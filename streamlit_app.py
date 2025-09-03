@@ -14,8 +14,8 @@ try:
     mod = importlib.import_module("bloodmap_app.app")
     mod.main()
 except Exception as e:
-    st.set_page_config(page_title="피수치 가이드 / BloodMap", layout="centered")
-    st.title("🩸 피수치 가이드 — 실행 오류")
+    st.set_page_config(page_title="피수치 가이드(보호자님들의울타리) / BloodMap", layout="centered")
+    st.title("🩸 피수치 가이드(보호자님들의울타리) — 실행 오류")
     st.error("`bloodmap_app.app.main()` 실행에 실패했습니다.")
     st.code(str(e))
     st.info(
