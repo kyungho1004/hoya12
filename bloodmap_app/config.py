@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 import os
 
-APP_TITLE = "🩸 피수치 가이드 / BloodMap v3.14 (New Site)"
-PAGE_TITLE = "피수치 가이드 / BloodMap"
+APP_TITLE = "🩸 피수치 가이드(보호자님들의울타리) / BloodMap v3.14 (New Site)"
+PAGE_TITLE = "피수치 가이드(보호자님들의울타리) / BloodMap"
 MADE_BY = "제작·자문: **Hoya/GPT**  ·  © 2025"
 CAFE_LINK_MD = "공식 카페: [피수치 가이드 공식카페](https://cafe.naver.com/bloodmap)"
 FOOTER_CAFE = "문의·피드백은 공식 카페 이용 바랍니다."
