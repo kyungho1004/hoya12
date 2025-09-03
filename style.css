@@ -1,0 +1,6 @@
+/* mobile-safe */
+.block-container{padding-top:8px}
+/* inputs tighten on mobile */
+.stTextInput>div>div>input{min-height:38px}
+.stNumberInput>div>div>input{min-height:38px}
+.stButton>button{min-height:40px;border-radius:12px}
