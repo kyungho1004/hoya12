@@ -1,115 +1,152 @@
 # -*- coding: utf-8 -*-
 def main():
     from datetime import datetime, date
-    import os, sys
+    import os, sys, importlib
     import streamlit as st
 
-    # ==== Robust imports: relative -> absolute -> local, with fallbacks for drug_data/utils_core ====
+    # ===== Load config module first, then read attributes safely =====
+    cfg = None
+    # 1) relative
     try:
-        from .config import (APP_TITLE, PAGE_TITLE, MADE_BY, CAFE_LINK_MD, FOOTER_CAFE,
-                            DISCLAIMER, ORDER, FEVER_GUIDE,
-                            LBL_WBC, LBL_Hb, LBL_PLT, LBL_ANC, LBL_Ca, LBL_P, LBL_Na, LBL_K,
-                            LBL_Alb, LBL_Glu, LBL_TP, LBL_AST, LBL_ALT, LBL_LDH, LBL_CRP, LBL_Cr, LBL_UA, LBL_TB, LBL_BUN, LBL_BNP,
-                            FONT_PATH_REG)
+        from . import config as cfg  # type: ignore
+    except Exception:
+        # 2) absolute
         try:
-            from .data.drugs import ANTICANCER, ABX_GUIDE
+            cfg = importlib.import_module("bloodmap_app.config")
         except Exception:
-            from .drug_data import ANTICANCER, ABX_GUIDE  # fallback
+            # 3) local file
+            sys.path.append(os.path.dirname(__file__))
+            import config as cfg  # type: ignore
+
+    def _g(name, default):
         try:
-            from .data.foods import FOODS
+            return getattr(cfg, name)
         except Exception:
-            from .config import FOODS  # fallback if defined
+            return default
+
+    # Safe pulls (provide robust defaults)
+    APP_TITLE   = _g("APP_TITLE", "BloodMap")
+    PAGE_TITLE  = _g("PAGE_TITLE", "BloodMap")
+    MADE_BY     = _g("MADE_BY", "")
+    CAFE_LINK_MD= _g("CAFE_LINK_MD", "")
+    FOOTER_CAFE = _g("FOOTER_CAFE", "")
+    DISCLAIMER  = _g("DISCLAIMER", "")
+    FONT_PATH_REG = _g("FONT_PATH_REG", "fonts/NanumGothic.ttf")
+
+    LBL_WBC = _g("LBL_WBC", "WBC")
+    LBL_Hb  = _g("LBL_Hb", "Hb")
+    LBL_PLT = _g("LBL_PLT", "PLT")
+    LBL_ANC = _g("LBL_ANC", "ANC")
+    LBL_Ca  = _g("LBL_Ca", "Ca")
+    LBL_P   = _g("LBL_P", "P")
+    LBL_Na  = _g("LBL_Na", "Na")
+    LBL_K   = _g("LBL_K", "K")
+    LBL_Alb = _g("LBL_Alb", "Albumin (알부민)")
+    LBL_Glu = _g("LBL_Glu", "Glucose")
+    LBL_TP  = _g("LBL_TP", "TP")
+    LBL_AST = _g("LBL_AST", "AST")
+    LBL_ALT = _g("LBL_ALT", "ALT")
+    LBL_LDH = _g("LBL_LDH", "LDH")
+    LBL_CRP = _g("LBL_CRP", "CRP")
+    LBL_Cr  = _g("LBL_Cr", "Cr")
+    LBL_UA  = _g("LBL_UA", "UA")
+    LBL_TB  = _g("LBL_TB", "TB")
+    LBL_BUN = _g("LBL_BUN", "BUN")
+    LBL_BNP = _g("LBL_BNP", "BNP")
+
+    ORDER = _g("ORDER", [LBL_WBC, LBL_Hb, LBL_PLT, LBL_ANC, LBL_Na, LBL_K, LBL_Ca, LBL_P, LBL_Cr,
+                         LBL_BUN, LBL_AST, LBL_ALT, LBL_LDH, LBL_CRP, LBL_Alb, LBL_Glu, LBL_TP, LBL_UA, LBL_TB, LBL_BNP])
+
+    FEVER_GUIDE = _g("FEVER_GUIDE", "- 38℃ 이상 또는 오한/오한전구증상 시 병원 문의")
+
+    # ===== Data modules (drugs/foods/ped) with bridges =====
+    try:
+        from .data.drugs import ANTICANCER, ABX_GUIDE
+    except Exception:
         try:
-            from .data.ped import PED_TOPICS, PED_INPUTS_INFO, PED_INFECT
+            from bloodmap_app.data.drugs import ANTICANCER, ABX_GUIDE
+        except Exception:
+            from .drug_data import ANTICANCER, ABX_GUIDE  # last fallback
+    try:
+        from .data.foods import FOODS
+    except Exception:
+        try:
+            from bloodmap_app.data.foods import FOODS
+        except Exception:
+            FOODS = _g("FOODS", {})
+
+    try:
+        from .data.ped import PED_TOPICS, PED_INPUTS_INFO, PED_INFECT
+    except Exception:
+        try:
+            from bloodmap_app.data.ped import PED_TOPICS, PED_INPUTS_INFO, PED_INFECT
         except Exception:
             PED_TOPICS, PED_INPUTS_INFO, PED_INFECT = [], "", {}
 
-        # prefer package-based utils (after you rename utils.py -> util_core.py)
+    # ===== Utils with bridges =====
+    try:
         from .utils.inputs import num_input_generic, entered, _parse_numeric
         from .utils.interpret import interpret_labs, compare_with_previous, food_suggestions, summarize_meds, abx_summary
         from .utils.reports import build_report, md_to_pdf_bytes_fontlocked
         from .utils.graphs import render_graphs
         from .utils.schedule import render_schedule
-        from .utils.counter import bump as counter_bump, count as counter_count
+        from .utils import counter as _bm_counter
     except Exception:
         try:
-            from bloodmap_app.config import (APP_TITLE, PAGE_TITLE, MADE_BY, CAFE_LINK_MD, FOOTER_CAFE,
-                                DISCLAIMER, ORDER, FEVER_GUIDE,
-                                LBL_WBC, LBL_Hb, LBL_PLT, LBL_ANC, LBL_Ca, LBL_P, LBL_Na, LBL_K,
-                                LBL_Alb, LBL_Glu, LBL_TP, LBL_AST, LBL_ALT, LBL_LDH, LBL_CRP, LBL_Cr, LBL_UA, LBL_TB, LBL_BUN, LBL_BNP,
-                                FONT_PATH_REG)
-            try:
-                from bloodmap_app.data.drugs import ANTICANCER, ABX_GUIDE
-            except Exception:
-                from bloodmap_app.drug_data import ANTICANCER, ABX_GUIDE
-            try:
-                from bloodmap_app.data.foods import FOODS
-            except Exception:
-                from bloodmap_app.config import FOODS
-            try:
-                from bloodmap_app.data.ped import PED_TOPICS, PED_INPUTS_INFO, PED_INFECT
-            except Exception:
-                PED_TOPICS, PED_INPUTS_INFO, PED_INFECT = [], "", {}
-
             from bloodmap_app.utils.inputs import num_input_generic, entered, _parse_numeric
             from bloodmap_app.utils.interpret import interpret_labs, compare_with_previous, food_suggestions, summarize_meds, abx_summary
             from bloodmap_app.utils.reports import build_report, md_to_pdf_bytes_fontlocked
             from bloodmap_app.utils.graphs import render_graphs
             from bloodmap_app.utils.schedule import render_schedule
-            from bloodmap_app.utils.counter import bump as counter_bump, count as counter_count
+            from bloodmap_app.utils import counter as _bm_counter
         except Exception:
             sys.path.append(os.path.dirname(__file__))
-            from config import (APP_TITLE, PAGE_TITLE, MADE_BY, CAFE_LINK_MD, FOOTER_CAFE,
-                                DISCLAIMER, ORDER, FEVER_GUIDE,
-                                LBL_WBC, LBL_Hb, LBL_PLT, LBL_ANC, LBL_Ca, LBL_P, LBL_Na, LBL_K,
-                                LBL_Alb, LBL_Glu, LBL_TP, LBL_AST, LBL_ALT, LBL_LDH, LBL_CRP, LBL_Cr, LBL_UA, LBL_TB, LBL_BUN, LBL_BNP,
-                                FONT_PATH_REG)
             try:
-                from data.drugs import ANTICANCER, ABX_GUIDE
+                from utils import num_input_generic, entered, _parse_numeric, interpret_labs, compare_with_previous, food_suggestions, summarize_meds, abx_summary, build_report, md_to_pdf_bytes_fontlocked, render_graphs, render_schedule  # type: ignore
             except Exception:
-                from drug_data import ANTICANCER, ABX_GUIDE
-            try:
-                from data.foods import FOODS
-            except Exception:
-                from config import FOODS
-            try:
-                from data.ped import PED_TOPICS, PED_INPUTS_INFO, PED_INFECT
-            except Exception:
-                PED_TOPICS, PED_INPUTS_INFO, PED_INFECT = [], "", {}
+                # very last resort mini-fallbacks
+                import streamlit as _st
+                def _parse_numeric(raw, decimals=1):
+                    if raw in ("", None): return None
+                    try: return round(float(raw), decimals)
+                    except: return None
+                def num_input_generic(label, key=None, decimals=1, as_int=False, placeholder=""):
+                    if as_int:
+                        v=_st.number_input(label, key=key, step=1, format="%d"); return int(v) if v is not None else None
+                    v=_st.number_input(label, key=key, step=0.1, format="%.{}f".format(decimals)); return float(v) if v is not None else None
+                def entered(x):
+                    try: return x not in (None, "") and (float(x)==float(x))
+                    except: return False
+                def interpret_labs(vals, extras): return []
+                def compare_with_previous(k, cur): return []
+                def food_suggestions(vals, place): return []
+                def summarize_meds(meds): return [f"- {k}: 입력됨" for k in meds.keys()]
+                def abx_summary(extras): return []
+                def build_report(mode, meta, vals, cmp_lines, extra_vals, meds_lines, food_lines, abx_lines):
+                    return f"# BloodMap 보고서\n- 모드: {mode}\n"
+                def md_to_pdf_bytes_fontlocked(md): raise RuntimeError("PDF 모듈 없음")
+                def render_graphs(): pass
+                def render_schedule(nickname_key): pass
+            class _DummyCounter:
+                @staticmethod
+                def bump():
+                    st.session_state.setdefault("_bm_counter", 0); st.session_state["_bm_counter"] += 1
+                @staticmethod
+                def count(): return st.session_state.get("_bm_counter", 0)
+            _bm_counter = _DummyCounter
 
-            # last-resort: local util_core or utils
-            try:
-                from utils.inputs import num_input_generic, entered, _parse_numeric
-                from utils.interpret import interpret_labs, compare_with_previous, food_suggestions, summarize_meds, abx_summary
-                from utils.reports import build_report, md_to_pdf_bytes_fontlocked
-                from utils.graphs import render_graphs
-                from utils.schedule import render_schedule
-                from utils.counter import bump as counter_bump, count as counter_count
-            except Exception:
-                from util_core import (num_input_generic, entered, _parse_numeric,
-                                       interpret_labs, compare_with_previous, food_suggestions, summarize_meds, abx_summary,
-                                       build_report, md_to_pdf_bytes_fontlocked, render_graphs, render_schedule)
-                def counter_bump(): pass
-                def counter_count(): return 0
-
-    # Optional deps
-    try:
-        import pandas as pd
-        HAS_PD = True
-    except Exception:
-        HAS_PD = False
-
+    # ===== UI =====
     st.set_page_config(page_title=PAGE_TITLE, layout="centered")
     st.title(APP_TITLE); st.markdown(MADE_BY); st.markdown(CAFE_LINK_MD)
 
-    # 방문 카운터 (있을 때만)
     try:
-        counter_bump()
-        st.caption(f"👀 조회수(방문): {counter_count()}")
+        _bm_counter.bump()
+        st.caption(f"👀 조회수(방문): {_bm_counter.count()}")
     except Exception:
         pass
 
-    # ===== Header UI =====
+    if "records" not in st.session_state: st.session_state.records = {}
+
     st.divider()
     st.header("1️⃣ 환자/암·소아 정보")
     c1, c2, c3 = st.columns([2,1,1])
@@ -117,12 +154,12 @@ def main():
         nickname = st.text_input("별명(저장/그래프/스케줄용)", placeholder="예: 홍길동")
     with c2:
         pin = st.text_input("PIN(4자리)", max_chars=4, placeholder="1234")
-        if pin and (not pin.isdigit() or len(pin) != 4):
+        if pin and (not pin.isdigit() or len(pin)!=4):
             st.warning("PIN은 숫자 4자리로 입력해주세요.")
     with c3:
         test_date = st.date_input("검사 날짜", value=date.today())
 
-    anc_place = st.radio("현재 식사 장소(ANC 가이드용)", ["가정", "병원"], horizontal=True)
+    anc_place = st.radio("현재 식사 장소(ANC 가이드용)", ["가정","병원"], horizontal=True)
 
     nickname_key = (nickname or "").strip()
     if pin and pin.isdigit() and len(pin)==4: nickname_key = f"{nickname_key}#{pin}"
@@ -132,7 +169,6 @@ def main():
 
     group = cancer_key = cancer_label = infect_sel = ped_topic = None
 
-    # 혈액암: 한글 포함 진단명
     heme_labels = {
         "AML (급성 골수성 백혈병)": "AML",
         "APL (급성 전골수구성 백혈병)": "APL",
@@ -154,20 +190,17 @@ def main():
                 "담도암(Cholangiocarcinoma)","자궁내막암(Endometrial cancer)",
                 "구강암/후두암","피부암(흑색종)","육종(Sarcoma)","신장암(RCC)",
                 "갑상선암","난소암","자궁경부암","전립선암","뇌종양(Glioma)","식도암","방광암"
-            ])
-            cancer_key = cancer_label
+            ]); cancer_key = cancer_label
         elif group == "소아암":
-            cancer_label = st.selectbox("소아암 (진단명 선택)", ["Neuroblastoma","Wilms tumor"])
-            cancer_key = cancer_label
+            cancer_label = st.selectbox("소아암 (진단명 선택)", ["Neuroblastoma","Wilms tumor"]); cancer_key = cancer_label
         elif group == "희귀암":
             cancer_label = st.selectbox("희귀암 (진단명 선택)", [
                 "담낭암(Gallbladder cancer)","부신암(Adrenal cancer)","망막모세포종(Retinoblastoma)",
                 "흉선종/흉선암(Thymoma/Thymic carcinoma)","신경내분비종양(NET)",
                 "간모세포종(Hepatoblastoma)","비인두암(NPC)","GIST"
-            ])
-            cancer_key = cancer_label
+            ]); cancer_key = cancer_label
     elif mode == "소아(일상/호흡기)":
-        st.caption(PED_INPUTS_INFO if PED_INPUTS_INFO else "—")
+        st.caption(PED_INPUTS_INFO or "—")
         ped_topic = st.selectbox("소아 주제", PED_TOPICS or [])
     else:
         infect_sel = st.selectbox("질환 선택", list(PED_INFECT.keys()) if PED_INFECT else [])
@@ -177,9 +210,8 @@ def main():
     # ===== Drugs & extras =====
     meds, extras = {}, {}
 
-    if mode == "일반/암" and group and group != "미선택/일반" and cancer_key:
+    if mode == "일반/암" and group and group!="미선택/일반" and cancer_key:
         st.markdown("### 💊 항암제 선택 및 입력")
-
         heme_by_cancer = {
             "AML": ["ARA-C","Daunorubicin","Idarubicin","Cyclophosphamide",
                     "Etoposide","Fludarabine","Hydroxyurea","MTX","ATRA","G-CSF"],
@@ -240,7 +272,6 @@ def main():
         if amt not in (None, ""):
             meds[d] = {"dose_or_tabs": amt}
 
-    # Safety notes
     if any(x in selected_drugs for x in ["MTX","6-MP"]):
         st.info("ℹ️ **유의사항(일반 정보)** — 개인별 처방은 반드시 담당 의료진 지시를 따르세요.")
     if "MTX" in selected_drugs:
@@ -248,14 +279,13 @@ def main():
     if "6-MP" in selected_drugs:
         st.warning("6-MP: **TPMT/NUDT15** 낮으면 골수억제 ↑ 가능. **Allopurinol/Febuxostat** 병용 시 용량조절 필요.")
 
-    # ===== Inputs =====
     st.divider()
-    st.header("2️⃣ 기본 혈액 검사 수치")
+    st.header("2️⃣ 기본 혈액 검사 수치 (입력한 값만 해석)")
     vals = {}
     for name in ORDER:
+        # CRP는 소수 2, 일부는 1로 보여주던 원래 UX 간소화
         vals[name] = num_input_generic(name, key=f"v_{name}", decimals=1, placeholder="")
 
-    # 지질패널
     st.markdown("#### 🧴 특수검사 — 지질패널")
     colL1, colL2, colL3, colL4 = st.columns(4)
     with colL1: vals['TG'] = num_input_generic("TG (중성지방, mg/dL)", key="lip_TG", decimals=0)
@@ -263,18 +293,17 @@ def main():
     with colL3: vals['HDL'] = num_input_generic("HDL (선택, mg/dL)", key="lip_HDL", decimals=0)
     with colL4: vals['LDL'] = num_input_generic("LDL (선택, mg/dL)", key="lip_LDL", decimals=0)
 
-    # ===== Run =====
     st.divider()
     run = st.button("🧠 해석하기 / 결과 생성", use_container_width=True)
+
     if run:
-        lipid_guides = []
+        st.subheader("📋 해석 결과")
+        # Lipid guide
         def _f(v): 
             try: return float(v)
             except: return None
-        tg = _f(vals.get("TG"))
-        tc = _f(vals.get("총콜레스테롤"))
-        hdl = _f(vals.get("HDL"))
-        ldl = _f(vals.get("LDL"))
+        tg = _f(vals.get("TG")); tc = _f(vals.get("총콜레스테롤")); hdl = _f(vals.get("HDL")); ldl = _f(vals.get("LDL"))
+        lipid_guides = []
         if tg is not None and tg >= 200:
             lipid_guides.append("중성지방(TG) 높음: 단 음료/과자 제한 · 튀김/버터/마요네즈 등 기름진 음식 줄이기 · 라면/가공식품(짠맛) 줄이기 · 채소/등푸른생선/현미·잡곡/소량 견과류 권장")
         if tc is not None and tc >= 240:
@@ -295,7 +324,6 @@ def main():
             st.markdown("### 🥗 음식/생활 가이드")
             for g in lipid_guides: st.markdown(f"- {g}")
 
-        # 간단 보고서
         try:
             report_md = build_report(mode, {"group":group,"cancer":cancer_key,"cancer_label":cancer_label,
                                             "nickname":nickname,"pin":pin or ""}, vals, [], {}, [], lipid_guides, [])
@@ -305,3 +333,15 @@ def main():
         st.download_button("📥 보고서(.md) 다운로드", data=report_md.encode("utf-8"),
                            file_name=f"bloodmap_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
                            mime="text/markdown")
+        st.download_button("📄 보고서(.txt) 다운로드", data=report_md.encode("utf-8"),
+                           file_name=f"bloodmap_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                           mime="text/plain")
+        try:
+            pdf_bytes = md_to_pdf_bytes_fontlocked(report_md)
+            st.download_button("🖨️ 보고서(.pdf) 다운로드", data=pdf_bytes,
+                               file_name=f"bloodmap_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+                               mime="application/pdf")
+        except Exception as e:
+            st.info(f"PDF 생성 모듈 사용 불가: {e}")
+
+    st.markdown("> " + DISCLAIMER)
