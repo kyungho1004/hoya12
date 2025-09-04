@@ -1,4 +1,4 @@
-/* 모바일 최적화 CSS */
+/* Mobile-friendly defaults */
 .block-container{padding-top:1rem;padding-bottom:2rem;max-width:880px}
 h1,h2,h3{line-height:1.2}
 label,.stTextInput,.stSelectbox,.stNumberInput{font-size:.95rem}
