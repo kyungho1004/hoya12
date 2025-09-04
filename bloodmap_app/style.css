@@ -1,6 +1,6 @@
-/* mobile-safe */
-.block-container{padding-top:8px}
-/* 작은 화면 입력 간격 조정 */
-@media (max-width: 480px){
-  .stButton>button{width:100%}
-}
+
+.block-container{padding-top:10px;padding-bottom:24px;max-width:860px}
+h1,h2,h3{line-height:1.25}
+.badge{display:inline-block;padding:2px 8px;border-radius:9999px;background:#eef2ff}
+.small{font-size:.9rem;color:#6b7280}
+label{font-weight:600}

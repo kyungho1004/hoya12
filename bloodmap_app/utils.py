@@ -1,24 +1,20 @@
 
 # -*- coding: utf-8 -*-
-import json, os
-from typing import Dict, Any
+def to_float(val, default: float = 0.0) -> float:
+    try:
+        if val is None:
+            return default
+        return float(val)
+    except (TypeError, ValueError):
+        return default
 
-DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
+def is_pos(val) -> bool:
+    try:
+        return float(val) > 0
+    except Exception:
+        return False
 
-def get_user_key(nickname: str, pin4: str) -> str:
-    pin4 = (pin4 or "").zfill(4)[:4]
-    return f"{nickname.strip()}#{pin4}" if nickname else f"anonymous#{pin4}"
-
-def save_session(user_key: str, payload: Dict[str, Any]) -> str:
-    os.makedirs(DATA_DIR, exist_ok=True)
-    fp = os.path.join(DATA_DIR, f"{user_key}.json")
-    with open(fp, "w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2)
-    return fp
-
-def load_session(user_key: str) -> Dict[str, Any]:
-    fp = os.path.join(DATA_DIR, f"{user_key}.json")
-    if not os.path.exists(fp):
-        return {}
-    with open(fp, "r", encoding="utf-8") as f:
-        return json.load(f)
+def digits_only(s: str, n: int = 4) -> str:
+    if not s:
+        return ""
+    return "".join(ch for ch in str(s) if ch.isdigit())[:n]
