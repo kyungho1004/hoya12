@@ -1,10 +1,42 @@
 # -*- coding: utf-8 -*-
 import streamlit as st
-
-# ✅ Only import names that actually exist in our config.py
 from . import config
-from .utils import css_load, num_input, safe_float, pediatric_guard, pin_4_guard
-from .drug_data import ANTICANCER_DETAIL, ANTIBIOTIC_DETAIL
+
+# ---- Try normal import first ----
+try:
+    from .utils import css_load, num_input, safe_float, pediatric_guard, pin_4_guard
+except Exception:
+    # ---- Safe local fallbacks (utils.py 없어도 동작) ----
+    def css_load():
+        try:
+            with open("bloodmap_app/style.css", "r", encoding="utf-8") as f:
+                st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+        except Exception:
+            pass
+    def safe_float(x):
+        try:
+            if x is None: return None
+            if isinstance(x, str) and x.strip()=="": return None
+            return float(x)
+        except Exception:
+            return None
+    def num_input(label: str, key: str, unit: str=None, step: float=0.1, format_decimals: int=2):
+        ph = "예: " + ("0" if format_decimals==0 else "0." + ("0"*format_decimals))
+        val = st.text_input(label + (f" ({unit})" if unit else ""), key=key, placeholder=ph)
+        return safe_float(val)
+    def pediatric_guard(years_input, months_input):
+        def _to_int(v):
+            try:
+                if v is None: return 0
+                if isinstance(v, str) and v.strip()=="": return 0
+                return int(float(v))
+            except Exception:
+                return 0
+        y = _to_int(years_input); m = _to_int(months_input)
+        return max(y*12 + m, 0)
+    def pin_4_guard(pin_str: str) -> str:
+        only = "".join(ch for ch in (pin_str or "") if ch.isdigit())
+        return (only[-4:]).zfill(4) if only else "0000"
 
 def _header():
     st.set_page_config(page_title="피수치 가이드 / BloodMap", layout="centered")
