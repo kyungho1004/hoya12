@@ -1,3 +1,1 @@
-
-# -*- coding: utf-8 -*-
-# bloodmap_app package
+# data package bridge
