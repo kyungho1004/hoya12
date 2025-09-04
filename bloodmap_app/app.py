@@ -326,14 +326,34 @@ def main():
             "식도암": [("SCC Ag","SCC antigen","ng/mL",1),("CEA","CEA","ng/mL",1)],
             "방광암": [("NMP22","NMP22","U/mL",1),("UBC","UBC","µg/L",1)],
         }.get(cancer, [])
-        if items:
-            st.divider()
-            st.header("4️⃣ 암별 디테일 수치")
-            st.caption("해석은 주치의 판단을 따르며, 값 기록/공유를 돕기 위한 입력 영역입니다.")
-            for key, label, unit, decs in items:
+   if items:
+    st.divider()
+    show_detail = st.checkbox("🧬 암별 디테일 수치 입력", value=True,
+                              help="필요할 때만 열어 입력하세요. 입력한 값만 보고서/저장에 포함됩니다.")
+    if show_detail:
+        st.header("3️⃣ 암별 디테일 수치")
+        st.caption("해석은 주치의 판단을 따르며, 값 기록/공유를 돕기 위한 입력 영역입니다.")
+
+        def _is_qualitative(label: str) -> bool:
+            l = (label or "").lower()
+            return ("(0/1)" in l) and ("score" not in l and "점수" not in l)
+
+        for key, label, unit, decs in items:
+            if _is_qualitative(label):
+                choice = st.selectbox(
+                    f"{label}".replace("(0/1)", "").strip() + " (정성)",
+                    ["음성(-)", "양성(+)"],
+                    key=f"extra_{key}"
+                )
+                val = 1 if choice == "양성(+)" else 0
+            else:
                 ph = f"예: {('0' if decs==0 else '0.'+('0'*decs))}" if decs is not None else ""
-                val = num_input_generic(f"{label}" + (f" ({unit})" if unit else ""), key=f"extra_{key}", decimals=decs, placeholder=ph)
-                extra_vals[key] = val
+                val = num_input_generic(
+                    f"{label}" + (f" ({unit})" if unit else ""),
+                    key=f"extra_{key}", decimals=decs, placeholder=ph
+                )
+            extra_vals[key] = val
+
     elif mode == "소아(일상/호흡기)":
         st.divider()
         st.header("3️⃣ 소아 생활 가이드")
