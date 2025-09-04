@@ -326,7 +326,7 @@ def main():
             "식도암": [("SCC Ag","SCC antigen","ng/mL",1),("CEA","CEA","ng/mL",1)],
             "방광암": [("NMP22","NMP22","U/mL",1),("UBC","UBC","µg/L",1)],
         }.get(cancer, [])
-      if items:
+    if items:
      st.divider()
      show_detail = st.checkbox("🧬 암별 디테일 수치 입력", value=True,
                                help="필요할 때만 열어 입력하세요. 입력한 값만 보고서/저장에 포함됩니다.")
