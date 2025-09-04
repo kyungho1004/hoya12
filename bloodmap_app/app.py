@@ -114,10 +114,8 @@ def main():
     with colA:
         nickname = st.text_input("별명", key="nickname", placeholder="예: 호야")
     with colB:
-        pin = st.text_input("PIN (4자리 숫자)", key="pin", max_chars=4, placeholder="0000")
-    pin = _sanitize_pin(pin)
-    if st.session_state.get("pin") != pin:
-        st.session_state["pin"] = pin
+        pin_raw = st.text_input("PIN (4자리 숫자)", key="pin", max_chars=4, placeholder="0000")
+    pin = _sanitize_pin(pin_raw)
     key = _make_storage_key(nickname, pin)
     if key:
         st.caption(f"저장키: **{key}**")
