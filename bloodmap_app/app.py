@@ -308,7 +308,7 @@ def main():
 
     # ===== 암별 디테일 수치 =====
     extra_vals = {}
-     if mode == "일반/암" and group and group != "미선택/일반" and cancer:
+      if mode == "일반/암" and group and group != "미선택/일반" and cancer:
         items = {
             "AML": [("PT","PT","sec",1),("aPTT","aPTT","sec",1),("Fibrinogen","Fibrinogen","mg/dL",1),("D-dimer","D-dimer","µg/mL FEU",2)],
             "APL": [("PT","PT","sec",1),("aPTT","aPTT","sec",1),("Fibrinogen","Fibrinogen","mg/dL",1),("D-dimer","D-dimer","µg/mL FEU",2),("DIC Score","DIC Score","pt",0)],
