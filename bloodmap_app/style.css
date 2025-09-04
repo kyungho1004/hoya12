@@ -1,11 +1,11 @@
-/* 모바일 최적화 기본 */
-.block-container {padding-top: 1rem; padding-bottom: 2rem; max-width: 860px;}
-h1,h2,h3 { line-height: 1.2; }
-label, .stTextInput, .stSelectbox, .stNumberInput { font-size: 0.95rem; }
-@media (max-width: 480px) {
-  .block-container { padding-left: 0.8rem; padding-right: 0.8rem; }
-  label, .stTextInput, .stSelectbox, .stNumberInput { font-size: 1rem; }
+/* 모바일 최적화 CSS (꼬임 방지 + 가독성) */
+.block-container{padding-top:1rem;padding-bottom:2rem;max-width:880px}
+h1,h2,h3{line-height:1.2}
+label,.stTextInput,.stSelectbox,.stNumberInput{font-size:.95rem}
+@media (max-width:480px){
+  .block-container{padding-left:.8rem;padding-right:.8rem}
+  label,.stTextInput,.stSelectbox,.stNumberInput{font-size:1rem}
 }
-.stAlert { border-radius: 12px; }
-.small-muted { color:#666; font-size:0.9rem; }
-.kicker { font-size: 0.9rem; color:#888; margin-bottom: 0.25rem; }
+.stAlert{border-radius:12px}
+.small-muted{color:#666;font-size:.9rem}
+.kicker{font-size:.9rem;color:#888;margin-bottom:.25rem}
