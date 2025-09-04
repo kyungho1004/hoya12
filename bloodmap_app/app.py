@@ -326,10 +326,10 @@ def main():
             "식도암": [("SCC Ag","SCC antigen","ng/mL",1),("CEA","CEA","ng/mL",1)],
             "방광암": [("NMP22","NMP22","U/mL",1),("UBC","UBC","µg/L",1)],
         }.get(cancer, [])
-   if items:
-    st.divider()
-    show_detail = st.checkbox("🧬 암별 디테일 수치 입력", value=True,
-                              help="필요할 때만 열어 입력하세요. 입력한 값만 보고서/저장에 포함됩니다.")
+      if items:
+     st.divider()
+     show_detail = st.checkbox("🧬 암별 디테일 수치 입력", value=True,
+                               help="필요할 때만 열어 입력하세요. 입력한 값만 보고서/저장에 포함됩니다.")
     if show_detail:
         st.header("3️⃣ 암별 디테일 수치")
         st.caption("해석은 주치의 판단을 따르며, 값 기록/공유를 돕기 위한 입력 영역입니다.")
@@ -353,8 +353,7 @@ def main():
                     key=f"extra_{key}", decimals=decs, placeholder=ph
                 )
             extra_vals[key] = val
-
-    elif mode == "소아(일상/호흡기)":
+         elif mode == "소아(일상/호흡기)":
         st.divider()
         st.header("3️⃣ 소아 생활 가이드")
         # 위험도 배너는 interpret에서 안내
