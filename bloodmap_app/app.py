@@ -4,7 +4,7 @@ def main():
     import os, sys, importlib
     import streamlit as st
 
-    # ----- Safe config import -----
+    # ---------- Safe config import ----------
     try:
         from . import config as cfg
     except Exception:
@@ -26,6 +26,7 @@ def main():
     DISCLAIMER  = _g("DISCLAIMER", "")
     FONT_PATH_REG = _g("FONT_PATH_REG", "fonts/NanumGothic.ttf")
 
+    # Labels
     LBL_WBC=_g("LBL_WBC","WBC"); LBL_Hb=_g("LBL_Hb","Hb"); LBL_PLT=_g("LBL_PLT","PLT"); LBL_ANC=_g("LBL_ANC","ANC")
     LBL_Ca=_g("LBL_Ca","Ca"); LBL_P=_g("LBL_P","P"); LBL_Na=_g("LBL_Na","Na"); LBL_K=_g("LBL_K","K")
     LBL_Alb=_g("LBL_Alb","Albumin (알부민)"); LBL_Glu=_g("LBL_Glu","Glucose"); LBL_TP=_g("LBL_TP","TP")
@@ -36,21 +37,22 @@ def main():
                          LBL_BUN, LBL_AST, LBL_ALT, LBL_LDH, LBL_CRP, LBL_Alb, LBL_Glu, LBL_TP, LBL_UA, LBL_TB, LBL_BNP])
     FEVER_GUIDE = _g("FEVER_GUIDE", "- 38℃ 이상 또는 오한/오한전구증상 시 병원 문의")
 
-    # ----- Data (bridged) -----
+    # ---------- Data modules (bridged) ----------
     try:
         from .data.drugs import ANTICANCER, ABX_GUIDE
     except Exception:
         try:
             from bloodmap_app.data.drugs import ANTICANCER, ABX_GUIDE
         except Exception:
-            from .drug_data import ANTICANCER, ABX_GUIDE
+            from .drug_data import ANTICANCER, ABX_GUIDE  # last fallback
 
+    # Pediatric data (may be missing)
     try:
         from .data.ped import PED_TOPICS, PED_INPUTS_INFO, PED_INFECT
     except Exception:
         PED_TOPICS, PED_INPUTS_INFO, PED_INFECT = [], "", {}
 
-    # ----- Utils (bridged) -----
+    # ---------- Utils (bridged) ----------
     try:
         from .utils.inputs import num_input_generic, entered, _parse_numeric
         from .utils.interpret import interpret_labs, compare_with_previous, food_suggestions, summarize_meds, abx_summary
@@ -69,12 +71,14 @@ def main():
             def count(): return st.session_state.get("_bm_counter", 0)
         _bm_counter = _DummyCounter
 
-    # ----- UI header -----
+    # ---------- UI header ----------
     st.set_page_config(page_title=PAGE_TITLE, layout="centered")
     st.title(APP_TITLE); st.markdown(MADE_BY); st.markdown(CAFE_LINK_MD)
     try:
         _bm_counter.bump(); st.caption(f"👀 조회수(방문): {_bm_counter.count()}")
     except Exception: pass
+
+    if "records" not in st.session_state: st.session_state.records = {}
 
     st.divider()
     st.header("1️⃣ 환자/암·소아 정보")
@@ -83,19 +87,22 @@ def main():
         nickname = st.text_input("별명(저장/그래프/스케줄용)", placeholder="예: 홍길동")
     with c2:
         pin = st.text_input("PIN(4자리)", max_chars=4, placeholder="1234")
-        if pin and (not pin.isdigit() or len(pin)!=4): st.warning("PIN은 숫자 4자리로 입력해주세요.")
+        if pin and (not pin.isdigit() or len(pin)!=4):
+            st.warning("PIN은 숫자 4자리로 입력해주세요.")
     with c3:
         test_date = st.date_input("검사 날짜", value=date.today())
-    anc_place = st.radio("현재 식사 장소(ANC 가이드용)", ["가정","병원"], horizontal=True)
+
+    anc_place = st.radio("현재 식사 장소(ANC 가이드용)", ["가정", "병원"], horizontal=True)
 
     nickname_key = (nickname or "").strip()
     if pin and pin.isdigit() and len(pin)==4: nickname_key = f"{nickname_key}#{pin}"
     elif nickname_key: nickname_key = f"{nickname_key}#----"
 
-    mode = st.selectbox("모드 선택", ["일반/암","소아(일상/호흡기)","소아(감염질환)"])
+    mode = st.selectbox("모드 선택", ["일반/암", "소아(일상/호흡기)", "소아(감염질환)"])
 
     group = cancer_key = cancer_label = infect_sel = ped_topic = None
 
+    # 혈액암: 한글 포함 진단명
     heme_labels = {
         "AML (급성 골수성 백혈병)": "AML",
         "APL (급성 전골수구성 백혈병)": "APL",
@@ -103,17 +110,19 @@ def main():
         "CML (만성 골수성 백혈병)": "CML",
         "CLL (만성 림프구성 백혈병)": "CLL",
     }
-
+    # 육종 독립 그룹
     sarcoma_dx_list = [
         "연부조직육종 (STS)","골육종 (Osteosarcoma)","유잉육종 (Ewing sarcoma)",
         "평활근육종 (Leiomyosarcoma)","지방육종 (Liposarcoma)","횡문근육종 (Rhabdomyosarcoma)","활막육종 (Synovial sarcoma)"
     ]
 
+    # ====== Group & Diagnosis ======
     if mode == "일반/암":
         group = st.selectbox("암 그룹 선택", ["미선택/일반","혈액암","고형암","육종","소아암","희귀암"])
         if group == "혈액암":
             cancer_label = st.selectbox("혈액암 (진단명 선택)", list(heme_labels.keys()))
-            cancer_key = heme_labels.get(cancer_label); st.caption(f"🧬 **혈액암 — 진단명:** {cancer_label}")
+            cancer_key = heme_labels.get(cancer_label)
+            st.caption(f"🧬 **혈액암 — 진단명:** {cancer_label}")
         elif group == "고형암":
             cancer_label = st.selectbox("고형암 (진단명 선택)", [
                 "폐암(Lung cancer)","유방암(Breast cancer)","위암(Gastric cancer)",
@@ -134,14 +143,139 @@ def main():
                 "간모세포종(Hepatoblastoma)","비인두암(NPC)","GIST"
             ]); cancer_key = cancer_label
 
-    # ----- 2) 기본 패널 -----
+        # ====== Anticancer meds section (ALWAYS visible once a cancer group is chosen) ======
+        st.markdown("### 💊 항암제 선택 및 입력")
+        # default maps
+        heme_by_cancer = {
+            "AML": ["ARA-C","Daunorubicin","Idarubicin","Cyclophosphamide",
+                    "Etoposide","Fludarabine","Hydroxyurea","MTX","ATRA","G-CSF"],
+            "APL": ["ATRA","Idarubicin","Daunorubicin","ARA-C","G-CSF","MTX","6-MP"],
+            "ALL": ["Vincristine","Asparaginase","Daunorubicin","Cyclophosphamide","MTX","ARA-C","Topotecan","Etoposide","6-MP"],
+            "CML": ["Imatinib","Dasatinib","Nilotinib","Hydroxyurea"],
+            "CLL": ["Fludarabine","Cyclophosphamide","Rituximab"],
+        }
+        solid_by_cancer = {
+            "폐암(Lung cancer)": ["Cisplatin","Carboplatin","Paclitaxel","Docetaxel","Gemcitabine","Pemetrexed",
+                               "Gefitinib","Erlotinib","Osimertinib","Alectinib","Bevacizumab","Pembrolizumab","Nivolumab"],
+            "유방암(Breast cancer)": ["Doxorubicin","Cyclophosphamide","Paclitaxel","Docetaxel","Trastuzumab","Bevacizumab"],
+            "위암(Gastric cancer)": ["Cisplatin","Oxaliplatin","5-FU","Capecitabine","Paclitaxel","Trastuzumab","Pembrolizumab"],
+            "대장암(Cololoractal cancer)": ["5-FU","Capecitabine","Oxaliplatin","Irinotecan","Bevacizumab"],
+            "간암(HCC)": ["Sorafenib","Lenvatinib","Bevacizumab","Pembrolizumab","Nivolumab"],
+            "췌장암(Pancreatic cancer)": ["Gemcitabine","Oxaliplatin","Irinotecan","5-FU"],
+            "담도암(Cholangiocarcinoma)": ["Gemcitabine","Cisplatin","Bevacizumab"],
+            "자궁내막암(Endometrial cancer)": ["Carboplatin","Paclitaxel"],
+            "구강암/후두암": ["Cisplatin","5-FU","Docetaxel"],
+            "피부암(흑색종)": ["Dacarbazine","Paclitaxel","Nivolumab","Pembrolizumab"],
+            "신장암(RCC)": ["Sunitinib","Pazopanib","Bevacizumab","Nivolumab","Pembrolizumab"],
+            "갑상선암": ["Lenvatinib","Sorafenib"],
+            "난소암": ["Carboplatin","Paclitaxel","Bevacizumab"],
+            "자궁경부암": ["Cisplatin","Paclitaxel","Bevacizumab"],
+            "전립선암": ["Docetaxel","Cabazitaxel"],
+            "뇌종양(Glioma)": ["Temozolomide","Bevacizumab"],
+            "식도암": ["Cisplatin","5-FU","Paclitaxel","Nivolumab","Pembrolizumab"],
+            "방광암": ["Cisplatin","Gemcitabine","Bevacizumab","Pembrolizumab","Nivolumab"],
+        }
+        sarcoma_by_dx = {
+            "연부조직육종 (STS)": ["Doxorubicin","Ifosfamide","Pazopanib","Gemcitabine","Docetaxel"],
+            "골육종 (Osteosarcoma)": ["Cisplatin","Doxorubicin","MTX","Ifosfamide","Etoposide"],
+            "유잉육종 (Ewing sarcoma)": ["Vincristine","Doxorubicin","Cyclophosphamide","Ifosfamide","Etoposide"],
+            "평활근육종 (Leiomyosarcoma)": ["Doxorubicin","Gemcitabine","Docetaxel","Pazopanib"],
+            "지방육종 (Liposarcoma)": ["Doxorubicin","Ifosfamide","Pazopanib"],
+            "횡문근육종 (Rhabdomyosarcoma)": ["Vincristine","Cyclophosphamide","Doxorubicin","Ifosfamide","Etoposide"],
+            "활막육종 (Synovial sarcoma)": ["Ifosfamide","Doxorubicin","Pazopanib"],
+        }
+
+        # Build union lists for graceful fallback (so the UI never "disappears")
+        def _union(list_of_lists):
+            s = []
+            seen = set()
+            for L in list_of_lists:
+                for x in L:
+                    if x not in seen:
+                        seen.add(x); s.append(x)
+            return s
+
+        group_defaults = {
+            "혈액암": _union(list(heme_by_cancer.values())),
+            "고형암": _union(list(solid_by_cancer.values())),
+            "육종"  : _union(list(sarcoma_by_dx.values())),
+            "소아암": ["Cyclophosphamide","Ifosfamide","Doxorubicin","Vincristine","Etoposide","Carboplatin","Cisplatin","Topotecan","Irinotecan"],
+            "희귀암": ["Imatinib","Sunitinib","Regorafenib","Gemcitabine","Cisplatin","Mitotane","Etoposide","Doxorubicin"],
+        }
+
+        if group == "혈액암" and cancer_key in heme_by_cancer:
+            drug_seed = heme_by_cancer[cancer_key]
+        elif group == "고형암" and cancer_key in solid_by_cancer:
+            drug_seed = solid_by_cancer[cancer_key]
+        elif group == "육종" and cancer_key in sarcoma_by_dx:
+            drug_seed = sarcoma_by_dx[cancer_key]
+        else:
+            # Fallback: show union for the chosen group (still editable)
+            drug_seed = group_defaults.get(group or "", [])
+
+        # Searchable list
+        all_drugs = sorted(set(group_defaults.get(group or "", []) + drug_seed))
+        drug_search = st.text_input("🔍 항암제 검색(영문/한글 허용)", key="drug_search")
+        if drug_search:
+            show_drugs = [d for d in all_drugs if drug_search.lower() in d.lower()]
+        else:
+            show_drugs = all_drugs
+        selected_drugs = st.multiselect("항암제 선택", show_drugs, default=drug_seed[:3])
+
+        meds = {}
+        for d in selected_drugs:
+            amt = num_input_generic(f"{d} - 용량/알약", key=f"med_{d}", decimals=1, placeholder="예: 1.5")
+            if amt not in (None, ""):
+                meds[d] = {"dose_or_tabs": amt}
+
+        # Safety notes
+        if any(x in selected_drugs for x in ["MTX","6-MP"]):
+            st.info("ℹ️ **유의사항(일반 정보)** — 개인별 처방은 반드시 담당 의료진 지시를 따르세요.")
+        if "MTX" in selected_drugs:
+            st.warning("MTX: 보통 **주 1회** 복용 스케줄(일일 복용 아님). NSAIDs/술 과다/탈수는 독성 ↑ 가능.")
+        if "6-MP" in selected_drugs:
+            st.warning("6-MP: **TPMT/NUDT15** 낮으면 골수억제 ↑ 가능. **Allopurinol/Febuxostat** 병용 시 용량조절 필요.")
+
+    elif mode == "소아(일상/호흡기)":
+        # Fallback content so the panel "works" even if ped data is empty
+        default_topics = PED_TOPICS or ["일상 관리", "해열·수분", "기침/콧물", "호흡기 관찰 포인트"]
+        st.caption(PED_INPUTS_INFO or "아이 컨디션과 생활관리 입력 후 해석 버튼을 눌러주세요.")
+        ped_topic = st.selectbox("소아 주제", default_topics)
+        colA,colB,colC = st.columns(3)
+        with colA:
+            temp = num_input_generic("체온(°C)", key="ped_temp", decimals=1)
+            cough = st.selectbox("기침 정도", ["없음","약간","보통","심함"], key="ped_cough")
+        with colB:
+            rr = num_input_generic("호흡수(회/분)", key="ped_rr", as_int=True)
+            runny = st.selectbox("콧물 색", ["맑음","노란","초록","피섞임"], key="ped_runny")
+        with colC:
+            intake = num_input_generic("수분 섭취(컵/일)", key="ped_intake", decimals=1)
+            urine = num_input_generic("소변 횟수(회/일)", key="ped_urine", as_int=True)
+        st.info("참고: 38℃ 이상 지속되거나 호흡 곤란/탈수 의심 시 즉시 진료 권고.")
+
+    else:  # "소아(감염질환)"
+        default_infect = PED_INFECT or {
+            "AOM(급성 중이염)": ["귀 아파함","체온","구토/설사"],
+            "Pharyngitis(인후염)": ["인후통","체온","기침"],
+            "URTI(상기도감염)": ["콧물","기침","체온"],
+            "Gastroenteritis(장염)": ["설사 횟수","구토 횟수","섭취량"],
+            "UTI(요로감염)": ["배뇨통","빈뇨","체온"],
+        }
+        infect_sel = st.selectbox("질환 선택", list(default_infect.keys()))
+        cols = st.columns(3)
+        meta_inputs = {}
+        for i, name in enumerate(default_infect[infect_sel]):
+            with cols[i % 3]:
+                meta_inputs[name] = num_input_generic(name, key=f"ped_inf_{i}", decimals=1)
+
+    # ---------- 2) 기본 혈액 검사 ----------
     st.divider(); st.header("2️⃣ 기본 혈액 검사 수치 (입력한 값만 해석)")
     vals = {}
     for name in ORDER:
         decimals = 2 if name==LBL_CRP else 1
         vals[name] = num_input_generic(name, key=f"v_{name}", decimals=decimals, placeholder="")
 
-    # ----- 특수검사 (토글 섹션) -----
+    # ---------- 특수검사 (토글) ----------
     st.markdown("### 🧪 특수검사")
     open_special = st.checkbox("특수검사 입력 열기", value=True)
     if open_special:
@@ -172,7 +306,7 @@ def main():
             with u2: vals['잠혈'] = st.selectbox("잠혈(혈뇨)", ["-", "trace", "+", "++", "+++"], index=0, key="ur_blood")
             with u3: vals['요당'] = st.selectbox("요당", ["-", "trace", "+", "++", "+++"], index=0, key="ur_glu")
 
-    # ----- 3) 실행 -----
+    # ---------- Run ----------
     st.divider()
     run = st.button("🧠 해석하기 / 결과 생성", use_container_width=True)
     if run:
@@ -208,12 +342,12 @@ def main():
         # 간단 보고서 + 다운로드
         try:
             report_md = build_report(
-                mode="일반/암",
+                mode=mode,
                 meta={"group":group,"cancer":cancer_key,"cancer_label":cancer_label,"nickname":nickname,"pin":pin or ""},
                 vals=vals, cmp_lines=[], extra_vals={}, meds_lines=[], food_lines=lipid_guides, abx_lines=[]
             )
         except Exception:
-            report_md = f"# BloodMap 보고서\n- 그룹/진단: {group}/{cancer_label or cancer_key or '—'}\n"
+            report_md = f"# BloodMap 보고서\n- 모드/그룹/진단: {mode}/{group}/{cancer_label or cancer_key or '—'}\n"
 
         st.download_button("📥 보고서(.md) 다운로드", data=report_md.encode("utf-8"),
                            file_name=f"bloodmap_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
