@@ -1,1 +1,28 @@
-/* minimal */
+
+/* Mobile-first, clean spacing */
+:root { --maxw: 720px; }
+section.main > div { max-width: var(--maxw); margin: 0 auto; }
+.block-container { padding-top: 0.75rem; padding-bottom: 3rem; }
+
+/* Make number inputs larger and full width on mobile */
+.css-1cpxqw2, .stNumberInput, .stTextInput, .stSelectbox, .stMultiselect, .stCheckbox {
+  width: 100%;
+}
+label, .stMarkdown p { line-height: 1.35; }
+
+/* Hide Streamlit menu/footer for cleaner mobile look */
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+
+/* Badge styles */
+.badge {
+  display: inline-block; padding: 0.25rem 0.5rem; border-radius: 8px; font-weight: 600;
+}
+.badge.ok { background: #e8f5e9; color: #1b5e20; }
+.badge.warn { background: #fff3e0; color: #e65100; }
+.badge.danger { background: #ffebee; color: #b71c1c; }
+
+/* Sticky header note */
+.header-note {
+  position: sticky; top: 0; background: white; z-index: 99; padding: 0.5rem 0; border-bottom: 1px solid #eee;
+}
