@@ -3,8 +3,8 @@
 import streamlit as st
 import pandas as pd
 from typing import Dict, Any
-from .utils import get_user_key, save_session, load_session
-from .drug_data import ANTINEOPLASTICS, ANTIBIOTICS, SARCOMA_DIAGNOSES
+from bloodmap_app.storage import get_user_key, save_session, load_session
+from bloodmap_app.drug_data import ANTINEOPLASTICS, ANTIBIOTICS, SARCOMA_DIAGNOSES
 
 APP_TITLE = "🩸 피수치 가이드 / BloodMap — v3.14 (특수검사 정리·연구자 모드)"
 APP_CAPTION = "본 도구는 보호자의 이해를 돕기 위한 참고 자료이며 의료적 판단은 담당 의료진의 권한입니다."
