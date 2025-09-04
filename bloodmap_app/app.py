@@ -364,3 +364,4 @@ def main():
             st.info(f"PDF 생성 모듈 사용 불가: {e}")
 
     st.caption(FOOTER_CAFE); st.markdown("> " + DISCLAIMER)
+    st.info("⚠️ 본 수치 해석은 참고용 도구이며, 개발자와 무관합니다.\n\n혈액 수치와 관련된 진단, 약물 복용, 부작용 판단 등은 반드시 **주치의와 상담 후 결정**하시기 바랍니다.\n\nBloodMap은 **개인정보를 절대 수집하지 않으며**, 입력한 내용은 저장되지 않습니다.")
