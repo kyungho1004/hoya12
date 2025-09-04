@@ -1,8 +1,1 @@
-
-/* Minimal mobile-friendly tweaks */
-:root { --pad: 10px; }
-.block-container { padding-top: var(--pad); padding-bottom: var(--pad); }
-label, .stMarkdown p { line-height: 1.35; }
-hr { border: none; border-top: 1px solid #eee; margin: 10px 0; }
-button[kind="primary"] { border-radius: 12px; }
-input, textarea { border-radius: 10px !important; }
+/* mobile-safe */ .block-container{padding-top:8px}
