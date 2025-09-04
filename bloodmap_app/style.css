@@ -1,2 +1,6 @@
 /* mobile-safe */
 .block-container{padding-top:8px}
+/* 작은 화면 입력 간격 조정 */
+@media (max-width: 480px){
+  .stButton>button{width:100%}
+}
