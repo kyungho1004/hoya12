@@ -4,6 +4,19 @@ from pathlib import Path
 import streamlit as st
 
 from . import utils
+
+# ---- Local helpers to avoid AttributeError on utils.sanitize_pin ----
+import re as _re
+
+def _sanitize_pin(pin: str) -> str:
+    digits = _re.sub(r"\D", "", pin or "")
+    return (digits + "0000")[:4]
+
+def _make_storage_key(nick: str, pin: str) -> str:
+    n = (nick or "").strip()[:24]
+    p = _sanitize_pin(pin)
+    return f"{n}#{p}" if n else ""
+
 from .drug_data import (
     CATEGORIES, hema_by_dx, solid_by_dx, sarcoma_by_dx, rare_by_dx,
     antibiotic_classes, ara_c_forms
@@ -102,10 +115,10 @@ def main():
         nickname = st.text_input("별명", key="nickname", placeholder="예: 호야")
     with colB:
         pin = st.text_input("PIN (4자리 숫자)", key="pin", max_chars=4, placeholder="0000")
-    pin = utils.sanitize_pin(pin)
+    pin = _sanitize_pin(pin)
     if st.session_state.get("pin") != pin:
         st.session_state["pin"] = pin
-    key = utils.make_storage_key(nickname, pin)
+    key = _make_storage_key(nickname, pin)
     if key:
         st.caption(f"저장키: **{key}**")
 
