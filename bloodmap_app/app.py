@@ -91,6 +91,27 @@ def _patient_bar():
         _reset_all()
 
 
+
+# --- Safe fallbacks for helper functions (in case of partial deploy) ---
+try:
+    _ = _timestamp_badge  # noqa: F821
+except Exception:
+    def _timestamp_badge():
+        from datetime import datetime
+        try:
+            from zoneinfo import ZoneInfo
+            ts = datetime.now(ZoneInfo("Asia/Seoul"))
+        except Exception:
+            ts = datetime.now()
+        st.caption(f"빌드 {APP_VERSION} · {ts.strftime('%Y-%m-%d %H:%M')} KST")
+
+try:
+    _ = _apply_accessibility  # noqa: F821
+except Exception:
+    def _apply_accessibility():
+        # No-op if accessibility helpers aren't loaded
+        pass
+
 def _mode_and_cancer_picker():
     st.markdown("### 1️⃣ 소아가이드 / 암 선택")
     mode = st.radio("모드 선택", options=["소아 가이드", "암 종류"], horizontal=True, key="mode_pick")
