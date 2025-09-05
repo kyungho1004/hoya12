@@ -46,11 +46,17 @@ def _mode_and_cancer_picker():
 
 def _labs_section():
     section("2️⃣ 피수치 입력")
-    c1, c2, c3 = st.columns(3)
+    c1, c2, c3, c4 = st.columns(4)
     wbc = num_input("WBC (×10³/µL)", "wbc", min_value=0.0, step=0.1, placeholder="예: 1.2")
     hb  = num_input("Hb (g/dL)", "hb", min_value=0.0, step=0.1, placeholder="예: 9.1")
     plt = num_input("혈소판 PLT (×10³/µL)", "plt", min_value=0.0, step=1.0, placeholder="예: 42")
     anc = num_input("ANC 호중구 (cells/µL)", "anc", min_value=0.0, step=10.0, placeholder="예: 320")
+
+    c5, c6, c7, c8 = st.columns(4)
+    ca  = num_input("Ca 칼슘 (mg/dL)", "ca", min_value=0.0, step=0.1, placeholder="예: 8.3")
+    na  = num_input("Na 소디움 (mEq/L)", "na", min_value=0.0, step=0.5, placeholder="예: 134")
+    k   = num_input("K 포타슘 (mEq/L)", "k", min_value=0.0, step=0.1, placeholder="예: 3.3")
+    alb = num_input("Albumin 알부민 (g/dL)", "alb", min_value=0.0, step=0.1, placeholder="예: 2.4")
 
     with st.expander("🧪 특수검사 (필요 시 열기)"):
         st.write("자주 시행하지 않는 항목은 토글로 열어서 입력합니다.")
@@ -77,7 +83,7 @@ def _labs_section():
     if anc and anc < 500:
         warn_banner("ANC 500 미만 — 생채소·생과일 금지, 모든 음식은 충분히 가열하세요. 조리 후 2시간 지난 음식은 먹지 않기.")
 
-    return dict(wbc=wbc, hb=hb, plt=plt, anc=anc)
+    return dict(wbc=wbc, hb=hb, plt=plt, anc=anc, ca=ca, na=na, k=k, alb=alb)
 
 def _therapy_section(picked_group, picked_dx):
     section("3️⃣ 약물 선택 (한글 표기)")
@@ -135,10 +141,36 @@ def main():
     labs = _labs_section()
     _therapy_section(picked_group, picked_dx)
     _result_section(labs, picked_group, picked_dx)
+    _diet_guide_section(labs)
 
     st.markdown("""<div class='footer-note'>
     본 자료는 보호자의 이해를 돕기 위한 참고용 정보입니다. 수치 기반 판단과 약물 변경은 반드시 주치의와 상담하십시오.
     </div>""", unsafe_allow_html=True)
+
+def _diet_guide_section(labs):
+    section("5️⃣ 식이 가이드 (자동)")
+    tips = []
+
+    # 기준값(참고용, 병원 기준과 다를 수 있음)
+    if labs.get('alb', 0) and labs['alb'] < 3.5:
+        tips.append(("알부민 낮음", ["달걀", "연두부", "흰살 생선", "닭가슴살", "귀리죽"]))
+    if labs.get('k', 0) and labs['k'] < 3.5:
+        tips.append(("칼륨 낮음", ["바나나", "감자", "호박죽", "고구마", "오렌지"]))
+    if labs.get('hb', 0) and labs['hb'] < 10.0:
+        tips.append(("Hb 낮음", ["소고기", "시금치", "두부", "달걀 노른자", "렌틸콩"]))
+    if labs.get('na', 0) and labs['na'] < 135:
+        tips.append(("나트륨 낮음", ["전해질 음료", "미역국", "바나나", "오트밀죽", "삶은 감자"]))
+    if labs.get('ca', 0) and labs['ca'] < 8.5:
+        tips.append(("칼슘 낮음", ["연어통조림", "두부", "케일", "브로콜리", "참깨 제외"]))  # 참깨 제외 안내 유지
+
+    if not tips:
+        st.info("입력값 기준으로 필요한 식이 가이드가 없습니다. (정상 범위로 추정)")
+        return
+
+    for title, foods in tips:
+        st.markdown(f"**• {title}** → 추천 식품 5개: " + ", ".join(foods))
+
+    st.caption("영양제(철분제 등)는 추천에서 제외합니다. **항암 치료 중 철분제는 권장되지 않습니다.** 반드시 주치의와 상의하세요. 철분제+비타민C 병용 시 흡수 증가 가능성이 있습니다.")
 
 if __name__ == "__main__":
     main()
