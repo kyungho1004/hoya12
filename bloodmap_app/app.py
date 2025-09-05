@@ -1,6 +1,40 @@
 # -*- coding: utf-8 -*-
 import streamlit as st
 
+# --- Safe UI helper fallbacks (section/subtitle/num_input/pin_valid/warn_banner) ---
+try:
+    _ = section  # noqa: F821
+except Exception:
+    def section(title:str):
+        st.markdown(f"## {title}")
+
+try:
+    _ = subtitle  # noqa: F821
+except Exception:
+    def subtitle(text:str):
+        st.markdown(f"<div class='small'>{text}</div>", unsafe_allow_html=True)
+
+try:
+    _ = num_input  # noqa: F821
+except Exception:
+    def num_input(label:str, key:str, min_value=None, max_value=None, step=None, format=None, placeholder=None):
+        # placeholder -> help 로 대체
+        return st.number_input(label, key=key, min_value=min_value, max_value=max_value, step=step, format=format if format else None, help=placeholder)
+
+try:
+    _ = pin_valid  # noqa: F821
+except Exception:
+    def pin_valid(pin_text:str)->bool:
+        s = str(pin_text or "").strip()
+        return s.isdigit() and len(s) == 4
+
+try:
+    _ = warn_banner  # noqa: F821
+except Exception:
+    def warn_banner(text:str):
+        st.markdown(f"<span class='badge'>⚠️ {text}</span>", unsafe_allow_html=True)
+
+
 # --- Safe fallbacks for pediatric helpers (in case of partial deploy) ---
 try:
     _ = _fever_grade_from_temp  # noqa
