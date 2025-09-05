@@ -512,7 +512,7 @@ def main():
         if user_key:
             st.success(f"사용자: **{user_key}** · 진단: {diagnosis} · 그룹: {group}")
         else:
-            st.warning("별명과 유효한 4자리 PIN을 입력하면 저장/내보내기가 활성화됩니다.")
+            st.warning("별명과 유효한 4자리 PIN을 입력하면 저장/해석하기가 활성화됩니다.")
 
         derived = {}
         if acr:
@@ -614,8 +614,8 @@ def main():
         st.code(share_txt, language="text")
         st.download_button("🔗 공유 텍스트(.txt)", data=share_txt, file_name=f"{user_key or 'share'}.txt", disabled=not user_key)
         
-        # ---- 내보내기 ----
-        st.markdown("### ⬇️ 내보내기")
+        # ---- 해석하기 ----
+        st.markdown("### ⬇️ 해석하기")
         cdl1, cdl2, cdl3 = st.columns(3)
 
         with cdl1:
