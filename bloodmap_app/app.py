@@ -1,6 +1,40 @@
 # -*- coding: utf-8 -*-
 import streamlit as st
 
+# --- Safe fallbacks for pediatric helpers (in case of partial deploy) ---
+try:
+    _ = _fever_grade_from_temp  # noqa
+except Exception:
+    def _fever_grade_from_temp(temp_c):
+        if temp_c is None or temp_c == 0:
+            return "없음"
+        try:
+            t = float(temp_c)
+        except Exception:
+            return "없음"
+        if t < 37.5: return "없음"
+        if 37.5 <= t < 38.0: return "미열"
+        if 38.0 <= t < 38.5: return "열"
+        return "고열(≥38.5)"
+
+try:
+    _ = _peds_severity_score  # noqa
+except Exception:
+    def _peds_severity_score(value:str)->int:
+        table = {"없음":0,"안함":0,"미열":1,"조금":1,"적음":1,"보통":2,"열":2,"많이":3,"심함":3,"고열(≥38.5)":3}
+        return table.get(value, 0)
+
+try:
+    _ = _risk_with_duration  # noqa
+except Exception:
+    def _risk_with_duration(base:int, days):
+        try:
+            d = int(days) if days is not None else 0
+        except Exception:
+            d = 0
+        return min(3, int(base) + (1 if d >= 3 else 0))
+
+
 # --- Safe fallback for inject_css (in case utils import was pruned during deploy) ---
 try:
     _ = inject_css  # type: ignore # noqa
