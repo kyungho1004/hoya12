@@ -73,7 +73,10 @@ def main():
     # ===== Diagnosis =====
     with tabs[0]:
         group = st.radio("암 그룹", ["혈액암","고형암","육종","희귀암"], horizontal=True)
-        diag_options = list(drug_data.CHEMO_BY_DIAGNOSIS.get(group, {}).keys())
+        st.session_state["group_sel"] = group
+        group_cur = (group if "group" in locals() else st.session_state.get("group_sel") or "혈액암")
+        diag_map = getattr(drug_data, "CHEMO_BY_DIAGNOSIS", {})
+        diag_options = list(diag_map.get(group_cur, {}).keys()) or ["AML(급성 골수성 백혈병)"]
         if not diag_options:
             diag_options = ["-"]
         diagnosis = st.selectbox("진단명", diag_options, index=0)
