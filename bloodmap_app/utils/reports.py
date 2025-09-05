@@ -23,6 +23,10 @@ def build_report(mode, meta, vals, cmp_lines, extra_vals, meds_lines, food_lines
         lines.append("## 감염질환 요약")
         for k,v in meta["infect_info"].items():
             lines.append(f"- {k}: {v}")
+    if meta.get("infect_symptoms"):
+        lines.append("## 체크한 증상")
+        for s in meta["infect_symptoms"]:
+            lines.append(f"- {s}")
     lines.append("")
     if vals:
         lines.append("## 입력 혈액 수치(입력한 값만)")
