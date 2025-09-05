@@ -81,8 +81,45 @@ def _interpret_peds():
     return msgs
 
 def main():
-    st.markdown(f"<style>{open('/mnt/data/hoya12/style.css','r',encoding='utf-8').read()}</style>", unsafe_allow_html=True)
+    # Robust CSS loader (optional)
+    from pathlib import Path as _P
+    try:
+        _here = _P(__file__).resolve()
+        _candidates = [
+            _here.parent.parent / "style.css",   # hoya12/style.css
+            _here.parent / "style.css",          # same folder fallback
+            _P("style.css"),                     # CWD fallback
+        ]
+        for _p in _candidates:
+            if _p.exists():
+                st.markdown(f"<style>{_p.read_text(encoding='utf-8')}</style>", unsafe_allow_html=True)
+                break
+    except Exception:
+        pass
+    
     st.title(APP_TITLE)
+
+# ---- Safe CSS loader (no absolute paths) ----
+try:
+    from pathlib import Path as _P
+    _APP_FILE = _P(__file__).resolve()
+    _PKG_ROOT = _APP_FILE.parent.parent  # hoya12/
+    _CSS_CANDIDATES = [
+        _PKG_ROOT / "style.css",               # hoya12/style.css
+        _APP_FILE.parent / "style.css",        # hoya12/bloodmap_app/style.css
+        _P.cwd() / "style.css"                 # current working dir
+    ]
+    _css_text = None
+    for _p in _CSS_CANDIDATES:
+        if _p.is_file():
+            _css_text = _p.read_text(encoding="utf-8")
+            break
+    if _css_text:
+        st.markdown(f"<style>{_css_text}</style>", unsafe_allow_html=True)
+except Exception as _e:
+    # CSS 미적용은 치명적 오류 아님 — 조용히 무시
+    pass
+
     st.caption(f"빌드: {VERSION}")
     st.info(GLOBAL_DISCLAIMER)
 
