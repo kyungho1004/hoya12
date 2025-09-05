@@ -111,19 +111,19 @@ def main():
     if mode == "일반/암":
         group = st.selectbox("암 그룹 선택", ["미선택/일반", "혈액암", "고형암", "육종", "희귀암"])
         if group == "혈액암":
+    heme_display = [
+        "급성 골수성 백혈병(AML)",
+        "급성 전골수구성 백혈병(APL)",
+        "급성 림프모구성 백혈병(ALL)",
+        "만성 골수성 백혈병(CML)",
+        "만성 림프구성 백혈병(CLL)",
+    ]
+    cancer = st.selectbox("혈액암(진단명)", heme_display)
+elif group == "고형암":
 
-heme_display = [
-    "급성 골수성 백혈병(AML)",
-    "급성 전골수구성 백혈병(APL)",
-    "급성 림프모구성 백혈병(ALL)",
-    "만성 골수성 백혈병(CML)",
-    "만성 림프구성 백혈병(CLL)",
-]
-cancer = st.selectbox("혈액암(진단명)", heme_display)
-        elif group == "고형암":
             cancer = st.selectbox("고형암(진단명)", [
                 "폐암(Lung cancer)","유방암(Breast cancer)","위암(Gastric cancer)",
-                "대장암(Cololoractal cancer)","간암(HCC)","췌장암(Pancreatic cancer)",
+                "대장암(Colorectal cancer)","간암(HCC)","췌장암(Pancreatic cancer)",
                 "담도암(Cholangiocarcinoma)","자궁내막암(Endometrial cancer)",
                 "구강암/후두암","피부암(흑색종)","신장암(RCC)",
                 "갑상선암","난소암","자궁경부암","전립선암","뇌종양(Glioma)","식도암","방광암"
@@ -185,7 +185,7 @@ cancer = st.selectbox("혈액암(진단명)", heme_display)
                                "Gefitinib","Erlotinib","Osimertinib","Alectinib","Bevacizumab","Pembrolizumab","Nivolumab"],
             "유방암(Breast cancer)": ["Doxorubicin","Cyclophosphamide","Paclitaxel","Docetaxel","Trastuzumab","Bevacizumab"],
             "위암(Gastric cancer)": ["Cisplatin","Oxaliplatin","5-FU","Capecitabine","Paclitaxel","Trastuzumab","Pembrolizumab"],
-            "대장암(Cololoractal cancer)": ["5-FU","Capecitabine","Oxaliplatin","Irinotecan","Bevacizumab"],
+            "대장암(Colorectal cancer)": ["5-FU","Capecitabine","Oxaliplatin","Irinotecan","Bevacizumab"],
             "간암(HCC)": ["Sorafenib","Lenvatinib","Bevacizumab","Pembrolizumab","Nivolumab"],
             "췌장암(Pancreatic cancer)": ["Gemcitabine","Oxaliplatin","Irinotecan","5-FU"],
             "담도암(Cholangiocarcinoma)": ["Gemcitabine","Cisplatin","Bevacizumab"],
@@ -378,7 +378,7 @@ cancer = st.selectbox("혈액암(진단명)", heme_display)
             st.divider()
             st.header("4️⃣ 암별 디테일 수치")
             st.caption("해석은 주치의 판단을 따르며, 값 기록/공유를 돕기 위한 입력 영역입니다.")
-            if cancer in ["AML","APL"]:
+            if heme_key_map.get(cancer, cancer) in ["AML","APL"]:
                 extra_vals["DIC Score"] = num_input_generic("DIC Score (pt)", key="ex_dic", decimals=0, placeholder="예: 3")
         elif group == "육종":
             st.divider()
