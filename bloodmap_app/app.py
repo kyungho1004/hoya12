@@ -91,7 +91,7 @@ def main():
     if mode == "일반/암":
         group = st.selectbox("암 그룹 선택", ["미선택/일반", "혈액암", "고형암", "육종", "희귀암"])
         if group == "혈액암":
-            cancer = st.selectbox("혈액암(진단명)", ["AML","APL","ALL","CML","CLL"])
+            cancer = st.selectbox("혈액암(진단명)", ["AML(급성 골수성 백혈병)","APL(급성 전골수구성백혈병)","ALL(급성 림프모구성 백혈병)","CML(만성 골수성백혈병)","CLL(만성 림프구성백혈병)"])
         elif group == "고형암":
             cancer = st.selectbox("고형암(진단명)", [
                 "폐암(Lung cancer)","유방암(Breast cancer)","위암(Gastric cancer)",
@@ -146,11 +146,12 @@ def main():
         st.markdown("### 💊 항암제 선택 및 입력")
         heme_by_cancer = {
             "AML": ["ARA-C","Daunorubicin","Idarubicin","Cyclophosphamide",
-                    "Etoposide","Fludarabine","Hydroxyurea","MTX","ATRA","G-CSF"],
-            "APL": ["ATRA","Idarubicin","Daunorubicin","ARA-C","G-CSF"],
-            "ALL": ["Vincristine","Asparaginase","Daunorubicin","Cyclophosphamide","MTX","ARA-C","Topotecan","Etoposide"],
+                    "Etoposide","Fludarabine","Hydroxyurea","MTX","ATRA","G-CSF","6-MP"],
+            "APL": ["ATRA","Idarubicin","Daunorubicin","ARA-C","G-CSF","MTX","6-mp"],
+            "ALL": [ "Vincristine", "Asparaginase", "Daunorubicin", "Cyclophosphamide",
+                   "MTX", "ARA-C", "Topotecan", "Etoposide", "6-mp", "Prednisolone", "Dexamethasone"],
             "CML": ["Imatinib","Dasatinib","Nilotinib","Hydroxyurea"],
-            "CLL": ["Fludarabine","Cyclophosphamide"],
+            "CLL": [ "Fludarabine", "Cyclophosphamide", "Bendamustine", "Rituximab", "Venetoclax"],
         }
         solid_by_cancer = {
             "폐암(Lung cancer)": ["Cisplatin","Carboplatin","Paclitaxel","Docetaxel","Gemcitabine","Pemetrexed",
