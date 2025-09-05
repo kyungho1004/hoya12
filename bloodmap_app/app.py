@@ -43,6 +43,7 @@ def _patient_bar():
         st.info(f"저장 키: **{storage_key}**")
 
 
+
 def _mode_and_cancer_picker():
     st.markdown("### 1️⃣ 소아가이드 / 암 선택")
     mode = st.radio("모드 선택", options=["소아 가이드", "암 종류"], horizontal=True, key="mode_pick")
@@ -57,28 +58,52 @@ def _mode_and_cancer_picker():
         picked_dx = dx
         st.caption("암 그룹/진단 선택 후 바로 아래에서 항암제·항생제를 추가하세요.")
     else:
-        peds_cat = st.radio("소아 카테고리", ["일상 가이드", "호흡기", "감염 질환", "혈액암(소아)", "고형암(소아)", "육종(소아)", "희귀암(소아)"], horizontal=True, key="peds_cat")
+        peds_cat = st.radio("소아 카테고리", ["일상 가이드", "호흡기", "감염 질환"], horizontal=True, key="peds_cat")
         if peds_cat == "감염 질환":
             with st.expander("감염 질환 토글"):
-                c1, c2, c3 = st.columns(3)
+                c1, c2, c3, c4, c5, c6 = st.columns(6)
                 rsv = c1.checkbox("RSV", key="p_rsv")
                 adv = c2.checkbox("Adenovirus", key="p_adv")
                 rota = c3.checkbox("Rotavirus", key="p_rota")
-                flu = st.checkbox("Influenza", key="p_flu")
-                para = st.checkbox("Parainfluenza", key="p_para")
-                # 간단 가이드 표기
+                flu = c4.checkbox("Influenza", key="p_flu")
+                para = c5.checkbox("Parainfluenza", key="p_para")
+                hfm = c6.checkbox("수족구(Hand-Foot-Mouth)", key="p_hfm")
+
+                st.markdown("**증상별 (예시)**")
+                c7, c8, c9 = st.columns(3)
+                diarrhea = c7.selectbox("설사", ["없음", "조금", "보통", "많이"], key="sx_diarrhea")
+                pain = c8.selectbox("통증", ["없음", "보통", "심함"], key="sx_pain")
+                fever = c9.selectbox("열(체감/측정)", ["없음", "미열", "열", "고열(≥38.5)"], key="sx_fever")
+
+                _peds_interpret_and_show(pain=pain, fever=fever, diarrhea=diarrhea, cough="없음")
+
                 notes = []
                 if rsv: notes.append("RSV: 수분섭취, 비강세척, 호흡곤란·탈수 시 진료.")
-                if adv: notes.append("Adeno: 고열 지속 가능, 해열제 간격 준수, 눈충혈/결막염 동반 주의.")
-                if rota: notes.append("Rota: 탈수 예방(ORS), 설사 지속·혈변 시 진료.")
+                if adv: notes.append("Adenovirus: 고열 지속 가능, 해열제 간격 준수, 결막염·혈뇨 동반 가능 주의.")
+                if rota: notes.append("Rotavirus: 구토/설사로 탈수 위험, ORS 권장, 혈변·무기력 시 진료.")
                 if flu: notes.append("Influenza: 48시간 이내 항바이러스제 고려(의료진). 고위험군 모니터링.")
-                if para: notes.append("Parainfluenza: 크룹 기침 가능, 흡입기·응급실 치료 필요할 수 있음.")
+                if para: notes.append("Parainfluenza: 크룹 기침 가능, 흡입치료·응급실 필요 가능.")
+                if hfm: notes.append("수족구: 수포·통증으로 수분 섭취 저하 시 탈수 위험, 통증 조절 및 수분 보충.")
+
                 if notes:
-                    st.info("\n".join(notes))
-        else:
-            st.caption("소아 모드에서는 보호자용 가이드를 강조합니다.")
+                    st.info("\n".join(["• " + n for n in notes]))
+        elif peds_cat == "호흡기":
+            st.markdown("**호흡기 예시**")
+            cough = st.selectbox("기침", ["안함", "조금", "보통", "심함"], key="sx_cough")
+            fever = st.selectbox("열(체감/측정)", ["없음", "미열", "열", "고열(≥38.5)"], key="sx_fever_r")
+            _peds_interpret_and_show(pain="없음", fever=fever, diarrhea="없음", cough=cough)
+            st.caption("기침/호흡곤란이 심하거나 밤에 악화 시, 또는 고열 지속 시 진료 권장.")
+        else:  # 일상 가이드
+            st.markdown("**일상 가이드 — 증상 체크**")
+            c1, c2, c3 = st.columns(3)
+            fever = c1.selectbox("열(체감/측정)", ["없음", "미열", "열", "고열(≥38.5)"], key="sx_fever_d")
+            cough = c2.selectbox("기침", ["안함", "조금", "보통", "심함"], key="sx_cough_d")
+            diarrhea = c3.selectbox("설사", ["없음", "조금", "보통", "많이"], key="sx_diarrhea_d")
+            _peds_interpret_and_show(pain="없음", fever=fever, diarrhea=diarrhea, cough=cough)
+            st.caption("가정 내 대증치료(수분/해열제 간격 준수)와 위생 관리. 악화 또는 고열 시 병원 내원.")
 
     return picked_group, picked_dx
+
 
 
 
@@ -243,6 +268,28 @@ def _diet_guide_section(labs):
 
     st.caption("영양제(철분제 등)는 추천에서 제외합니다. 항암 치료 중 철분제는 권장되지 않습니다. "
                "철분제와 비타민C 병용 시 흡수 증가 가능성이 있어 반드시 주치의와 상의하세요.")
+
+def _peds_severity_score(value:str)->int:
+    table = {
+        "없음": 0, "안함": 0, "미열": 1, "조금": 1,
+        "보통": 2, "열": 2,
+        "많이": 3, "심함": 3, "고열(≥38.5)": 3
+    }
+    return table.get(value, 0)
+
+def _peds_interpret_and_show(**kwargs):
+    # kwargs: pain, fever, diarrhea, cough
+    pain = _peds_severity_score(kwargs.get("pain"))
+    fever = _peds_severity_score(kwargs.get("fever"))
+    diarrhea = _peds_severity_score(kwargs.get("diarrhea"))
+    cough = _peds_severity_score(kwargs.get("cough"))
+    risk = max(pain, fever, diarrhea, cough)
+    if fever >= 3 or diarrhea >= 3 or pain >= 3 or cough >= 3:
+        st.error("증상이 **심합니다**. 꼭 병원에서 **주치의 상담 또는 응급실 내원**을 권장합니다.")
+    elif risk == 2:
+        st.warning("증상이 **중등도**입니다. 수분 보충, 해열제 간격 준수 등 대증치료를 하면서 **악화 시 내원**하세요.")
+    else:
+        st.info("증상이 **경증**으로 추정됩니다. 가정 내 대증치료와 관찰을 권장합니다.")
 
 def main():
     st.set_page_config(page_title=f"{APP_TITLE} {APP_VERSION}", layout="centered", initial_sidebar_state="collapsed")
