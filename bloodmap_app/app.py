@@ -181,10 +181,10 @@ def main():
     st.divider()
 
     # ===== Tabs =====
-    tabs = st.tabs(["진단 선택", "기본 수치", "특수/소변", "약물 선택", "소아 가이드", "결과/내보내기"])
+    tabs = st.tabs(["기본 수치","특수/소변","약물 선택","소아 가이드","결과/내보내기"])
 
     # ===== Diagnosis =====
-    with tabs[0]:
+    with st.container():
         group = st.radio("암 그룹", ["혈액암","고형암","육종","희귀암"], horizontal=True)
         st.session_state["group_sel"] = group
         group_cur = (group if "group" in locals() else st.session_state.get("group_sel") or "혈액암")
@@ -306,7 +306,7 @@ def main():
         st.caption("자세한 입력은 상단의 '기본 수치' 탭에서 가능합니다.")
 
     # ===== Basic panel =====
-    with tabs[1]:
+    with tabs[0]:
         def _numfield(label, key):
             v = st.session_state.get(key, "")
             return st.text_input(label, value=str(v) if v not in (None, "") else "", key=key, placeholder="")
@@ -358,7 +358,7 @@ def main():
 
         # # (removed legacy oncology quick panel; using new toggles)
 # ===== Special/Urine panel =====
-    with tabs[2]:
+    with tabs[1]:
         st.markdown("#### 특수/소변 검사")
         st.caption("요단백·요알부민·혈뇨 등은 필요한 값만 입력하세요.")
         unit_col, _, _ = st.columns(3)
@@ -448,7 +448,7 @@ def main():
 
 
     # ===== Pediatrics =====
-    with tabs[4]:
+    with tabs[2]:
         st.markdown("#### 소아 패널 / 해석 가이드")
         c1,c2,c3 = st.columns(3)
         with c1:
@@ -500,7 +500,7 @@ def main():
             st.markdown(f"- {m}")
 
     # ===== Result / Export =====
-    with tabs[5]:
+    with tabs[4]:
         st.info('''이 해석기는 참고용 도구이며, 모든 수치는 개발자와 무관합니다.
 결과를 기반으로 반드시 주치의와 상담 후 의학적 판단 및 치료 결정을 하시기 바랍니다.''')
         st.markdown("### 결과 요약")
