@@ -4,6 +4,13 @@ import pandas as pd
 import streamlit as st
 import matplotlib.pyplot as plt
 
+DEFAULT_Y_LIST = [
+    "WBC","Hb","PLT","ANC","CRP",
+    "Ferritin","LDH","Uric acid","ESR","Retic(%)","β2-microglobulin",
+    "AST","ALT","ALP","GGT","Total bilirubin",
+    "Na","K","Ca","Mg","Phos","INR","aPTT","Fibrinogen","D-dimer","Triglycerides","Lactate"
+]
+
 def _load_user_df(history_csv: str, user_key: str) -> pd.DataFrame:
     if not os.path.exists(history_csv):
         return pd.DataFrame()
@@ -16,7 +23,6 @@ def _load_user_df(history_csv: str, user_key: str) -> pd.DataFrame:
     df = df[df["user_key"] == user_key].copy()
     if df.empty:
         return df
-    # Parse timestamp and sort
     if "timestamp" in df.columns:
         try:
             df["timestamp"] = pd.to_datetime(df["timestamp"])
@@ -39,7 +45,6 @@ def _line(df, x, y, title, ylabel):
     st.pyplot(fig)
 
 def render_graphs(history_csv: str, user_key: str):
-    """Render WBC, Hb, PLT, ANC, CRP trends for the given user_key."""
     if not user_key:
         st.info("별명과 4자리 PIN을 입력하면 그래프가 활성화됩니다.")
         return
@@ -50,9 +55,6 @@ def render_graphs(history_csv: str, user_key: str):
     st.subheader("📈 추이 그래프")
     st.caption("동일한 별명#PIN으로 저장된 기록을 시간순으로 표시합니다.")
     x = "timestamp"
-    _line(df, x, "WBC", "WBC 추이 (×10³/µL)", "WBC (×10³/µL)")
-    _line(df, x, "Hb", "Hb 추이 (g/dL)", "Hb (g/dL)")
-    _line(df, x, "PLT", "혈소판 추이 (×10³/µL)", "PLT (×10³/µL)")
-    _line(df, x, "ANC", "ANC 추이 (/µL)", "ANC (/µL)")
-    if "CRP" in df.columns:
-        _line(df, x, "CRP", "CRP 추이 (mg/dL)", "CRP (mg/dL)")
+    for y in DEFAULT_Y_LIST:
+        if y in df.columns:
+            _line(df, x, y, f"{y} 추이", y)
