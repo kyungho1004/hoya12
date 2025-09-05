@@ -3,4 +3,5 @@ import streamlit as st
 from bloodmap_app.app import main
 
 if __name__ == "__main__":
+    st.set_page_config(page_title="피수치 가이드 / BloodMap", layout="centered", initial_sidebar_state="collapsed")
     main()
