@@ -265,6 +265,20 @@ def main():
             diag_options = ["-"]
         diagnosis = st.selectbox("진단명", diag_options, index=0)
 
+        # --- 항암제(진단별 선택) ---
+        with st.expander("🧬 항암제(진단별 선택)", expanded=False):
+            # 진단별 약물 목록 (drug_data 우선, 없으면 폴백 맵 사용)
+            diag_map = getattr(drug_data, "CHEMO_BY_DIAGNOSIS", {})
+            chemo_list = (diag_map.get(group, {}) or {}).get(diagnosis, [])
+            if not chemo_list and "고형암" in str(group):
+                chemo_list = ["Cisplatin (시스플라틴)","Carboplatin (카보플라틴)","Paclitaxel (파클리탁셀)","Gemcitabine (젬시타빈)","5-FU (플루오로우라실)","Oxaliplatin (옥살리플라틴)"]
+            if not chemo_list and "혈액암" in str(group):
+                chemo_list = ["Cytarabine (사이타라빈)","Daunorubicin (다우노루비신)","Idarubicin (이다루비신)","Methotrexate (메토트렉세이트(MTX))","6-Mercaptopurine (6-MP(머캅토퓨린))"]
+            sel_chemo = st.multiselect("항암제 선택(진단별)", options=chemo_list, default=chemo_list, key="chemo_by_diagnosis")
+            if not chemo_list:
+                st.caption("진단별 약물 데이터가 비어 있습니다. drug_data.CHEMO_BY_DIAGNOSIS에 추가하거나 메시지로 알려주세요.")
+    
+
         # Quick preview for core labs on the first tab
         st.markdown("#### 🧪 피수치(핵심) 미리보기")
         q1,q2,q3,q4,q5 = st.columns(5)
@@ -283,8 +297,6 @@ def main():
             "POMP": ["6-Mercaptopurine (6-MP(머캅토퓨린))","Vincristine (빈크리스틴)","Methotrexate (메토트렉세이트(MTX))","Prednisone (프레드니손)"]
         }
         REG = getattr(drug_data, "REGIMENS", None) or _fallback_reg
-        reg_keys_quick = ["(프리셋 없음)"] + list(REG.keys())
-        st.selectbox("레짐 프리셋(Quick)", reg_keys_quick, key="chosen_reg_quick", help="약물 선택 탭과 연동됩니다.")
         # sync shared state
         st.session_state["chosen_reg_shared"] = st.session_state.get("chosen_reg_quick", "(프리셋 없음)")
 
@@ -335,54 +347,8 @@ def main():
         for h in hints:
             if h: st.caption("• " + h)
 
-        # Oncology quick panel: 항암제 & 특수검사(소변) 바로 밑에 표시
-        if group in ("혈액암","고형암","육종"):
-            st.markdown("---")
-            st.markdown("### 🧬 항암제(빠른 선택)")
-            _fallback_reg = {
-                "MAP": ["High-dose Methotrexate (고용량 메토트렉세이트)","Doxorubicin (독소루비신)","Cisplatin (시스플라틴)"],
-                "VAC/IE": ["Vincristine (빈크리스틴)","Actinomycin D (아크티노마이신 D)","Cyclophosphamide (사이클로포스파마이드)","Ifosfamide (이포스파미드)","Etoposide (에토포사이드)"],
-                "POMP": ["6-Mercaptopurine (6-MP(머캅토퓨린))","Vincristine (빈크리스틴)","Methotrexate (메토트렉세이트(MTX))","Prednisone (프레드니손)"]
-            }
-            REG = getattr(drug_data, "REGIMENS", None) or _fallback_reg
-            reg_keys2 = ["(프리셋 없음)"] + list(REG.keys())
-            chosen_reg2 = st.selectbox("레짐 프리셋(빠른 선택)", reg_keys2, key="chosen_reg_basic", help="약물 선택 탭과 연동")
-            chemo_list2 = drug_data.CHEMO_BY_DIAGNOSIS.get(group, {}).get(diagnosis, [])
-            if chosen_reg2 != "(프리셋 없음)":
-                preset2 = REG.get(chosen_reg2, [])
-                chemo_list2 = list(dict.fromkeys(list(preset2) + list(chemo_list2)))
-                st.caption(f"프리셋 적용: {chosen_reg2} → {len(preset2)}개 항목 선반영")
-            sel_chemo_basic = st.multiselect("항암제 선택(빠른)", options=chemo_list2, default=(REG.get(chosen_reg2, []) if chosen_reg2 != "(프리셋 없음)" else []), key="chemo_quick")
-
-            st.markdown("### 🧪 특수검사(소변 간편)")
-            u1,u2,u3 = st.columns(3)
-            with u1:
-                alb_unit_q = st.radio("요 알부민 단위", ["mg/L","mg/dL"], horizontal=True, index=0, key="alb_unit_quick")
-            with u2:
-                alb_q = st.number_input(f"요 알부민 ({st.session_state.get('alb_unit_quick','mg/L')})", min_value=0.0, step=1.0, format="%.1f", key="alb_quick")
-            with u3:
-                prot_q = st.number_input("요 단백 (mg/dL)", min_value=0.0, step=1.0, format="%.1f", key="prot_quick")
-            cr_q = st.number_input("요 크레아티닌 (mg/dL)", min_value=0.0, step=0.1, format="%.1f", key="ucr_quick")
-            alb_mg_L_q = (st.session_state.get("alb_quick") or 0.0) * (10.0 if st.session_state.get("alb_unit_quick") == "mg/dL" else 1.0)
-            acr_q = compute_acr(alb_mg_L_q if alb_mg_L_q else None, cr_q if cr_q else None)
-            upcr_q = compute_upcr(prot_q if prot_q else None, cr_q if cr_q else None)
-            c1,c2 = st.columns(2)
-            with c1:
-                st.metric("ACR (mg/g)", f"{acr_q:.0f}" if acr_q else "-")
-                st.caption(interpret_acr(acr_q))
-            with c2:
-                st.metric("UPCR (mg/g)", f"{upcr_q:.0f}" if upcr_q else "-")
-                st.caption(interpret_upcr(upcr_q))
-    
-        if ANC:
-            if ANC < 500:
-                st.info("ANC 가이드: ⚠️ 500 미만 주의")
-            elif ANC < 1000:
-                st.info("ANC 가이드: ⚠️ 500~999 주의")
-            else:
-                st.info("ANC 가이드: ✅ 1000 이상 안정")
-
-    # ===== Special/Urine panel =====
+        # # (removed legacy oncology quick panel; using new toggles)
+===== Special/Urine panel =====
     with tabs[2]:
         st.markdown("#### 특수/소변 검사")
         st.caption("요단백·요알부민·혈뇨 등은 필요한 값만 입력하세요.")
@@ -471,79 +437,6 @@ def main():
         for q in quick:
             if q: st.caption("• " + q)
 
-
-    # ===== Drugs panel =====
-    with tabs[3]:
-        st.markdown("#### 항암제/항생제 (한글 병기)")
-        chemo_list = drug_data.CHEMO_BY_DIAGNOSIS.get(group, {}).get(diagnosis, [])
-        # 레짐 프리셋 (drug_data.REGIMENS 없을 때도 안전하게 동작)
-        _fallback_reg = {
-            "MAP": [
-                "High-dose Methotrexate (고용량 메토트렉세이트)",
-                "Doxorubicin (독소루비신)",
-                "Cisplatin (시스플라틴)"
-            ],
-            "VAC/IE": [
-                "Vincristine (빈크리스틴)",
-                "Actinomycin D (아크티노마이신 D)",
-                "Cyclophosphamide (사이클로포스파마이드)",
-                "Ifosfamide (이포스파미드)",
-                "Etoposide (에토포사이드)"
-            ],
-            "POMP": [
-                "6-Mercaptopurine (6-MP(머캅토퓨린))",
-                "Vincristine (빈크리스틴)",
-                "Methotrexate (메토트렉세이트(MTX))",
-                "Prednisone (프레드니손)"
-            ],
-        }
-        REG = getattr(drug_data, "REGIMENS", None) or _fallback_reg
-        reg_keys = list(REG.keys())
-        options_full = ["(프리셋 없음)"] + reg_keys
-        default_shared = st.session_state.get("chosen_reg_shared", "(프리셋 없음)")
-        try:
-            idx_default = options_full.index(default_shared)
-        except ValueError:
-            idx_default = 0
-        chosen_reg = st.selectbox(
-            "레짐 프리셋", options_full, index=idx_default,
-            key="chosen_reg_full", help="예: MAP, VAC/IE, POMP"
-        )
-        # keep shared in sync if user changes here
-        st.session_state["chosen_reg_shared"] = chosen_reg
-        if chosen_reg != "(프리셋 없음)":
-            preset = REG.get(chosen_reg, [])
-            base_set = set(chemo_list)
-            chemo_list = list(dict.fromkeys(list(preset) + list(base_set)))
-            st.caption(f"프리셋 적용: {chosen_reg} → {len(preset)}개 항목 선반영")
-        sel_chemo = st.multiselect(
-            "항암제 선택",
-            options=chemo_list,
-            default=(REG.get(chosen_reg, []) if chosen_reg != "(프리셋 없음)" else []),
-            help="복수 선택 가능"
-        )
-
-
-        st.markdown("---")
-        ABX = getattr(drug_data, "ANTIBIOTICS_BY_CLASS", {
-            "Cephalosporins(세팔로스포린계)": ["Cefazolin(세파졸린)", "Ceftriaxone(세프트리악손)", "Ceftazidime(세프타지딤)", "Cefepime(세페핌)"],
-            "Penicillins(페니실린계)": ["Amoxicillin(아목시실린)", "Piperacillin-tazobactam(피페라실린/타조박탐)"],
-            "Carbapenems(카바페넴계)": ["Meropenem(메로페넴)", "Imipenem/cilastatin(이미페넴/실라스타틴)"],
-            "Glycopeptides(글리코펩타이드)": ["Vancomycin(반코마이신)"],
-        })
-        ABX_TIPS = getattr(drug_data, "ABX_CLASS_TIPS", {
-            "Cephalosporins(세팔로스포린계)": "교차 알레르기 가능성. 일부 약은 담즙정체성 간염 드물게 보고.",
-            "Penicillins(페니실린계)": "알레르기/발진 주의. 신장기능 저하 시 용량 조절 고려.",
-            "Carbapenems(카바페넴계)": "광범위. 경련 위험(고용량/신기능 저하) 주의.",
-            "Glycopeptides(글리코펩타이드)": "반코마이신: 신독성/이독성, 혈중농도 모니터링.",
-        })
-        abx_classes = list(ABX.keys())
-        abx_class = st.selectbox("항생제 계열", abx_classes)
-        abx_options = ABX.get(abx_class, [])
-        sel_abx = st.multiselect("항생제 선택", options=abx_options)
-        tip = ABX_TIPS.get(abx_class, "")
-        if tip:
-            st.info(f"계열 안내: {tip}")
 
     # ===== Pediatrics =====
     with tabs[4]:
