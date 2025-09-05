@@ -1,1 +1,1 @@
-# utils package bridge
+# utils package
