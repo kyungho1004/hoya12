@@ -45,6 +45,14 @@ def save_row(row: dict):
     df.to_csv(HISTORY_CSV, index=False)
 
 def main():
+
+    # --- safe module binding (avoid NameError/UnboundLocalError) ---
+    try:
+        from . import drug_data as _drug_data
+    except Exception:
+        import importlib
+        _drug_data = importlib.import_module("bloodmap_app.drug_data")
+    drug_data = _drug_data
     st.set_page_config(page_title=APP_TITLE, layout="centered", initial_sidebar_state="collapsed")
     load_css()
     st.markdown(f"### {APP_TITLE} — {VERSION}")
@@ -73,7 +81,7 @@ def main():
         group = st.radio("암 그룹", ["혈액암","고형암","육종","희귀암"], horizontal=True)
         st.session_state["group_sel"] = group
         group_cur = (group if "group" in locals() else st.session_state.get("group_sel") or "혈액암")
-        diag_map = getattr(drug_data, "CHEMO_BY_DIAGNOSIS", {})
+        diag_map = getattr(drug_data, "CHEMO_BY_DIAGNOSIS", {}) or {}
         diag_options = list(diag_map.get(group_cur, {}).keys()) or ["AML(급성 골수성 백혈병)"]
         if not diag_options:
             diag_options = ["-"]
