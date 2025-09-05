@@ -1,10 +1,30 @@
 # -*- coding: utf-8 -*-
 import streamlit as st
+from io import BytesIO
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+from reportlab.graphics.barcode import qr as rl_qr
+from reportlab.lib.units import mm
+from datetime import datetime
+try:
+    from zoneinfo import ZoneInfo
+except Exception:
+    ZoneInfo=None
 # Safe import (handles stale/partial deployments)
 try:
-    from .utils import inject_css, section, subtitle, num_input, pin_valid, warn_banner
+    from .utils import inject_css, section, subtitle, num_input, pin_valid, warn_banner, load_profiles, save_profile, recent_profiles
 except Exception:  # pragma: no cover
     import streamlit as st
+from io import BytesIO
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+from reportlab.graphics.barcode import qr as rl_qr
+from reportlab.lib.units import mm
+from datetime import datetime
+try:
+    from zoneinfo import ZoneInfo
+except Exception:
+    ZoneInfo=None
     def inject_css():
         try:
             with open("bloodmap_app/style.css", "r", encoding="utf-8") as f:
@@ -28,20 +48,35 @@ def _header_share():
         st.write("• 카카오/메신저 공유 링크, 카페/블로그, 앱 주소 QR은 다음 빌드에서 연결됩니다.")
         st.code("https://bloodmap.example", language="text")
 
+
 def _patient_bar():
     st.markdown("""
     <div class='card'>
-      <b>결과 상단 표기</b> — 별명·PIN 4자리 (중복 방지)    </div>
+      <b>결과 상단 표기</b> — 별명·PIN 4자리 (중복 방지)
+    </div>
     """, unsafe_allow_html=True)
-    c1, c2 = st.columns([2,1])
-    nickname = c1.text_input("별명", key="nickname", placeholder="예: 민수맘 / Hoya")
-    pin = c2.text_input("PIN 4자리", key="pin", max_chars=4, placeholder="0000")
+
+    colA, colB, colC = st.columns([2,1,1])
+    nickname = colA.text_input("별명", key="nickname", placeholder="예: 민수맘 / Hoya")
+    pin = colB.text_input("PIN 4자리", key="pin", max_chars=4, placeholder="0000")
     if pin and not pin_valid(pin):
         st.error("PIN은 숫자 4자리만 허용됩니다.")
+
     storage_key = f"{nickname}#{pin}" if (nickname and pin_valid(pin)) else None
     if storage_key:
+        colC.button("저장", on_click=lambda: save_profile(storage_key))
         st.info(f"저장 키: **{storage_key}**")
+        # 최근 사용 키
+        rec = recent_profiles()
+        if rec:
+            st.caption("최근 사용: " + " · ".join(rec))
 
+    # 접근성 토글
+    col1, col2, col3 = st.columns([1,1,1])
+    col1.toggle("큰 글자", key="acc_lg")
+    col2.toggle("고대비", key="acc_hc")
+    if col3.button("초기화"):
+        _reset_all()
 
 
 def _mode_and_cancer_picker():
@@ -59,50 +94,155 @@ def _mode_and_cancer_picker():
         st.caption("암 그룹/진단 선택 후 바로 아래에서 항암제·항생제를 추가하세요.")
     else:
         peds_cat = st.radio("소아 카테고리", ["일상 가이드", "호흡기", "감염 질환"], horizontal=True, key="peds_cat")
+
         if peds_cat == "감염 질환":
             with st.expander("감염 질환 토글"):
-                c1, c2, c3, c4, c5, c6 = st.columns(6)
-                rsv = c1.checkbox("RSV", key="p_rsv")
-                adv = c2.checkbox("Adenovirus", key="p_adv")
+                c1, c2, c3, c4, c5, c6, c7, c8 = st.columns(8)
+                rsv  = c1.checkbox("RSV", key="p_rsv")
+                adv  = c2.checkbox("Adenovirus", key="p_adv")
                 rota = c3.checkbox("Rotavirus", key="p_rota")
-                flu = c4.checkbox("Influenza", key="p_flu")
+                flu  = c4.checkbox("Influenza", key="p_flu")
                 para = c5.checkbox("Parainfluenza", key="p_para")
-                hfm = c6.checkbox("수족구(Hand-Foot-Mouth)", key="p_hfm")
+                hfm  = c6.checkbox("수족구", key="p_hfm")
+                noro = c7.checkbox("노로/아스트로", key="p_noro")
+                myco = c8.checkbox("마이코플라스마", key="p_myco")
 
-                st.markdown("**증상별 (예시)**")
-                c7, c8, c9 = st.columns(3)
-                diarrhea = c7.selectbox("설사", ["없음", "조금", "보통", "많이"], key="sx_diarrhea")
-                pain = c8.selectbox("통증", ["없음", "보통", "심함"], key="sx_pain")
-                fever = c9.selectbox("열(체감/측정)", ["없음", "미열", "열", "고열(≥38.5)"], key="sx_fever")
+            # Common inputs
+            st.markdown("**공통 지표 (선택)**")
+            c9, c10, c11, c12 = st.columns(4)
+            dur = c9.number_input("증상 기간(일)", key="sx_days", min_value=0, max_value=30, step=1)
+            dysp = c10.selectbox("호흡곤란 정도", ["없음", "조금", "보통", "많이", "심함"], key="sx_dysp")
+            cyan = c11.checkbox("청색증(입술/손톱 푸르스름) 있음", key="sx_cyan")
+            ox_avail = c12.checkbox("펄스옥시미터 있음", key="sx_ox_avail")
+            spo2 = None
+            if ox_avail:
+                spo2 = st.number_input("SpO₂(%)", key="sx_spo2", min_value=50.0, max_value=100.0, step=0.1, format="%.1f")
+            st.caption("SpO₂는 가정용 기기가 있을 때만 입력하세요. 없으면 비워두면 됩니다.")
 
-                _peds_interpret_and_show(pain=pain, fever=fever, diarrhea=diarrhea, cough="없음")
+            # RSV
 
-                notes = []
-                if rsv: notes.append("RSV: 수분섭취, 비강세척, 호흡곤란·탈수 시 진료.")
-                if adv: notes.append("Adenovirus: 고열 지속 가능, 해열제 간격 준수, 결막염·혈뇨 동반 가능 주의.")
-                if rota: notes.append("Rotavirus: 구토/설사로 탈수 위험, ORS 권장, 혈변·무기력 시 진료.")
-                if flu: notes.append("Influenza: 48시간 이내 항바이러스제 고려(의료진). 고위험군 모니터링.")
-                if para: notes.append("Parainfluenza: 크룹 기침 가능, 흡입치료·응급실 필요 가능.")
-                if hfm: notes.append("수족구: 수포·통증으로 수분 섭취 저하 시 탈수 위험, 통증 조절 및 수분 보충.")
+            if rsv:
+                st.markdown("**RSV — 증상 입력**")
+                c1, c2 = st.columns(2)
+                rsv_temp = c1.number_input("발열 — 체온(°C)", key="rsv_temp", min_value=30.0, max_value=42.0, step=0.1, format="%.1f")
+                rsv_rhino = c2.selectbox("콧물 색", ["없음", "흰색", "누런색", "피섞임"], key="rsv_rhino")
+                fever = _fever_grade_from_temp(rsv_temp)
+                rh_map = {"없음":0, "흰색":1, "누런색":2, "피섞임":3}
+                _peds_interpret_and_show(fever=fever, extras=[rh_map[rsv_rhino]], duration_days=dur, spo2=spo2, dyspnea=dysp, cyanosis=cyan)
 
-                if notes:
-                    st.info("\n".join(["• " + n for n in notes]))
+            # Adenovirus
+            if adv:
+                st.markdown("**Adenovirus — 증상 입력**")
+                c1, c2 = st.columns(2)
+                adv_temp = c1.number_input("발열 — 체온(°C)", key="adv_temp", min_value=30.0, max_value=42.0, step=0.1, format="%.1f")
+                adv_eye = c2.selectbox("눈꼽 분비물", ["없음", "적음", "보통", "심함"], key="adv_eye")
+                fever = _fever_grade_from_temp(adv_temp)
+                eye_map = {"없음":0, "적음":1, "보통":2, "심함":3}
+                _peds_interpret_and_show(fever=fever, extras=[eye_map[adv_eye]], duration_days=dur, spo2=spo2, dyspnea=dysp, cyanosis=cyan)
+
+            # Influenza
+            if flu:
+                st.markdown("**인플루엔자 — 증상 입력**")
+                c1, c2 = st.columns(2)
+                flu_temp = c1.number_input("발열 — 체온(°C)", key="flu_temp", min_value=30.0, max_value=42.0, step=0.1, format="%.1f")
+                flu_cough = c2.selectbox("기침", ["없음", "보통", "심함"], key="flu_cough")
+                fever = _fever_grade_from_temp(flu_temp)
+                _peds_interpret_and_show(fever=fever, cough=flu_cough, duration_days=dur, spo2=spo2, dyspnea=dysp, cyanosis=cyan)
+
+            # Parainfluenza
+            if para:
+                st.markdown("**Parainfluenza — 증상 입력**")
+                c1, c2 = st.columns(2)
+                para_temp = c1.number_input("발열 — 체온(°C)", key="para_temp", min_value=30.0, max_value=42.0, step=0.1, format="%.1f")
+                para_cough = c2.selectbox("기침", ["없음", "조금", "보통", "많이", "심함"], key="para_cough")
+                fever = _fever_grade_from_temp(para_temp)
+                _peds_interpret_and_show(fever=fever, cough=para_cough, duration_days=dur, spo2=spo2, dyspnea=dysp, cyanosis=cyan)
+
+            # Rotavirus
+            if rota:
+                st.markdown("**Rotavirus — 증상 입력**")
+                c1, c2, c3 = st.columns(3)
+                rota_stool = c1.number_input("설사 횟수(회/일)", key="rota_stool", min_value=0, max_value=30, step=1)
+                rota_temp = c2.number_input("발열 — 체온(°C)", key="rota_temp", min_value=30.0, max_value=42.0, step=0.1, format="%.1f")
+                rota_dysuria = c3.selectbox("배뇨통", ["없음", "조금", "보통", "심함"], key="rota_dysuria")
+                fever = _fever_grade_from_temp(rota_temp)
+                stool_sev = 0 if rota_stool == 0 else (1 if rota_stool <= 2 else (2 if rota_stool <= 5 else 3))
+                dys_map = {"없음":0, "조금":1, "보통":2, "심함":3}
+                diarrhea_level = "없음" if stool_sev==0 else ("조금" if stool_sev==1 else ("보통" if stool_sev==2 else "많이"))
+                _peds_interpret_and_show(fever=fever, diarrhea=diarrhea_level, extras=[dys_map[rota_dysuria]], duration_days=dur, spo2=spo2, dyspnea=dysp, cyanosis=cyan)
+
+            # 수족구
+            if hfm:
+                st.markdown("**수족구 — 증상 입력**")
+                hfm_temp = st.number_input("발열 — 체온(°C)", key="hfm_temp", min_value=30.0, max_value=42.0, step=0.1, format="%.1f")
+                fever = _fever_grade_from_temp(hfm_temp)
+                _peds_interpret_and_show(fever=fever, duration_days=dur, spo2=spo2, dyspnea=dysp, cyanosis=cyan)
+
+            # 노로/아스트로
+            if noro:
+                st.markdown("**노로/아스트로 — 증상 입력**")
+                c1, c2, c3 = st.columns(3)
+                noro_vomit = c1.selectbox("구토", ["없음", "조금", "보통", "심함"], key="noro_vomit")
+                noro_stool = c2.number_input("설사 횟수(회/일)", key="noro_stool", min_value=0, max_value=30, step=1)
+                noro_temp = c3.number_input("발열 — 체온(°C)", key="noro_temp", min_value=30.0, max_value=42.0, step=0.1, format="%.1f")
+                fever = _fever_grade_from_temp(noro_temp)
+                stool_sev = 0 if noro_stool == 0 else (1 if noro_stool <= 2 else (2 if noro_stool <= 5 else 3))
+                _peds_interpret_and_show(fever=fever, diarrhea=["없음","조금","보통","많이"][stool_sev], extras=[_peds_severity_score(noro_vomit)], duration_days=dur, spo2=spo2, dyspnea=dysp, cyanosis=cyan)
+
+            # 마이코플라스마
+            if myco:
+                st.markdown("**마이코플라스마 — 증상 입력**")
+                c1, c2 = st.columns(2)
+                myco_cough = c1.selectbox("기침", ["안함", "조금", "보통", "심함"], key="myco_cough")
+                myco_temp  = c2.number_input("발열 — 체온(°C)", key="myco_temp", min_value=30.0, max_value=42.0, step=0.1, format="%.1f")
+                fever = _fever_grade_from_temp(myco_temp)
+                _peds_interpret_and_show(fever=fever, cough=myco_cough, duration_days=dur, spo2=spo2, dyspnea=dysp, cyanosis=cyan)
+
         elif peds_cat == "호흡기":
             st.markdown("**호흡기 예시**")
-            cough = st.selectbox("기침", ["안함", "조금", "보통", "심함"], key="sx_cough")
-            fever = st.selectbox("열(체감/측정)", ["없음", "미열", "열", "고열(≥38.5)"], key="sx_fever_r")
-            _peds_interpret_and_show(pain="없음", fever=fever, diarrhea="없음", cough=cough)
+            c1, c2, c3, c4 = st.columns(4)
+            cough   = c1.selectbox("기침", ["안함", "조금", "보통", "심함"], key="sx_cough")
+            fever_t = c2.number_input("체온(°C)", key="sx_fever_r_t", min_value=30.0, max_value=42.0, step=0.1, format="%.1f")
+            dysp    = c3.selectbox("호흡곤란 정도", ["없음", "조금", "보통", "많이", "심함"], key="sx_dysp_r")
+            cyan    = c4.checkbox("청색증 있음", key="sx_cyan_r")
+            colx1, colx2 = st.columns(2)
+            ox_avail_r = colx1.checkbox("펄스옥시미터 있음", key="sx_ox_avail_r")
+            spo2 = None
+            if ox_avail_r:
+                spo2 = colx2.number_input("SpO₂(%)", key="sx_spo2_r", min_value=50.0, max_value=100.0, step=0.1, format="%.1f")
+            fever   = _fever_grade_from_temp(fever_t)
+            _peds_interpret_and_show(pain="없음", fever=fever, diarrhea="없음", cough=cough, spo2=spo2, dyspnea=dysp, cyanosis=cyan)
             st.caption("기침/호흡곤란이 심하거나 밤에 악화 시, 또는 고열 지속 시 진료 권장.")
+
         else:  # 일상 가이드
             st.markdown("**일상 가이드 — 증상 체크**")
-            c1, c2, c3 = st.columns(3)
-            fever = c1.selectbox("열(체감/측정)", ["없음", "미열", "열", "고열(≥38.5)"], key="sx_fever_d")
-            cough = c2.selectbox("기침", ["안함", "조금", "보통", "심함"], key="sx_cough_d")
-            diarrhea = c3.selectbox("설사", ["없음", "조금", "보통", "많이"], key="sx_diarrhea_d")
-            _peds_interpret_and_show(pain="없음", fever=fever, diarrhea=diarrhea, cough=cough)
-            st.caption("가정 내 대증치료(수분/해열제 간격 준수)와 위생 관리. 악화 또는 고열 시 병원 내원.")
+            # appetite yes/no + level
+            has_app = st.radio("식욕", ["없음", "있음"], horizontal=True, key="app_yesno")
+            if has_app == "있음":
+                appetite = st.selectbox("식욕 정도", ["조금", "보통", "많음"], key="app_level")
+            else:
+                appetite = "없음"
+            c1, c2, c3, c4 = st.columns(4)
+            fever_t  = c1.number_input("발열 — 체온(°C)", key="sx_fever_d_t", min_value=30.0, max_value=42.0, step=0.1, format="%.1f")
+            vomit    = c2.selectbox("구토", ["없음", "조금", "보통", "심함"], key="sx_vomit")
+            diarrhea = c3.selectbox("설사", ["없음", "조금", "보통", "심함"], key="sx_diarrhea_d")
+            urine    = c4.number_input("소변 횟수(회/일)", key="sx_urine_d", min_value=0, max_value=30, step=1)
+            # optional: 체중 변화
+            weight_delta = st.number_input("체중 변화(kg, 7일)", key="sx_wdelta", min_value=-10.0, max_value=10.0, step=0.1, format="%.1f")
+            fever    = _fever_grade_from_temp(fever_t)
+            app_map = {"없음":2, "조금":1, "보통":0, "많음":0}
+            extra = [app_map.get(appetite,0), _peds_severity_score(vomit)]
+            # 탈수 시사: 소변 3회 미만이면 가중
+            if urine < 3: extra.append(2)
+            # 체중 감소 2% 넘으면 가중(추정치로 1kg 이상 감소 시 경고)
+            if weight_delta is not None and weight_delta < -1.0: extra.append(2)
+            _peds_interpret_and_show(pain="없음", fever=fever, diarrhea=diarrhea, cough="안함", extras=extra)
 
     return picked_group, picked_dx
+
+
+
+
 
 
 
@@ -112,6 +252,7 @@ def _labs_section():
     ped_mode = st.session_state.get("mode_pick") == "소아 가이드"
 
     def _labs_body():
+        section("3️⃣ 피수치 입력")
         c1, c2, c3, c4 = st.columns(4)
         wbc = num_input("WBC (×10³/µL)", "wbc", min_value=0.0, step=0.1, placeholder="예: 1.2")
         hb  = num_input("Hb (g/dL)", "hb", min_value=0.0, step=0.1, placeholder="예: 9.1")
@@ -124,7 +265,6 @@ def _labs_section():
         k   = num_input("K 포타슘 (mEq/L)", "k", min_value=0.0, step=0.1, placeholder="예: 3.3")
         alb = num_input("Albumin 알부민 (g/dL)", "alb", min_value=0.0, step=0.1, placeholder="예: 2.4")
 
-        # 알부민 '밑에' 확장 항목
         c9, c10, c11, c12 = st.columns(4)
         glu = num_input("Glucose 혈당 (mg/dL)", "glu", min_value=0.0, step=1.0, placeholder="예: 105")
         tp  = num_input("Total Protein 총단백 (g/dL)", "tp", min_value=0.0, step=0.1, placeholder="예: 4.4")
@@ -141,7 +281,7 @@ def _labs_section():
             st.write("자주 시행하지 않는 항목은 토글로 열어서 입력합니다.")
             t1 = st.checkbox("응고패널 (PT, aPTT, Fibrinogen, D-dimer)", key="toggle_coag")
             if t1:
-                c1, c2 = st.columns(2)
+                c1a, c2a = st.columns(2)
                 num_input("PT (sec)", "pt", min_value=0.0, step=0.1)
                 num_input("aPTT (sec)", "aptt", min_value=0.0, step=0.1)
                 num_input("Fibrinogen (mg/dL)", "fbg", min_value=0.0, step=1.0)
@@ -149,7 +289,7 @@ def _labs_section():
 
             t_lipid = st.checkbox("지질검사 패널 (TC/TG/LDL/HDL)", key="toggle_lipid")
             if t_lipid:
-                c1, c2, c3, c4 = st.columns(4)
+                c1b, c2b, c3b, c4b = st.columns(4)
                 num_input("총콜레스테롤 TC (mg/dL)", "tc", min_value=0.0, step=1.0)
                 num_input("중성지방 TG (mg/dL)", "tg", min_value=0.0, step=1.0)
                 num_input("LDL-C (mg/dL)", "ldl", min_value=0.0, step=1.0)
@@ -157,28 +297,32 @@ def _labs_section():
 
             t_hf = st.checkbox("심부전 표지자 (BNP/NT-proBNP)", key="toggle_hf")
             if t_hf:
-                c1, c2 = st.columns(2)
+                c1c, c2c = st.columns(2)
                 num_input("BNP (pg/mL)", "bnp", min_value=0.0, step=1.0)
                 num_input("NT-proBNP (pg/mL)", "ntprobnp", min_value=0.0, step=1.0)
 
-            t2 = st.checkbox("보체 (C3, C4, CH50)", key="toggle_complement")
-            if t2:
-                c1, c2, c3 = st.columns(3)
-                num_input("C3 (mg/dL)", "c3", min_value=0.0, step=1.0)
-                num_input("C4 (mg/dL)", "c4", min_value=0.0, step=1.0)
-                num_input("CH50 (U/mL)", "ch50", min_value=0.0, step=1.0)
-
-            t3 = st.checkbox("요검사 (단백뇨/잠혈/요당)", key="toggle_ua")
-            if t3:
-                st.selectbox("단백뇨(Proteinuria)", ["없음", "미량", "약양성", "중등도", "강양성"], key="ua_prot")
-                st.selectbox("잠혈(Hematuria)", ["없음", "미량", "약양성", "중등도", "강양성"], key="ua_hema")
-                st.selectbox("요당(Glycosuria)", ["없음", "미량", "약양성", "중등도", "강양성"], key="ua_glu")
+            t_ext = st.checkbox("염증/기타 (ESR/PCT/Ferritin/LDH/CK, 소변량)", key="toggle_ext")
+            if t_ext:
+                c1d, c2d, c3d, c4d, c5d = st.columns(5)
+                num_input("ESR (mm/hr)", "esr", min_value=0.0, step=1.0)
+                num_input("Procalcitonin PCT (ng/mL)", "pct", min_value=0.0, step=0.01)
+                num_input("Ferritin (ng/mL)", "ferritin", min_value=0.0, step=1.0)
+                num_input("LDH (U/L)", "ldh", min_value=0.0, step=1.0)
+                num_input("CK (U/L)", "ck", min_value=0.0, step=1.0)
+                num_input("소변량 (mL/kg/hr)", "uo", min_value=0.0, step=0.1)
 
         # ANC 경고 배너
         if anc and anc < 500:
             warn_banner("ANC 500 미만 — 생채소·생과일 금지, 모든 음식은 충분히 가열하세요. 조리 후 2시간 지난 음식은 먹지 않기.")
 
         return dict(wbc=wbc, hb=hb, plt=plt, anc=anc, ca=ca, na=na, k=k, alb=alb, glu=glu, tp=tp, ast=ast, alt=alt, crp=crp, cr=cr, ua=ua, tb=tb)
+
+    if ped_mode:
+        with st.expander("3️⃣ 피수치 입력 (소아 — 필요 시 열기)"):
+            return _labs_body()
+    else:
+        return _labs_body()
+
 
     # 소아 모드면 전체를 토글(Expander)로 감싸기
     if ped_mode:
@@ -242,6 +386,12 @@ def _result_section(labs, picked_group, picked_dx):
     )
     st.download_button("📄 TXT 다운로드", report_txt, file_name="bloodmap_report.txt")
 
+    # PDF 다운로드 (QR 포함)
+    url_hint = "https://bloodmap.example"
+    pdf_bytes = _make_pdf(nick, pin, picked_group, picked_dx, entered, url_hint)
+    st.download_button("🧾 PDF 다운로드", data=pdf_bytes, file_name="bloodmap_report.pdf", mime="application/pdf")
+
+
 
 def _diet_guide_section(labs):
     section("5️⃣ 식이 가이드 (자동)")
@@ -278,6 +428,44 @@ def _peds_severity_score(value:str)->int:
     return table.get(value, 0)
 
 def _peds_interpret_and_show(**kwargs):
+    # kwargs may include: pain, fever, diarrhea, cough, extras(list[int]), duration_days(int), spo2(float),
+    # dyspnea(str), cyanosis(bool)
+    pain = _peds_severity_score(kwargs.get("pain"))
+    fever = _peds_severity_score(kwargs.get("fever"))
+    diarrhea = _peds_severity_score(kwargs.get("diarrhea"))
+    cough = _peds_severity_score(kwargs.get("cough"))
+    dyspnea = _peds_severity_score(kwargs.get("dyspnea"))
+    cyanosis = bool(kwargs.get("cyanosis", False))
+    extras = kwargs.get("extras", [])
+    duration_days = kwargs.get("duration_days")
+    spo2 = kwargs.get("spo2")
+
+    base = max([pain, fever, diarrhea, cough, dyspnea] + (extras or [0]))
+    # duration effect
+    risk = _risk_with_duration(base, duration_days)
+
+    # Cyanosis is severe by definition
+    if cyanosis:
+        risk = 3
+
+    # SpO2 thresholds only if measured
+    if spo2 is not None:
+        try:
+            s = float(spo2)
+            if s < 92:
+                risk = 3
+            elif s < 95:
+                risk = max(risk, 2)
+        except Exception:
+            pass
+
+    if risk >= 3:
+        st.error("증상이 **심합니다**. 꼭 병원에서 **주치의 상담 또는 응급실 내원**을 권장합니다.")
+    elif risk == 2:
+        st.warning("증상이 **중등도**입니다. 수분 보충, 해열제 간격 준수 등 대증치료를 하면서 **악화 시 내원**하세요.")
+    else:
+        st.info("증상이 **경증**으로 추정됩니다. 가정 내 대증치료와 관찰을 권장합니다.")
+
     # kwargs: pain, fever, diarrhea, cough
     pain = _peds_severity_score(kwargs.get("pain"))
     fever = _peds_severity_score(kwargs.get("fever"))
@@ -291,6 +479,18 @@ def _peds_interpret_and_show(**kwargs):
     else:
         st.info("증상이 **경증**으로 추정됩니다. 가정 내 대증치료와 관찰을 권장합니다.")
 
+def _fever_grade_from_temp(temp_c: float|None) -> str:
+    if not temp_c:
+        return "없음"
+    try:
+        t = float(temp_c)
+    except Exception:
+        return "없음"
+    if t < 37.5: return "없음"
+    if 37.5 <= t < 38.0: return "미열"
+    if 38.0 <= t < 38.5: return "열"
+    return "고열(≥38.5)"
+
 def main():
     st.set_page_config(page_title=f"{APP_TITLE} {APP_VERSION}", layout="centered", initial_sidebar_state="collapsed")
     inject_css()
@@ -299,7 +499,10 @@ def main():
     st.caption(f"빌드 {APP_VERSION} — 모바일 최적화 UI")
 
     _header_share()
+    _timestamp_badge()
+    _apply_accessibility()
     _patient_bar()
+    st.markdown("""<div class='fixed-action'><button class='btn'>🔍 해석하기 버튼은 아래에 있습니다</button></div>""", unsafe_allow_html=True)
     picked_group, picked_dx = _mode_and_cancer_picker()
 
     # 모드 확인: 암 종류일 때만 약물 섹션 바로 아래 표시

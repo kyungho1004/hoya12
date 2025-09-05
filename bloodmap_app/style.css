@@ -14,3 +14,28 @@ h1, h2, h3, h4, h5 { color: var(--fg); }
 }
 .st-emotion-cache-ue6h4q { padding: 1rem !important; } /* container padding */
 .footer-note{font-size:.8rem;color:#666;margin-top:1rem;}
+
+/* Hide +/- steppers on number inputs */
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button{
+  -webkit-appearance: none; margin: 0;
+}
+input[type=number]{ -moz-appearance: textfield; }
+
+/* accessibility */
+.high-contrast { --fg:#000; --bg:#fff; --card:#fff; --border:#000; --accent:#000; }
+.large-text { font-size: 1.05rem; }
+.fixed-action {
+  position: fixed; bottom: 12px; left: 0; right: 0; z-index: 9999;
+  display: flex; justify-content: center;
+}
+.fixed-action .btn {
+  background: var(--fg); color: #fff; border: none; border-radius: 9999px;
+  padding: .9rem 1.25rem; font-weight: 700; box-shadow: 0 6px 20px rgba(0,0,0,.15);
+}
+/* Hide +/- steppers on number inputs */
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button{
+  -webkit-appearance: none; margin: 0;
+}
+input[type=number]{ -moz-appearance: textfield; }

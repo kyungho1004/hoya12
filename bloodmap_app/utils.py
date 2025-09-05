@@ -29,3 +29,27 @@ def pin_valid(pin_text:str)->bool:
 
 def warn_banner(text:str):
     st.markdown(f"<span class='badge'>⚠️ {text}</span>", unsafe_allow_html=True)
+
+
+import json, os, time
+
+PROFILES_PATH = os.path.join("data","profiles.json")
+
+def load_profiles():
+    try:
+        with open(PROFILES_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def save_profile(key:str):
+    db = load_profiles()
+    db[key] = {"ts": int(time.time())}
+    os.makedirs(os.path.dirname(PROFILES_PATH), exist_ok=True)
+    with open(PROFILES_PATH, "w", encoding="utf-8") as f:
+        json.dump(db, f, ensure_ascii=False, indent=2)
+    return db
+
+def recent_profiles(n=5):
+    db = load_profiles()
+    return sorted(db.keys(), key=lambda k: db[k]["ts"], reverse=True)[:n]
