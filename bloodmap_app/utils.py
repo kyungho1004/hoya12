@@ -3,7 +3,14 @@ import streamlit as st
 
 def inject_css():
     try:
-        with open(st.secrets.get('css_path', 'bloodmap_app/style.css'), 'r', encoding='utf-8') as f:
+        import os
+        css_path = 'bloodmap_app/style.css'
+        try:
+            # Optional override via secrets or env
+            css_path = st.secrets['css_path'] if 'css_path' in st.secrets else os.environ.get('CSS_PATH', css_path)
+        except Exception:
+            pass
+        with open(css_path, 'r', encoding='utf-8') as f:
             st.markdown(f"""<style>{f.read()}</style>""", unsafe_allow_html=True)
     except Exception:
         pass
