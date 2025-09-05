@@ -110,16 +110,15 @@ def main():
 
     if mode == "일반/암":
         group = st.selectbox("암 그룹 선택", ["미선택/일반", "혈액암", "고형암", "육종", "희귀암"])
-        if group == "혈액암":
-        heme_display = [
-    "급성 골수성 백혈병(AML)",
-    "급성 전골수구성 백혈병(APL)",
-    "급성 림프모구성 백혈병(ALL)",
-    "만성 골수성 백혈병(CML)",
-    "만성 림프구성 백혈병(CLL)",
-]
-        cancer = st.selectbox("혈액암(진단명)", heme_display)
-
+                if group == "혈액암":
+            heme_display = [
+                "급성 골수성 백혈병(AML)",
+                "급성 전골수구성 백혈병(APL)",
+                "급성 림프모구성 백혈병(ALL)",
+                "만성 골수성 백혈병(CML)",
+                "만성 림프구성 백혈병(CLL)",
+            ]
+            cancer = st.selectbox("혈액암(진단명)", heme_display)
         elif group == "고형암":
             cancer = st.selectbox("고형암(진단명)", [
                 "폐암(Lung cancer)","유방암(Breast cancer)","위암(Gastric cancer)",
@@ -378,8 +377,7 @@ def main():
             st.divider()
             st.header("4️⃣ 암별 디테일 수치")
             st.caption("해석은 주치의 판단을 따르며, 값 기록/공유를 돕기 위한 입력 영역입니다.")
-            ckey = heme_key_map.get(cancer, cancer)
-                if ckey in ["AML","APL"]:
+            if heme_key_map.get(cancer, cancer) in ["AML","APL"]:
                 extra_vals["DIC Score"] = num_input_generic("DIC Score (pt)", key="ex_dic", decimals=0, placeholder="예: 3")
         elif group == "육종":
             st.divider()
