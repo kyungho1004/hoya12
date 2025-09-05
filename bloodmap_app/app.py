@@ -329,20 +329,20 @@ try:
     idx_default = options_full.index(default_shared)
 except ValueError:
     idx_default = 0
-chosen_reg = st.selectbox("레짐 프리셋", options_full, index=idx_default, key="chosen_reg_full", help="예: MAP, VAC/IE, POMP")
-# keep shared in sync if user changes here
-st.session_state["chosen_reg_shared"] = chosen_reg
-if chosen_reg != "(프리셋 없음)":
-    preset = REG.get(chosen_reg, [])
-    base_set = set(chemo_list)
-    chemo_list = list(dict.fromkeys(list(preset) + list(base_set)))
-    st.caption(f"프리셋 적용: {chosen_reg} → {len(preset)}개 항목 선반영")
-sel_chemo = st.multiselect(
-    "항암제 선택",
-    options=chemo_list,
-    default=(REG.get(chosen_reg, []) if chosen_reg != "(프리셋 없음)" else []),
-    help="복수 선택 가능"
-)
+        chosen_reg = st.selectbox("레짐 프리셋", options_full, index=idx_default, key="chosen_reg_full", help="예: MAP, VAC/IE, POMP")
+        # keep shared in sync if user changes here
+        st.session_state["chosen_reg_shared"] = chosen_reg
+        if chosen_reg != "(프리셋 없음)":
+            preset = REG.get(chosen_reg, [])
+            base_set = set(chemo_list)
+            chemo_list = list(dict.fromkeys(list(preset) + list(base_set)))
+            st.caption(f"프리셋 적용: {chosen_reg} → {len(preset)}개 항목 선반영")
+        sel_chemo = st.multiselect(
+            "항암제 선택",
+            options=chemo_list,
+            default=(REG.get(chosen_reg, []) if chosen_reg != "(프리셋 없음)" else []),
+            help="복수 선택 가능"
+        )
 
 
         st.markdown("---")
