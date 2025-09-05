@@ -559,7 +559,6 @@ def main():
             st.session_state["auto_age_months"] = age_years*12
             st.experimental_rerun()
         group_ped = st.selectbox("소아 질환군", ["-", "소아-일상", "소아-감염", "소아-혈액암", "소아-고형암", "소아-육종", "소아-희귀암"])
-            "ANC": (st.session_state.get("ANC_20") or st.session_state.get("ANC_inline") or st.session_state.get("ANC_ped") or (ANC if "ANC" in locals() else None)) or ""
         for m in ped_msgs:
             st.markdown(f"- {m}")
 
@@ -607,7 +606,6 @@ def main():
             "WBC": (st.session_state.get("WBC_20") or st.session_state.get("WBC_inline") or st.session_state.get("WBC_ped") or (WBC if "WBC" in locals() else None)) or ""
             "Hb": (st.session_state.get("Hb_20") or st.session_state.get("Hb_inline") or st.session_state.get("Hb_ped") or (Hb if "Hb" in locals() else None)) or ""
             "PLT": (st.session_state.get("PLT_20") or st.session_state.get("PLT_inline") or st.session_state.get("PLT_ped") or (PLT if "PLT" in locals() else None)) or ""
-            "ANC": (st.session_state.get("ANC_20") or st.session_state.get("ANC_inline") or ANC) if (st.session_state.get("ANC_20") or st.session_state.get("ANC_inline") or ANC) else "",
             "CRP": (st.session_state.get("CRP_20") or st.session_state.get("CRP_inline") or st.session_state.get("CRP_ped") or (CRP if "CRP" in locals() else None)) or ""
             "Urine Alb (mg/L)": urine_albumin_mg_L if urine_albumin_mg_L else "",
             "Ferritin": Ferritin if "Ferritin" in locals() and Ferritin else "",
