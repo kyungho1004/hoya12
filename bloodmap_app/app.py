@@ -338,7 +338,7 @@ def main():
             if h: st.caption("• " + h)
 
         # # (removed legacy oncology quick panel; using new toggles)
-===== Special/Urine panel =====
+# ===== Special/Urine panel =====
     with tabs[2]:
         st.markdown("#### 특수/소변 검사")
         st.caption("요단백·요알부민·혈뇨 등은 필요한 값만 입력하세요.")
@@ -512,7 +512,7 @@ def main():
         if user_key:
             st.success(f"사용자: **{user_key}** · 진단: {diagnosis} · 그룹: {group}")
         else:
-            st.warning("별명과 유효한 4자리 PIN을 입력하면 저장/해석하기가 활성화됩니다.")
+            st.warning("별명과 유효한 4자리 PIN을 입력하면 저장/내보내기가 활성화됩니다.")
 
         derived = {}
         if acr:
@@ -614,8 +614,8 @@ def main():
         st.code(share_txt, language="text")
         st.download_button("🔗 공유 텍스트(.txt)", data=share_txt, file_name=f"{user_key or 'share'}.txt", disabled=not user_key)
         
-        # ---- 해석하기 ----
-        st.markdown("### ⬇️ 해석하기")
+        # ---- 내보내기 ----
+        st.markdown("### ⬇️ 내보내기")
         cdl1, cdl2, cdl3 = st.columns(3)
 
         with cdl1:
