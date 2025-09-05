@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 from bloodmap_app.app import main
 
