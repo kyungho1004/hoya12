@@ -267,6 +267,21 @@ def main():
 
         # --- 항암제(진단별 선택) ---
         with st.expander("🧬 항암제(진단별 선택)", expanded=False):
+
+            # --- 기본 피수치(20종) ---
+            with st.expander("🧪 기본 피수치(20종)", expanded=False):
+                st.caption("필요 수치만 입력하세요. 입력값은 결과/해석에 반영됩니다.")
+                def _numtxt(label, key):
+                    val = st.session_state.get(key, "")
+                    return st.text_input(label, value=str(val) if val not in (None, "") else "", key=key, placeholder="")
+                c1,c2,c3,c4,c5 = st.columns(5)
+                _numtxt("WBC(×10³/µL)", "WBC_20"); _numtxt("Hb(g/dL)", "Hb_20"); _numtxt("PLT(×10³/µL)", "PLT_20"); _numtxt("ANC(/µL)", "ANC_20"); _numtxt("CRP(mg/dL)", "CRP_20")
+                c6,c7,c8,c9,c10 = st.columns(5)
+                _numtxt("Ca(mg/dL)", "Ca_20"); _numtxt("K(mmol/L)", "K_20"); _numtxt("TP(g/dL)", "TP_20"); _numtxt("LD(U/L)", "LD_20"); _numtxt("P(mg/dL)", "P_20")
+                c11,c12,c13,c14,c15 = st.columns(5)
+                _numtxt("Alb(g/dL)", "Alb_20"); _numtxt("AST(U/L)", "AST_20"); _numtxt("Cr(mg/dL)", "Cr_20"); _numtxt("Na(mmol/L)", "Na_20"); _numtxt("Glu(mg/dL)", "Glu_20")
+                c16,c17,c18,c19,c20 = st.columns(5)
+                _numtxt("ALT(U/L)", "ALT_20"); _numtxt("UA(mg/dL)", "UA_20"); _numtxt("Tb(mg/dL)", "Tb_20"); _numtxt("Ferritin(ng/mL)", "Ferritin_20"); _numtxt("D-dimer(µg/mL)", "Ddimer_20")
             # 진단별 약물 목록 (drug_data 우선, 없으면 폴백 맵 사용)
             diag_map = getattr(drug_data, "CHEMO_BY_DIAGNOSIS", {})
             chemo_list = (diag_map.get(group, {}) or {}).get(diagnosis, [])
@@ -292,40 +307,44 @@ def main():
 
     # ===== Basic panel =====
     with tabs[1]:
+        def _numfield(label, key):
+            v = st.session_state.get(key, "")
+            return st.text_input(label, value=str(v) if v not in (None, "") else "", key=key, placeholder="")
+
         st.markdown("#### 기본 수치")
         c1, c2, c3, c4, c5 = st.columns(5)
         with c1:
-            WBC = st.number_input("WBC(×10³/µL)", min_value=0.0, step=0.1, format="%.1f", key="WBC_val")
+            WBC = _numfield("WBC(×10³/µL)", "WBC_val")
         with c2:
-            Hb  = st.number_input("Hb(g/dL)", min_value=0.0, step=0.1, format="%.1f", key="Hb_val")
+            Hb  = _numfield("Hb(g/dL)", "Hb_val")
         with c3:
-            PLT = st.number_input("혈소판(×10³/µL)", min_value=0.0, step=1.0, format="%.0f", key="PLT_val")
+            PLT = _numfield("혈소판(×10³/µL)", "PLT_val")
         with c4:
-            ANC = st.number_input("호중구 ANC(/µL)", min_value=0.0, step=10.0, format="%.0f", key="ANC_val")
+            ANC = _numfield("호중구 ANC(/µL)", "ANC_val")
         with c5:
-            CRP = st.number_input("CRP(mg/dL)", min_value=0.0, step=0.1, format="%.2f", key="CRP_val")
+            CRP = _numfield("CRP(mg/dL)", "CRP_val")
 
 
         st.markdown("#### 기본 수치(확장)")
         # 전해질/간·신장/대사 핵심
         b1,b2,b3,b4 = st.columns(4)
         with b1:
-            Ca = st.number_input("Ca(칼슘, mg/dL)", min_value=0.0, step=0.1, format="%.2f", key="Ca_val")
-            P_ = st.number_input("P(인, mg/dL)", min_value=0.0, step=0.1, format="%.2f", key="P_val")
-            Na = st.number_input("Na(나트륨, mmol/L)", min_value=0.0, step=0.1, format="%.1f", key="Na_val")
+            Ca = _numfield("Ca(칼슘, mg/dL)", "Ca_val")
+            P_ = _numfield("P(인, mg/dL)", "P_val")
+            Na = _numfield("Na(나트륨, mmol/L)", "Na_val")
         with b2:
-            K_ = st.number_input("K(칼륨, mmol/L)", min_value=0.0, step=0.1, format="%.1f", key="K_val")
-            Alb = st.number_input("Alb(알부민, g/dL)", min_value=0.0, step=0.1, format="%.2f", key="Alb_val")
-            Glu = st.number_input("Glu(혈당, mg/dL)", min_value=0.0, step=1.0, format="%.0f", key="Glu_val")
+            K_ = _numfield("K(칼륨, mmol/L)", "K_val")
+            Alb = _numfield("Alb(알부민, g/dL)", "Alb_val")
+            Glu = _numfield("Glu(혈당, mg/dL)", "Glu_val")
         with b3:
-            TP = st.number_input("TP(총단백질, g/dL)", min_value=0.0, step=0.1, format="%.2f", key="TP_val")
-            AST = st.number_input("AST(간수치, U/L)", min_value=0.0, step=1.0, format="%.0f", key="AST_val_basic")
-            ALT = st.number_input("ALT(간세포수치, U/L)", min_value=0.0, step=1.0, format="%.0f", key="ALT_val_basic")
+            TP = _numfield("TP(총단백질, g/dL)", "TP_val")
+            AST = _numfield("AST(간수치, U/L)", "AST_val_basic")
+            ALT = _numfield("ALT(간세포수치, U/L)", "ALT_val_basic")
         with b4:
-            LD = st.number_input("LD(유산탈수효소, U/L)", min_value=0.0, step=1.0, format="%.0f", key="LD_val")
-            sCr = st.number_input("Cr(크레아티닌, mg/dL)", min_value=0.0, step=0.01, format="%.2f", key="Cr_val")
-            UA = st.number_input("UA(요산, mg/dL)", min_value=0.0, step=0.1, format="%.2f", key="UA_val")
-            Tb = st.number_input("Tb(총빌리루빈, mg/dL)", min_value=0.0, step=0.1, format="%.2f", key="Tb_val")
+            LD = _numfield("LD(유산탈수효소, U/L)", "LD_val")
+            sCr = _numfield("Cr(크레아티닌, mg/dL)", "Cr_val")
+            UA = _numfield("UA(요산, mg/dL)", "UA_val")
+            Tb = _numfield("Tb(총빌리루빈, mg/dL)", "Tb_val")
 
         # 간단 해석 캡션
         from .helpers import interpret_na, interpret_k, interpret_ca, interpret_phos, interpret_ast, interpret_alt, interpret_ldh as _int_ldh, interpret_tbili, interpret_ua

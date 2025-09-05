@@ -1,0 +1,13 @@
+
+/* Mobile-first responsive tweaks */
+:root { --pad: 10px; --radius: 14px; }
+.block { padding: var(--pad); border-radius: var(--radius); background: #ffffff; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+.badge { display:inline-block; padding:4px 10px; border-radius: 999px; background:#f2f4f8; font-size:12px; margin-right:6px; }
+.result { border-left:4px solid #d6336c; padding-left:10px; }
+.small { font-size: 12px; color:#6b7280; }
+.stButton>button { border-radius: 12px; }
+.stMultiSelect [data-baseweb="tag"] { border-radius: 999px; }
+@media (max-width: 480px) {
+  .stTabs [data-baseweb="tab-list"] { flex-wrap: wrap; }
+  .stRadio, .stSelectbox, .stTextInput, .stNumberInput { font-size: 16px !important; }
+}
