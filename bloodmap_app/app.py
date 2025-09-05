@@ -3,6 +3,26 @@ import os
 import datetime
 import streamlit as st
 
+def _chemo_list_for_diagnosis(diag_map, diagnosis, fallback_groups=("혈액암","고형암","육종","희귀암")):
+    if not isinstance(diag_map, dict):
+        return []
+    # Try direct hits in any group
+    for g in fallback_groups:
+        items = diag_map.get(g, {})
+        if isinstance(items, dict) and diagnosis in items:
+            return items.get(diagnosis, [])
+    # Fuzzy match (contains)
+    for g, items in diag_map.items():
+        if isinstance(items, dict):
+            for name, lst in items.items():
+                try:
+                    if diagnosis and str(diagnosis) in str(name):
+                        return lst or []
+                except Exception:
+                    continue
+    return []
+
+
 def _pref_value(st, *keys, fallback_name=None):
     """Return first non-empty numeric from session_state keys or None.
     keys: ordered preference (20종 -> 인라인 -> 소아 등)"""
@@ -284,7 +304,7 @@ def main():
                 _numtxt("ALT(U/L)", "ALT_20"); _numtxt("UA(mg/dL)", "UA_20"); _numtxt("Tb(mg/dL)", "Tb_20"); _numtxt("Ferritin(ng/mL)", "Ferritin_20"); _numtxt("D-dimer(µg/mL)", "Ddimer_20")
             # 진단별 약물 목록 (drug_data 우선, 없으면 폴백 맵 사용)
             diag_map = getattr(drug_data, "CHEMO_BY_DIAGNOSIS", {})
-            chemo_list = (diag_map.get(group, {}) or {}).get(diagnosis, [])
+            chemo_list = _chemo_list_for_diagnosis(diag_map, diagnosis)
             if not chemo_list and "고형암" in str(group):
                 chemo_list = ["Cisplatin (시스플라틴)","Carboplatin (카보플라틴)","Paclitaxel (파클리탁셀)","Gemcitabine (젬시타빈)","5-FU (플루오로우라실)","Oxaliplatin (옥살리플라틴)"]
             if not chemo_list and "혈액암" in str(group):
@@ -508,7 +528,7 @@ def main():
             msgs = _safe_interpret_summary(st, group=group, diagnosis=diagnosis)
             st.markdown("\n".join([f"- {m}" for m in msgs]))
             st.caption("※ 참고용: 해석은 자동 요약이며 최종 의학적 판단은 의료진에게 확인하세요.")
-            if st.session_state.get("mode_main") == "소아질환":
+            if st.session_state.get("mode_main","암") == "소아질환":
                 fx = st.session_state.get("sx_fever_max"); fd = st.session_state.get("sx_fever_days")
                 try:
                     if fx is not None and float(fx) >= 39.5:
