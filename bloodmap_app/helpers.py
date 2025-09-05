@@ -263,3 +263,65 @@ def build_report_pdf_bytes(md: str) -> bytes:
         return pdf
     except Exception as e:
         return f"PDF 생성 실패: {e}".encode("utf-8")
+
+
+# --- Pediatric infection quick interpreter ---
+def interpret_ped_infection(paths, temp_c: float, fever_days: float, dehydration: str, resp_severity: str,
+                            risk_neutro: bool=False, age_months: int=0) -> list:
+    """
+    paths: list of selected pathogens, e.g., ["Adenovirus","RSV"]
+    dehydration: "-", "없음","경미","중등도","중증"
+    resp_severity: "-", "경증","중등도","중증"
+    """
+    msgs = []
+    P = set([p.lower() for p in paths])
+
+    if risk_neutro:
+        msgs.append("⚠️ 항암치료/호중구감소증 의심: 38.0℃ 이상 발열 시 즉시 내원(FN 규약).")
+
+    if age_months and age_months < 3*12 and temp_c >= 38.0:
+        msgs.append("⚠️ 영아(36개월 미만) 발열: 저연령 고위험군 — 의료기관 평가 권고.")
+
+    # Generic by pathogen
+    if "adenovirus" in P or "아데노" in P:
+        msgs += ["아데노바이러스: 고열·인두염/결막염 가능. 해열·수분, 세균 2차감염 의심 시 진료."]
+    if "rsv" in P:
+        msgs += ["RSV: 세기관지염 — 수분, 비강흡인, 산소포화도 관찰. 호흡곤란/얼굴창백/무호흡 시 즉시 내원."]
+    if "influenza" in P or "인플루엔자" in P or "flu" in P:
+        msgs += ["인플루엔자: 증상 48시간 이내라면 항바이러스제 고려(고위험군 우선). 해열·수분, 합병증 주의."]
+    if "parainfluenza" in P or "파라인플루엔자" in P or "크룹" in P:
+        msgs += ["파라인플루엔자/크룹: 컹컹기침·흡기성 천명 시 응급실에서 스테로이드/네불라이저 고려."]
+    if "rhinovirus" in P or "라이노" in P:
+        msgs += ["라이노바이러스: 상기도감염 — 대증치료, 수분·비강세척."]
+    if "metapneumovirus" in P or "메타뉴모" in P:
+        msgs += ["hMPV: RSV 유사 — 저연령/기저질환 시 호흡부전 관찰."]
+    if "norovirus" in P or "로타" in P or "rotavirus" in P:
+        msgs += ["장관바이러스: 구토·설사 — 소량·자주 ORS, 탈수 징후 시 수액치료."]
+    if "covid" in P or "sars-cov-2" in P or "코로나" in P:
+        msgs += ["COVID-19: 고열·기침·인후통. 격리/등교 기준은 지역 지침 따르며, 고위험군 항바이러스 고려."]
+
+    # Fever duration
+    if fever_days and fever_days >= 5:
+        msgs.append("발열 5일 이상 지속: 가와사키/다른 원인 감별 위해 진료 권고.")
+
+    # Dehydration
+    d = (dehydration or "").strip()
+    if d in ("중등도","중증"):
+        msgs.append("탈수 중등도 이상: ORS 실패 시 병원 수액치료 고려.")
+    elif d == "경미":
+        msgs.append("탈수 경미: 소량·자주 수분공급, 전해질 보충.")
+
+    # Respiratory severity
+    r = (resp_severity or "").strip()
+    if r == "중증":
+        msgs.append("호흡곤란(중증): 청색증·함몰호흡·무호흡 — 응급실 권고.")
+    elif r == "중등도":
+        msgs.append("호흡곤란(중등도): 호흡수 증가/함몰 — 의료기관 평가 권고.")
+
+    # High temp
+    if temp_c and temp_c >= 39.0:
+        msgs.append("고열(≥39℃): 해열제(아세트아미노펜/이부프로펜) 교대 복용 가능 — 간·신장 병력 확인.")
+
+    if not msgs:
+        msgs.append("입력값이 부족합니다. 증상·체온·병원체를 선택하면 맞춤 안내가 나옵니다.")
+    return msgs

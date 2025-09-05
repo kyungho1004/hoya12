@@ -273,6 +273,18 @@ def main():
     # ===== Result / Export =====
     with tabs[5]:
         st.markdown("### 결과 요약")
+        # --- 핵심 피수치 요약(상단 고정) ---
+        st.markdown("#### 🧪 피수치(핵심)")
+        m1, m2, m3, m4, m5 = st.columns(5)
+        try:
+            with m1: st.metric("WBC (×10³/µL)", f"{WBC:.1f}" if WBC else "-")
+            with m2: st.metric("Hb (g/dL)", f"{Hb:.1f}" if Hb else "-")
+            with m3: st.metric("PLT (×10³/µL)", f"{PLT:.0f}" if PLT else "-")
+            with m4: st.metric("ANC (/µL)", f"{ANC:.0f}" if ANC else "-")
+            with m5: st.metric("CRP (mg/dL)", f"{CRP:.2f}" if CRP else "-")
+        except Exception:
+            pass
+
         sticky = st.empty()
         header_html = f"""
         <div class='sticky-header'>
