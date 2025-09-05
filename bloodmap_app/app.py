@@ -11,8 +11,6 @@ from .helpers import (
     pediatric_guides, build_report_md, build_report_txt, build_report_pdf_bytes
 )
 from .graphs import render_graphs
-from . import drug_data
-
 DATA_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data"))
 os.makedirs(DATA_DIR, exist_ok=True)
 HISTORY_CSV = os.path.join(DATA_DIR, "history.csv")
@@ -93,7 +91,6 @@ def main():
         st.caption("자세한 입력은 상단의 '기본 수치' 탭에서 가능합니다.")
         
         # Regimen quick selector mirrored to '약물 선택' 탭
-        from . import drug_data
         _fallback_reg = {
             "MAP": ["High-dose Methotrexate (고용량 메토트렉세이트)","Doxorubicin (독소루비신)","Cisplatin (시스플라틴)"],
             "VAC/IE": ["Vincristine (빈크리스틴)","Actinomycin D (아크티노마이신 D)","Cyclophosphamide (사이클로포스파마이드)","Ifosfamide (이포스파미드)","Etoposide (에토포사이드)"],
@@ -154,7 +151,6 @@ def main():
         if group in ("혈액암","고형암","육종"):
             st.markdown("---")
             st.markdown("### 🧬 항암제(빠른 선택)")
-            from . import drug_data
             _fallback_reg = {
                 "MAP": ["High-dose Methotrexate (고용량 메토트렉세이트)","Doxorubicin (독소루비신)","Cisplatin (시스플라틴)"],
                 "VAC/IE": ["Vincristine (빈크리스틴)","Actinomycin D (아크티노마이신 D)","Cyclophosphamide (사이클로포스파마이드)","Ifosfamide (이포스파미드)","Etoposide (에토포사이드)"],
