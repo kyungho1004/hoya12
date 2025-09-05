@@ -1,9 +1,0 @@
-
-/* Pill style for top radio toggle */
-.stRadio [role="radiogroup"] label { padding:6px 12px; border:1px solid #e5e7eb; border-radius:999px; margin-right:6px }
-.stRadio [role="radiogroup"] input:checked + div { font-weight:600 }
-/* Hide number input steppers just in case */
-div[data-testid="stNumberInput"] button { display: none !important; }
-input[type=number]::-webkit-outer-spin-button,
-input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-input[type=number] { -moz-appearance: textfield; }
