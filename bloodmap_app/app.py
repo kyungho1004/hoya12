@@ -11,7 +11,11 @@ from .config import (APP_TITLE, PAGE_TITLE, MADE_BY, CAFE_LINK_MD, FOOTER_CAFE,
                     FONT_PATH_REG)
 from .data.drugs import ANTICANCER, ABX_GUIDE
 from .data.foods import FOODS
-from .data.ped import PED_TOPICS, PED_INPUTS_INFO, PED_INFECT, PED_SYMPTOMS, PED_RED_FLAGS
+try:
+    from .data.ped import PED_TOPICS, PED_INPUTS_INFO, PED_INFECT, PED_SYMPTOMS, PED_RED_FLAGS
+except Exception:
+    from .data.ped import PED_TOPICS, PED_INPUTS_INFO, PED_INFECT
+    PED_SYMPTOMS, PED_RED_FLAGS = {}, {}
 from .utils.inputs import num_input_generic, entered, _parse_numeric
 from .utils.interpret import interpret_labs, compare_with_previous, food_suggestions, summarize_meds, abx_summary
 from .utils.reports import build_report, md_to_pdf_bytes_fontlocked
@@ -88,10 +92,19 @@ def main():
     infect_sel = None
     ped_topic = None
 
+    # 내부키(혈액암) 정규화: 화면표기는 'AML(…)' 등이나 로직키는 'AML'
+    heme_key_map = {
+        'AML(급성 골수성 백혈병)': 'AML',
+        'APL(급성 전골수구성백혈병)': 'APL',
+        'ALL(급성 림프모구성 백혈병)': 'ALL',
+        'CML(만성 골수성백혈병)': 'CML',
+        'CLL(만성 림프구성백혈병)': 'CLL',
+    }
+
     if mode == "일반/암":
         group = st.selectbox("암 그룹 선택", ["미선택/일반", "혈액암", "고형암", "육종", "희귀암"])
         if group == "혈액암":
-            cancer = st.selectbox("혈액암(진단명)", ["AML(급성 골수성 백혈병)","APL(급성 전골수구성백혈병)","ALL(급성 림프모구성 백혈병)","CML(만성 골수성백혈병)","CLL(만성 림프구성백혈병)"])
+            cancer = st.selectbox("혈액암(진단명)", ["AML","APL","ALL","CML","CLL"])
         elif group == "고형암":
             cancer = st.selectbox("고형암(진단명)", [
                 "폐암(Lung cancer)","유방암(Breast cancer)","위암(Gastric cancer)",
@@ -146,12 +159,11 @@ def main():
         st.markdown("### 💊 항암제 선택 및 입력")
         heme_by_cancer = {
             "AML": ["ARA-C","Daunorubicin","Idarubicin","Cyclophosphamide",
-                    "Etoposide","Fludarabine","Hydroxyurea","MTX","ATRA","G-CSF","6-MP"],
-            "APL": ["ATRA","Idarubicin","Daunorubicin","ARA-C","G-CSF","MTX","6-mp"],
-            "ALL": [ "Vincristine", "Asparaginase", "Daunorubicin", "Cyclophosphamide",
-                   "MTX", "ARA-C", "Topotecan", "Etoposide", "6-mp", "Prednisolone", "Dexamethasone"],
+                    "Etoposide","Fludarabine","Hydroxyurea","MTX","ATRA","G-CSF"],
+            "APL": ["ATRA","Idarubicin","Daunorubicin","ARA-C","G-CSF"],
+            "ALL": ["Vincristine","Asparaginase","Daunorubicin","Cyclophosphamide","MTX","ARA-C","Topotecan","Etoposide"],
             "CML": ["Imatinib","Dasatinib","Nilotinib","Hydroxyurea"],
-            "CLL": [ "Fludarabine", "Cyclophosphamide", "Bendamustine", "Rituximab", "Venetoclax"],
+            "CLL": ["Fludarabine","Cyclophosphamide"],
         }
         solid_by_cancer = {
             "폐암(Lung cancer)": ["Cisplatin","Carboplatin","Paclitaxel","Docetaxel","Gemcitabine","Pemetrexed",
@@ -193,7 +205,7 @@ def main():
             "GIST": ["Imatinib","Sunitinib","Regorafenib"],
         }
         default_drugs_by_group = {
-            "혈액암": heme_by_cancer.get(cancer, []),
+            "혈액암": heme_by_cancer.get(heme_key_map.get(cancer, cancer), []),
             "고형암": solid_by_cancer.get(cancer, []),
             "육종": sarcoma_by_dx.get(cancer, []),
             "희귀암": rare_by_cancer.get(cancer, []),
@@ -347,7 +359,7 @@ def main():
             extra_vals["TC"] = num_input_generic("Total Cholesterol (mg/dL)", key="ex_tc", decimals=0, placeholder="예: 180")
 
     if mode == "일반/암" and group and group != "미선택/일반" and cancer:
-        if group == "혈액암" and cancer in ["AML","APL","ALL","CML","CLL"]:
+        if group == "혈액암" and heme_key_map.get(cancer, cancer) in ["AML","APL","ALL","CML","CLL"]:
             st.divider()
             st.header("4️⃣ 암별 디테일 수치")
             st.caption("해석은 주치의 판단을 따르며, 값 기록/공유를 돕기 위한 입력 영역입니다.")
