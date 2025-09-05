@@ -166,7 +166,7 @@ def main():
                 "VAC/IE": ["Vincristine (빈크리스틴)","Actinomycin D (아크티노마이신 D)","Cyclophosphamide (사이클로포스파마이드)","Ifosfamide (이포스파미드)","Etoposide (에토포사이드)"],
                 "POMP": ["6-Mercaptopurine (6-MP(머캅토퓨린))","Vincristine (빈크리스틴)","Methotrexate (메토트렉세이트(MTX))","Prednisone (프레드니손)"]
             }
-        REG = getattr(drug_data, "REGIMENS", None) or _fallback_reg
+            REG = getattr(drug_data, "REGIMENS", None) or _fallback_reg
             reg_keys2 = ["(프리셋 없음)"] + list(REG.keys())
             chosen_reg2 = st.selectbox("레짐 프리셋(빠른 선택)", reg_keys2, key="chosen_reg_basic", help="약물 선택 탭과 연동")
             chemo_list2 = drug_data.CHEMO_BY_DIAGNOSIS.get(group, {}).get(diagnosis, [])
