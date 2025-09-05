@@ -2,6 +2,113 @@
 import os
 import datetime
 import streamlit as st
+
+def _pref_value(st, *keys, fallback_name=None):
+    """Return first non-empty numeric from session_state keys or None.
+    keys: ordered preference (20종 -> 인라인 -> 소아 등)"""
+    for k in keys:
+        v = st.session_state.get(k, None)
+        if v not in (None, ""):
+            try:
+                return float(v)
+            except Exception:
+                try:
+                    return float(str(v).strip())
+                except Exception:
+                    pass
+    # legacy locals fallback by name (string)
+    if fallback_name and fallback_name in globals():
+        try:
+            return float(globals()[fallback_name])
+        except Exception:
+            return None
+    return None
+
+def _safe_interpret_summary(st, group=None, diagnosis=None):
+    msgs = []
+    # core
+    WBC = _pref_value(st, "WBC_20","WBC_inline","WBC_ped", fallback_name="WBC")
+    Hb  = _pref_value(st, "Hb_20","Hb_inline","Hb_ped", fallback_name="Hb")
+    PLT = _pref_value(st, "PLT_20","PLT_inline","PLT_ped", fallback_name="PLT")
+    ANC = _pref_value(st, "ANC_20","ANC_inline","ANC_ped", fallback_name="ANC")
+    CRP = _pref_value(st, "CRP_20","CRP_inline","CRP_ped", fallback_name="CRP")
+    Na  = _pref_value(st, "Na_20","Na_inline", fallback_name="Na")
+    K   = _pref_value(st, "K_20","K_inline", fallback_name="K")
+    Cr  = _pref_value(st, "Cr_20","Cr_inline", fallback_name="Creatinine")
+    Tb  = _pref_value(st, "Tb_20", fallback_name="TBILI")
+    BNP = _pref_value(st, "BNP_toggle", fallback_name="BNP")
+    Alb = _pref_value(st, "Alb_20","Alb_inline", fallback_name="Alb")
+    LD  = _pref_value(st, "LD_20","LD_inline", fallback_name="LDH")
+    Glu = _pref_value(st, "Glu_20","Glu_inline", fallback_name="Glucose")
+
+    # urine for ACR/UPCR (toggle section priority)
+    alb_unit = st.session_state.get("alb_unit_toggle") or st.session_state.get("alb_unit_inline") or "mg/L"
+    alb_val  = st.session_state.get("alb_val_toggle") or st.session_state.get("alb_q_inline")
+    prot_val = st.session_state.get("prot_val_toggle") or st.session_state.get("prot_q_inline")
+    ucr_val  = st.session_state.get("ucr_val_toggle") or st.session_state.get("ucr_q_inline")
+
+    # compute ACR/UPCR with safe fallbacks
+    try:
+        from .helpers import compute_acr, compute_upcr
+    except Exception:
+        def compute_acr(alb_mg_L, u_cr_mg_dL):
+            if not alb_mg_L or not u_cr_mg_dL:
+                return None
+            # mg/L to mg/g (divide by (Cr mg/dL)*0.01 to get g/L), simplified common approx
+            return (alb_mg_L / (u_cr_mg_dL * 10.0)) * 1000.0  # rough mg/g
+        def compute_upcr(u_prot_mg_dL, u_cr_mg_dL):
+            if not u_prot_mg_dL or not u_cr_mg_dL:
+                return None
+            return (u_prot_mg_dL / u_cr_mg_dL) * 1000.0  # mg/g
+
+    acr = None
+    upcr = None
+    try:
+        if alb_val is not None and ucr_val not in (None, ""):
+            alb_mg_L = float(alb_val) * (10.0 if alb_unit == "mg/dL" else 1.0)
+            acr = compute_acr(alb_mg_L if alb_mg_L else None, float(ucr_val) if ucr_val else None)
+        if prot_val not in (None, "") and ucr_val not in (None, ""):
+            upcr = compute_upcr(float(prot_val) if prot_val else None, float(ucr_val) if ucr_val else None)
+    except Exception:
+        pass
+
+    # rules
+    if ANC is not None:
+        if ANC < 500: msgs.append("⚠️ 중증 호중구감소(ANC<500): 발열 시 패혈증 위험 — 즉시 내원 권고")
+        elif ANC < 1000: msgs.append("주의: 중등도 호중구감소(ANC<1000)")
+        elif ANC < 1500: msgs.append("경도 호중구감소(ANC<1500)")
+    if Hb is not None and Hb < 10: msgs.append("빈혈(Hb<10) — 증상/산소포화도 고려하여 평가")
+    if PLT is not None:
+        if PLT < 50: msgs.append("⚠️ 혈소판 감소(PLT<50k): 출혈주의, 처치 전 확인")
+        elif PLT < 100: msgs.append("혈소판 경감(PLT<100k)")
+    if CRP is not None and CRP >= 5: msgs.append("염증수치 상승(CRP≥5)")
+    if Na is not None and Na < 130: msgs.append("저나트륨(Na<130)")
+    if K is not None:
+        if K >= 5.5: msgs.append("⚠️ 고칼륨(K≥5.5) — 심전도/약물검토 필요")
+        elif K < 3.0: msgs.append("저칼륨(K<3.0)")
+    if Cr is not None and Cr >= 2.0: msgs.append("신장기능 저하(Cr≥2.0) 의심")
+    if Tb is not None and Tb >= 2.0: msgs.append("담즙정체/간기능 이상(Tb≥2.0) 의심")
+    if BNP is not None and BNP > 100: msgs.append("BNP 상승(>100) — 심부전/과수분 상태 고려")
+
+    if acr is not None:
+        if acr >= 300: msgs.append("단백뇨(ACR≥300 mg/g)")
+        elif acr >= 30: msgs.append("미세알부민뇨(ACR 30–299 mg/g)")
+    if upcr is not None:
+        if upcr >= 300: msgs.append("UPCR≥300 mg/g (중등도 이상 단백뇨)")
+        elif upcr >= 150: msgs.append("UPCR≥150 mg/g (경증 이상 단백뇨)")
+
+    # pediatric hints
+    if group and ("소아" in str(group)):
+        Tmax = _pref_value(st, "sx_fever_max")
+        days = _pref_value(st, "sx_fever_days")
+        if Tmax and Tmax >= 39: msgs.append("소아 고열(≥39℃) — 탈수/해열제 용량 확인")
+        if days and days >= 5: msgs.append("소아 발열 5일 이상 — 합병증/원인 재평가 권고")
+
+    # Final
+    if not msgs:
+        msgs = ["특이 위험 신호 없음(입력값 기준). 증상/진찰/영상·검사와 함께 종합 판단 필요."]
+    return msgs
+
 import pandas as pd
 
 from .config import VERSION, APP_TITLE, BRAND, KST_NOTE
@@ -86,47 +193,65 @@ def main():
         # --- 혈액암/고형암/육종/희귀암 프리셋(폴백 확장) ---
         _F_DIAG = {
             "혈액암": {
-                "AML(급성 골수성 백혈병)": ["7+3 (Cytarabine + Daunorubicin)", "FLAG-IDA (Fludarabine+Cytarabine+G-CSF+Idarubicin)", "CPX-351"],
-                "APL(급성 전골수성 백혈병)": ["ATRA + ATO (All-trans retinoic acid + Arsenic trioxide)", "ATRA + Anthracycline"],
-                "ALL(급성 림프구성 백혈병)": ["Hyper-CVAD", "CALGB 기반(유지: POMP)"],
-                "CLL(만성 림프구성 백혈병)": ["FCR (Fludarabine/Cyclophosphamide/Rituximab)", "Acalabrutinib + Obinutuzumab", "Venetoclax + Obinutuzumab", "Ibrutinib"],
-                "CML(만성 골수성 백혈병)": ["Imatinib", "Dasatinib", "Nilotinib"],
-                "DLBCL(미만성 거대B세포림프종)": ["R-CHOP", "Polatuzumab + R-CHP"],
-                "Hodgkin lymphoma": ["ABVD", "Brentuximab + AVD"],
-                "MM(다발골수종)": ["VRd (Bortezomib/Lenalidomide/Dexamethasone)", "DRd (Daratumumab + Lenalidomide + Dexamethasone)"],
-                "MDS(골수이형성증후군)": ["Azacitidine", "Decitabine"]
+                "AML(급성 골수성 백혈병)": [
+                    "Cytarabine (사이타라빈)","Daunorubicin (다우노루비신)","Idarubicin (이다루비신)",
+                    "Gemtuzumab ozogamicin (게무투주맙 오조가마이신)","Midostaurin (미도스타우린)"
+                ],
+                "APL(급성 전골수성 백혈병)": [
+                    "All-trans retinoic acid (ATRA)",
+                    "Arsenic trioxide (ATO)",
+                    "Methotrexate (메토트렉세이트(MTX))",
+                    "6-Mercaptopurine (6-MP(머캅토퓨린))",
+                    "Daunorubicin (다우노루비신)","Idarubicin (이다루비신)"
+                ],
+                "ALL(급성 림프구성 백혈병)": [
+                    "Vincristine (빈크리스틴)","Prednisone (프레드니손)","Dexamethasone (덱사메타손)",
+                    "Asparaginase (아스파라기나아제)","Daunorubicin (다우노루비신)",
+                    "Methotrexate (메토트렉세이트(MTX))","6-Mercaptopurine (6-MP(머캅토퓨린))",
+                    "Cytarabine (사이타라빈)"
+                ],
+                "CLL(만성 림프구성 백혈병)": [
+                    "Fludarabine (플루다라빈)","Cyclophosphamide (사이클로포스파마이드)","Rituximab (리툭시맙)",
+                    "Bendamustine (벤다무스틴)","Venetoclax (베네토클락스)","Obinutuzumab (오비누투주맙)",
+                    "Acalabrutinib (아칼라브루티닙)","Ibrutinib (이브루티닙)"
+                ],
+                "CML(만성 골수성 백혈병)": ["Imatinib (이매티닙)","Dasatinib (다사티닙)","Nilotinib (닐로티닙)"],
+                "DLBCL(미만성 거대B세포림프종)": ["Rituximab","Cyclophosphamide","Doxorubicin","Vincristine","Prednisone","Polatuzumab vedotin"],
+                "Hodgkin lymphoma": ["Doxorubicin","Bleomycin","Vinblastine","Dacarbazine","Brentuximab vedotin"],
+                "MM(다발골수종)": ["Bortezomib","Lenalidomide","Dexamethasone","Daratumumab","Cyclophosphamide"],
+                "MDS(골수이형성증후군)": ["Azacitidine","Decitabine"]
             },
             "고형암": {
-                "폐암(NSCLC-비편평)": ["Cisplatin + Pemetrexed (시스플라틴/페메트렉시드)", "Carboplatin + Paclitaxel (카보플라틴/파클리탁셀)"],
-                "폐암(NSCLC-편평)": ["Cisplatin + Gemcitabine (시스플라틴/젬시타빈)", "Carboplatin + Paclitaxel (카보플라틴/파클리탁셀)"],
-                "소세포 폐암(SCLC)": ["Etoposide + Cisplatin (EP)", "Etoposide + Carboplatin (EC)"],
-                "식도암": ["Cisplatin + 5-FU (FP)", "FOLFOX (5-FU/Leucovorin/Oxaliplatin)"],
-                "위암": ["FOLFOX", "FLOT (5-FU/Leucovorin/Oxaliplatin/Docetaxel)", "CAPOX (Capecitabine/Oxaliplatin)"],
-                "대장암": ["FOLFOX", "FOLFIRI (5-FU/Leucovorin/Irinotecan)", "CAPOX (Capecitabine/Oxaliplatin)"],
-                "간암(HCC)": ["Atezolizumab + Bevacizumab (아테졸리주맙/베바시주맙)", "Sorafenib (소라페닙)", "Lenvatinib (렌바티닙)"],
-                "담도암": ["Gemcitabine + Cisplatin (GemCis)", "GEMOX (Gemcitabine/Oxaliplatin)"],
-                "췌장암": ["FOLFIRINOX", "Gemcitabine + nab-Paclitaxel"],
-                "유방암": ["AC → T (Doxorubicin/Cyclophosphamide → Paclitaxel)", "TC (Docetaxel/Cyclophosphamide)", "Trastuzumab + Pertuzumab + Taxane (HER2+)"],
-                "난소암": ["Carboplatin + Paclitaxel", "Carboplatin + Docetaxel"],
-                "자궁내막암": ["Carboplatin + Paclitaxel"],
-                "자궁경부암": ["Cisplatin(동시방사선)", "Carboplatin + Paclitaxel"],
-                "신장암": ["Pembrolizumab + Axitinib", "Nivolumab + Ipilimumab"],
-                "방광암": ["Gemcitabine + Cisplatin (GC)", "MVAC (Methotrexate/Vinblastine/Doxorubicin/Cisplatin)"],
-                "전립선암": ["Docetaxel (도세탁셀)", "Abiraterone + Prednisone (아비라테론+프레드니손)", "ADT(호르몬치료)"],
-                "갑상선암": ["Lenvatinib", "Sorafenib"],
-                "두경부암": ["EXTREME (Cetuximab + Platinum + 5-FU)", "TPF (Docetaxel/Cisplatin/5-FU)"]
+                "폐암(NSCLC-비편평)": ["Cisplatin","Pemetrexed","Carboplatin","Paclitaxel","Pembrolizumab"],
+                "폐암(NSCLC-편평)": ["Cisplatin","Gemcitabine","Carboplatin","Paclitaxel","Pembrolizumab"],
+                "소세포 폐암(SCLC)": ["Etoposide","Cisplatin","Carboplatin","Atezolizumab"],
+                "식도암": ["Cisplatin","5-FU","Oxaliplatin","Leucovorin"],
+                "위암": ["5-FU","Oxaliplatin","Docetaxel","Capecitabine"],
+                "대장암": ["5-FU","Oxaliplatin","Irinotecan","Leucovorin","Capecitabine","Bevacizumab"],
+                "간암(HCC)": ["Atezolizumab","Bevacizumab","Sorafenib","Lenvatinib"],
+                "담도암": ["Gemcitabine","Cisplatin","Oxaliplatin"],
+                "췌장암": ["5-FU","Oxaliplatin","Irinotecan","Leucovorin","Gemcitabine","nab-Paclitaxel"],
+                "유방암": ["Doxorubicin","Cyclophosphamide","Paclitaxel","Docetaxel","Trastuzumab","Pertuzumab"],
+                "난소암": ["Carboplatin","Paclitaxel","Docetaxel"],
+                "자궁내막암": ["Carboplatin","Paclitaxel"],
+                "자궁경부암": ["Cisplatin","Carboplatin","Paclitaxel","Bevacizumab"],
+                "신장암": ["Pembrolizumab","Axitinib","Nivolumab","Ipilimumab"],
+                "방광암": ["Gemcitabine","Cisplatin","Methotrexate","Vinblastine","Doxorubicin"],
+                "전립선암": ["Docetaxel","Abiraterone","Prednisone","Enzalutamide","ADT"],
+                "갑상선암": ["Lenvatinib","Sorafenib"],
+                "두경부암": ["Cetuximab","Cisplatin","Carboplatin","5-FU","Docetaxel"]
             },
             "육종": {
-                "골육종(MAP)": ["High-dose Methotrexate (고용량 메토트렉세이트)", "Doxorubicin", "Cisplatin"],
-                "유잉육종(VAC/IE)": ["Vincristine", "Actinomycin D", "Cyclophosphamide", "Ifosfamide", "Etoposide"],
-                "횡문근육종": ["Vincristine", "Actinomycin D", "Cyclophosphamide", "Ifosfamide", "Etoposide"]
+                "골육종(MAP)": ["High-dose Methotrexate (고용량 메토트렉세이트)","Doxorubicin","Cisplatin"],
+                "유잉육종(VAC/IE)": ["Vincristine","Actinomycin D","Cyclophosphamide","Ifosfamide","Etoposide"],
+                "횡문근육종": ["Vincristine","Actinomycin D","Cyclophosphamide","Ifosfamide","Etoposide"]
             },
             "희귀암": {
-                "신경모세포종": ["Cyclophosphamide", "Doxorubicin", "Vincristine", "Carboplatin", "Etoposide", "Ifosfamide"],
-                "윌름스종양": ["Vincristine", "Dactinomycin(Actinomycin D)", "Doxorubicin"],
-                "간모세포종": ["Cisplatin", "Doxorubicin", "Vincristine", "5-FU"],
-                "GCT(BEP)": ["Bleomycin", "Etoposide", "Cisplatin"],
-                "수모세포종": ["Cisplatin", "Vincristine", "Cyclophosphamide", "Etoposide"]
+                "신경모세포종": ["Cyclophosphamide","Doxorubicin","Vincristine","Carboplatin","Etoposide","Ifosfamide"],
+                "윌름스종양": ["Vincristine","Dactinomycin(Actinomycin D)","Doxorubicin"],
+                "간모세포종": ["Cisplatin","Doxorubicin","Vincristine","5-FU"],
+                "GCT(BEP)": ["Bleomycin","Etoposide","Cisplatin"],
+                "수모세포종": ["Cisplatin","Vincristine","Cyclophosphamide","Etoposide"]
             }
         }
         # merge fallback into loaded map (without overwriting existing)
@@ -434,13 +559,19 @@ def main():
             st.session_state["auto_age_months"] = age_years*12
             st.experimental_rerun()
         group_ped = st.selectbox("소아 질환군", ["-", "소아-일상", "소아-감염", "소아-혈액암", "소아-고형암", "소아-육종", "소아-희귀암"])
-        ped_msgs = pediatric_guides({"ANC": ANC}, group_ped, diagnosis)
+            "ANC": (st.session_state.get("ANC_20") or st.session_state.get("ANC_inline") or st.session_state.get("ANC_ped") or (ANC if "ANC" in locals() else None)) or ""
         for m in ped_msgs:
             st.markdown(f"- {m}")
 
     # ===== Result / Export =====
     with tabs[5]:
+        st.info('''이 해석기는 참고용 도구이며, 모든 수치는 개발자와 무관합니다.
+결과를 기반으로 반드시 주치의와 상담 후 의학적 판단 및 치료 결정을 하시기 바랍니다.''')
         st.markdown("### 결과 요약")
+        if st.button("🧠 해석 보기", key="btn_interpret_results"):
+            msgs = _safe_interpret_summary(st, group=group, diagnosis=diagnosis)
+            st.markdown("\n".join([f"- {m}" for m in msgs]))
+            st.caption("※ 참고용: 해석은 자동 요약이며 최종 의학적 판단은 의료진에게 확인하세요.")
         # --- 핵심 피수치 요약(상단 고정) ---
         st.markdown("#### 🧪 피수치(핵심)")
         m1, m2, m3, m4, m5 = st.columns(5)
@@ -473,28 +604,40 @@ def main():
             derived["UPCR (mg/g)"] = f"{upcr:.0f}"
 
         values = {
-            "WBC": (st.session_state.get("WBC_inline") or WBC) if (st.session_state.get("WBC_inline") or WBC) else "",
-            "Hb": Hb if Hb else "",
-            "PLT": PLT if PLT else "",
-            "ANC": ANC if ANC else "",
-            "CRP": CRP if CRP else "",
+            "WBC": (st.session_state.get("WBC_20") or st.session_state.get("WBC_inline") or st.session_state.get("WBC_ped") or (WBC if "WBC" in locals() else None)) or ""
+            "Hb": (st.session_state.get("Hb_20") or st.session_state.get("Hb_inline") or st.session_state.get("Hb_ped") or (Hb if "Hb" in locals() else None)) or ""
+            "PLT": (st.session_state.get("PLT_20") or st.session_state.get("PLT_inline") or st.session_state.get("PLT_ped") or (PLT if "PLT" in locals() else None)) or ""
+            "ANC": (st.session_state.get("ANC_20") or st.session_state.get("ANC_inline") or ANC) if (st.session_state.get("ANC_20") or st.session_state.get("ANC_inline") or ANC) else "",
+            "CRP": (st.session_state.get("CRP_20") or st.session_state.get("CRP_inline") or st.session_state.get("CRP_ped") or (CRP if "CRP" in locals() else None)) or ""
             "Urine Alb (mg/L)": urine_albumin_mg_L if urine_albumin_mg_L else "",
             "Ferritin": Ferritin if "Ferritin" in locals() and Ferritin else "",
-            "LDH": LDH if "LDH" in locals() and LDH else "",
-            "Uric acid": UricAcid if "UricAcid" in locals() and UricAcid else "",
+            "LDH": (st.session_state.get("LD_20") or (LDH if "LDH" in locals() else None)) or "",
+            "Uric acid": (st.session_state.get("UA_20") or (UricAcid if "UricAcid" in locals() else None)) or "",
             "ESR": ESR if "ESR" in locals() and ESR else "",
             "Retic(%)": Retic if "Retic" in locals() and Retic else "",
             "β2-microglobulin": B2M if "B2M" in locals() and B2M else "",
             "BNP": BNP if "BNP" in locals() and BNP else "",
+            "Pediatric suspect": st.session_state.get("ped_suspect",""),
+            "Pain severity": st.session_state.get("sx_pain",""),
+            "Rhinorrhea": st.session_state.get("sx_rhin",""),
+            "Cough": st.session_state.get("sx_cough",""),
+            "Sore throat": st.session_state.get("sx_sore",""),
+            "Fever days": st.session_state.get("sx_fever_days",""),
+            "Fever Tmax(℃)": st.session_state.get("sx_fever_max",""),
+            "Vomiting": st.session_state.get("sx_vomit",""),
+            "Diarrhea": st.session_state.get("sx_diarrhea",""),
+            "Urine glucose(dip)": st.session_state.get("UGLU_toggle",""),
+            "Hematuria(dip)": st.session_state.get("UBLD_toggle",""),
+            "Ketone(dip)": st.session_state.get("UKET_toggle",""),
             "Coombs": Coombs if "Coombs" in locals() and Coombs and Coombs!="선택 안 함" else "",
             "AST": (st.session_state.get("AST_inline") or (AST if "AST" in locals() else None)) or "",
             "ALT": (st.session_state.get("ALT_inline") or (ALT if "ALT" in locals() else None)) or "",
             "ALP": ALP if "ALP" in locals() and ALP else "",
             "GGT": GGT if "GGT" in locals() and GGT else "",
-            "Total bilirubin": TBILI if "TBILI" in locals() and TBILI else "",
-            "Na": (st.session_state.get("Na_inline") or (Na if "Na" in locals() else None)) or "",
-            "K": (st.session_state.get("K_inline") or (K if "K" in locals() else None)) or "",
-            "Ca": (st.session_state.get("Ca_inline") or (Ca if "Ca" in locals() else None)) or "",
+            "Total bilirubin": (st.session_state.get("Tb_20") or (TBILI if "TBILI" in locals() else None)) or "",
+            "Na": (st.session_state.get("Na_20") or st.session_state.get("Na_inline") or (Na if "Na" in locals() else None)) or "",
+            "K": (st.session_state.get("K_20") or st.session_state.get("K_inline") or (K if "K" in locals() else None)) or "",
+            "Ca": (st.session_state.get("Ca_20") or st.session_state.get("Ca_inline") or (Ca if "Ca" in locals() else None)) or "",
             "Mg": Mg if "Mg" in locals() and Mg else "",
             "Phos": Phos if "Phos" in locals() and Phos else "",
             "INR": INR if "INR" in locals() and INR else "",
@@ -504,9 +647,9 @@ def main():
             "Triglycerides": TG if "TG" in locals() and TG else "",
             "Lactate": Lactate if "Lactate" in locals() and Lactate else "",
             "Urine Prot (mg/dL)": urine_protein_mg_dL if urine_protein_mg_dL else "",
-            "Ca": (st.session_state.get("Ca_inline") or (Ca if "Ca" in locals() else None)) or "",
-            "P": P_ if "P_" in locals() and P_ else "",
-            "Na": (st.session_state.get("Na_inline") or (Na if "Na" in locals() else None)) or "",
+            "Ca": (st.session_state.get("Ca_20") or st.session_state.get("Ca_inline") or (Ca if "Ca" in locals() else None)) or "",
+            "P": (st.session_state.get("P_20") or (P_ if "P_" in locals() else None)) or "",
+            "Na": (st.session_state.get("Na_20") or st.session_state.get("Na_inline") or (Na if "Na" in locals() else None)) or "",
             "K": K_ if "K_" in locals() and K_ else "",
             "Alb": (st.session_state.get("Alb_inline") or (Alb if "Alb" in locals() else None)) or "",
             "Glu": (st.session_state.get("Glu_inline") or (Glu if "Glu" in locals() else None)) or "",
