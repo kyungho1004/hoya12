@@ -1,5 +1,17 @@
 # -*- coding: utf-8 -*-
 import streamlit as st
+
+# --- Safe fallback for inject_css (in case utils import was pruned during deploy) ---
+try:
+    _ = inject_css  # type: ignore # noqa
+except Exception:
+    def inject_css():
+        try:
+            with open("bloodmap_app/style.css", "r", encoding="utf-8") as _f:
+                st.markdown(f"<style>{_f.read()}</style>", unsafe_allow_html=True)
+        except Exception:
+            pass
+
 from io import BytesIO
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
