@@ -1,5 +1,55 @@
 
-try:
-    from ..drug_data import ANTICANCER, ABX_GUIDE
-except Exception:
-    ANTICANCER, ABX_GUIDE = {}, {}
+# -*- coding: utf-8 -*-
+ANTICANCER = {
+    "ARA-C": {"alias": "시타라빈", "aes": ["골수억제","발열","간기능상승","구내염"]},
+    "Daunorubicin": {"alias": "다우노루비신", "aes": ["심독성","골수억제","탈모"]},
+    "Idarubicin": {"alias": "이다루비신", "aes": ["심독성","골수억제"]},
+    "Cyclophosphamide": {"alias": "사이클로포스파마이드", "aes": ["출혈성방광염","골수억제"]},
+    "Etoposide": {"alias": "에토포사이드", "aes": ["골수억제","저혈압"]},
+    "Fludarabine": {"alias": "플루다라빈", "aes": ["면역억제","감염"]},
+    "Hydroxyurea": {"alias": "하이드록시우레아", "aes": ["골수억제"]},
+    "MTX": {"alias": "메토트렉세이트", "aes": ["간독성","구내염","신독성(고용량)"]},
+    "ATRA": {"alias": "베사노이드(트레티노인)", "aes": ["분화증후군","피부건조","광과민","설사"]},
+    "G-CSF": {"alias": "그라신(필그라스팀 등)", "aes": ["골통","발열 반응"]},
+    "Vincristine": {"alias": "빈크리스틴", "aes": ["말초신경병증","변비"]},
+    "Asparaginase": {"alias": "아스파라가제", "aes": ["췌장염","혈전","간기능상승"]},
+    "Imatinib": {"alias": "이미티닙", "aes": ["부종","근육통"]},
+    "Dasatinib": {"alias": "다사티닙", "aes": ["흉막삼출","혈소판감소"]},
+    "Nilotinib": {"alias": "닐로티닙", "aes": ["QT연장","고혈당"]},
+    "Topotecan": {"alias": "토포테칸", "aes": ["골수억제","설사"]},
+    "Doxorubicin": {"alias": "독소루비신", "aes": ["심독성","탈모","구내염"]},
+    "Ifosfamide": {"alias": "이포스파마이드", "aes": ["신경독성","신독성"]},
+    "Pazopanib": {"alias": "파조파닙", "aes": ["고혈압","간독성"]},
+    "Cisplatin": {"alias": "시스플라틴", "aes": ["신독성","구토"]},
+    "Carboplatin": {"alias": "카보플라틴", "aes": ["골수억제"]},
+    "Paclitaxel": {"alias": "파클리탁셀", "aes": ["말초신경병증"]},
+    "Docetaxel": {"alias": "도세탁셀", "aes": ["체액저류","구내염"]},
+    "Gemcitabine": {"alias": "젬시타빈", "aes": ["골수억제"]},
+    "Pemetrexed": {"alias": "페메트렉시드", "aes": ["골수억제"]},
+    "Gefitinib": {"alias": "게피티닙", "aes": ["피부발진","설사"]},
+    "Erlotinib": {"alias": "엘로티닙", "aes": ["피부발진","간기능상승"]},
+    "Osimertinib": {"alias": "오시머티닙", "aes": ["QT연장","간기능상승"]},
+    "Alectinib": {"alias": "알렉티닙", "aes": ["간기능상승","변비"]},
+    "Bevacizumab": {"alias": "베바시주맙", "aes": ["출혈","고혈압","창상지연"]},
+    "Pembrolizumab": {"alias": "펨브롤리주맙", "aes": ["면역관련 이상반응"]},
+    "Nivolumab": {"alias": "니볼루맙", "aes": ["면역관련 이상반응"]},
+    "Trastuzumab": {"alias": "트라스투주맙", "aes": ["심기능저하"]},
+    "Temozolomide": {"alias": "테모졸로마이드", "aes": ["골수억제"]},
+    "Cabazitaxel": {"alias": "카바지탁셀", "aes": ["호중구감소"]},
+    "Sunitinib": {"alias": "수니티닙", "aes": ["고혈압","갑상선기능저하"]},
+    "Regorafenib": {"alias": "레고라페닙", "aes": ["손발증후군","고혈압"]},
+    "Lenvatinib": {"alias": "렌바티닙", "aes": ["고혈압"]},
+    "Sorafenib": {"alias": "소라페닙", "aes": ["손발증후군"]},
+}
+
+ABX_GUIDE = {
+    "페니실린계": ["알레르기/아나필락시스", "설사", "고용량 시 경련 위험"],
+    "세팔로스포린계": ["광범위 사용", "알레르기 교차반응(페니실린)", "설사"],
+    "카바페넴계": ["내성균 의심 시", "발작 위험(고용량)"],
+    "퀴놀론계": ["힘줄염/파열", "QT 연장", "광과민"],
+    "아미노글리코사이드계": ["신독성/이독성", "혈중 농도 모니터"],
+    "마크로라이드계": ["QT 연장", "CYP 상호작용", "위장관 부작용"],
+    "테트라사이클린계": ["소아/임산부 금기", "광과민"],
+    "글리코펩타이드계(반코마이신)": ["신독성", "적색인증후군"],
+    "메트로니다졸": ["금주(디설피람 유사)", "금속맛"],
+}
