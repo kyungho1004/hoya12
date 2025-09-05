@@ -1,6 +1,8 @@
 
-/* mobile-safe */
-.block-container{padding-top:8px}
+/* Mobile-safe tweaks */
+.block-container{padding-top:10px !important; padding-bottom:40px !important;}
+.stTextInput>div>div>input, .stNumberInput input {font-size:16px !important}
+h1,h2,h3{line-height:1.2}
 @media (max-width: 480px){
-  .stButton>button{width:100%}
+  .stTabs [data-baseweb="tab-list"]{flex-wrap:wrap}
 }
