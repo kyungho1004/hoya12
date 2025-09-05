@@ -5,7 +5,7 @@ import streamlit as st
 import pandas as pd
 
 from .config import VERSION, APP_TITLE, BRAND, KST_NOTE
-from .utils import (
+from .helpers import (
     is_valid_pin, key_from,
     compute_acr, compute_upcr, interpret_acr, interpret_upcr,
     pediatric_guides, build_report_md, build_report_txt, build_report_pdf_bytes
@@ -141,7 +141,7 @@ def main():
             B2M = st.number_input("β2-microglobulin (mg/L)", min_value=0.0, step=0.1, format="%.2f")
         Coombs = st.selectbox("Coombs test", ["-","Direct(+)","Direct(-)","Indirect(+)","Indirect(-)"])
 
-        from .utils import interpret_ferritin, interpret_ldh, interpret_ua, interpret_esr, interpret_b2m
+        from .helpers import interpret_ferritin, interpret_ldh, interpret_ua, interpret_esr, interpret_b2m
         extra_msgs = []
         if Ferritin: extra_msgs.append(interpret_ferritin(Ferritin))
         if LDH: extra_msgs.append(interpret_ldh(LDH))
@@ -176,7 +176,7 @@ def main():
             TG = st.number_input("Triglycerides (mg/dL)", min_value=0.0, step=1.0, format="%.0f")
             Lactate = st.number_input("Lactate (mmol/L)", min_value=0.0, step=0.1, format="%.2f")
 
-        from .utils import (
+        from .helpers import (
             interpret_ast, interpret_alt, interpret_alp, interpret_ggt, interpret_tbili,
             interpret_na, interpret_k, interpret_ca, interpret_mg, interpret_phos,
             interpret_inr, interpret_aptt, interpret_fibrinogen, interpret_ddimer,
