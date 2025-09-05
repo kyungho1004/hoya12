@@ -337,6 +337,21 @@ def main():
             st.download_button("📝 결과 .txt 다운로드", data=txt, file_name=f"{user_key or 'result'}.txt", disabled=not user_key)
         with cdl3:
             st.download_button("🧾 결과 .pdf 다운로드", data=pdf_bytes, file_name=f"{user_key or 'result'}.pdf", disabled=not user_key)
+        st.markdown("#### 한글 폰트 (PDF 인쇄용)")
+        from .font_installer import ensure_fonts
+        if st.button("📥 한글 폰트 자동 설치(NotoSansKR/NanumGothic)"):
+            font_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "fonts"))
+            res = ensure_fonts(font_dir)
+            msg = ", ".join([f"{k}:{v}" for k,v in res.items()])
+            st.success(f"폰트 설치 결과: {msg}")
+        else:
+            font_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "fonts"))
+            exists = [fn for fn in os.listdir(font_dir) if fn.lower().endswith((".ttf",".otf"))] if os.path.exists(font_dir) else []
+            if exists:
+                st.caption("감지된 폰트: " + ", ".join(exists))
+            else:
+                st.caption("설치된 폰트가 없습니다. 위 버튼으로 설치하면 PDF 한글 출력 품질이 좋아집니다.")
+
 
         if user_key and st.button("💾 결과 저장 (별명#PIN 별 이력)"):
             ts = datetime.datetime.now().isoformat(timespec="milliseconds")
