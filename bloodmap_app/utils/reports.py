@@ -64,6 +64,12 @@ def md_to_pdf_bytes_fontlocked(md_text):
         buf = io.BytesIO()
         c = canvas.Canvas(buf, pagesize=A4)
         pdfmetrics.registerFont(TTFont("KR", FONT_PATH_REG))
+        import os
+        try:
+            bold_path = "fonts/NanumBarunGothicBold.otf"
+            pdfmetrics.registerFont(TTFont("KR-Bold", bold_path))
+        except Exception:
+            pass
         width, height = A4
         x, y = 40, height-40
         for line in md_text.splitlines():
