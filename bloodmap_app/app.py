@@ -559,6 +559,41 @@ def main():
             st.session_state["auto_age_months"] = age_years*12
             st.experimental_rerun()
         group_ped = st.selectbox("소아 질환군", ["-", "소아-일상", "소아-감염", "소아-혈액암", "소아-고형암", "소아-육종", "소아-희귀암"])
+        # 소아 증상 요약 메시지(참고용)
+        ped_msgs = []
+        try:
+            suspect = st.session_state.get("ped_suspect")
+            if suspect and suspect != "-":
+                ped_msgs.append(f"의심 질환: {suspect}")
+            pain = st.session_state.get("sx_pain")
+            if pain and pain != "없음":
+                ped_msgs.append(f"통증: {pain}")
+            rhin = st.session_state.get("sx_rhin")
+            if rhin and rhin != "없음":
+                ped_msgs.append(f"콧물: {rhin}")
+            cough = st.session_state.get("sx_cough")
+            if cough and cough != "없음":
+                ped_msgs.append(f"기침: {cough}")
+            sore = st.session_state.get("sx_sore")
+            if sore and sore != "없음":
+                ped_msgs.append(f"인후통: {sore}")
+            fd = st.session_state.get("sx_fever_days")
+            fx = st.session_state.get("sx_fever_max")
+            if fd not in (None, "", 0):
+                ped_msgs.append(f"발열 {int(fd)}일")
+            if fx not in (None, "", 0):
+                ped_msgs.append(f"최고체온 {fx}℃")
+            vomit = st.session_state.get("sx_vomit")
+            if vomit and vomit != "없음":
+                ped_msgs.append(f"구토: {vomit}")
+            diarrhea = st.session_state.get("sx_diarrhea")
+            if diarrhea and diarrhea != "없음":
+                ped_msgs.append(f"설사: {diarrhea}")
+        except Exception:
+            pass
+        if not ped_msgs:
+            ped_msgs = ["입력된 소아 증상 요약이 없습니다. (참고용)"]
+
         for m in ped_msgs:
             st.markdown(f"- {m}")
 

@@ -14,3 +14,6 @@
 
 ## v3.4.2 hotfix (2025-09-05)
 - values 딕셔너리 헤더(WBC/Hb/PLT/ANC/CRP) 누락된 쉼표 보정 및 'Urine Alb' 들여쓰기 수정.
+
+## v3.4.3 hotfix (2025-09-05)
+- 소아 패널에서 미정의 변수 `ped_msgs`로 인한 NameError 수정(증상 요약 자동 생성).
