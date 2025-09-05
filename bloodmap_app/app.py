@@ -74,8 +74,7 @@ def _mode_and_cancer_picker():
                 if flu: notes.append("Influenza: 48시간 이내 항바이러스제 고려(의료진). 고위험군 모니터링.")
                 if para: notes.append("Parainfluenza: 크룹 기침 가능, 흡입기·응급실 치료 필요할 수 있음.")
                 if notes:
-                    st.info("
-".join(notes))
+                    st.info("\n".join(notes))
         else:
             st.caption("소아 모드에서는 보호자용 가이드를 강조합니다.")
 
@@ -209,16 +208,13 @@ def _result_section(labs, picked_group, picked_dx):
     st.download_button("📥 보고서(.md) 다운로드", report_md, file_name="bloodmap_report.md")
 
     # TXT 다운로드
-    report_txt = f"피수치 해석기 {APP_VERSION}
-" \
-                 f"사용자: {nick} #{pin}
-" \
-                 f"암 그룹/진단: {picked_group or '-'} / {picked_dx or '-'}
-" \
-                 f"수치: {entered}
-" \
-                 "본 자료는 보호자의 이해를 돕기 위한 참고용이며, 모든 의학적 판단은 담당 의료진의 진료 지침을 따르십시오.
-"
+    report_txt = (
+        f"피수치 해석기 {APP_VERSION}\n"
+        f"사용자: {nick} #{pin}\n"
+        f"암 그룹/진단: {picked_group or '-'} / {picked_dx or '-'}\n"
+        f"수치: {entered}\n"
+        "본 자료는 보호자의 이해를 돕기 위한 참고용이며, 모든 의학적 판단은 담당 의료진의 진료 지침을 따르십시오.\n"
+    )
     st.download_button("📄 TXT 다운로드", report_txt, file_name="bloodmap_report.txt")
 
 
