@@ -332,17 +332,18 @@ except ValueError:
 chosen_reg = st.selectbox("레짐 프리셋", options_full, index=idx_default, key="chosen_reg_full", help="예: MAP, VAC/IE, POMP")
 # keep shared in sync if user changes here
 st.session_state["chosen_reg_shared"] = chosen_reg
-        if chosen_reg != "(프리셋 없음)":
-            preset = REG.get(chosen_reg, [])
-            base_set = set(chemo_list)
-            chemo_list = list(dict.fromkeys(list(preset) + list(base_set)))
-            st.caption(f"프리셋 적용: {chosen_reg} → {len(preset)}개 항목 선반영")
-        sel_chemo = st.multiselect(
-            "항암제 선택",
-            options=chemo_list,
-            default=(REG.get(chosen_reg, []) if chosen_reg != "-" else []),
-            help="복수 선택 가능"
-        )
+if chosen_reg != "(프리셋 없음)":
+    preset = REG.get(chosen_reg, [])
+    base_set = set(chemo_list)
+    chemo_list = list(dict.fromkeys(list(preset) + list(base_set)))
+    st.caption(f"프리셋 적용: {chosen_reg} → {len(preset)}개 항목 선반영")
+sel_chemo = st.multiselect(
+    "항암제 선택",
+    options=chemo_list,
+    default=(REG.get(chosen_reg, []) if chosen_reg != "(프리셋 없음)" else []),
+    help="복수 선택 가능"
+)
+
 
         st.markdown("---")
         ABX = getattr(drug_data, "ANTIBIOTICS_BY_CLASS", {
@@ -469,7 +470,40 @@ st.session_state["chosen_reg_shared"] = chosen_reg
         txt = build_report_txt(md)
         pdf_bytes = build_report_pdf_bytes(md)
 
+
+        # ---- 공유하기 ----
+        st.markdown("### 🔗 공유하기")
+        try:
+            from .config import CAFE_URL, HELP_URL
+        except Exception:
+            CAFE_URL, HELP_URL = "", ""
+        cc1, cc2, cc3 = st.columns([1,1,2])
+        with cc1:
+            if CAFE_URL:
+                st.link_button("카페(가이드/공유)", CAFE_URL, use_container_width=True)
+        with cc2:
+            if HELP_URL:
+                st.link_button("업데이트/문의", HELP_URL, use_container_width=True)
+        # 공유 텍스트 구성 (핵심 피수치 요약)
+        core_keys = ["WBC","Hb","PLT","ANC","CRP"]
+        extra_keys = ["Na","K","Ca","Cr","TBili","AST","ALT","LD","Alb","TP","Glu","BNP"]
+        def _fmt(v):
+            try:
+                if v is None or v == "": return "-"
+                if isinstance(v, float) and v.is_integer(): return f"{int(v)}"
+                return f"{v}"
+            except Exception:
+                return f"{v}"
+        parts = [f"{k}:{_fmt(values.get(k,''))}" for k in core_keys if values.get(k,"") not in ("",None)]
+        parts += [f"{k}:{_fmt(values.get(k,''))}" for k in extra_keys if values.get(k,"") not in ("",None)]
+        share_txt = f"[{user_key}] {group} · {diagnosis}\\n" + " | ".join(parts)
+        st.code(share_txt, language="text")
+        st.download_button("🔗 공유 텍스트(.txt)", data=share_txt, file_name=f"{user_key or 'share'}.txt", disabled=not user_key)
+        
+        # ---- 내보내기 ----
+        st.markdown("### ⬇️ 내보내기")
         cdl1, cdl2, cdl3 = st.columns(3)
+
         with cdl1:
             st.download_button("📄 결과 .md 다운로드", data=md, file_name=f"{user_key or 'result'}.md", disabled=not user_key)
         with cdl2:
