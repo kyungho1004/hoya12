@@ -218,6 +218,32 @@ def _result_section(labs, picked_group, picked_dx):
     st.download_button("📄 TXT 다운로드", report_txt, file_name="bloodmap_report.txt")
 
 
+def _diet_guide_section(labs):
+    section("5️⃣ 식이 가이드 (자동)")
+    tips = []
+
+    # 입력값 기반 간단 규칙 (참고용)
+    if labs.get('alb') and labs['alb'] < 3.5:
+        tips.append(("알부민 낮음", ["달걀", "연두부", "흰살 생선", "닭가슴살", "귀리죽"]))
+    if labs.get('k') and labs['k'] < 3.5:
+        tips.append(("칼륨 낮음", ["바나나", "감자", "호박죽", "고구마", "오렌지"]))
+    if labs.get('hb') and labs['hb'] < 10.0:
+        tips.append(("Hb 낮음", ["소고기", "시금치", "두부", "달걀 노른자", "렌틸콩"]))
+    if labs.get('na') and labs['na'] < 135:
+        tips.append(("나트륨 낮음", ["전해질 음료", "미역국", "바나나", "오트밀죽", "삶은 감자"]))
+    if labs.get('ca') and labs['ca'] < 8.5:
+        tips.append(("칼슘 낮음", ["연어통조림", "두부", "케일", "브로콜리", "참깨 제외"]))
+
+    if not tips:
+        st.info("입력값 기준으로 필요한 식이 가이드가 없습니다. (정상 범위로 추정)")
+        return
+
+    for title, foods in tips:
+        st.markdown("**• " + title + "** → 추천 식품 5개: " + ", ".join(foods))
+
+    st.caption("영양제(철분제 등)는 추천에서 제외합니다. 항암 치료 중 철분제는 권장되지 않습니다. "
+               "철분제와 비타민C 병용 시 흡수 증가 가능성이 있어 반드시 주치의와 상의하세요.")
+
 def main():
     st.set_page_config(page_title=f"{APP_TITLE} {APP_VERSION}", layout="centered", initial_sidebar_state="collapsed")
     inject_css()
