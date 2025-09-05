@@ -11,7 +11,7 @@ from .config import (APP_TITLE, PAGE_TITLE, MADE_BY, CAFE_LINK_MD, FOOTER_CAFE,
                     FONT_PATH_REG)
 from .data.drugs import ANTICANCER, ABX_GUIDE
 from .data.foods import FOODS
-from .data.ped import PED_TOPICS, PED_INPUTS_INFO, PED_INFECT
+from .data.ped import PED_TOPICS, PED_INPUTS_INFO, PED_INFECT, PED_SYMPTOMS, PED_RED_FLAGS
 from .utils.inputs import num_input_generic, entered, _parse_numeric
 from .utils.interpret import interpret_labs, compare_with_previous, food_suggestions, summarize_meds, abx_summary
 from .utils.reports import build_report, md_to_pdf_bytes_fontlocked
@@ -120,7 +120,22 @@ def main():
     else:
         st.markdown("### 🧫 소아·영유아 감염질환")
         infect_sel = st.selectbox("질환 선택", list(PED_INFECT.keys()))
-        st.info("선택한 감염질환에 따라 특징/진단 정보를 표시합니다.")
+        info = PED_INFECT.get(infect_sel, {})
+        st.info(f"핵심: {info.get('핵심','')} · 진단: {info.get('진단','')} · 특징: {info.get('특징','')}")
+        # 증상 체크리스트
+        with st.expander("🧒 증상 체크리스트", expanded=True):
+            sel_sym = []
+            for i, s in enumerate(PED_SYMPTOMS.get(infect_sel, [])):
+                if st.checkbox(s, key=f"sym_{infect_sel}_{i}"):
+                    sel_sym.append(s)
+            # 공통+질환별 레드 플래그
+            reds = list(set(PED_RED_FLAGS.get("공통", []) + PED_RED_FLAGS.get(infect_sel, [])))
+            if reds:
+                st.markdown("**🚨 레드 플래그(아래 항목이 하나라도 해당되면 진료/응급실 고려)**")
+                for i, r in enumerate(reds):
+                    st.checkbox(r, key=f"red_{infect_sel}_{i}")
+        # 저장
+        st.session_state["infect_symptoms"] = sel_sym
 
     table_mode = st.checkbox("⚙️ PC용 표 모드(가로형)", help="모바일은 세로형 고정 → 줄꼬임 없음.")
 
@@ -186,24 +201,26 @@ def main():
     else:
         drug_list = []
 
-    drug_search = st.text_input("🔍 항암제 검색", key="drug_search")
-    drug_choices = [d for d in drug_list if not drug_search or drug_search.lower() in d.lower() or drug_search.lower() in ANTICANCER.get(d,{}).get("alias","").lower()]
-    selected_drugs = st.multiselect("항암제 선택", drug_choices, default=[])
+    if mode == "일반/암":
+        st.markdown("### 💊 항암제 선택 및 입력")
+        drug_search = st.text_input("🔍 항암제 검색", key="drug_search")
+        drug_choices = [d for d in drug_list if not drug_search or drug_search.lower() in d.lower() or drug_search.lower() in ANTICANCER.get(d,{}).get("alias","").lower()]
+        selected_drugs = st.multiselect("항암제 선택", drug_choices, default=[])
 
-    for d in selected_drugs:
-        alias = ANTICANCER.get(d,{}).get("alias","")
-        if d == "ATRA":
-            amt = num_input_generic(f"{d} ({alias}) - 캡슐 개수", key=f"med_{d}", as_int=True, placeholder="예: 2")
-        elif d == "ARA-C":
-            ara_form = st.selectbox(f"{d} ({alias}) - 제형", ["정맥(IV)","피하(SC)","고용량(HDAC)"], key=f"ara_form_{d}")
-            amt = num_input_generic(f"{d} ({alias}) - 용량/일", key=f"med_{d}", decimals=1, placeholder="예: 100")
+        for d in selected_drugs:
+            alias = ANTICANCER.get(d,{}).get("alias","")
+            if d == "ATRA":
+                amt = num_input_generic(f"{d} ({alias}) - 캡슐 개수", key=f"med_{d}", as_int=True, placeholder="예: 2")
+            elif d == "ARA-C":
+                ara_form = st.selectbox(f"{d} ({alias}) - 제형", ["정맥(IV)","피하(SC)","고용량(HDAC)"], key=f"ara_form_{d}")
+                amt = num_input_generic(f"{d} ({alias}) - 용량/일", key=f"med_{d}", decimals=1, placeholder="예: 100")
+                if amt and float(amt)>0:
+                    meds[d] = {"form": ara_form, "dose": amt}
+                continue
+            else:
+                amt = num_input_generic(f"{d} ({alias}) - 용량/알약", key=f"med_{d}", decimals=1, placeholder="예: 1.5")
             if amt and float(amt)>0:
-                meds[d] = {"form": ara_form, "dose": amt}
-            continue
-        else:
-            amt = num_input_generic(f"{d} ({alias}) - 용량/알약", key=f"med_{d}", decimals=1, placeholder="예: 1.5")
-        if amt and float(amt)>0:
-            meds[d] = {"dose_or_tabs": amt}
+                meds[d] = {"dose_or_tabs": amt}
 
     st.markdown("### 🧪 항생제 선택 및 입력")
     extras["abx"] = {}
@@ -402,6 +419,8 @@ def main():
         elif mode == "소아(감염질환)":
             info = PED_INFECT.get(infect_sel, {})
             meta["infect_info"] = {"핵심": info.get("핵심",""), "진단": info.get("진단",""), "특징": info.get("특징","")}
+            # 선택한 증상도 리포트에 포함
+            meta["infect_symptoms"] = st.session_state.get("infect_symptoms", [])
 
         meds_lines = summarize_meds(meds) if meds else []
         abx_lines = abx_summary(extras.get("abx", {})) if extras.get("abx") else []
