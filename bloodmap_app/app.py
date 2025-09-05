@@ -289,16 +289,6 @@ def main():
         with q4: st.metric("ANC (/µL)", f"{ss.get('ANC_val',0.0):.0f}" if ss.get('ANC_val') else "-")
         with q5: st.metric("CRP (mg/dL)", f"{ss.get('CRP_val',0.0):.2f}" if ss.get('CRP_val') else "-")
         st.caption("자세한 입력은 상단의 '기본 수치' 탭에서 가능합니다.")
-        
-        # Regimen quick selector mirrored to '약물 선택' 탭
-        _fallback_reg = {
-            "MAP": ["High-dose Methotrexate (고용량 메토트렉세이트)","Doxorubicin (독소루비신)","Cisplatin (시스플라틴)"],
-            "VAC/IE": ["Vincristine (빈크리스틴)","Actinomycin D (아크티노마이신 D)","Cyclophosphamide (사이클로포스파마이드)","Ifosfamide (이포스파미드)","Etoposide (에토포사이드)"],
-            "POMP": ["6-Mercaptopurine (6-MP(머캅토퓨린))","Vincristine (빈크리스틴)","Methotrexate (메토트렉세이트(MTX))","Prednisone (프레드니손)"]
-        }
-        REG = getattr(drug_data, "REGIMENS", None) or _fallback_reg
-        # sync shared state
-        st.session_state["chosen_reg_shared"] = st.session_state.get("chosen_reg_quick", "(프리셋 없음)")
 
     # ===== Basic panel =====
     with tabs[1]:
