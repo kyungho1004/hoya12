@@ -43,3 +43,8 @@
 # v3.17.1 핫픽스
 - 일부 환경에서 `bloodmap_app.utils`가 **디렉토리(패키지)** 로 인식되어 `ImportError`가 발생하던 문제 수정.
 - 헬퍼 모듈명을 `helpers.py`로 변경하고, 앱은 `from .helpers import ...`를 사용하도록 수정.
+
+
+# v3.17.2 핫픽스
+- `ModuleNotFoundError: matplotlib` 해결: `requirements.txt`에 `matplotlib>=3.8` 추가.
+- 그래프 모듈이 matplotlib 미설치 환경에서도 **Streamlit line_chart**로 자동 폴백하도록 수정.
