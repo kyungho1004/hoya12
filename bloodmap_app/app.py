@@ -603,10 +603,11 @@ def main():
             derived["UPCR (mg/g)"] = f"{upcr:.0f}"
 
         values = {
-            "WBC": (st.session_state.get("WBC_20") or st.session_state.get("WBC_inline") or st.session_state.get("WBC_ped") or (WBC if "WBC" in locals() else None)) or ""
-            "Hb": (st.session_state.get("Hb_20") or st.session_state.get("Hb_inline") or st.session_state.get("Hb_ped") or (Hb if "Hb" in locals() else None)) or ""
-            "PLT": (st.session_state.get("PLT_20") or st.session_state.get("PLT_inline") or st.session_state.get("PLT_ped") or (PLT if "PLT" in locals() else None)) or ""
-            "CRP": (st.session_state.get("CRP_20") or st.session_state.get("CRP_inline") or st.session_state.get("CRP_ped") or (CRP if "CRP" in locals() else None)) or ""
+            "WBC": (st.session_state.get("WBC_20") or st.session_state.get("WBC_inline") or st.session_state.get("WBC_ped") or (WBC if "WBC" in locals() else None)) or "",
+            "Hb": (st.session_state.get("Hb_20") or st.session_state.get("Hb_inline") or st.session_state.get("Hb_ped") or (Hb if "Hb" in locals() else None)) or "",
+            "PLT": (st.session_state.get("PLT_20") or st.session_state.get("PLT_inline") or st.session_state.get("PLT_ped") or (PLT if "PLT" in locals() else None)) or "",
+            "ANC": (st.session_state.get("ANC_20") or st.session_state.get("ANC_inline") or st.session_state.get("ANC_ped") or (ANC if "ANC" in locals() else None)) or "",
+            "CRP": (st.session_state.get("CRP_20") or st.session_state.get("CRP_inline") or st.session_state.get("CRP_ped") or (CRP if "CRP" in locals() else None)) or "",
             "Urine Alb (mg/L)": urine_albumin_mg_L if urine_albumin_mg_L else "",
             "Ferritin": Ferritin if "Ferritin" in locals() and Ferritin else "",
             "LDH": (st.session_state.get("LD_20") or (LDH if "LDH" in locals() else None)) or "",

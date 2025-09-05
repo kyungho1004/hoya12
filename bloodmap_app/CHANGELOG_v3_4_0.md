@@ -11,3 +11,6 @@
 
 ## v3.4.1 hotfix (2025-09-05)
 - 잘못 삽입된 값 딕셔너리 라인이 소아 패널에 들어가 생긴 `IndentationError` 제거.
+
+## v3.4.2 hotfix (2025-09-05)
+- values 딕셔너리 헤더(WBC/Hb/PLT/ANC/CRP) 누락된 쉼표 보정 및 'Urine Alb' 들여쓰기 수정.
