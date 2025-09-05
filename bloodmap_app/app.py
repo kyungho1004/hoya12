@@ -288,9 +288,18 @@ def main():
         # --- 항암제(진단별 선택) ---
         if st.session_state.get("mode_main","암")=="암":
             with st.expander("🧬 항암제(진단별 선택)", expanded=False):
+                # 진단별 약물 목록 (drug_data 우선, 없으면 폴백 맵 사용)
+                diag_map = getattr(drug_data, "CHEMO_BY_DIAGNOSIS", {})
+                chemo_list = _chemo_list_for_diagnosis(diag_map, diagnosis)
+                if not chemo_list and "고형암" in str(group):
+                    chemo_list = ["Cisplatin (시스플라틴)","Carboplatin (카보플라틴)","Paclitaxel (파클리탁셀)","Gemcitabine (젬시타빈)","5-FU (플루오로우라실)","Oxaliplatin (옥살리플라틴)"]
+                if not chemo_list and "혈액암" in str(group):
+                    chemo_list = ["Cytarabine (사이타라빈)","Daunorubicin (다우노루비신)","Idarubicin (이다루비신)","Methotrexate (메토트렉세이트(MTX))","6-Mercaptopurine (6-MP(머캅토퓨린))"]
+                sel_chemo = st.multiselect("항암제 선택(진단별)", options=chemo_list, default=chemo_list, key="chemo_by_diagnosis")
+                if not chemo_list:
+                    st.caption("진단별 약물 데이터가 비어 있습니다. drug_data.CHEMO_BY_DIAGNOSIS에 추가하거나 메시지로 알려주세요.")
 
             # --- 기본 피수치(20종) ---
-            if st.session_state.get("mode_main","암")=="암":
             with st.expander("🧪 기본 피수치(20종)", expanded=False):
                 st.caption("필요 수치만 입력하세요. 입력값은 결과/해석에 반영됩니다.")
                 def _numtxt(label, key):
@@ -304,16 +313,6 @@ def main():
                 _numtxt("Alb(g/dL)", "Alb_20"); _numtxt("AST(U/L)", "AST_20"); _numtxt("Cr(mg/dL)", "Cr_20"); _numtxt("Na(mmol/L)", "Na_20"); _numtxt("Glu(mg/dL)", "Glu_20")
                 c16,c17,c18,c19,c20 = st.columns(5)
                 _numtxt("ALT(U/L)", "ALT_20"); _numtxt("UA(mg/dL)", "UA_20"); _numtxt("Tb(mg/dL)", "Tb_20"); _numtxt("Ferritin(ng/mL)", "Ferritin_20"); _numtxt("D-dimer(µg/mL)", "Ddimer_20")
-            # 진단별 약물 목록 (drug_data 우선, 없으면 폴백 맵 사용)
-            diag_map = getattr(drug_data, "CHEMO_BY_DIAGNOSIS", {})
-            chemo_list = _chemo_list_for_diagnosis(diag_map, diagnosis)
-            if not chemo_list and "고형암" in str(group):
-                chemo_list = ["Cisplatin (시스플라틴)","Carboplatin (카보플라틴)","Paclitaxel (파클리탁셀)","Gemcitabine (젬시타빈)","5-FU (플루오로우라실)","Oxaliplatin (옥살리플라틴)"]
-            if not chemo_list and "혈액암" in str(group):
-                chemo_list = ["Cytarabine (사이타라빈)","Daunorubicin (다우노루비신)","Idarubicin (이다루비신)","Methotrexate (메토트렉세이트(MTX))","6-Mercaptopurine (6-MP(머캅토퓨린))"]
-            sel_chemo = st.multiselect("항암제 선택(진단별)", options=chemo_list, default=chemo_list, key="chemo_by_diagnosis")
-            if not chemo_list:
-                st.caption("진단별 약물 데이터가 비어 있습니다. drug_data.CHEMO_BY_DIAGNOSIS에 추가하거나 메시지로 알려주세요.")
     
 
         # Quick preview for core labs on the first tab
