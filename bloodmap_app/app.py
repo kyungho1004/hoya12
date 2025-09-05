@@ -94,17 +94,32 @@ def main():
 
     # 내부키(혈액암) 정규화: 화면표기는 'AML(…)' 등이나 로직키는 'AML'
     heme_key_map = {
-        'AML(급성 골수성 백혈병)': 'AML',
-        'APL(급성 전골수구성백혈병)': 'APL',
-        'ALL(급성 림프모구성 백혈병)': 'ALL',
-        'CML(만성 골수성백혈병)': 'CML',
-        'CLL(만성 림프구성백혈병)': 'CLL',
-    }
+    # EN-first
+    'AML(급성 골수성 백혈병)': 'AML',
+    'APL(급성 전골수구성백혈병)': 'APL',
+    'ALL(급성 림프모구성 백혈병)': 'ALL',
+    'CML(만성 골수성백혈병)': 'CML',
+    'CLL(만성 림프구성백혈병)': 'CLL',
+    # KR-first
+    '급성 골수성 백혈병(AML)': 'AML',
+    '급성 전골수구성 백혈병(APL)': 'APL',
+    '급성 림프모구성 백혈병(ALL)': 'ALL',
+    '만성 골수성 백혈병(CML)': 'CML',
+    '만성 림프구성 백혈병(CLL)': 'CLL',
+}
 
     if mode == "일반/암":
         group = st.selectbox("암 그룹 선택", ["미선택/일반", "혈액암", "고형암", "육종", "희귀암"])
         if group == "혈액암":
-            cancer = st.selectbox("혈액암(진단명)", ["AML","APL","ALL","CML","CLL"])
+
+heme_display = [
+    "급성 골수성 백혈병(AML)",
+    "급성 전골수구성 백혈병(APL)",
+    "급성 림프모구성 백혈병(ALL)",
+    "만성 골수성 백혈병(CML)",
+    "만성 림프구성 백혈병(CLL)",
+]
+cancer = st.selectbox("혈액암(진단명)", heme_display)
         elif group == "고형암":
             cancer = st.selectbox("고형암(진단명)", [
                 "폐암(Lung cancer)","유방암(Breast cancer)","위암(Gastric cancer)",
