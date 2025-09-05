@@ -48,3 +48,8 @@
 # v3.17.2 핫픽스
 - `ModuleNotFoundError: matplotlib` 해결: `requirements.txt`에 `matplotlib>=3.8` 추가.
 - 그래프 모듈이 matplotlib 미설치 환경에서도 **Streamlit line_chart**로 자동 폴백하도록 수정.
+
+
+# v3.17.3 핫픽스
+- 일부 환경에서 `drug_data.REGIMENS`가 누락되어 `AttributeError`가 발생하던 문제 수정.
+- 앱이 `REGIMENS`/`ANTIBIOTICS_BY_CLASS`/`ABX_CLASS_TIPS` 부재 시 **안전한 기본값**으로 자동 폴백.
