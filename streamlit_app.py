@@ -1,7 +1,6 @@
+
 # -*- coding: utf-8 -*-
-import streamlit as st
 from bloodmap_app.app import main
 
 if __name__ == "__main__":
-    # Run the app's main entrypoint
     main()
