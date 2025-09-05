@@ -106,7 +106,9 @@ def main():
         }
         REG = getattr(drug_data, "REGIMENS", None) or _fallback_reg
         reg_keys_quick = ["(프리셋 없음)"] + list(REG.keys())
-        st.selectbox("레짐 프리셋(Quick)", reg_keys_quick, key="chosen_reg", help="약물 선택 탭과 연동됩니다.")
+        st.selectbox("레짐 프리셋(Quick)", reg_keys_quick, key="chosen_reg_quick", help="약물 선택 탭과 연동됩니다.")
+        # sync shared state
+        st.session_state["chosen_reg_shared"] = st.session_state.get("chosen_reg_quick", "(프리셋 없음)")
 
     # ===== Basic panel =====
     with tabs[1]:
@@ -321,7 +323,15 @@ def main():
         }
         REG = getattr(drug_data, "REGIMENS", None) or _fallback_reg
         reg_keys = list(REG.keys())
-        chosen_reg = st.selectbox("레짐 프리셋", ["(프리셋 없음)"] + reg_keys, key="chosen_reg", help="예: MAP, VAC/IE, POMP")
+        options_full = ["(프리셋 없음)"] + reg_keys
+default_shared = st.session_state.get("chosen_reg_shared", "(프리셋 없음)")
+try:
+    idx_default = options_full.index(default_shared)
+except ValueError:
+    idx_default = 0
+chosen_reg = st.selectbox("레짐 프리셋", options_full, index=idx_default, key="chosen_reg_full", help="예: MAP, VAC/IE, POMP")
+# keep shared in sync if user changes here
+st.session_state["chosen_reg_shared"] = chosen_reg
         if chosen_reg != "(프리셋 없음)":
             preset = REG.get(chosen_reg, [])
             base_set = set(chemo_list)
