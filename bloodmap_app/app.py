@@ -195,26 +195,60 @@ def main():
     with tabs[3]:
         st.markdown("#### 항암제/항생제 (한글 병기)")
         chemo_list = drug_data.CHEMO_BY_DIAGNOSIS.get(group, {}).get(diagnosis, [])
-        reg_keys = ["-"] + list(drug_data.REGIMENS.keys())
+        # 레짐 프리셋 (drug_data.REGIMENS 없을 때도 안전하게 동작)
+        _fallback_reg = {
+            "MAP": [
+                "High-dose Methotrexate (고용량 메토트렉세이트)",
+                "Doxorubicin (독소루비신)",
+                "Cisplatin (시스플라틴)"
+            ],
+            "VAC/IE": [
+                "Vincristine (빈크리스틴)",
+                "Actinomycin D (아크티노마이신 D)",
+                "Cyclophosphamide (사이클로포스파마이드)",
+                "Ifosfamide (이포스파미드)",
+                "Etoposide (에토포사이드)"
+            ],
+            "POMP": [
+                "6-Mercaptopurine (6-MP(머캅토퓨린))",
+                "Vincristine (빈크리스틴)",
+                "Methotrexate (메토트렉세이트(MTX))",
+                "Prednisone (프레드니손)"
+            ],
+        }
+        REG = getattr(drug_data, "REGIMENS", None) or _fallback_reg
+        reg_keys = ["-"] + list(REG.keys())
         chosen_reg = st.selectbox("레짐 프리셋", reg_keys, help="예: MAP, VAC/IE, POMP")
         if chosen_reg != "-":
-            preset = drug_data.REGIMENS.get(chosen_reg, [])
+            preset = REG.get(chosen_reg, [])
             base_set = set(chemo_list)
             chemo_list = list(dict.fromkeys(list(preset) + list(base_set)))
             st.caption(f"프리셋 적용: {chosen_reg} → {len(preset)}개 항목 선반영")
         sel_chemo = st.multiselect(
             "항암제 선택",
             options=chemo_list,
-            default=(drug_data.REGIMENS.get(chosen_reg, []) if chosen_reg != "-" else []),
+            default=(REG.get(chosen_reg, []) if chosen_reg != "-" else []),
             help="복수 선택 가능"
         )
 
         st.markdown("---")
-        abx_classes = list(drug_data.ANTIBIOTICS_BY_CLASS.keys())
+        ABX = getattr(drug_data, "ANTIBIOTICS_BY_CLASS", {
+            "Cephalosporins(세팔로스포린계)": ["Cefazolin(세파졸린)", "Ceftriaxone(세프트리악손)", "Ceftazidime(세프타지딤)", "Cefepime(세페핌)"],
+            "Penicillins(페니실린계)": ["Amoxicillin(아목시실린)", "Piperacillin-tazobactam(피페라실린/타조박탐)"],
+            "Carbapenems(카바페넴계)": ["Meropenem(메로페넴)", "Imipenem/cilastatin(이미페넴/실라스타틴)"],
+            "Glycopeptides(글리코펩타이드)": ["Vancomycin(반코마이신)"],
+        })
+        ABX_TIPS = getattr(drug_data, "ABX_CLASS_TIPS", {
+            "Cephalosporins(세팔로스포린계)": "교차 알레르기 가능성. 일부 약은 담즙정체성 간염 드물게 보고.",
+            "Penicillins(페니실린계)": "알레르기/발진 주의. 신장기능 저하 시 용량 조절 고려.",
+            "Carbapenems(카바페넴계)": "광범위. 경련 위험(고용량/신기능 저하) 주의.",
+            "Glycopeptides(글리코펩타이드)": "반코마이신: 신독성/이독성, 혈중농도 모니터링.",
+        })
+        abx_classes = list(ABX.keys())
         abx_class = st.selectbox("항생제 계열", abx_classes)
-        abx_options = drug_data.ANTIBIOTICS_BY_CLASS.get(abx_class, [])
+        abx_options = ABX.get(abx_class, [])
         sel_abx = st.multiselect("항생제 선택", options=abx_options)
-        tip = getattr(drug_data, "ABX_CLASS_TIPS", {}).get(abx_class, "")
+        tip = ABX_TIPS.get(abx_class, "")
         if tip:
             st.info(f"계열 안내: {tip}")
 
