@@ -2,7 +2,14 @@
 import os
 import pandas as pd
 import streamlit as st
-import matplotlib.pyplot as plt
+
+try:
+    import matplotlib.pyplot as plt
+    _HAS_MPL = True
+except Exception:
+    _HAS_MPL = False
+    plt = None
+
 
 DEFAULT_Y_LIST = [
     "WBC","Hb","PLT","ANC","CRP",
@@ -37,12 +44,16 @@ def _line(df, x, y, title, ylabel):
     series = df[[x, y]].dropna()
     if series.empty:
         return
-    fig, ax = plt.subplots()
-    ax.plot(series[x], series[y], marker="o")
-    ax.set_title(title)
-    ax.set_xlabel("Date/Time")
-    ax.set_ylabel(ylabel)
-    st.pyplot(fig)
+    if _HAS_MPL:
+        fig, ax = plt.subplots()
+        ax.plot(series[x], series[y], marker="o")
+        ax.set_title(title)
+        ax.set_xlabel("Date/Time")
+        ax.set_ylabel(ylabel)
+        st.pyplot(fig)
+    else:
+        st.caption(f"(경고) matplotlib 미설치 — 간이 라인차트로 대체 표시합니다.")
+        st.line_chart(series.set_index(x))
 
 def render_graphs(history_csv: str, user_key: str):
     if not user_key:
