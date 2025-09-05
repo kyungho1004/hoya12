@@ -1,1 +1,0 @@
-# BloodMap app package
