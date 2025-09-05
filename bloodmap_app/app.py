@@ -508,6 +508,15 @@ def main():
             msgs = _safe_interpret_summary(st, group=group, diagnosis=diagnosis)
             st.markdown("\n".join([f"- {m}" for m in msgs]))
             st.caption("※ 참고용: 해석은 자동 요약이며 최종 의학적 판단은 의료진에게 확인하세요.")
+            if st.session_state.get("mode_main") == "소아질환":
+                fx = st.session_state.get("sx_fever_max"); fd = st.session_state.get("sx_fever_days")
+                try:
+                    if fx is not None and float(fx) >= 39.5:
+                        st.error("🚑 고열(≥39.5℃): 병원 방문 권고")
+                    elif fd is not None and int(fd) >= 5:
+                        st.warning("⚠️ 발열 5일 이상 지속: 진료 권고")
+                except Exception:
+                    pass
         # --- 핵심 피수치 요약(상단 고정) ---
         st.markdown("#### 🧪 피수치(핵심)")
         m1, m2, m3, m4, m5 = st.columns(5)
@@ -553,6 +562,12 @@ def main():
             "Retic(%)": Retic if "Retic" in locals() and Retic else "",
             "β2-microglobulin": B2M if "B2M" in locals() and B2M else "",
             "BNP": BNP if "BNP" in locals() and BNP else "",
+            "C3 (보체)": st.session_state.get("C3_toggle",""),
+            "C4 (보체)": st.session_state.get("C4_toggle",""),
+            "Urine dip Protein": st.session_state.get("UPRO_dip",""),
+            "Urine dip WBC-esterase": st.session_state.get("ULEU_dip",""),
+            "Urine dip Nitrite": st.session_state.get("UNIT_dip",""),
+            "Urine dip pH": st.session_state.get("UpH_dip",""),
             "Pediatric suspect": st.session_state.get("ped_suspect",""),
             "Pain severity": st.session_state.get("sx_pain",""),
             "Rhinorrhea": st.session_state.get("sx_rhin",""),
