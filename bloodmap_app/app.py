@@ -82,6 +82,59 @@ def main():
         st.session_state["group_sel"] = group
         group_cur = (group if "group" in locals() else st.session_state.get("group_sel") or "혈액암")
         diag_map = getattr(drug_data, "CHEMO_BY_DIAGNOSIS", {}) or {}
+
+        # --- 혈액암/고형암/육종/희귀암 프리셋(폴백 확장) ---
+        _F_DIAG = {
+            "혈액암": {
+                "AML(급성 골수성 백혈병)": ["7+3 (Cytarabine + Daunorubicin)", "FLAG-IDA (Fludarabine+Cytarabine+G-CSF+Idarubicin)", "CPX-351"],
+                "APL(급성 전골수성 백혈병)": ["ATRA + ATO (All-trans retinoic acid + Arsenic trioxide)", "ATRA + Anthracycline"],
+                "ALL(급성 림프구성 백혈병)": ["Hyper-CVAD", "CALGB 기반(유지: POMP)"],
+                "CLL(만성 림프구성 백혈병)": ["FCR (Fludarabine/Cyclophosphamide/Rituximab)", "Acalabrutinib + Obinutuzumab", "Venetoclax + Obinutuzumab", "Ibrutinib"],
+                "CML(만성 골수성 백혈병)": ["Imatinib", "Dasatinib", "Nilotinib"],
+                "DLBCL(미만성 거대B세포림프종)": ["R-CHOP", "Polatuzumab + R-CHP"],
+                "Hodgkin lymphoma": ["ABVD", "Brentuximab + AVD"],
+                "MM(다발골수종)": ["VRd (Bortezomib/Lenalidomide/Dexamethasone)", "DRd (Daratumumab + Lenalidomide + Dexamethasone)"],
+                "MDS(골수이형성증후군)": ["Azacitidine", "Decitabine"]
+            },
+            "고형암": {
+                "폐암(NSCLC-비편평)": ["Cisplatin + Pemetrexed (시스플라틴/페메트렉시드)", "Carboplatin + Paclitaxel (카보플라틴/파클리탁셀)"],
+                "폐암(NSCLC-편평)": ["Cisplatin + Gemcitabine (시스플라틴/젬시타빈)", "Carboplatin + Paclitaxel (카보플라틴/파클리탁셀)"],
+                "소세포 폐암(SCLC)": ["Etoposide + Cisplatin (EP)", "Etoposide + Carboplatin (EC)"],
+                "식도암": ["Cisplatin + 5-FU (FP)", "FOLFOX (5-FU/Leucovorin/Oxaliplatin)"],
+                "위암": ["FOLFOX", "FLOT (5-FU/Leucovorin/Oxaliplatin/Docetaxel)", "CAPOX (Capecitabine/Oxaliplatin)"],
+                "대장암": ["FOLFOX", "FOLFIRI (5-FU/Leucovorin/Irinotecan)", "CAPOX (Capecitabine/Oxaliplatin)"],
+                "간암(HCC)": ["Atezolizumab + Bevacizumab (아테졸리주맙/베바시주맙)", "Sorafenib (소라페닙)", "Lenvatinib (렌바티닙)"],
+                "담도암": ["Gemcitabine + Cisplatin (GemCis)", "GEMOX (Gemcitabine/Oxaliplatin)"],
+                "췌장암": ["FOLFIRINOX", "Gemcitabine + nab-Paclitaxel"],
+                "유방암": ["AC → T (Doxorubicin/Cyclophosphamide → Paclitaxel)", "TC (Docetaxel/Cyclophosphamide)", "Trastuzumab + Pertuzumab + Taxane (HER2+)"],
+                "난소암": ["Carboplatin + Paclitaxel", "Carboplatin + Docetaxel"],
+                "자궁내막암": ["Carboplatin + Paclitaxel"],
+                "자궁경부암": ["Cisplatin(동시방사선)", "Carboplatin + Paclitaxel"],
+                "신장암": ["Pembrolizumab + Axitinib", "Nivolumab + Ipilimumab"],
+                "방광암": ["Gemcitabine + Cisplatin (GC)", "MVAC (Methotrexate/Vinblastine/Doxorubicin/Cisplatin)"],
+                "전립선암": ["Docetaxel (도세탁셀)", "Abiraterone + Prednisone (아비라테론+프레드니손)", "ADT(호르몬치료)"],
+                "갑상선암": ["Lenvatinib", "Sorafenib"],
+                "두경부암": ["EXTREME (Cetuximab + Platinum + 5-FU)", "TPF (Docetaxel/Cisplatin/5-FU)"]
+            },
+            "육종": {
+                "골육종(MAP)": ["High-dose Methotrexate (고용량 메토트렉세이트)", "Doxorubicin", "Cisplatin"],
+                "유잉육종(VAC/IE)": ["Vincristine", "Actinomycin D", "Cyclophosphamide", "Ifosfamide", "Etoposide"],
+                "횡문근육종": ["Vincristine", "Actinomycin D", "Cyclophosphamide", "Ifosfamide", "Etoposide"]
+            },
+            "희귀암": {
+                "신경모세포종": ["Cyclophosphamide", "Doxorubicin", "Vincristine", "Carboplatin", "Etoposide", "Ifosfamide"],
+                "윌름스종양": ["Vincristine", "Dactinomycin(Actinomycin D)", "Doxorubicin"],
+                "간모세포종": ["Cisplatin", "Doxorubicin", "Vincristine", "5-FU"],
+                "GCT(BEP)": ["Bleomycin", "Etoposide", "Cisplatin"],
+                "수모세포종": ["Cisplatin", "Vincristine", "Cyclophosphamide", "Etoposide"]
+            }
+        }
+        # merge fallback into loaded map (without overwriting existing)
+        for _grp, _items in _F_DIAG.items():
+            base = diag_map.get(_grp, {})
+            for k, v in _items.items():
+                base.setdefault(k, v)
+            diag_map[_grp] = base
         diag_options = list(diag_map.get(group_cur, {}).keys()) or ["AML(급성 골수성 백혈병)"]
         if not diag_options:
             diag_options = ["-"]
@@ -185,8 +238,6 @@ def main():
             with u3:
                 prot_q = st.number_input("요 단백 (mg/dL)", min_value=0.0, step=1.0, format="%.1f", key="prot_quick")
             cr_q = st.number_input("요 크레아티닌 (mg/dL)", min_value=0.0, step=0.1, format="%.1f", key="ucr_quick")
-
-            from .helpers import compute_acr, compute_upcr, interpret_acr, interpret_upcr
             alb_mg_L_q = (st.session_state.get("alb_quick") or 0.0) * (10.0 if st.session_state.get("alb_unit_quick") == "mg/dL" else 1.0)
             acr_q = compute_acr(alb_mg_L_q if alb_mg_L_q else None, cr_q if cr_q else None)
             upcr_q = compute_upcr(prot_q if prot_q else None, cr_q if cr_q else None)
@@ -233,7 +284,7 @@ def main():
             st.metric("UPCR (mg/g)", f"{upcr:.0f}" if upcr else "-")
             st.caption(interpret_upcr(upcr))
 
-        st.markdown("#### 특수검사(+)")
+        st.markdown("#### 특수검사")
         e1,e2,e3 = st.columns(3)
         with e1:
             Ferritin = st.number_input("Ferritin (ng/mL)", min_value=0.0, step=1.0, format="%.1f")
@@ -244,7 +295,7 @@ def main():
         with e3:
             Retic = st.number_input("Retic(%)", min_value=0.0, step=0.1, format="%.1f")
             B2M = st.number_input("β2-microglobulin (mg/L)", min_value=0.0, step=0.1, format="%.2f")
-        Coombs = st.selectbox("Coombs test", ["-","Direct(+)","Direct(-)","Indirect(+)","Indirect(-)"])
+        Coombs = st.selectbox("Coombs 검사", ["직접항글로불린 양성","직접항글로불린 음성","간접항글로불린 양성","간접항글로불린 음성","선택 안 함"], index=4)
 
         from .helpers import interpret_ferritin, interpret_ldh, interpret_ua, interpret_esr, interpret_b2m
         extra_msgs = []
@@ -259,7 +310,7 @@ def main():
 
         st.info("단위: ACR = Alb(mg/L)/Cr(mg/dL)×100, UPCR = Prot(mg/dL)/Cr(mg/dL)×1000")
 
-        st.markdown("#### 간기능/전해질/응고 (+)")
+        st.markdown("#### 간기능/전해질/응고")
         l1,l2,l3 = st.columns(3)
         with l1:
             AST = st.number_input("AST (U/L)", min_value=0.0, step=1.0, format="%.0f")
@@ -422,7 +473,7 @@ def main():
             derived["UPCR (mg/g)"] = f"{upcr:.0f}"
 
         values = {
-            "WBC": WBC if WBC else "",
+            "WBC": (st.session_state.get("WBC_inline") or WBC) if (st.session_state.get("WBC_inline") or WBC) else "",
             "Hb": Hb if Hb else "",
             "PLT": PLT if PLT else "",
             "ANC": ANC if ANC else "",
@@ -436,14 +487,14 @@ def main():
             "β2-microglobulin": B2M if "B2M" in locals() and B2M else "",
             "BNP": BNP if "BNP" in locals() and BNP else "",
             "Coombs": Coombs if "Coombs" in locals() and Coombs and Coombs!="선택 안 함" else "",
-            "AST": AST if "AST" in locals() and AST else "",
-            "ALT": ALT if "ALT" in locals() and ALT else "",
+            "AST": (st.session_state.get("AST_inline") or (AST if "AST" in locals() else None)) or "",
+            "ALT": (st.session_state.get("ALT_inline") or (ALT if "ALT" in locals() else None)) or "",
             "ALP": ALP if "ALP" in locals() and ALP else "",
             "GGT": GGT if "GGT" in locals() and GGT else "",
             "Total bilirubin": TBILI if "TBILI" in locals() and TBILI else "",
-            "Na": Na if "Na" in locals() and Na else "",
-            "K": K if "K" in locals() and K else "",
-            "Ca": Ca if "Ca" in locals() and Ca else "",
+            "Na": (st.session_state.get("Na_inline") or (Na if "Na" in locals() else None)) or "",
+            "K": (st.session_state.get("K_inline") or (K if "K" in locals() else None)) or "",
+            "Ca": (st.session_state.get("Ca_inline") or (Ca if "Ca" in locals() else None)) or "",
             "Mg": Mg if "Mg" in locals() and Mg else "",
             "Phos": Phos if "Phos" in locals() and Phos else "",
             "INR": INR if "INR" in locals() and INR else "",
@@ -453,19 +504,19 @@ def main():
             "Triglycerides": TG if "TG" in locals() and TG else "",
             "Lactate": Lactate if "Lactate" in locals() and Lactate else "",
             "Urine Prot (mg/dL)": urine_protein_mg_dL if urine_protein_mg_dL else "",
-            "Ca": Ca if "Ca" in locals() and Ca else "",
+            "Ca": (st.session_state.get("Ca_inline") or (Ca if "Ca" in locals() else None)) or "",
             "P": P_ if "P_" in locals() and P_ else "",
-            "Na": Na if "Na" in locals() and Na else "",
+            "Na": (st.session_state.get("Na_inline") or (Na if "Na" in locals() else None)) or "",
             "K": K_ if "K_" in locals() and K_ else "",
-            "Alb": Alb if "Alb" in locals() and Alb else "",
-            "Glu": Glu if "Glu" in locals() and Glu else "",
-            "TP": TP if "TP" in locals() and TP else "",
-            "AST": AST if "AST" in locals() and AST else "",
-            "ALT": ALT if "ALT" in locals() and ALT else "",
-            "LD": LD if "LD" in locals() and LD else "",
+            "Alb": (st.session_state.get("Alb_inline") or (Alb if "Alb" in locals() else None)) or "",
+            "Glu": (st.session_state.get("Glu_inline") or (Glu if "Glu" in locals() else None)) or "",
+            "TP": (st.session_state.get("TP_inline") or (TP if "TP" in locals() else None)) or "",
+            "AST": (st.session_state.get("AST_inline") or (AST if "AST" in locals() else None)) or "",
+            "ALT": (st.session_state.get("ALT_inline") or (ALT if "ALT" in locals() else None)) or "",
+            "LD": (st.session_state.get("LD_inline") or (LD if "LD" in locals() else None)) or "",
             "Cr": sCr if "sCr" in locals() and sCr else "",
-            "UA": UA if "UA" in locals() and UA else "",
-            "Tb": Tb if "Tb" in locals() and Tb else "",
+            "UA": (st.session_state.get("UA_inline") or (UA if "UA" in locals() else None)) or "",
+            "Tb": (st.session_state.get("Tb_inline") or (Tb if "Tb" in locals() else None)) or "",
             "Urine Cr (mg/dL)": urine_cr_mg_dL if urine_cr_mg_dL else "",
         }
         meta = {"user_key": user_key or "-", "diagnosis": diagnosis, "category": group}
