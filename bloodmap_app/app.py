@@ -30,9 +30,9 @@ def save_row(row: dict):
         "timestamp","user_key","category","diagnosis",
         "WBC","Hb","PLT","ANC","CRP",
         "Urine Alb (mg/L)","Urine Prot (mg/dL)","Urine Cr (mg/dL)",
-        "Ferritin","LDH","Uric acid","ESR","Retic(%)","β2-microglobulin","Coombs",
-        "AST","ALT","ALP","GGT","Total bilirubin",
-        "Na","K","Ca","Mg","Phos","INR","aPTT","Fibrinogen","D-dimer","Triglycerides","Lactate",
+        "Ferritin","LDH","Uric acid","ESR","Retic(%)","β2-microglobulin","BNP","Coombs",
+        "AST","ALT","ALP","GGT","Total bilirubin","Tb",
+        "Na","K","Ca","Mg","Phos","P","INR","aPTT","Fibrinogen","D-dimer","Triglycerides","Lactate","Albumin","Alb","Glucose","Glu","Total protein","TP","Creatinine","Cr",
         "ACR (mg/g)","UPCR (mg/g)","Chemo","Antibiotics"
     ]
     df_new = pd.DataFrame([row], columns=cols)
@@ -78,21 +78,117 @@ def main():
             diag_options = ["-"]
         diagnosis = st.selectbox("진단명", diag_options, index=0)
 
+        # Quick preview for core labs on the first tab
+        st.markdown("#### 🧪 피수치(핵심) 미리보기")
+        q1,q2,q3,q4,q5 = st.columns(5)
+        ss = st.session_state
+        with q1: st.metric("WBC (×10³/µL)", f"{ss.get('WBC_val',0.0):.1f}" if ss.get('WBC_val') else "-")
+        with q2: st.metric("Hb (g/dL)", f"{ss.get('Hb_val',0.0):.1f}" if ss.get('Hb_val') else "-")
+        with q3: st.metric("PLT (×10³/µL)", f"{ss.get('PLT_val',0.0):.0f}" if ss.get('PLT_val') else "-")
+        with q4: st.metric("ANC (/µL)", f"{ss.get('ANC_val',0.0):.0f}" if ss.get('ANC_val') else "-")
+        with q5: st.metric("CRP (mg/dL)", f"{ss.get('CRP_val',0.0):.2f}" if ss.get('CRP_val') else "-")
+        st.caption("자세한 입력은 상단의 '기본 수치' 탭에서 가능합니다.")
+        
+        # Regimen quick selector mirrored to '약물 선택' 탭
+        from . import drug_data
+        _fallback_reg = {
+            "MAP": ["High-dose Methotrexate (고용량 메토트렉세이트)","Doxorubicin (독소루비신)","Cisplatin (시스플라틴)"],
+            "VAC/IE": ["Vincristine (빈크리스틴)","Actinomycin D (아크티노마이신 D)","Cyclophosphamide (사이클로포스파마이드)","Ifosfamide (이포스파미드)","Etoposide (에토포사이드)"],
+            "POMP": ["6-Mercaptopurine (6-MP(머캅토퓨린))","Vincristine (빈크리스틴)","Methotrexate (메토트렉세이트(MTX))","Prednisone (프레드니손)"]
+        }
+        REG = getattr(drug_data, "REGIMENS", None) or _fallback_reg
+        reg_keys_quick = ["(프리셋 없음)"] + list(REG.keys())
+        st.selectbox("레짐 프리셋(Quick)", reg_keys_quick, key="chosen_reg", help="약물 선택 탭과 연동됩니다.")
+
     # ===== Basic panel =====
     with tabs[1]:
         st.markdown("#### 기본 수치")
         c1, c2, c3, c4, c5 = st.columns(5)
         with c1:
-            WBC = st.number_input("WBC(×10³/µL)", min_value=0.0, step=0.1, format="%.1f")
+            WBC = st.number_input("WBC(×10³/µL)", min_value=0.0, step=0.1, format="%.1f", key="WBC_val")
         with c2:
-            Hb  = st.number_input("Hb(g/dL)", min_value=0.0, step=0.1, format="%.1f")
+            Hb  = st.number_input("Hb(g/dL)", min_value=0.0, step=0.1, format="%.1f", key="Hb_val")
         with c3:
-            PLT = st.number_input("혈소판(×10³/µL)", min_value=0.0, step=1.0, format="%.0f")
+            PLT = st.number_input("혈소판(×10³/µL)", min_value=0.0, step=1.0, format="%.0f", key="PLT_val")
         with c4:
-            ANC = st.number_input("호중구 ANC(/µL)", min_value=0.0, step=10.0, format="%.0f")
+            ANC = st.number_input("호중구 ANC(/µL)", min_value=0.0, step=10.0, format="%.0f", key="ANC_val")
         with c5:
-            CRP = st.number_input("CRP(mg/dL)", min_value=0.0, step=0.1, format="%.2f")
+            CRP = st.number_input("CRP(mg/dL)", min_value=0.0, step=0.1, format="%.2f", key="CRP_val")
 
+
+        st.markdown("#### 기본 수치(확장)")
+        # 전해질/간·신장/대사 핵심
+        b1,b2,b3,b4 = st.columns(4)
+        with b1:
+            Ca = st.number_input("Ca(칼슘, mg/dL)", min_value=0.0, step=0.1, format="%.2f", key="Ca_val")
+            P_ = st.number_input("P(인, mg/dL)", min_value=0.0, step=0.1, format="%.2f", key="P_val")
+            Na = st.number_input("Na(나트륨, mmol/L)", min_value=0.0, step=0.1, format="%.1f", key="Na_val")
+        with b2:
+            K_ = st.number_input("K(칼륨, mmol/L)", min_value=0.0, step=0.1, format="%.1f", key="K_val")
+            Alb = st.number_input("Alb(알부민, g/dL)", min_value=0.0, step=0.1, format="%.2f", key="Alb_val")
+            Glu = st.number_input("Glu(혈당, mg/dL)", min_value=0.0, step=1.0, format="%.0f", key="Glu_val")
+        with b3:
+            TP = st.number_input("TP(총단백질, g/dL)", min_value=0.0, step=0.1, format="%.2f", key="TP_val")
+            AST = st.number_input("AST(간수치, U/L)", min_value=0.0, step=1.0, format="%.0f", key="AST_val_basic")
+            ALT = st.number_input("ALT(간세포수치, U/L)", min_value=0.0, step=1.0, format="%.0f", key="ALT_val_basic")
+        with b4:
+            LD = st.number_input("LD(유산탈수효소, U/L)", min_value=0.0, step=1.0, format="%.0f", key="LD_val")
+            sCr = st.number_input("Cr(크레아티닌, mg/dL)", min_value=0.0, step=0.01, format="%.2f", key="Cr_val")
+            UA = st.number_input("UA(요산, mg/dL)", min_value=0.0, step=0.1, format="%.2f", key="UA_val")
+            Tb = st.number_input("Tb(총빌리루빈, mg/dL)", min_value=0.0, step=0.1, format="%.2f", key="Tb_val")
+
+        # 간단 해석 캡션
+        from .helpers import interpret_na, interpret_k, interpret_ca, interpret_phos, interpret_ast, interpret_alt, interpret_ldh as _int_ldh, interpret_tbili, interpret_ua
+        hints = []
+        hints += [interpret_na(Na), interpret_k(K_), interpret_ca(Ca), interpret_phos(P_)]
+        hints += [interpret_ast(AST), interpret_alt(ALT)]
+        hints += [(_int_ldh(LD) if LD else "")]
+        hints += [interpret_tbili(Tb), interpret_ua(UA)]
+        for h in hints:
+            if h: st.caption("• " + h)
+
+        # Oncology quick panel: 항암제 & 특수검사(소변) 바로 밑에 표시
+        if group in ("혈액암","고형암","육종"):
+            st.markdown("---")
+            st.markdown("### 🧬 항암제(빠른 선택)")
+            from . import drug_data
+            _fallback_reg = {
+                "MAP": ["High-dose Methotrexate (고용량 메토트렉세이트)","Doxorubicin (독소루비신)","Cisplatin (시스플라틴)"],
+                "VAC/IE": ["Vincristine (빈크리스틴)","Actinomycin D (아크티노마이신 D)","Cyclophosphamide (사이클로포스파마이드)","Ifosfamide (이포스파미드)","Etoposide (에토포사이드)"],
+                "POMP": ["6-Mercaptopurine (6-MP(머캅토퓨린))","Vincristine (빈크리스틴)","Methotrexate (메토트렉세이트(MTX))","Prednisone (프레드니손)"]
+            }
+            REG = getattr(drug_data, "REGIMENS", None) or _fallback_reg
+            reg_keys2 = ["(프리셋 없음)"] + list(REG.keys())
+            chosen_reg2 = st.selectbox("레짐 프리셋(빠른 선택)", reg_keys2, key="chosen_reg_basic", help="약물 선택 탭과 연동")
+            chemo_list2 = drug_data.CHEMO_BY_DIAGNOSIS.get(group, {}).get(diagnosis, [])
+            if chosen_reg2 != "(프리셋 없음)":
+                preset2 = REG.get(chosen_reg2, [])
+                chemo_list2 = list(dict.fromkeys(list(preset2) + list(chemo_list2)))
+                st.caption(f"프리셋 적용: {chosen_reg2} → {len(preset2)}개 항목 선반영")
+            sel_chemo_basic = st.multiselect("항암제 선택(빠른)", options=chemo_list2, default=(REG.get(chosen_reg2, []) if chosen_reg2 != "(프리셋 없음)" else []), key="chemo_quick")
+
+            st.markdown("### 🧪 특수검사(소변 간편)")
+            u1,u2,u3 = st.columns(3)
+            with u1:
+                alb_unit_q = st.radio("요 알부민 단위", ["mg/L","mg/dL"], horizontal=True, index=0, key="alb_unit_quick")
+            with u2:
+                alb_q = st.number_input(f"요 알부민 ({st.session_state.get('alb_unit_quick','mg/L')})", min_value=0.0, step=1.0, format="%.1f", key="alb_quick")
+            with u3:
+                prot_q = st.number_input("요 단백 (mg/dL)", min_value=0.0, step=1.0, format="%.1f", key="prot_quick")
+            cr_q = st.number_input("요 크레아티닌 (mg/dL)", min_value=0.0, step=0.1, format="%.1f", key="ucr_quick")
+
+            from .helpers import compute_acr, compute_upcr, interpret_acr, interpret_upcr
+            alb_mg_L_q = (st.session_state.get("alb_quick") or 0.0) * (10.0 if st.session_state.get("alb_unit_quick") == "mg/dL" else 1.0)
+            acr_q = compute_acr(alb_mg_L_q if alb_mg_L_q else None, cr_q if cr_q else None)
+            upcr_q = compute_upcr(prot_q if prot_q else None, cr_q if cr_q else None)
+            c1,c2 = st.columns(2)
+            with c1:
+                st.metric("ACR (mg/g)", f"{acr_q:.0f}" if acr_q else "-")
+                st.caption(interpret_acr(acr_q))
+            with c2:
+                st.metric("UPCR (mg/g)", f"{upcr_q:.0f}" if upcr_q else "-")
+                st.caption(interpret_upcr(upcr_q))
+    
         if ANC:
             if ANC < 500:
                 st.info("ANC 가이드: ⚠️ 500 미만 주의")
@@ -217,9 +313,9 @@ def main():
             ],
         }
         REG = getattr(drug_data, "REGIMENS", None) or _fallback_reg
-        reg_keys = ["-"] + list(REG.keys())
-        chosen_reg = st.selectbox("레짐 프리셋", reg_keys, help="예: MAP, VAC/IE, POMP")
-        if chosen_reg != "-":
+        reg_keys = list(REG.keys())
+        chosen_reg = st.selectbox("레짐 프리셋", ["(프리셋 없음)"] + reg_keys, key="chosen_reg", help="예: MAP, VAC/IE, POMP")
+        if chosen_reg != "(프리셋 없음)":
             preset = REG.get(chosen_reg, [])
             base_set = set(chemo_list)
             chemo_list = list(dict.fromkeys(list(preset) + list(base_set)))
@@ -317,7 +413,8 @@ def main():
             "ESR": ESR if "ESR" in locals() and ESR else "",
             "Retic(%)": Retic if "Retic" in locals() and Retic else "",
             "β2-microglobulin": B2M if "B2M" in locals() and B2M else "",
-            "Coombs": Coombs if "Coombs" in locals() and Coombs and Coombs!="-" else "",
+            "BNP": BNP if "BNP" in locals() and BNP else "",
+            "Coombs": Coombs if "Coombs" in locals() and Coombs and Coombs!="선택 안 함" else "",
             "AST": AST if "AST" in locals() and AST else "",
             "ALT": ALT if "ALT" in locals() and ALT else "",
             "ALP": ALP if "ALP" in locals() and ALP else "",
@@ -335,6 +432,19 @@ def main():
             "Triglycerides": TG if "TG" in locals() and TG else "",
             "Lactate": Lactate if "Lactate" in locals() and Lactate else "",
             "Urine Prot (mg/dL)": urine_protein_mg_dL if urine_protein_mg_dL else "",
+            "Ca": Ca if "Ca" in locals() and Ca else "",
+            "P": P_ if "P_" in locals() and P_ else "",
+            "Na": Na if "Na" in locals() and Na else "",
+            "K": K_ if "K_" in locals() and K_ else "",
+            "Alb": Alb if "Alb" in locals() and Alb else "",
+            "Glu": Glu if "Glu" in locals() and Glu else "",
+            "TP": TP if "TP" in locals() and TP else "",
+            "AST": AST if "AST" in locals() and AST else "",
+            "ALT": ALT if "ALT" in locals() and ALT else "",
+            "LD": LD if "LD" in locals() and LD else "",
+            "Cr": sCr if "sCr" in locals() and sCr else "",
+            "UA": UA if "UA" in locals() and UA else "",
+            "Tb": Tb if "Tb" in locals() and Tb else "",
             "Urine Cr (mg/dL)": urine_cr_mg_dL if urine_cr_mg_dL else "",
         }
         meta = {"user_key": user_key or "-", "diagnosis": diagnosis, "category": group}
@@ -376,12 +486,26 @@ def main():
                 "Urine Alb (mg/L)": urine_albumin_mg_L,
                 "Urine Prot (mg/dL)": urine_protein_mg_dL,
                 "Urine Cr (mg/dL)": urine_cr_mg_dL,
+                "Ca": Ca if "Ca" in locals() else 0.0,
+                "P": P_ if "P_" in locals() else 0.0,
+                "Na": Na if "Na" in locals() else 0.0,
+                "K": K_ if "K_" in locals() else 0.0,
+                "Alb": Alb if "Alb" in locals() else 0.0,
+                "Glu": Glu if "Glu" in locals() else 0.0,
+                "TP": TP if "TP" in locals() else 0.0,
+                "AST": AST if "AST" in locals() else 0.0,
+                "ALT": ALT if "ALT" in locals() else 0.0,
+                "LD": LD if "LD" in locals() else 0.0,
+                "Cr": sCr if "sCr" in locals() else 0.0,
+                "UA": UA if "UA" in locals() else 0.0,
+                "Tb": Tb if "Tb" in locals() else 0.0,
                 "Ferritin": Ferritin if "Ferritin" in locals() else 0.0,
                 "LDH": LDH if "LDH" in locals() else 0.0,
                 "Uric acid": UricAcid if "UricAcid" in locals() else 0.0,
                 "ESR": ESR if "ESR" in locals() else 0.0,
                 "Retic(%)": Retic if "Retic" in locals() else 0.0,
                 "β2-microglobulin": B2M if "B2M" in locals() else 0.0,
+                "BNP": BNP if "BNP" in locals() else 0.0,
                 "Coombs": Coombs if "Coombs" in locals() else "",
                 "AST": AST if "AST" in locals() else 0.0,
                 "ALT": ALT if "ALT" in locals() else 0.0,

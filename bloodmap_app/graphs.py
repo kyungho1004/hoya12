@@ -13,9 +13,11 @@ except Exception:
 
 DEFAULT_Y_LIST = [
     "WBC","Hb","PLT","ANC","CRP",
-    "Ferritin","LDH","Uric acid","ESR","Retic(%)","β2-microglobulin",
-    "AST","ALT","ALP","GGT","Total bilirubin",
-    "Na","K","Ca","Mg","Phos","INR","aPTT","Fibrinogen","D-dimer","Triglycerides","Lactate"
+    "Ferritin","LDH","LD","Uric acid","UA","ESR","Retic(%)","β2-microglobulin",
+    "AST","ALT","ALP","GGT","Total bilirubin","Tb",
+    "Na","K","Ca","Mg","Phos","P","INR","aPTT","Fibrinogen","D-dimer","Triglycerides","Lactate",
+    "Albumin","Alb","Glucose","Glu","Total protein","TP","Creatinine","Cr",
+    "BNP","NT-proBNP"
 ]
 
 def _load_user_df(history_csv: str, user_key: str) -> pd.DataFrame:

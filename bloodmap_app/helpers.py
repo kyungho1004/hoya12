@@ -325,3 +325,12 @@ def interpret_ped_infection(paths, temp_c: float, fever_days: float, dehydration
     if not msgs:
         msgs.append("입력값이 부족합니다. 증상·체온·병원체를 선택하면 맞춤 안내가 나옵니다.")
     return msgs
+
+
+def interpret_bnp(val: float) -> str:
+    if not val:
+        return ""
+    # 간단 기준(성인 일반): >100 pg/mL 상승. 소아/연령별 상이할 수 있음.
+    if val > 100:
+        return "BNP 상승 — 심부전/심장 부담 가능성(연령·신장/수분상태 고려)."
+    return "BNP: 뚜렷한 상승 없음."
