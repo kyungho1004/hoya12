@@ -38,7 +38,7 @@ def main():
     with c3:
         st.code("https://hdzwo5ginueir7hknzzfg4.streamlit.app/", language="text")
 
-    st.caption("✅ 모바일 줄꼬임 방지 · **별명+PIN(4자리)** 저장키 · **육종(진단명) 분리** · **항암제 직접 선택(한글 병기)** · 특수검사 토글 · 소아 일상/감염 가이드(질환별 입력)")
+    st.caption("✅ 별명+PIN(4자리) 저장키 · 육종(진단명) 분리 · 항암제 직접 선택(한글 병기) · 특수검사 토글 · 소아 일상/감염 가이드(질환별 입력)")
 
     os.makedirs("fonts", exist_ok=True)
     try:
@@ -95,7 +95,7 @@ def main():
                 "간모세포종(Hepatoblastoma)","비인두암(NPC)","GIST"
             ])
         else:
-            st.info("암 그룹을 선택하면 아래 참고용 **항암제 목록**만 보여주고, 선택은 직접 하도록 되어 있습니다.")
+            st.info("암별 참고 항암제 목록만 표시합니다. 선택은 전부 직접 하도록 되어 있어요.")
 
     # ===== 항암제/항생제 (암은 수동 선택만) =====
     meds, extras = {}, {"abx": {}}
@@ -106,10 +106,10 @@ def main():
         AC_ALL.setdefault("MTX", {"alias":"메토트렉세이트"})
         AC_ALL.setdefault("6-MP", {"alias":"6-머캅토퓨린"})
 
-        # 참고: 암별 흔히 쓰는 항암제(표시만, 자동선택 X)
+        # 참고 목록(자동 선택 아님)
         heme_by_cancer = {
             "AML": ["ARA-C","Daunorubicin","Idarubicin","Cyclophosphamide","Etoposide","Fludarabine","Hydroxyurea","MTX","ATRA","G-CSF"],
-            "APL": ["ATRA","Idarubicin","Daunorubicin","ARA-C","G-CSF","MTX","6-MP"],  # 요청: MTX/6-MP 포함
+            "APL": ["ATRA","Idarubicin","Daunorubicin","ARA-C","G-CSF","MTX","6-MP"],  # MTX/6-MP 포함
             "ALL": ["Vincristine","Asparaginase","Daunorubicin","Cyclophosphamide","MTX","6-MP","ARA-C","Topotecan","Etoposide"],
             "CML": ["Imatinib","Dasatinib","Nilotinib","Hydroxyurea"],
             "CLL": ["Fludarabine","Cyclophosphamide","Rituximab"],
@@ -154,7 +154,6 @@ def main():
             "GIST": ["Imatinib","Sunitinib","Regorafenib"],
         }
 
-        # 참고 목록만 표시
         if group and group != "미선택/일반" and cancer:
             ref = (heme_by_cancer if group=="혈액암" else
                    solid_by_cancer if group=="고형암" else
@@ -195,7 +194,7 @@ def main():
         show_labs = True
     else:
         st.divider(); st.header("2️⃣ 피수치(혈액검사) 입력")
-        show_labs = st.checkbox("피수치 입력 보이기", value=False, help="요청사항: 소아가이드/일상가이드에서 피수치는 토글")
+        show_labs = st.checkbox("피수치 입력 보이기", value=False, help="소아가이드/감염질환에서 피수치는 토글로 표시")
 
     def render_lab_inputs():
         table_mode = st.checkbox("⚙️ PC용 표 모드(가로형)", value=False, key="tbl_mode", help="모바일은 세로형 고정 → 줄꼬임 없음.")
@@ -206,11 +205,9 @@ def main():
                 vals[name] = num_input_generic(f"{name}", key=f"v_{name}", decimals=dec)
         else:
             st.markdown("**기본 패널 (표 모드)**")
-            left, right = st.columns(2)
-            half = (len(ORDER)+1)//2
+            left, right = st.columns(2); half = (len(ORDER)+1)//2
             for i, name in enumerate(ORDER):
                 dec = 2 if name==LBL_CRP else 1
-                (left if i<half else right).markdown("" if i<half else "")
                 vals[name] = num_input_generic(f"{name}", key=f"t_{name}", decimals=dec)
 
     special_vals = {}
@@ -257,17 +254,16 @@ def main():
             temp_c = num_input_generic("체온(℃)", key="ped_temp", decimals=1)
             cyan = st.checkbox("청색증(체크)")
         ox = st.checkbox("산소포화도 측정기 있음")
-        spo2 = num_input_generic("SpO₂(%) (직접입력)", key="ped_spo2", decimals=0) if ox else None
-        ped_inputs = {"식욕": appetite, "발열": bool(fever_chk), "체온": temp_c, "기침": cough, "호흡곤란": dysp, "청색증": bool(cyan), "SpO2": spo2, "측정기": bool(ox)}
+        spo2_val = num_input_generic("SpO₂(%) (직접입력)", key="ped_spo2", decimals=0) if ox else None
+        ped_inputs = {"식욕": appetite, "발열": bool(fever_chk), "체온": temp_c, "기침": cough, "호흡곤란": dysp, "청색증": bool(cyan), "SpO2": spo2_val, "측정기": bool(ox)}
 
     # ===== 소아: 감염질환 (질환별로 입력 다르게) =====
     if mode == "소아(감염질환)":
         st.divider(); st.header("3️⃣ 소아 — 감염질환")
         infection = st.selectbox("질환 선택", ["RSV", "아데노", "로타", "인플루엔자", "파라인플루엔자", "수족구", "노로", "마이코플"])
 
-        # 공통 vital 옵션: SpO2만(요청엔 명시 없지만 실무상 유용)
         ox = st.checkbox("산소포화도 측정기 있음")
-        spo2 = num_input_generic("SpO₂(%) (직접입력)", key="inf_spo2", decimals=0) if ox else None
+        spo2_val = num_input_generic("SpO₂(%) (직접입력)", key="inf_spo2", decimals=0) if ox else None
 
         st.subheader("증상 입력 (질환별 전용)")
         if infection == "RSV":
@@ -296,8 +292,7 @@ def main():
             m_cough = st.radio("기침", ["안함","조금","보통","많이","심함"], horizontal=True)
             infect_specific = {"기침": m_cough}
 
-        # 저장
-        ped_inputs = {"SpO2": spo2, "측정기": bool(ox)}
+        ped_inputs = {"SpO2": spo2_val, "측정기": bool(ox)}
         ped_inputs.update(infect_specific)
 
     # ===== 스케줄 =====
@@ -307,53 +302,30 @@ def main():
     st.divider()
     run = st.button("🔎 해석하기", use_container_width=True)
 
-    # Helper: triage
     def sev(v:str):
         rank = {"안함":0,"없음":0,"조금":1,"보통":2,"많이":3,"심함":4}
         return rank.get(str(v),0)
 
     def triage_from_inputs(p:dict):
         msgs=[]; danger=False; urgent=False
-        spo2 = p.get("SpO2")
-        if spo2 is not None:
+        # 안정적으로 가져옴 (NameError 방지)
+        s = p.get("SpO2")
+        if s is not None:
             try:
-                spo2 = float(spo2)
-                if spo2 < 92: danger=True; msgs.append("SpO₂<92%")
-                elif spo2 < 95: urgent=True; msgs.append("SpO₂ 92–94%")
+                s = float(s)
+                if s < 92: danger=True; msgs.append("SpO₂<92%")
+                elif s < 95: urgent=True; msgs.append("SpO₂ 92–94%")
             except: pass
         if p.get("청색증"): danger=True; msgs.append("청색증")
         if sev(p.get("호흡곤란", "없음"))>=4: danger=True; msgs.append("호흡곤란 심함")
         elif sev(p.get("호흡곤란", "없음"))>=3: urgent=True; msgs.append("호흡곤란 많음")
-        if p.get("발열") and float(p.get("체온") or 0)>=39.0: urgent=True; msgs.append("고열")
+        t = p.get("체온")
+        try:
+            if p.get("발열") and t is not None and float(t)>=39.0: urgent=True; msgs.append("고열")
+        except: pass
         lead = "🚑 위급" if danger else ("⚠️ 주의" if urgent else "🙂 가정 경과관찰")
         if not msgs: msgs.append("특이 위험 신호 없음")
         return f"**{lead}**: " + ", ".join(msgs)
-
-    # Disease-specific helper text
-    def disease_tip(d, fields):
-        if d=="RSV":
-            c=fields.get("기침","없음"); 
-            return "영아에서 천명·무호흡 위험. 기침이 '많이/심함'이면 즉시 진료." if sev(c)>=3 else "수분·비강흡인 고려, 기침 경과관찰."
-        if d=="아데노":
-            return "눈곱/결막염 동반 시 세정·손위생 중요, 고열 지속 시 진료."
-        if d=="로타":
-            dia=float(fields.get("설사(회/일)") or 0); 
-            return "탈수 위험 → 소량·자주 수분 보충." + (" (설사 빈도 높음)" if dia>=6 else "")
-        if d=="인플루엔자":
-            c=fields.get("기침","없음"); 
-            return "고열·근육통 동반 가능. 증상 48시간 이내면 항바이러스제 고려(의료진 판단)."
-        if d=="파라인플루엔자":
-            c=fields.get("기침","없음"); f=fields.get("발열", False)
-            return "크룹성 기침 가능. 발열 동반 시 해열·가습, 호흡곤란 악화 시 응급."
-        if d=="수족구":
-            return "구내통증으로 수분섭취 저하 흔함 → 탈수 주의."
-        if d=="노로":
-            dia=float(fields.get("설사(회/일)") or 0)
-            return "구토/설사로 탈수 주의, 가볍게 자주 수분." + (" (설사 빈도 높음)" if dia>=6 else "")
-        if d=="마이코플":
-            c=fields.get("기침","없음")
-            return "기침 장기화 가능. 호흡곤란·고열 지속 시 진료."
-        return ""
 
     if run:
         st.subheader("📋 해석 결과")
@@ -373,7 +345,7 @@ def main():
             fs_all = food_suggestions(vals, anc_place) if show_labs else []
             cleaned = []
             for s in fs_all:
-                if re.search(r"(철분|비타민|iron|vitamin)", s, flags=re.I): 
+                if re.search(r"(철분|비타민|iron|vitamin)", s, flags=re.I):
                     continue
                 cleaned.append(s)
             if cleaned:
@@ -384,11 +356,11 @@ def main():
             if meds:
                 st.markdown("### 💊 항암제 부작용·상호작용 요약")
                 for line in summarize_meds(meds): st.write(line)
-            if extras.get("abx"):
-                abx_lines = abx_summary(extras["abx"])
-                if abx_lines:
-                    st.markdown("### 🧪 항생제 주의 요약")
-                    for l in abx_lines: st.write(l)
+            # 항상 리스트로 초기화해서 NameError 방지
+            abx_lines = abx_summary(extras.get("abx", {})) if extras.get("abx") else []
+            if abx_lines:
+                st.markdown("### 🧪 항생제 주의 요약")
+                for l in abx_lines: st.write(l)
 
             st.markdown("### 🌡️ 발열 가이드"); st.write(FEVER_GUIDE)
 
@@ -398,18 +370,33 @@ def main():
         else:  # 감염질환
             if infection:
                 st.write(triage_from_inputs(ped_inputs))
-                tip = disease_tip(infection, infect_specific)
-                if tip:
-                    st.markdown("#### 🧾 질환별 안내"); st.write(tip)
+                # 질환별 안내 한줄
+                def tip(d, f):
+                    if d=="RSV":
+                        c=f.get("기침","없음"); 
+                        return "영아에서 천명·무호흡 위험. 기침이 '많이/심함'이면 즉시 진료." if sev(c)>=3 else "수분·비강흡인 고려, 기침 경과관찰."
+                    if d=="아데노": return "눈곱/결막염 동반 시 세정·손위생 중요, 고열 지속 시 진료."
+                    if d=="로타":
+                        try: dia=float(f.get("설사(회/일)") or 0)
+                        except: dia=0
+                        return "탈수 위험 → 소량·자주 수분 보충." + (" (설사 빈도 높음)" if dia>=6 else "")
+                    if d=="인플루엔자": return "고열·근육통 가능. 48시간 이내면 항바이러스제 고려(의료진 판단)."
+                    if d=="파라인플루엔자": return "크룹성 기침 가능. 발열 동반 시 해열·가습, 호흡곤란 악화 시 응급."
+                    if d=="수족구": return "구내통증으로 수분섭취 저하 흔함 → 탈수 주의."
+                    if d=="노로":
+                        try: dia=float(f.get("설사(회/일)") or 0)
+                        except: dia=0
+                        return "구토/설사로 탈수 주의, 가볍게 자주 수분." + (" (설사 빈도 높음)" if dia>=6 else "")
+                    if d=="마이코플": return "기침 장기화 가능. 호흡곤란·고열 지속 시 진료."
+                    return ""
+                add = tip(infection, infect_specific)
+                if add:
+                    st.markdown("#### 🧾 질환별 안내"); st.write(add)
 
         # ===== Report build & download =====
         meta = {"group": group, "cancer": cancer, "anc_place": anc_place, "mode": mode, "infection": infection}
-        # compile special extra (labs)
-        extra_all = {}
-        for k,v in (special_vals or {}).items():
-            if entered(v): extra_all[k]=v
+        extra_all = {k:v for k,v in (special_vals or {}).items() if entered(v)}
 
-        # re-run food guide clean in report
         fs_report = []
         if mode=="일반/암" and show_labs:
             for s in (food_suggestions(vals, anc_place) or []):
