@@ -177,7 +177,7 @@ def main():
             extras["abx"][abx] = num_input_generic(f"{abx} - 복용/주입량", key=f"abx_{abx}", decimals=1, placeholder="예: 1")
 
     # ===== 기본 혈액검사 (암 모드) / 소아 모드에서는 토글 =====
-    vals = {}; show_labs = False
+    vals = {}; special_vals = {}; show_labs = False
     if mode == "일반/암":
         st.divider(); st.header("3️⃣ 기본 혈액 검사 (입력한 값만 해석)")
         show_labs = True
@@ -193,7 +193,6 @@ def main():
             key = f"t_{name}" if table_mode else f"v_{name}"
             vals[name] = num_input_generic(f"{name}", key=key, decimals=dec)
 
-    special_vals = {}
     if show_labs:
         render_lab_inputs()
         # 특수검사 토글
@@ -273,14 +272,12 @@ def main():
     st.divider()
     run = st.button("🔎 해석하기", use_container_width=True)
 
+    # ----- helpers (safe) -----
     def _sev(v:str):
-        rank = {"안함":0,"없음":0,"조금":1,"보통":2,"많이":3,"심함":4}
-        return rank.get(str(v),0)
+        return {"안함":0,"없음":0,"조금":1,"보통":2,"많이":3,"심함":4}.get(str(v),0)
 
-    def _triage_from_inputs(pdata:dict):
-        """Robust triage — never raises NameError."""
+    def _triage(pdata:dict):
         msgs=[]; danger=False; urgent=False
-        # SpO2
         s = pdata.get("SpO2", None)
         try:
             if s is not None:
@@ -288,15 +285,12 @@ def main():
                 if s < 92: danger=True; msgs.append("SpO₂<92%")
                 elif s < 95: urgent=True; msgs.append("SpO₂ 92–94%")
         except: pass
-        # Cyanosis
         if pdata.get("청색증", False): danger=True; msgs.append("청색증")
-        # Dyspnea
         hs = _sev(pdata.get("호흡곤란", "없음"))
         if hs >= 4: danger=True; msgs.append("호흡곤란 심함")
         elif hs >= 3: urgent=True; msgs.append("호흡곤란 많음")
-        # Fever
-        t = pdata.get("체온", None)
         try:
+            t = pdata.get("체온", None)
             if pdata.get("발열", False) and t is not None and float(t) >= 39.0:
                 urgent=True; msgs.append("고열")
         except: pass
@@ -304,17 +298,16 @@ def main():
         if not msgs: msgs.append("특이 위험 신호 없음")
         return f"**{lead}**: " + ", ".join(msgs)
 
-    def _disease_tip(dname:str, fields:dict)->str:
-        """Per-disease helper text (resilient)."""
+    def _tip(dname:str, fields:dict)->str:
         try:
             if dname=="RSV":
-                c=fields.get("기침","없음"); 
-                return "영아에서 천명·무호흡 위험. 기침이 '많이/심함'이면 즉시 진료." if _sev(c)>=3 else "수분·비강흡인 고려, 기침 경과관찰."
+                return "영아에서 천명·무호흡 위험. 기침 심하면 즉시 진료."
             if dname=="아데노":
                 return "눈곱/결막염 동반 시 세정·손위생 중요, 고열 지속 시 진료."
             if dname=="로타":
-                try: dia=float(fields.get("설사(회/일)") or 0)
-                except: dia=0
+                val = fields.get("설사(회/일)"); 
+                try: dia = float(val or 0)
+                except: dia = 0
                 return "탈수 위험 → 소량·자주 수분 보충." + (" (설사 빈도 높음)" if dia>=6 else "")
             if dname=="인플루엔자":
                 return "고열·근육통 가능. 48시간 이내면 항바이러스제 고려(의료진 판단)."
@@ -323,127 +316,127 @@ def main():
             if dname=="수족구":
                 return "구내통증으로 수분섭취 저하 흔함 → 탈수 주의."
             if dname=="노로":
-                try: dia=float(fields.get("설사(회/일)") or 0)
-                except: dia=0
+                val = fields.get("설사(회/일)")
+                try: dia = float(val or 0)
+                except: dia = 0
                 return "구토/설사로 탈수 주의, 가볍게 자주 수분." + (" (설사 빈도 높음)" if dia>=6 else "")
             if dname=="마이코플":
                 return "기침 장기화 가능. 호흡곤란·고열 지속 시 진료."
-        except:
-            pass
+        except: pass
         return ""
 
     if run:
         st.subheader("📋 해석 결과")
+
+        # ----- ensure base defaults so NameError never occurs -----
+        cleaned, fs_all, meds_lines, abx_lines, cmp_lines = [], [], [], [], []
+        extra_all = {k:v for k,v in (special_vals or {}).items() if entered(v)}  # safe even if empty dict
 
         if mode == "일반/암":
             if show_labs:
                 for line in interpret_labs(vals, extras): st.write(line)
                 if (storage_key or nickname) and st.session_state.records.get(storage_key or nickname):
                     st.markdown("### 🔍 수치 변화 비교 (이전 기록 대비)")
-                    for l in (compare_with_previous(storage_key or nickname, {k: vals.get(k) for k in ORDER if entered(vals.get(k))}) or []):
-                        st.write(l)
+                    cmp_lines = compare_with_previous(storage_key or nickname, {k: vals.get(k) for k in ORDER if entered(vals.get(k))}) or []
+                    for l in cmp_lines: st.write(l)
 
-            # 식이가이드(철분제/비타민 문구 제거)
-            fs_all = food_suggestions(vals, anc_place) if show_labs else []
-            cleaned = [s for s in fs_all if not re.search(r"(철분|비타민|iron|vitamin)", s, flags=re.I)]
-            if cleaned:
-                st.markdown("### 🥗 식이가이드")
-                for s in cleaned: st.markdown(s)
+                fs_all = food_suggestions(vals, anc_place) or []
+                cleaned = [s for s in fs_all if not re.search(r\"(철분|비타민|iron|vitamin)\", s, flags=re.I)]
+                if cleaned:
+                    st.markdown(\"### 🥗 식이가이드\")
+                    for s in cleaned: st.markdown(s)
 
             if meds:
-                st.markdown("### 💊 항암제 부작용·상호작용 요약")
-                for line in summarize_meds(meds): st.write(line)
-            abx_lines = abx_summary(extras.get("abx", {})) if extras.get("abx") else []
+                st.markdown(\"### 💊 항암제 부작용·상호작용 요약\")
+                meds_lines = summarize_meds(meds) or []
+                for line in meds_lines: st.write(line)
+
+            abx_lines = abx_summary(extras.get(\"abx\", {})) if extras.get(\"abx\") else []
             if abx_lines:
-                st.markdown("### 🧪 항생제 주의 요약")
+                st.markdown(\"### 🧪 항생제 주의 요약\")
                 for l in abx_lines: st.write(l)
 
-            st.markdown("### 🌡️ 발열 가이드"); st.write(FEVER_GUIDE)
+            st.markdown(\"### 🌡️ 발열 가이드\"); st.write(FEVER_GUIDE)
 
         elif mode == "소아(일상가이드)":
-            st.write(_triage_from_inputs(ped_inputs))
+            st.write(_triage(ped_inputs))
 
         else:  # 감염질환
             if infection:
-                st.write(_triage_from_inputs(ped_inputs))
-                tip = _disease_tip(infection, infect_specific)
+                st.write(_triage(ped_inputs))
+                tip = _tip(infection, infect_specific)
                 if tip:
-                    st.markdown("#### 🧾 질환별 안내"); st.write(tip)
+                    st.markdown(\"#### 🧾 질환별 안내\"); st.write(tip)
 
         # ===== Report build & download =====
-        meta = {"group": group, "cancer": cancer, "anc_place": anc_place, "mode": mode, "infection": infection}
-        extra_all = {k:v for k,v in (special_vals or {}).items() if entered(v)}
+        meta = {\"group\": group, \"cancer\": cancer, \"anc_place\": anc_place, \"mode\": mode, \"infection\": infection}
 
         fs_report = []
-        if mode=="일반/암" and show_labs:
-            for s in (food_suggestions(vals, anc_place) or []):
-                if not re.search(r"(철분|비타민|iron|vitamin)", s, flags=re.I):
+        if mode==\"일반/암\" and show_labs:
+            for s in (fs_all or []):
+                if not re.search(r\"(철분|비타민|iron|vitamin)\", s, flags=re.I):
                     fs_report.append(s)
-
-        meds_lines = summarize_meds(meds) if meds else []
-        abx_lines = abx_summary(extras.get("abx", {})) if extras.get("abx") else []
-        cmp_lines = compare_with_previous(storage_key or nickname, {k: vals.get(k) for k in ORDER if entered(vals.get(k))}) if (mode=="일반/암" and show_labs) else []
 
         report_md = build_report(mode, meta, vals if show_labs else {}, cmp_lines, extra_all, meds_lines, fs_report, abx_lines)
 
         if extra_all and show_labs:
-            sp_lines = [f"- {k}: {v}" for k,v in extra_all.items()]
-            report_md += "\n\n### 🧪 특수검사 요약\n" + "\n".join(sp_lines) + "\n"
+            sp_lines = [f\"- {k}: {v}\" for k,v in extra_all.items()]
+            report_md += \"\\n\\n### 🧪 특수검사 요약\\n\" + \"\\n\".join(sp_lines) + \"\\n\"
 
-        if mode != "일반/암":
-            report_md += "\n\n### 🧒 소아 입력 요약\n"
+        if mode != \"일반/암\":
+            report_md += \"\\n\\n### 🧒 소아 입력 요약\\n\"
             for k, v in ped_inputs.items():
-                if v not in (None, "", 0, False):
-                    report_md += f"- {k}: {v}\n"
+                if v not in (None, \"\", 0, False):
+                    report_md += f\"- {k}: {v}\\n\"
             if infection and infect_specific:
-                report_md += f"\n### 🧾 {infection} 전용 항목\n"
+                report_md += f\"\\n### 🧾 {infection} 전용 항목\\n\"
                 for k, v in infect_specific.items():
-                    if v not in (None, "", 0, False):
-                        report_md += f"- {k}: {v}\n"
+                    if v not in (None, \"\", 0, False):
+                        report_md += f\"- {k}: {v}\\n\"
 
-        st.download_button("📥 보고서(.md) 다운로드", data=report_md.encode("utf-8"),
-                           file_name=f"bloodmap_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
-                           mime="text/markdown")
-        st.download_button("📄 보고서(.txt) 다운로드", data=report_md.encode("utf-8"),
-                           file_name=f"bloodmap_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
-                           mime="text/plain")
+        st.download_button(\"📥 보고서(.md) 다운로드\", data=report_md.encode(\"utf-8\"),
+                           file_name=f\"bloodmap_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md\",
+                           mime=\"text/markdown\")
+        st.download_button(\"📄 보고서(.txt) 다운로드\", data=report_md.encode(\"utf-8\"),
+                           file_name=f\"bloodmap_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt\",
+                           mime=\"text/plain\")
         try:
             pdf_bytes = md_to_pdf_bytes_fontlocked(report_md)
-            st.download_button("🖨️ 보고서(.pdf) 다운로드", data=pdf_bytes,
-                               file_name=f"bloodmap_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
-                               mime="application/pdf")
+            st.download_button(\"🖨️ 보고서(.pdf) 다운로드\", data=pdf_bytes,
+                               file_name=f\"bloodmap_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf\",
+                               mime=\"application/pdf\")
         except Exception:
-            st.info("PDF 모듈이 없거나 글꼴이 없어 PDF 생성이 비활성화되었습니다. (pip install reportlab)")
+            st.info(\"PDF 모듈이 없거나 글꼴이 없어 PDF 생성이 비활성화되었습니다. (pip install reportlab)\")
 
         # 저장
-        record = {"ts": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                  "mode": mode, "group": group, "cancer": cancer, "infection": infection,
-                  "labs": {k: vals.get(k) for k in ORDER if entered(vals.get(k))} if show_labs else {},
-                  "extra": extra_all, "meds": meds, "extras": extras, "ped_inputs": ped_inputs}
-        key = (storage_key or nickname or "").strip()
+        record = {\"ts\": datetime.now().strftime(\"%Y-%m-%d %H:%M:%S\"),
+                  \"mode\": mode, \"group\": group, \"cancer\": cancer, \"infection\": infection,
+                  \"labs\": {k: vals.get(k) for k in ORDER if entered(vals.get(k))} if show_labs else {},
+                  \"extra\": extra_all, \"meds\": meds, \"extras\": extras, \"ped_inputs\": ped_inputs}
+        key = (storage_key or nickname or \"\").strip()
         if key:
             st.session_state.records.setdefault(key, []).append(record)
-            st.success(f"저장되었습니다. 저장키: **{key}**")
+            st.success(f\"저장되었습니다. 저장키: **{key}**\")
         else:
-            st.info("별명과 PIN(4자리)을 입력하면 안전하게 저장/그래프 기능을 사용할 수 있어요.")
+            st.info(\"별명과 PIN(4자리)을 입력하면 안전하게 저장/그래프 기능을 사용할 수 있어요.\")
 
     # ===== 그래프 & 사전 =====
     render_graphs()
-    st.markdown("---")
-    st.header("📚 약물 사전 (한글 병기)")
-    with st.expander("열기 / 닫기", expanded=False):
-        st.caption("검색 + 간단 테이블")
+    st.markdown(\"---\")
+    st.header(\"📚 약물 사전 (한글 병기)\")
+    with st.expander(\"열기 / 닫기\", expanded=False):
+        st.caption(\"검색 + 간단 테이블\")
         try:
             ac_rows = []
             for k, v in ANTICANCER.items():
-                alias = v.get("alias",""); aes = ", ".join(v.get("aes", []))
-                ac_rows.append({"약물": k, "한글명": alias, "부작용": aes})
+                alias = v.get(\"alias\",\"\" ); aes = \", \".join(v.get(\"aes\", []))
+                ac_rows.append({\"약물\": k, \"한글명\": alias, \"부작용\": aes})
             # 보강 항목도 포함
-            ac_rows.append({"약물": "MTX", "한글명":"메토트렉세이트", "부작용": ""})
-            ac_rows.append({"약물": "6-MP", "한글명":"6-머캅토퓨린", "부작용": ""})
+            ac_rows.append({\"약물\": \"MTX\", \"한글명\":\"메토트렉세이트\", \"부작용\": \"\"})
+            ac_rows.append({\"약물\": \"6-MP\", \"한글명\":\"6-머캅토퓨린\", \"부작용\": \"\"})
             if HAS_PD:
                 ac_df = pd.DataFrame(ac_rows)
-                q = st.text_input("🔎 항암제 검색", key="drug_dict_search")
+                q = st.text_input(\"🔎 항암제 검색\", key=\"drug_dict_search\")
                 if q:
                     ql = q.strip().lower()
                     ac_df = ac_df[ac_df.apply(lambda r: any(ql in str(x).lower() for x in r), axis=1)]
@@ -451,4 +444,4 @@ def main():
         except Exception:
             pass
 
-    st.caption(FOOTER_CAFE); st.markdown("> " + DISCLAIMER)
+    st.caption(FOOTER_CAFE); st.markdown(\"> \" + DISCLAIMER)
