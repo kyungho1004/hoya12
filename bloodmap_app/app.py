@@ -122,8 +122,9 @@ def main():
             }], index=[infect_sel]); st.table(_df)
         else:
             st.markdown(f"**{infect_sel}**")
-            st.write(f"- 핵심: {PED_INFECT[infect_sel].get('핵심','')}")
-            st.write(f"- 진단: {PED_INFECT[infect_sel].get('진단','')}")
+                        _info = PED_INFECT.get(infect_sel, {});
+            st.write("- 핵심:", _info.get("핵심", ""))
+                        st.write("- 진단:", _info.get("진단", ""))
             st.write(f"- 특징: {PED_INFECT[infect_sel].get('특징','")}")
 
     table_mode = st.checkbox("⚙️ PC용 표 모드(가로형)")
