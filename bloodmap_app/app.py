@@ -3,18 +3,34 @@ from datetime import datetime, date
 import os
 import streamlit as st
 
-from .config import (APP_TITLE, PAGE_TITLE, MADE_BY, CAFE_LINK_MD, FOOTER_CAFE,
-                    DISCLAIMER, ORDER, FEVER_GUIDE,
-                    LBL_WBC, LBL_Hb, LBL_PLT, LBL_ANC, LBL_Ca, LBL_P, LBL_Na, LBL_K,
-                    LBL_Alb, LBL_Glu, LBL_TP, LBL_AST, LBL_ALT, LBL_LDH, LBL_CRP, LBL_Cr, LBL_UA, LBL_TB, LBL_BUN, LBL_BNP,
-                    FONT_PATH_REG)
-from .data.drugs import ANTICANCER, ABX_GUIDE
-from .data.ped import PED_TOPICS, PED_INPUTS_INFO, PED_INFECT
-from .utils.inputs import num_input_generic, entered
-from .utils.interpret import interpret_labs, compare_with_previous, food_suggestions, summarize_meds, abx_summary
-from .utils.reports import build_report, md_to_pdf_bytes_fontlocked
-from .utils.graphs import render_graphs
-from .utils.schedule import render_schedule
+# --- Import compatibility: package or direct-run ---
+try:
+    from .config import (APP_TITLE, PAGE_TITLE, MADE_BY, CAFE_LINK_MD, FOOTER_CAFE,
+                        DISCLAIMER, ORDER, FEVER_GUIDE,
+                        LBL_WBC, LBL_Hb, LBL_PLT, LBL_ANC, LBL_Ca, LBL_P, LBL_Na, LBL_K,
+                        LBL_Alb, LBL_Glu, LBL_TP, LBL_AST, LBL_ALT, LBL_LDH, LBL_CRP, LBL_Cr, LBL_UA, LBL_TB, LBL_BUN, LBL_BNP,
+                        FONT_PATH_REG)
+    from .data.drugs import ANTICANCER, ABX_GUIDE
+    from .data.ped import PED_TOPICS, PED_INPUTS_INFO, PED_INFECT
+    from .utils.inputs import num_input_generic, entered
+    from .utils.interpret import interpret_labs, compare_with_previous, food_suggestions, summarize_meds, abx_summary
+    from .utils.reports import build_report, md_to_pdf_bytes_fontlocked
+    from .utils.graphs import render_graphs
+    from .utils.schedule import render_schedule
+except Exception:
+    # if run as "streamlit run app.py" inside the package folder
+    from config import (APP_TITLE, PAGE_TITLE, MADE_BY, CAFE_LINK_MD, FOOTER_CAFE,
+                        DISCLAIMER, ORDER, FEVER_GUIDE,
+                        LBL_WBC, LBL_Hb, LBL_PLT, LBL_ANC, LBL_Ca, LBL_P, LBL_Na, LBL_K,
+                        LBL_Alb, LBL_Glu, LBL_TP, LBL_AST, LBL_ALT, LBL_LDH, LBL_CRP, LBL_Cr, LBL_UA, LBL_TB, LBL_BUN, LBL_BNP,
+                        FONT_PATH_REG)
+    from data.drugs import ANTICANCER, ABX_GUIDE
+    from data.ped import PED_TOPICS, PED_INPUTS_INFO, PED_INFECT
+    from utils.inputs import num_input_generic, entered
+    from utils.interpret import interpret_labs, compare_with_previous, food_suggestions, summarize_meds, abx_summary
+    from utils.reports import build_report, md_to_pdf_bytes_fontlocked
+    from utils.graphs import render_graphs
+    from utils.schedule import render_schedule
 
 try:
     import pandas as pd
@@ -26,7 +42,6 @@ def main():
     st.set_page_config(page_title=PAGE_TITLE, layout="centered")
     st.title(APP_TITLE); st.markdown(MADE_BY); st.markdown(CAFE_LINK_MD)
 
-    # 스타일 로드(선택)
     try:
         with open(os.path.join(os.path.dirname(__file__), "style.css"), "r", encoding="utf-8") as f:
             st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
@@ -40,9 +55,15 @@ def main():
     with c3: st.code("https://hdzwo5ginueir7hknzzfg4.streamlit.app/", language="text")
     st.caption("✅ 모바일 줄꼬임 · 별명+PIN 저장/그래프 · 암별/소아/희귀암 · PDF · 비교 · 스케줄 · ANC 가이드")
 
-    from .utils import counter as _bm_counter
-    try: _bm_counter.bump(); st.caption(f"👀 조회수(방문): {_bm_counter.count()}")
-    except Exception: pass
+    # 조회수
+    try:
+        from .utils import counter as _bm_counter  # try relative
+    except Exception:
+        import utils.counter as _bm_counter        # fallback absolute
+    try:
+        _bm_counter.bump(); st.caption(f"👀 조회수(방문): {_bm_counter.count()}")
+    except Exception:
+        pass
 
     if "records" not in st.session_state: st.session_state.records = {}
     if "schedules" not in st.session_state: st.session_state.schedules = {}
@@ -93,27 +114,27 @@ def main():
     else:
         st.markdown("### 🧫 소아 감염질환")
         infect_sel = st.selectbox("질환 선택", list(PED_INFECT.keys()))
-        try:
-            import pandas as pd
+        if HAS_PD:
             _df = pd.DataFrame([{
                 "핵심": PED_INFECT[infect_sel].get("핵심",""),
                 "진단": PED_INFECT[infect_sel].get("진단",""),
                 "특징": PED_INFECT[infect_sel].get("특징",""),
             }], index=[infect_sel]); st.table(_df)
-        except Exception:
+        else:
             st.markdown(f"**{infect_sel}**")
             st.write(f"- 핵심: {PED_INFECT[infect_sel].get('핵심','')}")
             st.write(f"- 진단: {PED_INFECT[infect_sel].get('진단','')}")
-            st.write(f"- 특징: {PED_INFECT[infect_sel].get('특징','')}")
+            st.write(f"- 특징: {PED_INFECT[infect_sel].get('특징','")}")
 
     table_mode = st.checkbox("⚙️ PC용 표 모드(가로형)")
 
+    # 2) 약물
     meds = {}; extras = {}
     if mode == "일반/암" and group and group != "미선택/일반" and (cancer or sarcoma_sub):
         st.markdown("### 💊 항암제 선택 및 입력")
         heme_by_cancer = {
             "AML": ["ARA-C","Daunorubicin","Idarubicin","Cyclophosphamide","Etoposide","Fludarabine","Hydroxyurea","MTX","ATRA","G-CSF"],
-            "APL": ["ATRA","Idarubicin","Daunorubicin","ARA-C","G-CSF","MTX","6-MP"],
+            "APL": ["ATRA","Idarubicin","Daunorubicin","ARA-C","G-CSF","MTX","6-MP"],  # MTX/6-MP 포함
             "ALL": ["Vincristine","Asparaginase","Daunorubicin","Cyclophosphamide","MTX","ARA-C","Topotecan","Etoposide"],
             "CML": ["Imatinib","Dasatinib","Nilotinib","Hydroxyurea"],
             "CLL": ["Fludarabine","Cyclophosphamide","Rituximab"],
@@ -390,26 +411,26 @@ def main():
             rows=[]
             for k, v in ANTICANCER.items():
                 rows.append({"약물":k,"한글명":v.get("alias",""),"부작용":", ".join(v.get("aes",[]))})
-            try:
+            if HAS_PD:
                 import pandas as pd
                 df = pd.DataFrame(rows); q = st.text_input("🔎 검색", key="drug_search_ac")
                 if q: 
                     ql=q.lower()
                     df = df[df.apply(lambda r: any(ql in str(x).lower() for x in r.values), axis=1)]
                 st.dataframe(df, use_container_width=True, height=360)
-            except Exception:
+            else:
                 for r in rows[:20]:
                     st.markdown(f"**{r['약물']}** · {r['한글명']} — {r['부작용']}")
         with view_tab2:
             rows=[{"계열":k,"주의사항":", ".join(v)} for k,v in ABX_GUIDE.items()]
-            try:
+            if HAS_PD:
                 import pandas as pd
                 df = pd.DataFrame(rows); q = st.text_input("🔎 검색", key="drug_search_abx")
                 if q:
                     ql=q.lower()
                     df = df[df.apply(lambda r: any(ql in str(x).lower() for x in r.values), axis=1)]
                 st.dataframe(df, use_container_width=True, height=360)
-            except Exception:
+            else:
                 for r in rows[:20]:
                     st.markdown(f"**{r['계열']}** — {r['주의사항']}")
 
