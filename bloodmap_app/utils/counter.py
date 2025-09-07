@@ -1,21 +1,8 @@
-
 # -*- coding: utf-8 -*-
-import os, json
-
-PATH = "visit_count.json"
+import streamlit as st
 
 def bump():
-    try:
-        d = json.load(open(PATH, "r", encoding="utf-8"))
-    except Exception:
-        d = {"count": 0}
-    d["count"] = int(d.get("count", 0)) + 1
-    json.dump(d, open(PATH, "w", encoding="utf-8"))
-    return d["count"]
+    S = st.session_state; S.__dict__.setdefault("_bm_views", 0); S._bm_views += 1
 
 def count():
-    try:
-        d = json.load(open(PATH, "r", encoding="utf-8"))
-        return int(d.get("count", 0))
-    except Exception:
-        return 1
+    return getattr(st.session_state, "_bm_views", 0)

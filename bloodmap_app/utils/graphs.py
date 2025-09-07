@@ -1,29 +1,31 @@
-
 # -*- coding: utf-8 -*-
 import streamlit as st
-from ..config import LBL_WBC, LBL_Hb, LBL_PLT, LBL_CRP, LBL_ANC
 
 def render_graphs():
-    recs = st.session_state.get("records", {})
-    if not recs:
+    if "records" not in st.session_state or not st.session_state.records:
         return
-    st.header("📈 추이 그래프")
-    target = st.selectbox("별명#PIN 선택", list(recs.keys()))
-    rows = recs.get(target, [])
-    if not rows:
-        st.info("기록이 없습니다.")
-        return
-    st.caption("아래 표에서 날짜별 변화를 확인하세요.")
-    table = []
-    for r in rows:
-        labs = r.get("labs", {})
-        row = {"시각": r.get("ts","")}
-        for k in [LBL_WBC, LBL_Hb, LBL_PLT, LBL_CRP, LBL_ANC]:
-            row[k] = labs.get(k, "")
-        table.append(row)
+    st.markdown("### 📈 추이 그래프")
+    keys = list(st.session_state.records.keys())
+    sel = st.selectbox("기록 확인(별명#PIN)", keys)
+    data = st.session_state.records.get(sel, [])
+    if not data:
+        st.info("기록이 없습니다."); return
     try:
         import pandas as pd
-        st.dataframe(pd.DataFrame(table))
+        rows = []
+        for rec in data:
+            labs = rec.get("labs", {})
+            rows.append({
+                "ts": rec.get("ts"),
+                "WBC": labs.get("WBC(백혈구)"),
+                "Hb": labs.get("Hb(혈색소)"),
+                "PLT": labs.get("혈소판(PLT)"),
+                "CRP": labs.get("CRP"),
+                "ANC": labs.get("ANC(호중구)"),
+            })
+        df = pd.DataFrame(rows).dropna(how="all", subset=["WBC","Hb","PLT","CRP","ANC"])
+        if df.empty: st.info("그래프화할 수치가 없습니다."); return
+        df = df.set_index("ts")
+        st.line_chart(df)
     except Exception:
-        for row in table:
-            st.write(row)
+        st.info("pandas 미설치 또는 데이터 부족으로 그래프 미표시.")
