@@ -539,9 +539,12 @@ with c[3]:
     show_report = st.checkbox("📄 보고서 미리보기", value=True)
 
 def build_report(mode, meta, vals, extra):
+    def _safe(x, default="미입력"):
+        return x if x else default
+
     lines = []
-    lines.append(f"# 피수치 리포트 — {meta.get('nickname','')}")
-    lines.append(f"- 세션: {meta.get('nickname','')}#{meta.get('pin','')} · 시각: {meta.get('time','')}")
+    lines.append(f"# 피수치 리포트 — {_safe(meta.get('nickname',''))}")
+    lines.append(f"- 세션: {_safe(meta.get('nickname',''))}#{_safe(meta.get('pin',''))} · 시각: {meta.get('time','')}")
     lines.append("")
     lines.append(f"## 모드: {mode}")
     if vals:
@@ -563,11 +566,16 @@ def build_report(mode, meta, vals, extra):
                     lines.append(f"- {k}: **{v}**")
     lines.append("")
     lines.append("> ⚠️ 본 수치는 참고용이며 개발자와 무관하며, 수치 기반 임의조정은 금지입니다. 반드시 의료진과 상의 후 결정하시기 바랍니다.")
-    return "\n".join(lines)
+    return "
+".join(lines)
 
 report_md = build_report(mode, meta, {k:v for k,v in vals.items() if entered(v)}, extra)
 if a4_opt:
-    report_md = report_md.replace("## ", "\\n\\n---\\n\\n## ")
+    report_md = report_md.replace("## ", "
+
+---
+
+## ")
 
 if show_report:
     st.markdown(report_md)
