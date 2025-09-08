@@ -324,6 +324,14 @@ def main():
         infect_sel = st.selectbox("질환 선택", list(PED_INFECT.keys()))
         info = PED_INFECT.get(infect_sel, {})
         st.info(f"핵심: {info.get('핵심','')} · 진단: {info.get('진단','')} · 특징: {info.get('특징','')}")
+        with st.expander("🧒 기본 활력/계측 입력", expanded=False):
+            age_m_gi = st.text_input("나이(개월)", key="pedinf_age_m", placeholder="예: 18")
+            temp_c_gi = st.text_input("체온(℃)", key="pedinf_temp_c", placeholder="예: 38.2")
+            rr_gi = st.text_input("호흡수(/분)", key="pedinf_rr", placeholder="예: 42")
+            spo2_gi = st.text_input("산소포화도(%)", key="pedinf_spo2", placeholder="예: 96")
+            hr_gi = st.text_input("심박수(/분)", key="pedinf_hr", placeholder="예: 120")
+            wt_kg_gi = st.text_input("체중(kg)", key="pedinf_wt", placeholder="예: 10.5")
+
         with st.expander("🧒 증상 체크리스트", expanded=True):
             sel_sym = []
             # --- Robust fallback for missing symptom lists ---
@@ -547,8 +555,8 @@ def main():
             st.markdown("**응고패널**")
             extra_vals["PT"] = num_input_generic("PT (sec)", key="ex_pt", decimals=1, placeholder="예: 12.0")
             extra_vals["aPTT"] = num_input_generic("aPTT (sec)", key="ex_aptt", decimals=1, placeholder="예: 32.0")
-            extra_vals["Fibrinogen"] = num_input_generic("Fibrinogen (mg/dL)", key="ex_fbg", decimals=1, placeholder="예: 250")
-            extra_vals["D-dimer"] = num_input_generic("D-dimer (µg/mL FEU)", key="ex_dd", decimals=2, placeholder="예: 0.50")
+            extra_vals["Fibrinogen"] = num_input_generic("Fibrinogen (Fbg, mg/dL)", key="ex_fbg", decimals=1, placeholder="예: 250")
+            extra_vals["D-dimer"] = num_input_generic("D-dimer (DD, µg/mL FEU)", key="ex_dd", decimals=2, placeholder="예: 0.50")
 
         if t_comp:
             st.markdown("**보체(C3/C4/CH50)**")
@@ -608,8 +616,8 @@ def main():
                 extra_vals["Urine albumin"] = u_alb
         if t_lipid_basic:
             st.markdown("**지질(기본)**")
-            extra_vals["TG"] = num_input_generic("Triglyceride (mg/dL)", key="ex_tg", decimals=0, placeholder="예: 150")
-            extra_vals["TC"] = num_input_generic("Total Cholesterol (mg/dL)", key="ex_tc", decimals=0, placeholder="예: 180")
+            extra_vals["TG"] = num_input_generic("Triglyceride (TG, mg/dL)", key="ex_tg", decimals=0, placeholder="예: 150")
+            extra_vals["TC"] = num_input_generic("Total Cholesterol (TC, mg/dL)", key="ex_tc", decimals=0, placeholder="예: 180")
 
         # --- TOP8 확장 토글 ---
         st.subheader("➕ 확장 패널")
@@ -631,18 +639,18 @@ def main():
         if t_anemia:
             st.markdown("**빈혈 패널**")
             extra_vals["Fe(철)"] = num_input_generic("Fe (µg/dL)", key="an_fe", decimals=0, placeholder="예: 60")
-            extra_vals["Ferritin"] = num_input_generic("Ferritin (ng/mL)", key="an_ferr", decimals=1, placeholder="예: 80")
-            extra_vals["TIBC"] = num_input_generic("TIBC (µg/dL)", key="an_tibc", decimals=0, placeholder="예: 330")
-            extra_vals["Transferrin sat.(%)"] = num_input_generic("Transferrin Sat. (%)", key="an_tsat", decimals=1, placeholder="예: 18.0")
-            extra_vals["Reticulocyte(%)"] = num_input_generic("망상적혈구(%)", key="an_retic", decimals=1, placeholder="예: 1.2")
-            extra_vals["Vitamin B12"] = num_input_generic("비타민 B12 (pg/mL)", key="an_b12", decimals=0, placeholder="예: 400")
+            extra_vals["Ferritin"] = num_input_generic("Ferritin (Fer, ng/mL)", key="an_ferr", decimals=1, placeholder="예: 80")
+            extra_vals["TIBC"] = num_input_generic("TIBC (Total Iron Binding Capacity, µg/dL)", key="an_tibc", decimals=0, placeholder="예: 330")
+            extra_vals["Transferrin sat.(%)"] = num_input_generic("Transferrin Sat. (TSAT, %)", key="an_tsat", decimals=1, placeholder="예: 18.0")
+            extra_vals["Reticulocyte(%)"] = num_input_generic("망상적혈구(%) (Retic %)", key="an_retic", decimals=1, placeholder="예: 1.2")
+            extra_vals["Vitamin B12"] = num_input_generic("비타민 B12 (Vit B12, pg/mL)", key="an_b12", decimals=0, placeholder="예: 400")
             extra_vals["Folate"] = num_input_generic("엽산(Folate, ng/mL)", key="an_folate", decimals=1, placeholder="예: 6.0")
 
         if t_elect:
             st.markdown("**전해질 확장**")
             extra_vals["Mg"] = num_input_generic("Mg (mg/dL)", key="el_mg", decimals=2, placeholder="예: 2.0")
-            extra_vals["Phos(인)"] = num_input_generic("Phosphate (mg/dL)", key="el_phos", decimals=2, placeholder="예: 3.5")
-            extra_vals["iCa(이온화칼슘)"] = num_input_generic("이온화칼슘 iCa (mmol/L)", key="el_ica", decimals=2, placeholder="예: 1.15")
+            extra_vals["Phos(인)"] = num_input_generic("Phosphate (Phos/P, mg/dL)", key="el_phos", decimals=2, placeholder="예: 3.5")
+            extra_vals["iCa(이온화칼슘)"] = num_input_generic("이온화칼슘 iCa (iCa, mmol/L)", key="el_ica", decimals=2, placeholder="예: 1.15")
             ca_corr = calc_corrected_ca(vals.get(LBL_Ca), vals.get(LBL_Alb))
             if ca_corr is not None:
                 st.info(f"보정 칼슘(Alb 반영): **{ca_corr} mg/dL**")
@@ -666,15 +674,15 @@ def main():
 
         if t_thy:
             st.markdown("**갑상선 패널**")
-            extra_vals["TSH"] = num_input_generic("TSH (µIU/mL)", key="thy_tsh", decimals=2, placeholder="예: 1.50")
-            extra_vals["Free T4"] = num_input_generic("Free T4 (ng/dL)", key="thy_ft4", decimals=2, placeholder="예: 1.2")
+            extra_vals["TSH"] = num_input_generic("TSH (Thyroid Stimulating Hormone, µIU/mL)", key="thy_tsh", decimals=2, placeholder="예: 1.50")
+            extra_vals["Free T4"] = num_input_generic("Free T4 (FT4, ng/dL)", key="thy_ft4", decimals=2, placeholder="예: 1.2")
             if st.checkbox("Total T3 입력", key="thy_t3_on"):
-                extra_vals["Total T3"] = num_input_generic("Total T3 (ng/dL)", key="thy_t3", decimals=0, placeholder="예: 110")
+                extra_vals["Total T3"] = num_input_generic("Total T3 (TT3, ng/dL)", key="thy_t3", decimals=0, placeholder="예: 110")
 
         if t_sepsis:
             st.markdown("**염증/패혈증 패널**")
-            extra_vals["Procalcitonin"] = num_input_generic("Procalcitonin (ng/mL)", key="sep_pct", decimals=2, placeholder="예: 0.12")
-            extra_vals["Lactate"] = num_input_generic("Lactate(젖산, mmol/L)", key="sep_lac", decimals=1, placeholder="예: 1.8")
+            extra_vals["Procalcitonin"] = num_input_generic("Procalcitonin (PCT, ng/mL)", key="sep_pct", decimals=2, placeholder="예: 0.12")
+            extra_vals["Lactate"] = num_input_generic("Lactate (Lac, mmol/L)", key="sep_lac", decimals=1, placeholder="예: 1.8")
             # CRP는 기본 유지
 
         if t_glu:
@@ -691,8 +699,8 @@ def main():
 
         if t_lipidx:
             st.markdown("**지질 확장**")
-            tc  = extra_vals.get("TC") or num_input_generic("Total Cholesterol (mg/dL)", key="lx_tc", decimals=0, placeholder="예: 180")
-            hdl = num_input_generic("HDL-C (mg/dL)", key="lx_hdl", decimals=0, placeholder="예: 50")
+            tc  = extra_vals.get("TC") or num_input_generic("Total Cholesterol (TC, mg/dL)", key="lx_tc", decimals=0, placeholder="예: 180")
+            hdl = num_input_generic("HDL-C (HDL, mg/dL)", key="lx_hdl", decimals=0, placeholder="예: 50")
             tg  = extra_vals.get("TG") or num_input_generic("Triglyceride (mg/dL)", key="lx_tg", decimals=0, placeholder="예: 120")
             ldl_fw = calc_friedewald_ldl(tc, hdl, tg)
             try:
@@ -707,7 +715,7 @@ def main():
             if ldl_fw is not None:
                 st.info(f"Friedewald LDL(자동): **{ldl_fw} mg/dL** (TG<400에서만 계산)")
                 extra_vals["LDL(Friedewald)"] = ldl_fw
-            extra_vals["ApoB"] = num_input_generic("ApoB (mg/dL)", key="lx_apob", decimals=0, placeholder="예: 90")
+            extra_vals["ApoB"] = num_input_generic("ApoB (Apolipoprotein B, mg/dL)", key="lx_apob", decimals=0, placeholder="예: 90")
 
         if t_biomkr and group and cancer:
             st.markdown("**암별 분자/표지자 (조건부 노출)**")
