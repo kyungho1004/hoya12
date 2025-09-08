@@ -17,9 +17,36 @@ except Exception:
 APP_TITLE = "🩸 피수치 가이드 / BloodMap"
 APP_SIGNATURE = "제작: Hoya/GPT · 자문: Hoya/GPT"
 
-SARCOMA_LIST = ["Ewing","Osteosarcoma","Synovial","Leiomyosarcoma","Liposarcoma","Rhabdomyosarcoma"]
-SOLID_LIST   = ["Lung","Breast","Colon","Stomach","Liver","Pancreas","Cholangiocarcinoma"]
-HEMATO_LIST  = ["AML","APL","ALL","CML","CLL"]
+# ---- Cancer dictionaries (code -> Korean) ----
+HEMATO_KO = {
+    "AML": "급성골수성백혈병",
+    "APL": "급성전골수구백혈병",
+    "ALL": "급성림프모구백혈병",
+    "CML": "만성골수성백혈병",
+    "CLL": "만성림프구성백혈병",
+}
+SARCOMA_KO = {
+    "Ewing": "유잉육종",
+    "Osteosarcoma": "골육종",
+    "Synovial": "활막육종",
+    "Leiomyosarcoma": "평활근육종",
+    "Liposarcoma": "지방육종",
+    "Rhabdomyosarcoma": "횡문근육종",
+}
+SOLID_KO = {
+    "Lung": "폐암",
+    "Breast": "유방암",
+    "Colon": "대장암",
+    "Stomach": "위암",
+    "Liver": "간암",
+    "Pancreas": "췌장암",
+    "Cholangiocarcinoma": "담관암",
+}
+
+# Options list (code, label)
+HEMATO_OPTS = [(k, f"{k} ({v})") for k, v in HEMATO_KO.items()]
+SARCOMA_OPTS = [(k, f"{k} ({v})") for k, v in SARCOMA_KO.items()]
+SOLID_OPTS = [(k, f"{k} ({v})") for k, v in SOLID_KO.items()]
 
 # 항암제(한글 병기) 기본 제안
 CHEMO_BY_DX: Dict[str, List[str]] = {
@@ -208,10 +235,12 @@ def interpret_labs(labs: Labs) -> List[Tuple[str, List[str]]]:
 
     # Summary
     summary = []
-    for key, label in [("wbc","WBC"),("hb","Hb"),("plt","혈소판"),("anc","ANC"),("ca","Ca"),
-                       ("na","Na"),("k","K"),("albumin","Albumin"),("glucose","Glucose"),
-                       ("ast","AST"),("alt","ALT"),("crp","CRP"),("cr","Cr"),("bun","BUN"),
-                       ("tb","TB"),("ua","UA")]:
+    for key, label in [
+        ("wbc","WBC(백혈구)"),("hb","Hb(헤모글로빈)"),("plt","PLT(혈소판)"),("anc","ANC(호중구)"),
+        ("ca","Ca(칼슘)"),("na","Na(나트륨)"),("k","K(칼륨)"),("albumin","Albumin(알부민)"),
+        ("glucose","Glucose(혈당)"),("ast","AST"),("alt","ALT"),("crp","CRP"),
+        ("cr","Cr(크레아티닌)"),("bun","BUN(요소질소)"),("tb","TB(총빌리루빈)"),("ua","UA(요산)"),
+    ]:
         v = getattr(labs, key)
         if v is not None and v != 0:
             summary.append(f"{label}: {v}")
@@ -313,149 +342,189 @@ def main():
         st.warning("PIN은 숫자 4자리로 입력해주세요.")
     key_id = f"{nickname}#{pin}" if nickname and pin and pin.isdigit() and len(pin)==4 else None
 
-    # 1) 일상/호흡기/감염 + 암종류
+    # ---- Toggles: 소아일상 / 소아감염 / 암종류 ----
     st.divider()
-    st.subheader("일상 · 호흡기/감염 · 암종류")
-    # 소아 입력
-    g1, g2, g3, g4 = st.columns(4)
-    with g1:
-        appetite = st.selectbox("식욕", ["모름","있음","없음"], index=0)
-        fever_now = st.checkbox("발열 있음")
-        temp_c = st.number_input("체온(℃)", min_value=0.0, step=0.1, format="%.1f")
-    with g2:
-        cough = st.selectbox("기침", ["안함","조금","보통","많이","심함"], index=0)
-        dyspnea = st.selectbox("호흡곤란", ["없음","조금","보통","많이","심함"], index=0)
-        cyanosis = st.checkbox("청색증")
-    with g3:
-        has_pulseox = st.checkbox("산소포화도 측정기 있음")
-        spo2 = st.number_input("SpO₂(%)", min_value=0.0, max_value=100.0, step=0.1, format="%.1f") if has_pulseox else None
-    with g4:
-        st.markdown("**감염 의심(체크)**")
-        rsv = st.checkbox("RSV")
-        adeno = st.checkbox("아데노")
-        rota = st.checkbox("로타")
-        influenza = st.checkbox("인플루엔자")
-        parainfluenza = st.checkbox("파라인플루엔자")
-        hfm = st.checkbox("수족구")
-        noro = st.checkbox("노로")
-        mycoplasma = st.checkbox("마이코플라즈마")
+    st.subheader("토글 선택")
+    t_peds_daily = st.checkbox("소아 — 일상/호흡기")
+    t_peds_inf   = st.checkbox("소아 — 감염")
+    t_cancer     = st.checkbox("암 종류")
 
-    # 암종류 선택
-    st.markdown("---")
-    grp = st.selectbox("암 그룹", ["혈액암","육종(진단명 분리)","고형암(기타)"])
-    if grp == "혈액암":
-        dx = st.selectbox("진단명", HEMATO_LIST)
-    elif grp == "육종(진단명 분리)":
-        dx = st.selectbox("육종 세부", SARCOMA_LIST)
+    # 1) 소아 — 일상/호흡기 (toggle)
+    if t_peds_daily:
+        st.markdown("### 소아 — 일상/호흡기")
+        g1, g2, g3 = st.columns(3)
+        with g1:
+            appetite = st.selectbox("식욕", ["모름","있음","없음"], index=0, key="pd_appetite")
+            fever_now = st.checkbox("발열 있음", key="pd_fever")
+            temp_c = st.number_input("체온(℃)", min_value=0.0, step=0.1, format="%.1f", key="pd_temp")
+        with g2:
+            cough = st.selectbox("기침", ["안함","조금","보통","많이","심함"], index=0, key="pd_cough")
+            dyspnea = st.selectbox("호흡곤란", ["없음","조금","보통","많이","심함"], index=0, key="pd_dyspnea")
+            cyanosis = st.checkbox("청색증", key="pd_cyanosis")
+        with g3:
+            has_pulseox = st.checkbox("산소포화도 측정기 있음", key="pd_haspo")
+            spo2 = st.number_input("SpO₂(%)", min_value=0.0, max_value=100.0, step=0.1, format="%.1f", key="pd_spo2") if has_pulseox else None
+        with st.expander("소아 해열제 빠른 계산 (중앙값, ml 단일 표기)"):
+            pc1, pc2, pc3 = st.columns([1,1,2])
+            with pc1:
+                wt = st.number_input("체중(kg)", min_value=0.0, step=0.1, format="%.1f", key="wt_calc")
+            with pc2:
+                acet_conc = st.selectbox("아세트아미노펜 농도", ["160 mg/5 ml","120 mg/5 ml"], key="acet_calc")
+                ibu_conc  = st.selectbox("이부프로펜 농도", ["100 mg/5 ml"], key="ibu_calc")
+            with pc3:
+                if (locals().get("wt", 0) or 0) > 0:
+                    ml_acet = dose_ml_acetaminophen(wt, acet_conc)
+                    ml_ibu  = dose_ml_ibuprofen(wt, ibu_conc)
+                    if ml_acet is not None:
+                        st.info(f"아세트아미노펜 권장 1회: **{ml_acet:.1f} ml**  (간격 4–6시간, 하루 최대 5회)")
+                    if ml_ibu is not None:
+                        st.info(f"이부프로펜 권장 1회: **{ml_ibu:.1f} ml**  (간격 6–8시간)")
     else:
-        dx = st.selectbox("고형암", SOLID_LIST)
+        appetite = fever_now = temp_c = cough = dyspnea = cyanosis = has_pulseox = spo2 = None
 
-    # 소아 해열제 빠른 계산 (부가도구)
-    with st.expander("소아 해열제 빠른 계산 (중앙값 기준, ml 단일 표기)"):
-        pc1, pc2, pc3 = st.columns([1,1,2])
-        with pc1:
-            wt = st.number_input("체중(kg)", min_value=0.0, step=0.1, format="%.1f", key="wt_calc")
-        with pc2:
-            acet_conc = st.selectbox("아세트아미노펜 농도", ["160 mg/5 ml","120 mg/5 ml"], key="acet_calc")
-            ibu_conc  = st.selectbox("이부프로펜 농도", ["100 mg/5 ml"], key="ibu_calc")
-        with pc3:
-            if wt > 0:
-                ml_acet = dose_ml_acetaminophen(wt, acet_conc)
-                ml_ibu  = dose_ml_ibuprofen(wt, ibu_conc)
-                if ml_acet is not None:
-                    st.info(f"아세트아미노펜 권장 1회: **{ml_acet:.1f} ml**  (간격 4–6시간, 하루 최대 5회)")
-                if ml_ibu is not None:
-                    st.info(f"이부프로펜 권장 1회: **{ml_ibu:.1f} ml**  (간격 6–8시간)")
+    # 2) 소아 — 감염 (toggle)
+    if t_peds_inf:
+        st.markdown("### 소아 — 감염 의심(체크)")
+        rsv = st.checkbox("RSV", key="pi_rsv")
+        adeno = st.checkbox("아데노", key="pi_adeno")
+        rota = st.checkbox("로타", key="pi_rota")
+        influenza = st.checkbox("인플루엔자", key="pi_infl")
+        parainfluenza = st.checkbox("파라인플루엔자", key="pi_parainfl")
+        hfm = st.checkbox("수족구", key="pi_hfm")
+        noro = st.checkbox("노로", key="pi_noro")
+        mycoplasma = st.checkbox("마이코플라즈마", key="pi_mycop")
+    else:
+        rsv = adeno = rota = influenza = parainfluenza = hfm = noro = mycoplasma = None
 
-    # 2) 항암제
+    # 3) 암 종류 (toggle)
+    if t_cancer:
+        st.markdown("### 암 종류")
+        grp = st.selectbox("암 그룹", ["혈액암", "육종(진단명 분리)", "고형암(기타)"])
+        if grp == "혈액암":
+            code, label = st.selectbox("진단명", HEMATO_OPTS, format_func=lambda x: x[1])
+        elif grp == "육종(진단명 분리)":
+            code, label = st.selectbox("육종 세부", SARCOMA_OPTS, format_func=lambda x: x[1])
+        else:
+            code, label = st.selectbox("고형암", SOLID_OPTS, format_func=lambda x: x[1])
+        dx = code
+    else:
+        dx = None
+
+    # ---- 항암제 ----
     st.divider()
     st.subheader("항암제")
-    default_chemo = CHEMO_BY_DX.get(dx, [])
+    default_chemo = CHEMO_BY_DX.get(dx or "AML", [])  # fallback
     st.caption("암종에 맞는 항암제가 먼저 보입니다. 필요 시 추가 선택하세요.")
-    sel_chemo = st.multiselect("항암제(한글 병기)", default_chemo + CHEMO_COMMON, default=default_chemo)
-    sel_abx   = st.multiselect("항생제(한글 병기)", ANTIBIOTICS_COMMON, default=[])
+    sel_chemo = st.multiselect("항암제(한글 병기)", default_chemo + CHEMO_COMMON, default=default_chemo, key="chemo_sel")
+    sel_abx   = st.multiselect("항생제(한글 병기)", ANTIBIOTICS_COMMON, default=[], key="abx_sel")
 
-    # 3) 피수치 (심플)
+    # ---- 피수치 (toggle; pediatric on → default collapsed) ----
     st.divider()
-    st.subheader("피수치")
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        wbc = st.number_input("WBC", min_value=0.0, step=0.1, format="%.1f")
-        hb = st.number_input("Hb", min_value=0.0, step=0.1, format="%.1f")
-        plt = st.number_input("혈소판(PLT)", min_value=0.0, step=1.0, format="%.0f")
-        anc = st.number_input("ANC(호중구)", min_value=0.0, step=10.0, format="%.0f")
-        ca = st.number_input("Ca", min_value=0.0, step=0.1, format="%.1f")
-    with c2:
-        p = st.number_input("P(인)", min_value=0.0, step=0.1, format="%.1f")
-        na = st.number_input("Na", min_value=0.0, step=0.5, format="%.1f")
-        k = st.number_input("K", min_value=0.0, step=0.1, format="%.1f")
-        albumin = st.number_input("Albumin", min_value=0.0, step=0.1, format="%.1f")
-        glucose = st.number_input("Glucose", min_value=0.0, step=1.0, format="%.0f")
-    with c3:
-        tp = st.number_input("Total Protein", min_value=0.0, step=0.1, format="%.1f")
-        ast = st.number_input("AST", min_value=0.0, step=1.0, format="%.0f")
-        alt = st.number_input("ALT", min_value=0.0, step=1.0, format="%.0f")
-        ldh = st.number_input("LDH", min_value=0.0, step=1.0, format="%.0f")
-        crp = st.number_input("CRP", min_value=0.0, step=0.1, format="%.1f")
-    with c4:
-        cr = st.number_input("Creatinine(Cr)", min_value=0.0, step=0.01, format="%.2f")
-        ua = st.number_input("Uric Acid(UA)", min_value=0.0, step=0.1, format="%.1f")
-        tb = st.number_input("Total Bilirubin(TB)", min_value=0.0, step=0.1, format="%.1f")
-        bun = st.number_input("BUN", min_value=0.0, step=0.1, format="%.1f")
-        bnp = st.number_input("BNP(선택)", min_value=0.0, step=1.0, format="%.0f")
+    default_labs_open = not (t_peds_daily or t_peds_inf)
+    t_labs = st.checkbox("피수치 입력 열기", value=default_labs_open)
+    if t_labs:
+        st.markdown("### 피수치")
+        c1, c2, c3, c4 = st.columns(4)
+        with c1:
+            wbc = st.number_input("WBC(백혈구)", min_value=0.0, step=0.1, format="%.1f")
+            hb = st.number_input("Hb(헤모글로빈)", min_value=0.0, step=0.1, format="%.1f")
+            plt = st.number_input("PLT(혈소판)", min_value=0.0, step=1.0, format="%.0f")
+            anc = st.number_input("ANC(호중구)", min_value=0.0, step=10.0, format="%.0f")
+            ca = st.number_input("Ca(칼슘)", min_value=0.0, step=0.1, format="%.1f")
+        with c2:
+            p = st.number_input("P(인)", min_value=0.0, step=0.1, format="%.1f")
+            na = st.number_input("Na(나트륨)", min_value=0.0, step=0.5, format="%.1f")
+            k = st.number_input("K(칼륨)", min_value=0.0, step=0.1, format="%.1f")
+            albumin = st.number_input("Albumin(알부민)", min_value=0.0, step=0.1, format="%.1f")
+            glucose = st.number_input("Glucose(혈당)", min_value=0.0, step=1.0, format="%.0f")
+        with c3:
+            tp = st.number_input("Total Protein(총단백)", min_value=0.0, step=0.1, format="%.1f")
+            ast = st.number_input("AST", min_value=0.0, step=1.0, format="%.0f")
+            alt = st.number_input("ALT", min_value=0.0, step=1.0, format="%.0f")
+            ldh = st.number_input("LDH", min_value=0.0, step=1.0, format="%.0f")
+            crp = st.number_input("CRP(C-반응단백)", min_value=0.0, step=0.1, format="%.1f")
+        with c4:
+            cr = st.number_input("Cr(크레아티닌)", min_value=0.0, step=0.01, format="%.2f")
+            ua = st.number_input("UA(요산)", min_value=0.0, step=0.1, format="%.1f")
+            tb = st.number_input("TB(총빌리루빈)", min_value=0.0, step=0.1, format="%.1f")
+            bun = st.number_input("BUN(요소질소)", min_value=0.0, step=0.1, format="%.1f")
+            bnp = st.number_input("BNP(선택)", min_value=0.0, step=1.0, format="%.0f")
+    else:
+        wbc=hb=plt=anc=ca=p=na=k=albumin=glucose=tp=ast=alt=ldh=crp=cr=ua=tb=bun=bnp=None
 
-    # 4) 특수검사
+    # ---- 특수검사 (toggle) ----
     st.divider()
-    st.subheader("특수검사 (토글)")
-    t1, t2, t3, t4, t5 = st.columns(5)
-    with t1: tg_c = st.checkbox("보체")
-    with t2: tg_u = st.checkbox("요검사/단백뇨")
-    with t3: tg_coag = st.checkbox("응고")
-    with t4: tg_lip = st.checkbox("지질")
-    with t5: tg_etc = st.checkbox("기타")
+    t_special = st.checkbox("특수검사 입력 열기")
+    if t_special:
+        st.markdown("### 특수검사 (토글)")
+        t1, t2, t3, t4, t5 = st.columns(5)
+        with t1: tg_c = st.checkbox("보체")
+        with t2: tg_u = st.checkbox("요검사/단백뇨")
+        with t3: tg_coag = st.checkbox("응고")
+        with t4: tg_lip = st.checkbox("지질")
+        with t5: tg_etc = st.checkbox("기타")
 
-    if tg_c:
-        st.markdown("**보체**")
-        c_c1, c_c2, c_c3 = st.columns(3)
-        C3 = c_c1.number_input("C3", min_value=0.0, step=0.1, format="%.1f")
-        C4 = c_c2.number_input("C4", min_value=0.0, step=0.1, format="%.1f")
-        CH50 = c_c3.number_input("CH50", min_value=0.0, step=0.1, format="%.1f")
+        if tg_c:
+            st.markdown("**보체**")
+            c_c1, c_c2, c_c3 = st.columns(3)
+            C3 = c_c1.number_input("C3", min_value=0.0, step=0.1, format="%.1f")
+            C4 = c_c2.number_input("C4", min_value=0.0, step=0.1, format="%.1f")
+            CH50 = c_c3.number_input("CH50", min_value=0.0, step=0.1, format="%.1f")
 
-    if tg_u:
-        st.markdown("**요검사/단백뇨**")
-        u1, u2, u3, u4 = st.columns(4)
-        hematuria = u1.selectbox("혈뇨", ["모름","음성","미세","육안적"])
-        proteinuria = u2.selectbox("단백뇨", ["모름","음성","미세","+","++","+++"])
-        glycosuria = u3.selectbox("요당", ["모름","음성","+","++","+++"])
-        acr = u4.number_input("ACR (mg/g)", min_value=0.0, step=1.0, format="%.0f")
-        upcr = st.number_input("UPCR (mg/g)", min_value=0.0, step=1.0, format="%.0f")
+        if tg_u:
+            st.markdown("**요검사/단백뇨**")
+            u1, u2, u3, u4 = st.columns(4)
+            hematuria = u1.selectbox("혈뇨", ["모름","음성","미세","육안적"])
+            proteinuria = u2.selectbox("단백뇨", ["모름","음성","미세","+","++","+++"])
+            glycosuria = u3.selectbox("요당", ["모름","음성","+","++","+++"])
+            acr = u4.number_input("ACR (mg/g)", min_value=0.0, step=1.0, format="%.0f")
+            upcr = st.number_input("UPCR (mg/g)", min_value=0.0, step=1.0, format="%.0f")
 
-    if tg_coag:
-        st.markdown("**응고**")
-        c1_, c2_, c3_ = st.columns(3)
-        PT  = c1_.number_input("PT(sec)",   min_value=0.0, step=0.1, format="%.1f")
-        INR = c2_.number_input("INR",       min_value=0.0, step=0.01, format="%.2f")
-        aPTT= c3_.number_input("aPTT(sec)", min_value=0.0, step=0.1, format="%.1f")
+        if tg_coag:
+            st.markdown("**응고**")
+            c1_, c2_, c3_ = st.columns(3)
+            PT  = c1_.number_input("PT(sec)",   min_value=0.0, step=0.1, format="%.1f")
+            INR = c2_.number_input("INR",       min_value=0.0, step=0.01, format="%.2f")
+            aPTT= c3_.number_input("aPTT(sec)", min_value=0.0, step=0.1, format="%.1f")
 
-    if tg_lip:
-        st.markdown("**지질/혈당대사**")
-        l1, l2, l3 = st.columns(3)
-        chol = l1.number_input("총콜레스테롤", min_value=0.0, step=1.0, format="%.0f")
-        hdl  = l2.number_input("HDL", min_value=0.0, step=1.0, format="%.0f")
-        tg   = l3.number_input("Triglyceride", min_value=0.0, step=1.0, format="%.0f")
+        if tg_lip:
+            st.markdown("**지질/혈당대사**")
+            l1, l2, l3 = st.columns(3)
+            chol = l1.number_input("총콜레스테롤", min_value=0.0, step=1.0, format="%.0f")
+            hdl  = l2.number_input("HDL", min_value=0.0, step=1.0, format="%.0f")
+            tg   = l3.number_input("Triglyceride", min_value=0.0, step=1.0, format="%.0f")
 
-    if tg_etc:
-        st.markdown("**기타**")
-        e1, e2, e3 = st.columns(3)
-        tsh     = e1.number_input("TSH", min_value=0.0, step=0.01, format="%.2f")
-        pct     = e2.number_input("Procalcitonin", min_value=0.0, step=0.01, format="%.2f")
-        lactate = e3.number_input("Lactate", min_value=0.0, step=0.1, format="%.1f")
+        if tg_etc:
+            st.markdown("**기타**")
+            e1, e2, e3 = st.columns(3)
+            tsh     = e1.number_input("TSH", min_value=0.0, step=0.01, format="%.2f")
+            pct     = e2.number_input("Procalcitonin", min_value=0.0, step=0.01, format="%.2f")
+            lactate = e3.number_input("Lactate", min_value=0.0, step=0.1, format="%.1f")
 
-    # 5) 해석하기
+    # ---- 해석하기 ----
     st.divider()
     go = st.button("🔎 해석하기", type="primary", use_container_width=True)
 
     if go:
+        # Pediatric collect
+        peds = Peds(
+            appetite=appetite if (t_peds_daily and appetite!="모름") else None,
+            fever_now=bool(fever_now) if t_peds_daily else None,
+            temp_c=temp_c if (t_peds_daily and (temp_c or 0)>0) else None,
+            cough=cough if t_peds_daily else None,
+            dyspnea=dyspnea if t_peds_daily else None,
+            cyanosis=bool(cyanosis) if t_peds_daily else None,
+            spo2=spo2 if (t_peds_daily and (spo2 is not None) and spo2 > 0) else None,
+            rsv=rsv if t_peds_inf else None,
+            adeno=adeno if t_peds_inf else None,
+            rota=rota if t_peds_inf else None,
+            influenza=influenza if t_peds_inf else None,
+            parainfluenza=parainfluenza if t_peds_inf else None,
+            hfm=hfm if t_peds_inf else None,
+            noro=noro if t_peds_inf else None,
+            mycoplasma=mycoplasma if t_peds_inf else None,
+        )
+
         # Labs collect
         labs = Labs(
             wbc=wbc or None, hb=hb or None, plt=plt or None, anc=anc or None,
@@ -463,26 +532,13 @@ def main():
             glucose=glucose or None, tp=tp or None, ast=ast or None, alt=alt or None,
             ldh=ldh or None, crp=crp or None, cr=cr or None, ua=ua or None, tb=tb or None,
             bun=bun or None, bnp=bnp or None
-        )
-
-        # Pediatric collect
-        peds = Peds(
-            appetite=appetite if appetite!="모름" else None,
-            fever_now=bool(fever_now),
-            temp_c=temp_c if temp_c>0 else None,
-            cough=cough,
-            dyspnea=dyspnea,
-            cyanosis=bool(cyanosis),
-            spo2=spo2 if (has_pulseox and (spo2 is not None) and spo2 > 0) else None,
-            rsv=rsv, adeno=adeno, rota=rota, influenza=influenza, parainfluenza=parainfluenza,
-            hfm=hfm, noro=noro, mycoplasma=mycoplasma
-        )
+        ) if t_labs else Labs()
 
         sections: List[Tuple[str, List[str]]] = []
 
         # 확장된 항암제 경고
         warn = []
-        for d in sel_chemo:
+        for d in (sel_chemo or []):
             if "MTX" in d:
                 warn += ["[MTX] 간독성↑, 골수억제, 구내염, 신기능 영향 — 엽산 보충은 반드시 의료진 지시에 따라"]
             if "6-MP" in d:
