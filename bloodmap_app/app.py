@@ -332,20 +332,18 @@ def interpret_peds(p: Peds) -> List[Tuple[str, List[str]]]:
 def main():
     st.set_page_config(page_title="피수치 가이드 / BloodMap", layout="centered")
 
-# --- Hide +/- buttons on number_input (and native spinners) ---
-st.markdown(
-    \"\"\"
-    <style>
-    [data-testid="stNumberInput"] button {display:none !important;}
-    /* Hide native spin buttons */
-    input[type=number]::-webkit-outer-spin-button,
-    input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-    input[type=number] { -moz-appearance: textfield; }
-    </style>
-    \"\"\", unsafe_allow_html=True
-)
-
-    st.title(APP_TITLE)
+    # --- Hide +/- buttons on number_input (and native spinners) ---
+    st.markdown(
+        '''<style>
+        [data-testid="stNumberInput"] button {display:none !important;}
+        /* Hide native spin buttons */
+        input[type=number]::-webkit-outer-spin-button,
+        input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type=number] { -moz-appearance: textfield; }
+        </style>''',
+        unsafe_allow_html=True
+    )
+st.title(APP_TITLE)
     st.caption(APP_SIGNATURE)
 
     # Nickname + PIN
@@ -424,15 +422,25 @@ st.markdown(
     else:
         dx = None
 
-    # ---- 항암제 ----
+    
+    # ---- 약물 선택 ----
     st.divider()
-    st.subheader("항암제")
-    default_chemo = CHEMO_BY_DX.get(dx or "AML", [])  # fallback
-    st.caption("암종에 맞는 항암제가 먼저 보입니다. 필요 시 추가 선택하세요.")
-    sel_chemo = st.multiselect("항암제(한글 병기)", default_chemo + CHEMO_COMMON, default=default_chemo, key="chemo_sel")
-    sel_abx   = st.multiselect("항생제(한글 병기)", ANTIBIOTICS_COMMON, default=[], key="abx_sel")
-
-    # ---- 피수치 (toggle; pediatric on → default collapsed) ----
+    if t_peds_daily or t_peds_inf:
+        st.subheader("소아 — 항생제")
+        sel_abx = st.multiselect("항생제(한글 병기)", ANTIBIOTICS_COMMON, default=[], key="abx_sel")
+        sel_chemo = []
+    else:
+        st.subheader("항암제 / 항생제")
+        default_chemo = CHEMO_BY_DX.get(dx or "AML", [])
+        st.caption("암종에 맞는 항암제 목록이 보이지만 **자동 선택은 하지 않습니다. 직접 선택하세요.**")
+        sel_chemo = st.multiselect("항암제(한글 병기)", default_chemo + CHEMO_COMMON, default=[], key="chemo_sel")
+        sel_abx   = st.multiselect("항생제(한글 병기)", ANTIBIOTICS_COMMON, default=[], key="abx_sel")
+    
+    # 3) 피수치 (toggle; pediatric on → default collapsed)
+    st.divider()
+    default_labs_open = not (t_peds_daily or t_peds_inf)
+    t_labs = st.checkbox("피수치 입력 열기", value=default_labs_open)
+ (toggle; pediatric on → default collapsed) ----
     st.divider()
     default_labs_open = not (t_peds_daily or t_peds_inf)
     t_labs = st.checkbox("피수치 입력 열기", value=default_labs_open)
