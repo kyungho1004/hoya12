@@ -1,61 +1,104 @@
 # -*- coding: utf-8 -*-
-# 약물 및 진단/카테고리 데이터 (간단 버전)
-CANCER_GROUPS = {
-    "혈액암": [
-        "AML(급성골수성백혈병)",
-        "APL(급성전골수구백혈병)",
-        "ALL(급성림프구백혈병)",
-        "CML(만성골수성백혈병)",
-        "CLL(만성림프구백혈병)"
+# 표적치료제/면역항암제 우선 병기
+def ko(name: str) -> str:
+    m = {
+        "Osimertinib":"오시머티닙(Osimertinib)","Gefitinib":"게피티닙(Gefitinib)","Erlotinib":"얼로티닙(Erlotinib)","Afatinib":"아파티닙(Afatinib)",
+        "Alectinib":"알렉티닙(Alectinib)","Crizotinib":"크리조티닙(Crizotinib)","Brigatinib":"브리가티닙(Brigatinib)","Lorlatinib":"롤라티닙(Lorlatinib)",
+        "Capmatinib":"캡마티닙(Capmatinib)","Tepotinib":"테포티닙(Tepotinib)","Selpercatinib":"셀퍼카티닙(Selpercatinib)","Pralsetinib":"프랄세티닙(Pralsetinib)",
+        "Entrectinib":"엔트렉티닙(Entrectinib)","Larotrectinib":"라로트렉티닙(Larotrectinib)","Sotorasib":"소토라십(Sotorasib)","Adagrasib":"아다가라십(Adagrasib)",
+        "Bevacizumab":"베바시주맙(Bevacizumab)","Ramucirumab":"라무시루맙(Ramucirumab)","Pembrolizumab":"펨브롤리주맙(Pembrolizumab)",
+        "Nivolumab":"니볼루맙(Nivolumab)","Atezolizumab":"아테졸리주맙(Atezolizumab)","Durvalumab":"더발루맙(Durvalumab)","Ipilimumab":"이필리무맙(Ipilimumab)",
+        "Trastuzumab":"트라스투주맙(Trastuzumab)","Pertuzumab":"퍼투주맙(Pertuzumab)","Ado-trastuzumab emtansine":"T-DM1(Ado-trastuzumab emtansine)",
+        "Trastuzumab deruxtecan":"T-DXd(Trastuzumab deruxtecan)","Tucatinib":"투카티닙(Tucatinib)","Neratinib":"네라티닙(Neratinib)",
+        "Sacituzumab govitecan":"사시투주맙 고비테칸(Sacituzumab govitecan)","Alpelisib":"알펠리십(Alpelisib)",
+        "Dabrafenib":"다브라페닙(Dabrafenib)","Trametinib":"트라메티닙(Trametinib)","Vemurafenib":"베무라페닙(Vemurafenib)","Encorafenib":"엔코라페닙(Encorafenib)","Binimetinib":"비니메티닙(Binimetinib)",
+        "Belzutifan":"벨주티판(Belzutifan)","Cabozantinib":"카보잔티닙(Cabozantinib)","Lenvatinib":"렌바티닙(Lenvatinib)","Sunitinib":"수니티닙(Sunitinib)","Pazopanib":"파조파닙(Pazopanib)",
+        "Axitinib":"악시티닙(Axitinib)","Tivozanib":"티보자닙(Tivozanib)","Everolimus":"에베로리무스(Everolimus)",
+        "Olaparib":"올라파립(Olaparib)","Niraparib":"니라파립(Niraparib)","Rucaparib":"루카파립(Rucaparib)","Mirvetuximab soravtansine":"미르베툭시맙 소라브탄신(Mirvetuximab soravtansine)",
+        "Zolbetuximab":"졸베투시맙(Zolbetuximab)","Dostarlimab":"도스타릴맙(Dostarlimab)",
+        "Enfortumab vedotin":"엔포투맙 베도틴(Enfortumab vedotin)","Erdafitinib":"에르다피티닙(Erdafitinib)",
+        "Pemigatinib":"페미가티닙(Pemigatinib)","Futibatinib":"푸티바티닙(Futibatinib)","Ivosidenib":"이보시데닙(Ivosidenib)","Zanidatamab":"자니다타맙(Zanidatamab)",
+        "Selumetinib":"셀루메티닙(Selumetinib)","Ripretinib":"리프레티닙(Ripretinib)","Regorafenib":"레고라페닙(Regorafenib)",
+        "Cetuximab":"세툭시맙(Cetuximab)","Panitumumab":"파니투무맙(Panitumumab)","Tisotumab vedotin":"티소투맙 베도틴(Tisotumab vedotin)",
+        "Alectinib":"알렉티닙(Alectinib)","Amivantamab":"아미반타맙(Amivantamab)","Mobocertinib":"모보서티닙(Mobocertinib)",
+        "Larotrectinib":"라로트렉티닙(Larotrectinib)","Entrectinib":"엔트렉티닙(Entrectinib)","Fruquintinib":"프루퀸티닙(Fruquintinib)"
+    }
+    return m.get(name, name)
+
+# 고형암: 표적약물 중심으로 확장 (세포독성 약물은 목록 최소화)
+solid_targeted = {
+    "폐암(Lung cancer)": [
+        # EGFR
+        "Osimertinib","Gefitinib","Erlotinib","Afatinib",
+        # ALK/ROS1
+        "Alectinib","Crizotinib","Brigatinib","Lorlatinib","Entrectinib",
+        # METex14
+        "Capmatinib","Tepotinib",
+        # RET
+        "Selpercatinib","Pralsetinib",
+        # NTRK
+        "Larotrectinib","Entrectinib",
+        # KRAS G12C
+        "Sotorasib","Adagrasib",
+        # EGFR Ex20ins/HER3
+        "Amivantamab","Mobocertinib",
+        # BRAF
+        "Dabrafenib","Trametinib",
+        # ICI
+        "Pembrolizumab","Nivolumab","Atezolizumab","Durvalumab"
     ],
-    "고형암": [
-        "폐암",
-        "유방암",
-        "위암",
-        "대장암",
-        "간암",
-        "췌장암",
-        "담도암"
+    "유방암(Breast cancer)": [
+        "Trastuzumab","Pertuzumab","Ado-trastuzumab emtansine","Trastuzumab deruxtecan","Tucatinib","Neratinib",
+        "Palbociclib","Ribociclib","Abemaciclib",
+        "Alpelisib",
+        "Sacituzumab govitecan"
     ],
-    "육종(Sarcoma)": [
-        "골육종(Osteosarcoma)",
-        "유잉육종(Ewing sarcoma)",
-        "횡문근육종(Rhabdomyosarcoma)",
-        "평활근육종(Leiomyosarcoma)",
-        "지방육종(Liposarcoma)"
+    "대장암(Colorectal cancer)": [
+        "Cetuximab","Panitumumab","Bevacizumab","Ramucirumab","Regorafenib","Fruquintinib",
+        "Pembrolizumab","Nivolumab","Encorafenib"
     ],
-    "희귀암": [
-        "신경내분비종양",
-        "지속성흉선종",
-        "복강육종(기타)"
+    "위암(Gastric cancer)": [
+        "Trastuzumab","Trastuzumab deruxtecan","Ramucirumab","Pembrolizumab","Nivolumab","Zolbetuximab"
     ],
+    "간암(HCC)": [
+        "Lenvatinib","Sorafenib","Regorafenib","Cabozantinib","Atezolizumab","Bevacizumab","Durvalumab"
+    ],
+    "담도암(Cholangiocarcinoma)": [
+        "Pemigatinib","Futibatinib","Ivosidenib","Zanidatamab","Pembrolizumab","Durvalumab"
+    ],
+    "췌장암(Pancreatic cancer)": [
+        "Olaparib"
+    ],
+    "자궁내막암(Endometrial cancer)": [
+        "Dostarlimab","Pembrolizumab","Lenvatinib"
+    ],
+    "난소암": [
+        "Olaparib","Niraparib","Rucaparib","Mirvetuximab soravtansine","Bevacizumab"
+    ],
+    "자궁경부암": [
+        "Pembrolizumab","Tisotumab vedotin","Bevacizumab"
+    ],
+    "신장암(RCC)": [
+        "Cabozantinib","Lenvatinib","Axitinib","Sunitinib","Pazopanib","Tivozanib","Belzutifan",
+        "Nivolumab","Pembrolizumab","Ipilimumab"
+    ],
+    "피부암(흑색종)": [
+        "Pembrolizumab","Nivolumab","Ipilimumab","Dabrafenib","Trametinib","Vemurafenib","Encorafenib","Binimetinib"
+    ],
+    "갑상선암": [
+        "Lenvatinib","Sorafenib","Selpercatinib","Pralsetinib","Dabrafenib","Trametinib"
+    ],
+    "뇌종양(Glioma)": [
+        "Bevacizumab"
+    ],
+    "식도암": [
+        "Pembrolizumab","Nivolumab","Trastuzumab","Ramucirumab"
+    ],
+    "방광암": [
+        "Pembrolizumab","Nivolumab","Avelumab","Enfortumab vedotin","Erdafitinib"
+    ],
+    "전립선암": [
+        # 표적/신호전달제 우선
+        "Abiraterone","Enzalutamide","Apalutamide","Olaparib"
+    ]
 }
-
-CHEMO_BY_GROUP_OR_DX = {
-    # 혈액암 예시
-    "AML(급성골수성백혈병)": ["시타라빈(ARA-C)", "도우노루비신(Daunorubicin)", "미토잔트론(Mitoxantrone)"],
-    "APL(급성전골수구백혈병)": ["트레티노인(ATRA, 베사노이드)", "아토산(Arsenic trioxide)"],
-    "ALL(급성림프구백혈병)": ["빈크리스틴(Vincristine)", "메토트렉세이트(MTX)", "6-머캅토퓨린(6-MP)"],
-    "CML(만성골수성백혈병)": ["이미티닙(Imatinib)", "다사티닙(Dasatinib)"],
-    "CLL(만성림프구백혈병)": ["플루다라빈(Fludarabine)", "사이클로포스파마이드(Cyclophosphamide)"],
-
-    # 고형암(일부)
-    "폐암": ["시스플라틴(Cisplatin)", "카보플라틴(Carboplatin)", "파클리탁셀(Paclitaxel)", "도세탁셀(Docetaxel)"],
-    "유방암": ["독소루비신(Doxorubicin)", "도세탁셀(Docetaxel)", "사이클로포스파마이드(Cyclophosphamide)"],
-
-    # 육종
-    "골육종(Osteosarcoma)": ["메토트렉세이트(MTX)", "독소루비신(Doxorubicin)", "시스플라틴(Cisplatin)"],
-    "유잉육종(Ewing sarcoma)": ["빈크리스틴(Vincristine)", "이포스파마이드(Ifosfamide)", "독소루비신(Doxorubicin)", "에토포사이드(Etoposide)"],
-    "횡문근육종(Rhabdomyosarcoma)": ["빈크리스틴(Vincristine)", "독소루비신(Doxorubicin)", "사이클로포스파마이드(Cyclophosphamide)"],
-    "평활근육종(Leiomyosarcoma)": ["독소루비신(Doxorubicin)", "이포스파마이드(Ifosfamide)", "파조파닙(Pazopanib)"],
-    "지방육종(Liposarcoma)": ["독소루비신(Doxorubicin)", "이포스파마이드(Ifosfamide)"],
-
-    # 그룹 fallback
-    "육종(Sarcoma)": ["독소루비신(Doxorubicin)", "이포스파마이드(Ifosfamide)", "파조파닙(Pazopanib)"]
-}
-
-ANTIBIOTICS_KR = [
-    "세프트리악손", "피페라실린/타조박탐", "메로페넴",
-    "반코마이신", "레보플록사신", "시프로플록사신",
-    "아목시실린/클라불란산", "클린다마이신", "아지스로마이신"
-]

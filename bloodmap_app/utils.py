@@ -1,55 +1,14 @@
 # -*- coding: utf-8 -*-
 import streamlit as st
 
-def inject_css():
-    try:
-        import os
-        css_path = 'bloodmap_app/style.css'
-        try:
-            # Optional override via secrets or env
-            css_path = st.secrets['css_path'] if 'css_path' in st.secrets else os.environ.get('CSS_PATH', css_path)
-        except Exception:
-            pass
-        with open(css_path, 'r', encoding='utf-8') as f:
-            st.markdown(f"""<style>{f.read()}</style>""", unsafe_allow_html=True)
-    except Exception:
-        pass
+def user_key(nickname: str, pin: str) -> str:
+    pin = (pin or "").strip()
+    if len(pin) != 4 or not pin.isdigit():
+        return ""
+    nickname = (nickname or "").strip()
+    return f"{nickname}#{pin}"
 
-def section(title:str):
-    st.markdown(f"## {title}")
-
-def subtitle(text:str):
-    st.markdown(f"<div class='small'>{text}</div>", unsafe_allow_html=True)
-
-def num_input(label:str, key:str, min_value=None, max_value=None, step=None, format=None, placeholder=None):
-    return st.number_input(label, key=key, min_value=min_value, max_value=max_value, step=step, format=format if format else None, help=placeholder)
-
-def pin_valid(pin_text:str)->bool:
-    return pin_text.isdigit() and len(pin_text) == 4
-
-def warn_banner(text:str):
-    st.markdown(f"<span class='badge'>⚠️ {text}</span>", unsafe_allow_html=True)
-
-
-import json, os, time
-
-PROFILES_PATH = os.path.join("data","profiles.json")
-
-def load_profiles():
-    try:
-        with open(PROFILES_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return {}
-
-def save_profile(key:str):
-    db = load_profiles()
-    db[key] = {"ts": int(time.time())}
-    os.makedirs(os.path.dirname(PROFILES_PATH), exist_ok=True)
-    with open(PROFILES_PATH, "w", encoding="utf-8") as f:
-        json.dump(db, f, ensure_ascii=False, indent=2)
-    return db
-
-def recent_profiles(n=5):
-    db = load_profiles()
-    return sorted(db.keys(), key=lambda k: db[k]["ts"], reverse=True)[:n]
+def init_state():
+    for k, v in {"onco_prev_key": "", "onco_selected": []}.items():
+        if k not in st.session_state:
+            st.session_state[k] = v

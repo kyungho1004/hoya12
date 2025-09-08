@@ -1,3 +1,5 @@
-.block-container{padding-top:8px;padding-left:12px;padding-right:12px;max-width:100%}
-.stButton>button,.stDownloadButton>button{width:100%}
-[data-baseweb="tab-list"]{flex-wrap:wrap}
+
+.block-container {padding-top: .75rem; padding-bottom: 2rem; max-width: 900px;}
+@media (max-width: 768px) { .block-container {padding-left: .75rem; padding-right: .75rem;} }
+.small-note {font-size: .85rem; color: #6b7280;}
+.stRadio > label, .stSelectbox > label, .stTextInput > label {font-weight: 600;}
