@@ -768,7 +768,7 @@ def main():
         with col[1]:
             t_comp = st.checkbox("보체 검사(C3/C4/CH50)")
         with col[2]:
-            t_urine_basic = st.checkbox("요검사(단백/잠혈/요당/요Cr)")
+            t_urine_basic = st.checkbox("요검사(알부민/잠혈/요당/요Cr)")
         with col[3]:
             t_lipid_basic = st.checkbox("지질 기본(TG/TC)")
 
@@ -792,7 +792,7 @@ def main():
             with cq[0]:
                 hematuria_q = st.selectbox("혈뇨(정성)", ["", "+", "++", "+++"], index=0)
             with cq[1]:
-                proteinuria_q = st.selectbox("단백뇨(정성)", ["", "-", "+", "++"], index=0)
+                proteinuria_q = st.selectbox("알부민 소변(정성)", ["", "-", "+", "++"], index=0)
             with cq[2]:
                 wbc_q = st.selectbox("백혈구(정성)", ["", "-", "+", "++"], index=0)
             with cq[3]:
@@ -816,7 +816,7 @@ def main():
             if hematuria_q:
                 extra_vals["혈뇨(정성)"] = f"{hematuria_q} ({_desc_hema.get(hematuria_q,'')})"
             if proteinuria_q:
-                extra_vals["단백뇨(정성)"] = f"{proteinuria_q} ({_desc_prot.get(proteinuria_q,'')})"
+                extra_vals["알부민 소변(정성)"] = f"{proteinuria_q} ({_desc_prot.get(proteinuria_q,'')})"
             if wbc_q:
                 extra_vals["백혈구뇨(정성)"] = f"{wbc_q} ({_desc_wbc.get(wbc_q,'')})"
             if gly_q:
