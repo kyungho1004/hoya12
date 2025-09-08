@@ -64,9 +64,53 @@ def stage_acr(acr_mg_g):
     return "A3", "중증 증가 (>300 mg/g)"
 
 def child_pugh_score(albumin, bilirubin, inr, ascites, enceph):
+    """
+    Returns (score, class). If any of albumin/bilirubin/INR is missing/invalid,
+    return (0, None) so it won't be displayed.
+    """
     def _alb(a):
-        try: a=float(a)
-        except: return 0
+        try:
+            a = float(a)
+        except Exception:
+            return None
+        if a > 3.5: return 1
+        if 2.8 <= a <= 3.5: return 2
+        return 3
+
+    def _tb(b):
+        try:
+            b = float(b)
+        except Exception:
+            return None
+        if b < 2: return 1
+        if 2 <= b <= 3: return 2
+        return 3
+
+    def _inr(x):
+        try:
+            x = float(x)
+        except Exception:
+            return None
+        if x < 1.7: return 1
+        if 1.7 <= x <= 2.3: return 2
+        return 3
+
+    def _cat(v):
+        return {"없음": 1, "경미": 2, "중증": 3}.get(v, 0)
+
+    a_s = _alb(albumin)
+    b_s = _tb(bilirubin)
+    i_s = _inr(inr)
+
+    # if any numeric component missing -> invalid
+    if a_s is None or b_s is None or i_s is None:
+        return 0, None
+
+    s = a_s + b_s + i_s + _cat(ascites) + _cat(enceph)
+    if 5 <= s <= 6: k = "A"
+    elif 7 <= s <= 9: k = "B"
+    else: k = "C"
+    return s, k
         if a > 3.5: return 1
         if 2.8 <= a <= 3.5: return 2
         return 3
@@ -152,7 +196,7 @@ if mode == "일반/암":
             enceph = st.selectbox("간성뇌병증", ["없음","경미","중증"])
         extra["Child-Pugh 입력"] = {"Alb": cp_albumin, "TB": cp_bili, "INR": cp_inr, "Ascites": ascites, "Encephalopathy": enceph}
         sc, klass = child_pugh_score(cp_albumin, cp_bili, cp_inr, ascites, enceph)
-        if sc:
+        if sc and sc >= 5:
             st.info(f"Child-Pugh 총점: **{sc}** → 등급 **{klass}**")
             extra["Child-Pugh Score/Class"] = f"{sc} ({klass})"
 
