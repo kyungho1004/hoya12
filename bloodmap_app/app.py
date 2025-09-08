@@ -3,52 +3,98 @@
 from datetime import datetime, date
 import os
 import streamlit as st
+import importlib
 
-# ---- Robust imports (relative -> absolute fallback) ----
-try:
-    from .config import (APP_TITLE, PAGE_TITLE, MADE_BY, CAFE_LINK_MD, FOOTER_CAFE,
-                         DISCLAIMER, ORDER, FEVER_GUIDE,
-                         LBL_WBC, LBL_Hb, LBL_PLT, LBL_ANC, LBL_Ca, LBL_P, LBL_Na, LBL_K,
-                         LBL_Alb, LBL_Glu, LBL_TP, LBL_AST, LBL_ALT, LBL_LDH, LBL_CRP, LBL_Cr, LBL_UA, LBL_TB, LBL_BUN, LBL_BNP,
-                         FONT_PATH_REG)
-except Exception:
-    from config import (APP_TITLE, PAGE_TITLE, MADE_BY, CAFE_LINK_MD, FOOTER_CAFE,
-                        DISCLAIMER, ORDER, FEVER_GUIDE,
-                        LBL_WBC, LBL_Hb, LBL_PLT, LBL_ANC, LBL_Ca, LBL_P, LBL_Na, LBL_K,
-                        LBL_Alb, LBL_Glu, LBL_TP, LBL_AST, LBL_ALT, LBL_LDH, LBL_CRP, LBL_Cr, LBL_UA, LBL_TB, LBL_BUN, LBL_BNP,
-                        FONT_PATH_REG)
+# ---- Robust dynamic imports (package-aware) ----
+PKG = os.path.basename(os.path.dirname(__file__))
 
-try:
-    from .data.drugs import ANTICANCER, ABX_GUIDE
-except Exception:
-    from data.drugs import ANTICANCER, ABX_GUIDE
+def _load_mod(path_in_pkg):
+    """
+    Try to import a module inside the current package (PKG.path_in_pkg).
+    If that fails, try importing as a top-level module (path_in_pkg).
+    Return the imported module or None.
+    """
+    for modname in (f"{PKG}.{path_in_pkg}", path_in_pkg):
+        try:
+            return importlib.import_module(modname)
+        except Exception:
+            continue
+    return None
 
-try:
-    from .data.foods import FOODS
-except Exception:
-    from data.foods import FOODS
+# config
+_cfg = _load_mod("config")
+if _cfg is None:
+    raise ImportError("Cannot import config module (tried both package and top-level).")
+APP_TITLE = getattr(_cfg, "APP_TITLE", "BloodMap")
+PAGE_TITLE = getattr(_cfg, "PAGE_TITLE", "BloodMap")
+MADE_BY = getattr(_cfg, "MADE_BY", "")
+CAFE_LINK_MD = getattr(_cfg, "CAFE_LINK_MD", "")
+FOOTER_CAFE = getattr(_cfg, "FOOTER_CAFE", "")
+DISCLAIMER = getattr(_cfg, "DISCLAIMER", "")
+ORDER = getattr(_cfg, "ORDER", [])
+FEVER_GUIDE = getattr(_cfg, "FEVER_GUIDE", "")
+LBL_WBC = getattr(_cfg, "LBL_WBC", "WBC")
+LBL_Hb = getattr(_cfg, "LBL_Hb", "Hb")
+LBL_PLT = getattr(_cfg, "LBL_PLT", "PLT")
+LBL_ANC = getattr(_cfg, "LBL_ANC", "ANC")
+LBL_Ca = getattr(_cfg, "LBL_Ca", "Ca")
+LBL_P = getattr(_cfg, "LBL_P", "P")
+LBL_Na = getattr(_cfg, "LBL_Na", "Na")
+LBL_K = getattr(_cfg, "LBL_K", "K")
+LBL_Alb = getattr(_cfg, "LBL_Alb", "Alb")
+LBL_Glu = getattr(_cfg, "LBL_Glu", "Glu")
+LBL_TP = getattr(_cfg, "LBL_TP", "TP")
+LBL_AST = getattr(_cfg, "LBL_AST", "AST")
+LBL_ALT = getattr(_cfg, "LBL_ALT", "ALT")
+LBL_LDH = getattr(_cfg, "LBL_LDH", "LDH")
+LBL_CRP = getattr(_cfg, "LBL_CRP", "CRP")
+LBL_Cr = getattr(_cfg, "LBL_Cr", "Cr")
+LBL_UA = getattr(_cfg, "LBL_UA", "UA")
+LBL_TB = getattr(_cfg, "LBL_TB", "TB")
+LBL_BUN = getattr(_cfg, "LBL_BUN", "BUN")
+LBL_BNP = getattr(_cfg, "LBL_BNP", "BNP")
+FONT_PATH_REG = getattr(_cfg, "FONT_PATH_REG", None)
 
-try:
-    from .data.ped import PED_TOPICS, PED_INPUTS_INFO, PED_INFECT, PED_SYMPTOMS, PED_RED_FLAGS
-except Exception:
-    try:
-        from data.ped import PED_TOPICS, PED_INPUTS_INFO, PED_INFECT, PED_SYMPTOMS, PED_RED_FLAGS
-    except Exception:
-        from .data.ped import PED_TOPICS, PED_INPUTS_INFO, PED_INFECT  # last resort
-        PED_SYMPTOMS, PED_RED_FLAGS = {}, {}
+# data modules
+_drugs = _load_mod("data.drugs")
+_foods = _load_mod("data.foods")
+_ped = _load_mod("data.ped")
 
-try:
-    from .utils.inputs import num_input_generic, entered, _parse_numeric
-    from .utils.interpret import interpret_labs, compare_with_previous, food_suggestions, summarize_meds, abx_summary
-    from .utils.reports import build_report, md_to_pdf_bytes_fontlocked
-    from .utils.graphs import render_graphs
-    from .utils.schedule import render_schedule
-except Exception:
-    from utils.inputs import num_input_generic, entered, _parse_numeric
-    from utils.interpret import interpret_labs, compare_with_previous, food_suggestions, summarize_meds, abx_summary
-    from utils.reports import build_report, md_to_pdf_bytes_fontlocked
-    from utils.graphs import render_graphs
-    from utils.schedule import render_schedule
+ANTICANCER = getattr(_drugs, "ANTICANCER", {}) if _drugs else {}
+ABX_GUIDE = getattr(_drugs, "ABX_GUIDE", {}) if _drugs else {}
+FOODS = getattr(_foods, "FOODS", {}) if _foods else {}
+
+PED_TOPICS = getattr(_ped, "PED_TOPICS", {})
+PED_INPUTS_INFO = getattr(_ped, "PED_INPUTS_INFO", "")
+PED_INFECT = getattr(_ped, "PED_INFECT", {})
+PED_SYMPTOMS = getattr(_ped, "PED_SYMPTOMS", {})
+PED_RED_FLAGS = getattr(_ped, "PED_RED_FLAGS", {})
+
+# utils modules
+_utils_inputs = _load_mod("utils.inputs")
+_utils_interpret = _load_mod("utils.interpret")
+_utils_reports = _load_mod("utils.reports")
+_utils_graphs = _load_mod("utils.graphs")
+_utils_schedule = _load_mod("utils.schedule")
+
+if not all([_utils_inputs, _utils_interpret, _utils_reports, _utils_graphs, _utils_schedule]):
+    raise ImportError("Cannot import required utils modules under the package.")
+
+num_input_generic = getattr(_utils_inputs, "num_input_generic")
+entered = getattr(_utils_inputs, "entered")
+_parse_numeric = getattr(_utils_inputs, "_parse_numeric")
+
+interpret_labs = getattr(_utils_interpret, "interpret_labs")
+compare_with_previous = getattr(_utils_interpret, "compare_with_previous")
+food_suggestions = getattr(_utils_interpret, "food_suggestions")
+summarize_meds = getattr(_utils_interpret, "summarize_meds")
+abx_summary = getattr(_utils_interpret, "abx_summary")
+
+build_report = getattr(_utils_reports, "build_report")
+md_to_pdf_bytes_fontlocked = getattr(_utils_reports, "md_to_pdf_bytes_fontlocked")
+
+render_graphs = getattr(_utils_graphs, "render_graphs")
+render_schedule = getattr(_utils_schedule, "render_schedule")
 
 def _nickname_with_pin():
     col1, col2 = st.columns([2,1])
