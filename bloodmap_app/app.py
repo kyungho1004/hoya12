@@ -546,20 +546,24 @@ def build_report(mode, meta, vals, extra):
     lines.append(f"## 모드: {mode}")
     if vals:
         lines.append("### 기본")
-        for k,v in vals.items():
-            if entered(v): lines.append(f"- {k}: **{v}**")
+        for k, v in vals.items():
+            if entered(v):
+                lines.append(f"- {k}: **{v}**")
     if extra:
         lines.append("### 확장/추가")
-        for k,v in extra.items():
+        for k, v in extra.items():
             if isinstance(v, dict):
-                lines.append(f"- {k}: " + ", ".join([f\"{kk}={vv}\" for kk,vv in v.items() if entered(vv)]))
+                pairs = [f"{kk}={vv}" for kk, vv in v.items() if entered(vv)]
+                if pairs:
+                    lines.append(f"- {k}: " + ", ".join(pairs))
             elif isinstance(v, list):
-                lines.append(f"- {k}: " + \", \".join([str(x) for x in v]))
+                lines.append(f"- {k}: " + ", ".join([str(x) for x in v]))
             else:
-                if entered(v): lines.append(f"- {k}: **{v}**")
+                if entered(v):
+                    lines.append(f"- {k}: **{v}**")
     lines.append("")
     lines.append("> ⚠️ 본 수치는 참고용이며 개발자와 무관하며, 수치 기반 임의조정은 금지입니다. 반드시 의료진과 상의 후 결정하시기 바랍니다.")
-    return \"\\n\".join(lines)
+    return "\n".join(lines)
 
 report_md = build_report(mode, meta, {k:v for k,v in vals.items() if entered(v)}, extra)
 if a4_opt:
