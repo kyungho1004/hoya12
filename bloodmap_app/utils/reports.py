@@ -22,7 +22,7 @@ def build_report(mode, meta, vals, cmp_lines, extra_vals, meds_lines, food_lines
 
     if cmp_lines:
         lines.append("\n## 수치 변화 비교")
-        lines.extend([f\"- {x}\" for x in cmp_lines])
+        lines.extend([f"- {x}" for x in cmp_lines])
 
     ex = {k: v for k, v in (extra_vals or {}).items() if v not in (None, "")}
     if ex:
@@ -35,7 +35,7 @@ def build_report(mode, meta, vals, cmp_lines, extra_vals, meds_lines, food_lines
         lines.extend(meds_lines)
     if food_lines:
         lines.append("\n## 음식 가이드")
-        lines.extend([f\"- {x}\" for x in food_lines])
+        lines.extend([f"- {x}" for x in food_lines])
     if abx_lines:
         lines.append("\n## 항생제 주의 요약")
         lines.extend(abx_lines)
