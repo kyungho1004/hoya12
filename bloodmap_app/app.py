@@ -432,7 +432,8 @@ def main():
 
     # Drug selection
     st.divider()
-    if t_peds_daily or t_peds_inf:
+    t_peds_any = bool(t_peds_daily) or bool(t_peds_inf)
+    if t_peds_any:
         st.subheader("소아 — 항생제")
         sel_abx = st.multiselect("항생제(한글 병기)", ANTIBIOTICS_COMMON, default=[], key="abx_sel")
         sel_chemo = []
@@ -445,7 +446,7 @@ def main():
 
     # Labs (toggle; when pediatric toggles on, default collapsed)
     st.divider()
-    default_labs_open = not (t_peds_daily or t_peds_inf)
+    default_labs_open = not t_peds_any
     t_labs = st.checkbox("피수치 입력 열기", value=default_labs_open)
     if t_labs:
         st.markdown("### 피수치")
