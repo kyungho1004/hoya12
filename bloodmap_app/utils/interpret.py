@@ -1,12 +1,20 @@
 # -*- coding: utf-8 -*-
 from .inputs import entered
 try:
+    try:
     from ..config import (ORDER, LBL_Hb, LBL_ANC, LBL_Alb, LBL_CRP, LBL_Glu)
 except Exception:
     from config import (ORDER, LBL_Hb, LBL_ANC, LBL_Alb, LBL_CRP, LBL_Glu)
-from ..data.foods import FOODS, ANC_FOOD_RULES
-from ..data.drugs import ANTICANCER, ABX_GUIDE
-
+except Exception:
+    from config import (ORDER, LBL_Hb, LBL_ANC, LBL_Alb, LBL_CRP, LBL_Glu)
+try:
+    from ..data.foods import FOODS, ANC_FOOD_RULES
+except Exception:
+    from data.foods import FOODS, ANC_FOOD_RULES
+try:
+    from ..data.drugs import ANTICANCER, ABX_GUIDE
+except Exception:
+    from data.drugs import ANTICANCER, ABX_GUIDE
 def _fmt(k, v):
     try: return f"{k}: {float(v):g}"
     except: return f"{k}: {v}"
