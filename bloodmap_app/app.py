@@ -287,7 +287,7 @@ def main():
         heme_by_cancer = {
             "AML": ["ARA-C","Daunorubicin","Idarubicin","Cyclophosphamide",
                     "Etoposide","Fludarabine","Hydroxyurea","MTX","ATRA","G-CSF"],
-            "APL": ["ATRA","Idarubicin","Daunorubicin","ARA-C","G-CSF"],
+            "APL": ["ATRA","Idarubicin","Daunorubicin","ARA-C","MTX","6-MP","G-CSF"],
             "ALL": ["Vincristine","Asparaginase","Daunorubicin","Cyclophosphamide","MTX","ARA-C","Topotecan","Etoposide"],
             "CML": ["Imatinib","Dasatinib","Nilotinib","Hydroxyurea"],
             "CLL": ["Fludarabine","Cyclophosphamide"],
