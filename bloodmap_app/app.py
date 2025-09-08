@@ -1,9 +1,17 @@
 # -*- coding: utf-8 -*-
 import streamlit as st
-from . import utils
-from .drug_data import solid_targeted, ko
+from pathlib import Path
+try:
+    from . import utils
+    from .drug_data import solid_targeted, ko
+except Exception:
+    # Fallback when run as a script (no package context)
+    import sys, os
+    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+    import utils  # type: ignore
+    from drug_data import solid_targeted, ko  # type: ignore
 
-APP_TITLE = "🩸 피수치 가이드 / BloodMap — v3.14.3 (KST)"
+APP_TITLE = "🩸 피수치 가이드 / BloodMap — v3.14.3b (KST)"
 APP_SIGNATURE = "制作者: Hoya/GPT · 자문: Hoya/GPT"
 RUNNY_OPTIONS = ["없음","흰색","연한색","누런색","피섞임"]
 DYSP_3 = ["적게","조금","심함"]  # 요청: 호흡 난이도 3단계
@@ -131,8 +139,11 @@ def ped_infection():
 def main():
     st.set_page_config(page_title="피수치 가이드 / BloodMap", layout="centered")
     st.title(APP_TITLE)
-    with open(__file__.replace("app.py","style.css").replace("__init__.py","style.css"), "r", encoding="utf-8") as f:
-        st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+    try:
+        css = Path(__file__).with_name("style.css").read_text(encoding="utf-8")
+        st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
+    except Exception:
+        pass
 
     utils.init_state()
     ukey = section_user()
