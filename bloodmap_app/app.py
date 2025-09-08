@@ -186,40 +186,9 @@ if mode == "일반/암":
             extra["Child-Pugh Score/Class"] = f"{sc} ({klass})"
 
     # 암 그룹 & 진단
-    st.subheader("🧬 암 그룹/진단 선택")
-    group = st.selectbox("암 그룹 선택", ["미선택/일반", "혈액암", "고형암", "육종", "희귀암"])
-    cancer = ""
-    if group == "혈액암":
-        heme_display = [
-            "급성 골수성 백혈병(AML)",
-            "급성 전골수구성 백혈병(APL)",
-            "급성 림프모구성 백혈병(ALL)",
-            "만성 골수성 백혈병(CML)",
-            "만성 림프구성 백혈병(CLL)",
-        ]
-        cancer = st.selectbox("혈액암(진단명)", heme_display)
+    
 
-    elif group == "고형암":
-        cancer = st.selectbox("고형암(진단명)", [
-            "폐암(Lung cancer)","유방암(Breast cancer)","위암(Gastric cancer)",
-            "대장암(Colorectal cancer)","간암(HCC)","췌장암(Pancreatic cancer)",
-            "담도암(Cholangiocarcinoma)","자궁내막암(Endometrial cancer)",
-            "구강암/후두암","피부암(흑색종)","신장암(RCC)",
-            "갑상선암","난소암","자궁경부암","전립선암","뇌종양(Glioma)","식도암","방광암"
-        ])
-
-    elif group == "육종":
-        cancer = st.selectbox("육종(진단명)", [
-            "골육종(Osteosarcoma)","연부조직 육종(Soft tissue sarcoma)"
-        ])
-
-    elif group == "희귀암":
-        cancer = st.selectbox("희귀암(진단명)", [
-            "지정 없음(기타)"
-        ])
-
-    # TOP 패널
-    st.subheader("🔲 TOP 패널 (토글로 확장)")
+st.subheader("🔲 TOP 패널 (토글로 확장)")
     auto_open = st.checkbox("자주 쓰는 항목 빠르게 열기", value=True, help="빈혈/전해질/신장/갑상선/염증/지질을 자동으로 표시")
     # 빈혈
     t_anemia = st.checkbox("빈혈 패널", value=auto_open)
@@ -315,49 +284,9 @@ if mode == "일반/암":
         if entered(tc) and entered(hdl) and entered(tg):
             if float(tg) >= 400:
                 st.warning("TG ≥ 400 mg/dL: Friedewald LDL 계산이 비활성화됩니다.")
-            else:
-                ldl = calc_friedewald_ldl(tc, hdl, tg)
-                if ldl is not None:
-                    st.info(f"Friedewald LDL: **{ldl} mg/dL**")
+            
 
-    # 요검사(정성/정량)
-    with st.expander("🧫 요검사(기본) — 정성 + 정량(선택)", expanded=False):
-        cq = st.columns(4)
-        with cq[0]: hematuria_q = st.selectbox("혈뇨(정성)", ["", "+", "++", "+++"], index=0)
-        with cq[1]: proteinuria_q = st.selectbox("단백뇨(정성)", ["", "-", "+", "++"], index=0)
-        with cq[2]: wbc_q = st.selectbox("백혈구(정성)", ["", "-", "+", "++"], index=0)
-        with cq[3]: gly_q = st.selectbox("요당(정성)", ["", "-", "+++"], index=0)
-        _desc_hema = {"+":"소량 검출","++":"중등도 검출","+++":"고농도 검출"}
-        _desc_prot = {"-":"음성","+":"경도 검출","++":"중등도 검출"}
-        _desc_wbc  = {"-":"음성","+":"의심 수준","++":"양성"}
-        _desc_gly  = {"-":"음성","+++":"고농도 검출"}
-        if hematuria_q: extra["혈뇨(정성)"] = f"{hematuria_q} ({_desc_hema.get(hematuria_q,'')})"
-        if proteinuria_q: extra["단백뇨(정성)"] = f"{proteinuria_q} ({_desc_prot.get(proteinuria_q,'')})"
-        if wbc_q: extra["백혈구뇨(정성)"] = f"{wbc_q} ({_desc_wbc.get(wbc_q,'')})"
-        if gly_q: extra["요당(정성)"] = f"{gly_q} ({_desc_gly.get(gly_q,'')})"
-
-        with st.expander("정량(선택) — UPCR/ACR 계산", expanded=False):
-            u_prot = num_input("요단백 (mg/dL)", "ex_upr", 0.1, 1)
-            u_cr   = num_input("소변 Cr (mg/dL)", "ex_ucr", 0.1, 1)
-            u_alb  = num_input("소변 알부민 (mg/L)", "ex_ualb", 0.1, 1)
-            upcr = acr = None
-            if entered(u_cr) and entered(u_prot):
-                upcr = round((u_prot * 1000.0) / float(u_cr), 1)
-                st.info(f"UPCR(요단백/Cr): **{upcr} mg/g** (≈ 1000×[mg/dL]/[mg/dL])")
-            if entered(u_cr) and entered(u_alb):
-                acr = round((u_alb * 100.0) / float(u_cr), 1)
-                st.info(f"ACR(소변 알부민/Cr): **{acr} mg/g** (≈ 100×[mg/L]/[mg/dL])")
-            if acr is not None:
-                extra["ACR(mg/g)"] = acr
-                a, a_label = stage_acr(acr)
-                if a:
-                    st.caption(f"Albuminuria A-stage: **{a}** · {a_label}")
-                    extra["Albuminuria stage"] = f"{a} ({a_label})"
-            if upcr is not None:
-                extra["UPCR(mg/g)"] = upcr
-
-    # 특수 검사 (보체)
-    with st.expander("🧬 특수 검사 (보체)", expanded=False):
+with st.expander("🧬 특수 검사 (보체)", expanded=False):
         col = st.columns(3)
         with col[0]: extra["C3"] = num_input("보체 C3 (mg/dL)", "c3", 1, 0)
         with col[1]: extra["C4"] = num_input("보체 C4 (mg/dL)", "c4", 1, 0)
@@ -410,7 +339,42 @@ if mode == "일반/암":
                     g = float(g)
                     if g < 30: st.error("eGFR < 30: 감량/회피 고려")
                     elif g < 60: st.warning("eGFR 30–59: 주의")
-                    else: st.info("eGFR ≥ 60: 통상 범주")
+                    
+
+st.subheader("🧬 암 그룹/진단 선택")
+    group = st.selectbox("암 그룹 선택", ["미선택/일반", "혈액암", "고형암", "육종", "희귀암"])
+    cancer = ""
+    if group == "혈액암":
+        heme_display = [
+            "급성 골수성 백혈병(AML)",
+            "급성 전골수구성 백혈병(APL)",
+            "급성 림프모구성 백혈병(ALL)",
+            "만성 골수성 백혈병(CML)",
+            "만성 림프구성 백혈병(CLL)",
+        ]
+        cancer = st.selectbox("혈액암(진단명)", heme_display)
+
+    elif group == "고형암":
+        cancer = st.selectbox("고형암(진단명)", [
+            "폐암(Lung cancer)","유방암(Breast cancer)","위암(Gastric cancer)",
+            "대장암(Colorectal cancer)","간암(HCC)","췌장암(Pancreatic cancer)",
+            "담도암(Cholangiocarcinoma)","자궁내막암(Endometrial cancer)",
+            "구강암/후두암","피부암(흑색종)","신장암(RCC)",
+            "갑상선암","난소암","자궁경부암","전립선암","뇌종양(Glioma)","식도암","방광암"
+        ])
+
+    elif group == "육종":
+        cancer = st.selectbox("육종(진단명)", [
+            "골육종(Osteosarcoma)","연부조직 육종(Soft tissue sarcoma)"
+        ])
+
+    elif group == "희귀암":
+        cancer = st.selectbox("희귀암(진단명)", [
+            "지정 없음(기타)"
+        ])
+
+    # TOP 패널
+    else: st.info("eGFR ≥ 60: 통상 범주")
                 except: pass
             if cp:
                 if "C" in str(cp): st.error("Child-Pugh C: 감량/금기 검토")
