@@ -438,7 +438,7 @@ elif group == "림프종":
     st.caption("세포/자가세포치료(CAR-T, 자가이식)는 제외됩니다. 국내 미승인이라도 해외에서 활발히 쓰이는 일부는 참고용으로 회색 표시될 수 있습니다.")
 
         else:
-            st.info("암 그룹을 선택하면 해당 암종에 맞는 **항암제 목록")
+            st.info("암 그룹을 선택하면 해당 암종에 맞는 **항암제 목록과 추가 수치 패널**이 자동 노출됩니다.")
         # ✅ 진단 변경 시 항암제 선택 초기화
         try:
             _dx = f"{group}:{cancer}" if "cancer" in locals() else str(group)
@@ -447,7 +447,6 @@ elif group == "림프종":
                 st.session_state["selected_drugs"] = []
         except Exception:
             pass
-과 추가 수치 패널**이 자동 노출됩니다.")
     elif mode == "소아(일상/호흡기)":
         st.markdown("### 🧒 소아 일상 주제 선택")
         st.caption(PED_INPUTS_INFO)
