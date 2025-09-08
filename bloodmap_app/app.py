@@ -84,7 +84,18 @@ def main():
     if mode == "일반/암":
         group = st.selectbox("암 그룹 선택", ["미선택/일반", "혈액암", "고형암", "소아암", "희귀암"])
         if group == "혈액암":
-            cancer = st.selectbox("혈액암 종류", ["AML","APL","ALL","CML","CLL"])
+        heme_options = [
+            ("AML","급성 골수성 백혈병(AML)"),
+            ("APL","급성 전골수구성 백혈병(APL)"),
+            ("ALL","급성 림프구성 백혈병(ALL)"),
+            ("CML","만성 골수성 백혈병(CML)"),
+            ("CLL","만성 림프구성 백혈병(CLL)"),
+        ]
+        cancer_label = st.selectbox("혈액암 종류", [label for code,label in heme_options])
+        cancer_code = next(code for code,label in heme_options if label == cancer_label)
+        cancer = cancer_label  # display용
+        _heme_code = cancer_code  # 내부 매핑용
+
         elif group == "고형암":
             cancer = st.selectbox("고형암 종류", [
                 "폐암(Lung cancer)","유방암(Breast cancer)","위암(Gastric cancer)",
@@ -107,80 +118,9 @@ def main():
                 "간모세포종(Hepatoblastoma)","비인두암(NPC)","GIST"
             ])
         else:
-            st.info("암 그룹 선택 시 해당 암종 항암제/특수검사 자동 노출.")
-    elif mode == "소아(일상/호흡기)":
-        st.markdown("### 🧒 소아 일상 주제"); st.caption(PED_INPUTS_INFO)
-        ped_topic = st.selectbox("소아 주제", PED_TOPICS)
-    else:
-        
-        st.markdown("### 🧫 소아 감염질환")
-        infect_sel = st.selectbox("질환 선택", list(PED_INFECT.keys()))
-        if HAS_PD:
-            _df = pd.DataFrame([{
-                "핵심": PED_INFECT[infect_sel].get("핵심",""),
-                "진단": PED_INFECT[infect_sel].get("진단",""),
-                "특징": PED_INFECT[infect_sel].get("특징",""),
-            }], index=[infect_sel])
-            st.table(_df)
-        else:
-            st.markdown(f"**{infect_sel}**")
-            _info = PED_INFECT.get(infect_sel, {})
-            st.write("- 핵심:", _info.get("핵심", ""))
-            st.write("- 진단:", _info.get("진단", ""))
-            st.write("- 특징:", _info.get("특징", ""))
-
-    table_mode = st.checkbox("⚙️ PC용 표 모드(가로형)")
-
-    # 2) 약물
-    meds = {}; extras = {}
-    if mode == "일반/암" and group and group != "미선택/일반" and (cancer or sarcoma_sub):
-        st.markdown("### 💊 항암제 선택 및 입력")
-        heme_by_cancer = {
-            "AML": ["ARA-C","Daunorubicin","Idarubicin","Cyclophosphamide","Etoposide","Fludarabine","Hydroxyurea","MTX","ATRA","G-CSF"],
-            "APL": ["ATRA","Idarubicin","Daunorubicin","ARA-C","G-CSF","MTX","6-MP"],  # MTX/6-MP 포함
-            "ALL": ["Vincristine","Asparaginase","Daunorubicin","Cyclophosphamide","MTX","ARA-C","Topotecan","Etoposide"],
-            "CML": ["Imatinib","Dasatinib","Nilotinib","Hydroxyurea"],
-            "CLL": ["Fludarabine","Cyclophosphamide","Rituximab"],
-        }
-        solid_by_cancer = {
-            "폐암(Lung cancer)": ["Cisplatin","Carboplatin","Paclitaxel","Docetaxel","Gemcitabine","Pemetrexed","Gefitinib","Erlotinib","Osimertinib","Alectinib","Bevacizumab","Pembrolizumab","Nivolumab"],
-            "유방암(Breast cancer)": ["Doxorubicin","Cyclophosphamide","Paclitaxel","Docetaxel","Trastuzumab","Bevacizumab"],
-            "위암(Gastric cancer)": ["Cisplatin","Oxaliplatin","5-FU","Capecitabine","Paclitaxel","Trastuzumab","Pembrolizumab"],
-            "대장암(Cololoractal cancer)": ["5-FU","Capecitabine","Oxaliplatin","Irinotecan","Bevacizumab"],
-            "간암(HCC)": ["Sorafenib","Lenvatinib","Bevacizumab","Pembrolizumab","Nivolumab"],
-            "췌장암(Pancreatic cancer)": ["Gemcitabine","Oxaliplatin","Irinotecan","5-FU"],
-            "담도암(Cholangiocarcinoma)": ["Gemcitabine","Cisplatin","Bevacizumab"],
-            "자궁내막암(Endometrial cancer)": ["Carboplatin","Paclitaxel"],
-            "구강암/후두암": ["Cisplatin","5-FU","Docetaxel"],
-            "피부암(흑색종)": ["Dacarbazine","Paclitaxel","Nivolumab","Pembrolizumab"],
-            "육종(Sarcoma)": ["Doxorubicin","Ifosfamide","Pazopanib"],
-            "신장암(RCC)": ["Sunitinib","Pazopanib","Bevacizumab","Nivolumab","Pembrolizumab"],
-            "갑상선암": ["Lenvatinib","Sorafenib"],
-            "난소암": ["Carboplatin","Paclitaxel","Bevacizumab"],
-            "자궁경부암": ["Cisplatin","Paclitaxel","Bevacizumab"],
-            "전립선암": ["Docetaxel","Cabazitaxel"],
-            "뇌종양(Glioma)": ["Temozolomide","Bevacizumab"],
-            "식도암": ["Cisplatin","5-FU","Paclitaxel","Nivolumab","Pembrolizumab"],
-            "방광암": ["Cisplatin","Gemcitabine","Bevacizumab","Pembrolizumab","Nivolumab"],
-        }
-        rare_by_cancer = {
-            "담낭암(Gallbladder cancer)": ["Gemcitabine","Cisplatin"],
-            "부신암(Adrenal cancer)": ["Mitotane","Etoposide","Doxorubicin","Cisplatin"],
-            "망막모세포종(Retinoblastoma)": ["Vincristine","Etoposide","Carboplatin"],
-            "흉선종/흉선암(Thymoma/Thymic carcinoma)": ["Cyclophosphamide","Doxorubicin","Cisplatin"],
-            "신경내분비종양(NET)": ["Etoposide","Cisplatin","Sunitinib"],
-            "간모세포종(Hepatoblastoma)": ["Cisplatin","Doxorubicin"],
-            "비인두암(NPC)": ["Cisplatin","5-FU","Gemcitabine","Bevacizumab","Nivolumab","Pembrolizumab"],
-            "GIST": ["Imatinib","Sunitinib","Regorafenib"],
-        }
-
-        if cancer == "육종(Sarcoma)" and sarcoma_sub:
-            base = ["Doxorubicin","Ifosfamide"]
-            if "횡문근육종" in sarcoma_sub: base = ["Vincristine","Ifosfamide","Doxorubicin"]
-            drug_list = base
-        else:
+            key_cancer = _heme_code if (group == "혈액암" and "_heme_code" in locals()) else cancer
             default_by_group = {
-                "혈액암": heme_by_cancer.get(cancer, []),
+                "혈액암": heme_by_cancer.get(key_cancer, []),
                 "고형암": solid_by_cancer.get(cancer, []),
                 "소아암": ["Cyclophosphamide","Ifosfamide","Doxorubicin","Vincristine","Etoposide","Carboplatin","Cisplatin","Topotecan","Irinotecan"],
                 "희귀암": rare_by_cancer.get(cancer, []),
@@ -283,7 +223,7 @@ def main():
             "식도암": [("SCC Ag","SCC antigen","ng/mL",1),("CEA","CEA","ng/mL",1)],
             "방광암": [("NMP22","NMP22","U/mL",1),("UBC","UBC","µg/L",1)],
         }
-        items = items_map.get(cancer, [])
+        items = items_map.get(( _heme_code if "_heme_code" in locals() else cancer), [])
         if cancer == "육종(Sarcoma)" and sarcoma_sub:
             if "골육종" in sarcoma_sub: items = [("ALP","ALP","U/L",0)]
             elif "횡문근육종" in sarcoma_sub: items = [("CK","CK","U/L",0)]
