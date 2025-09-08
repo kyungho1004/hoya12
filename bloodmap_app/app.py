@@ -4,6 +4,16 @@ from datetime import datetime, date
 import os
 import streamlit as st
 
+# ---- Optional pandas (global) ----
+_pd = None
+HAS_PD = False
+try:
+    import pandas as _pd  # noqa: F401
+    HAS_PD = True
+except Exception:
+    _pd = None
+    HAS_PD = False
+
 # --- Import compatibility: package or direct-run ---
 try:
     from .config import (APP_TITLE, PAGE_TITLE, MADE_BY, CAFE_LINK_MD, FOOTER_CAFE,
@@ -32,16 +42,10 @@ except Exception:
     from utils.graphs import render_graphs
     from utils.schedule import render_schedule
 
-try:
-    import pandas as _pd
-    HAS_PD = True
-except Exception:
-    _pd = None
-    HAS_PD = False
-
 def main():
     st.set_page_config(page_title=PAGE_TITLE, layout="centered")
     st.title(APP_TITLE); st.markdown(MADE_BY); st.markdown(CAFE_LINK_MD)
+    st.caption("✅ 앱 로드됨")
 
     # 스타일
     try:
@@ -108,7 +112,7 @@ def main():
     else:
         st.markdown("### 🧫 소아 감염질환")
         infect_sel = st.selectbox("질환 선택", list(PED_INFECT.keys()))
-        if HAS_PD:
+        if HAS_PD and (_pd is not None):
             _df = _pd.DataFrame([{
                 "핵심": PED_INFECT[infect_sel].get("핵심",""),
                 "진단": PED_INFECT[infect_sel].get("진단",""),
@@ -304,7 +308,6 @@ def main():
             if danger: st.error("🚑 즉시 병원/응급실 — " + ", ".join(notes))
             elif urgent: st.warning("⚠️ 빠른 진료 필요 — " + ", ".join(notes))
             else: st.success("🙂 가정관리 가능 신호. 변화 시 즉시 상의.")
-        # placeholders if not defined
         for n in ["age_m","temp_c","rr","spo2","urine_24h","retraction","nasal_flaring","apnea"]:
             if n not in locals(): locals()[n] = None
         ped_banner(locals()["age_m"], locals()["temp_c"], locals()["rr"], locals()["spo2"],
@@ -410,8 +413,8 @@ def main():
             rows=[]
             for k, v in ANTICANCER.items():
                 rows.append({"약물":k,"한글명":v.get("alias",""),"부작용":", ".join(v.get("aes",[]))})
-            if HAS_PD:
-                df = __pd.DataFrame(rows); q = st.text_input("🔎 검색", key="drug_search_ac")
+            if HAS_PD and (_pd is not None):
+                df = _pd.DataFrame(rows); q = st.text_input("🔎 검색", key="drug_search_ac")
                 if q: 
                     ql=q.lower()
                     df = df[df.apply(lambda r: any(ql in str(x).lower() for x in r.values), axis=1)]
@@ -421,8 +424,8 @@ def main():
                     st.markdown(f"**{r['약물']}** · {r['한글명']} — {r['부작용']}")
         with view_tab2:
             rows=[{"계열":k,"주의사항":", ".join(v)} for k,v in ABX_GUIDE.items()]
-            if HAS_PD:
-                df = __pd.DataFrame(rows); q = st.text_input("🔎 검색", key="drug_search_abx")
+            if HAS_PD and (_pd is not None):
+                df = _pd.DataFrame(rows); q = st.text_input("🔎 검색", key="drug_search_abx")
                 if q:
                     ql=q.lower()
                     df = df[df.apply(lambda r: any(ql in str(x).lower() for x in r.values), axis=1)]
