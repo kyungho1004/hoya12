@@ -382,8 +382,72 @@ def main():
                 "흉선종/흉선암(Thymoma/Thymic carcinoma)","신경내분비종양(NET)",
                 "간모세포종(Hepatoblastoma)","비인두암(NPC)","GIST"
             ])
+        
+elif group == "림프종":
+    st.subheader("림프종 진단 / 약물 선택")
+    lymph_display = [
+        "미만성 거대 B세포 림프종(DLBCL)",
+        "원발 종격동 B세포 림프종(PMBCL)",
+        "여포성 림프종 1-2등급(FL 1-2)",
+        "여포성 림프종 3A(FL 3A)",
+        "여포성 림프종 3B(FL 3B)",
+        "외투세포 림프종(MCL)",
+        "변연대 림프종(MZL)",
+        "고등급 B세포 림프종(HGBL)",
+        "버킷 림프종(Burkitt)",
+    ]
+    cancer = st.selectbox("림프종(진단명)", lymph_display)
+
+    # 기본 항암제/표적 리스트(세포/자가치료 제외)
+    base_choices = [
+        # 1차/변형
+        "R-CHOP","Pola-R-CHP","DA-EPOCH-R",
+        # 구제
+        "R-ICE","R-DHAP","R-GDP","R-GemOx","R-ESHAP",
+        # 표적/항체·ADC·면역
+        "Pola-BR","Tafasitamab + Lenalidomide","Loncastuximab",
+        "Glofitamab","Epcoritamab","Selinexor",
+    ]
+    # PMBCL 전용(국내 미승인, 해외 활발 사용: 참고용)
+    pmbcl_only = ["Pembrolizumab (PMBCL; 해외 활발 사용, 국내 미승인)"]
+
+    # DLBCL/FL/MCL 등 세부별 가중(필요 시 정렬만 바꿔줌)
+    if "PMBCL" in cancer:
+        drug_choices = ["DA-EPOCH-R"] + base_choices + pmbcl_only
+    elif "DLBCL" in cancer or "HGBL" in cancer or "3B" in cancer:
+        drug_choices = ["R-CHOP","Pola-R-CHP","DA-EPOCH-R"] + base_choices
+    elif "3A" in cancer:
+        drug_choices = ["R-CHOP","Pola-R-CHP"] + [x for x in base_choices if x not in ["DA-EPOCH-R"]]
+    elif "FL 1-2" in cancer or "1-2" in cancer:
+        drug_choices = ["BR","R-CVP"] + base_choices
+    elif "MCL" in cancer:
+        drug_choices = ["BR","R-CHOP"] + base_choices + ["Ibrutinib (R/R)", "Acalabrutinib (R/R)", "Zanubrutinib (R/R)"]
+    elif "MZL" in cancer:
+        drug_choices = ["BR","R-CVP"] + base_choices
+    elif "Burkitt" in cancer:
+        drug_choices = ["CODOX-M/IVAC-R","Hyper-CVAD-R"] + base_choices
+    else:
+        drug_choices = base_choices
+
+    # ✅ 기본값-옵션 교집합으로 보호
+    _def = st.session_state.get("selected_drugs", [])
+    if isinstance(_def, str):
+        _def = [_def]
+    _def = [x for x in _def if x in drug_choices]
+    selected_drugs = st.multiselect("항암제 선택", drug_choices, default=_def, key="selected_drugs")
+    st.caption("세포/자가세포치료(CAR-T, 자가이식)는 제외됩니다. 국내 미승인이라도 해외에서 활발히 쓰이는 일부는 참고용으로 회색 표시될 수 있습니다.")
+
         else:
-            st.info("암 그룹을 선택하면 해당 암종에 맞는 **항암제 목록과 추가 수치 패널**이 자동 노출됩니다.")
+            st.info("암 그룹을 선택하면 해당 암종에 맞는 **항암제 목록")
+        # ✅ 진단 변경 시 항암제 선택 초기화
+        try:
+            _dx = f"{group}:{cancer}" if "cancer" in locals() else str(group)
+            if st.session_state.get("dx_key") != _dx:
+                st.session_state["dx_key"] = _dx
+                st.session_state["selected_drugs"] = []
+        except Exception:
+            pass
+과 추가 수치 패널**이 자동 노출됩니다.")
     elif mode == "소아(일상/호흡기)":
         st.markdown("### 🧒 소아 일상 주제 선택")
         st.caption(PED_INPUTS_INFO)
@@ -597,7 +661,12 @@ def main():
             st.session_state["selected_drugs"] = list(dict.fromkeys(cur + preset_map.get(preset, [])))
         drug_search = st.text_input("🔍 항암제 검색", key="drug_search")
         drug_choices = [d for d in drug_list if not drug_search or drug_search.lower() in d.lower() or drug_search.lower() in ANTICANCER.get(d,{}).get("alias","").lower()]
-        selected_drugs = st.multiselect("항암제 선택", drug_choices, default=st.session_state.get("selected_drugs", []), key="selected_drugs")
+        # ✅ 기본값이 옵션에 없으면 Streamlit이 에러를 내므로, 교집합만 유지
+        _def = st.session_state.get("selected_drugs", [])
+        if isinstance(_def, str):
+            _def = [_def]
+        _def = [x for x in _def if x in drug_choices]
+        selected_drugs = st.multiselect("항암제 선택", drug_choices, default=_def, key="selected_drugs")
 
         for d in selected_drugs:
             alias = ANTICANCER.get(d,{}).get("alias","")
