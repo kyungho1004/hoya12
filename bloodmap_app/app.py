@@ -434,12 +434,21 @@ def main():
 
         with st.expander("🧒 증상 체크리스트", expanded=True):
             sel_sym = []
-            # --- Robust fallback for missing symptom lists ---
-            base_sym = PED_SYMPTOMS.get(infect_sel)
+            name_l = (infect_sel or "").lower()
+            # 질환별 간단 체크리스트 (없으면 공통 기본)
+            base_sym = None
+            if ("아데노" in name_l) or ("adeno" in name_l) or ("pcf" in name_l):
+                base_sym = ["발열","결막 충혈","눈곱","인후통"]
+            elif ("파라" in name_l) or ("parainfluenza" in name_l):
+                base_sym = ["발열","기침","콧물"]
+            elif ("로타" in name_l) or ("rotavirus" in name_l) or ("노로" in name_l) or ("norovirus" in name_l):
+                base_sym = ["설사","구토","탈수 의심"]
+            elif ("rsv" in name_l):
+                base_sym = ["쌕쌕거림(천명)","흉곽 함몰","무호흡"]
+            elif ("인플루엔자" in name_l) or ("influenza" in name_l) or ("독감" in name_l):
+                base_sym = ["고열(≥38.5℃)","근육통/전신통","기침"]
             if not base_sym:
-                base_sym = PED_SYMPTOMS.get("공통")
-            if not base_sym:
-                base_sym = ["발열", "기침", "콧물", "인후통", "복통", "구토", "설사", "발진", "무기력", "호흡곤란"]
+                base_sym = PED_SYMPTOMS.get(infect_sel) or PED_SYMPTOMS.get("공통") or ["발열","기침","콧물"]
             for i, s in enumerate(base_sym):
                 if st.checkbox(s, key=f"sym_{infect_sel}_{i}"):
                     sel_sym.append(s)
@@ -449,6 +458,7 @@ def main():
                 for i, r in enumerate(reds):
                     st.checkbox(r, key=f"red_{infect_sel}_{i}")
         st.session_state["infect_symptoms"] = sel_sym
+
 
 
     table_mode = st.checkbox("⚙️ PC용 표 모드(가로형)", help="모바일은 세로형 고정 → 줄꼬임 없음.")
@@ -637,6 +647,12 @@ def main():
         retraction   = _parse_num_ped("흉곽 함몰(0/1)", key="ped_ret", decimals=0, placeholder="0 또는 1")
         nasal_flaring= _parse_num_ped("콧벌렁임(0/1)", key="ped_nf", decimals=0, placeholder="0 또는 1")
         apnea        = _parse_num_ped("무호흡(0/1)", key="ped_ap", decimals=0, placeholder="0 또는 1")
+
+        # 👶 간단 증상 입력(보호자 친화)
+        with st.expander("👶 증상(간단 선택)", expanded=True):
+            runny = st.selectbox("콧물", ["없음","흰색","노란색","피섞임"], key="ped_runny")
+            cough_sev = st.selectbox("기침", ["없음","조금","보통","심함"], key="ped_cough_sev")
+            st.session_state["ped_simple_sym"] = {"콧물": runny, "기침": cough_sev}
 
         with st.expander("👀 보호자 관찰 체크리스트", expanded=False):
             obs = {}
