@@ -33,7 +33,6 @@ except Exception:
     from utils.schedule import render_schedule
 
 try:
-    import pandas as pd
     HAS_PD = True
 except Exception:
     HAS_PD = False
@@ -410,7 +409,6 @@ def main():
             for k, v in ANTICANCER.items():
                 rows.append({"약물":k,"한글명":v.get("alias",""),"부작용":", ".join(v.get("aes",[]))})
             if HAS_PD:
-                import pandas as pd
                 df = pd.DataFrame(rows); q = st.text_input("🔎 검색", key="drug_search_ac")
                 if q: 
                     ql=q.lower()
@@ -422,7 +420,6 @@ def main():
         with view_tab2:
             rows=[{"계열":k,"주의사항":", ".join(v)} for k,v in ABX_GUIDE.items()]
             if HAS_PD:
-                import pandas as pd
                 df = pd.DataFrame(rows); q = st.text_input("🔎 검색", key="drug_search_abx")
                 if q:
                     ql=q.lower()
