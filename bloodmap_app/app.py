@@ -107,7 +107,7 @@ def main():
         st.markdown("### 🧫 소아 감염질환")
         infect_sel = st.selectbox("질환 선택", list(PED_INFECT.keys()))
         if HAS_PD:
-            _df = _pd.DataFrame([{
+            _df = __pd.DataFrame([{
                 "핵심": PED_INFECT[infect_sel].get("핵심",""),
                 "진단": PED_INFECT[infect_sel].get("진단",""),
                 "특징": PED_INFECT[infect_sel].get("특징",""),
@@ -409,7 +409,7 @@ def main():
             for k, v in ANTICANCER.items():
                 rows.append({"약물":k,"한글명":v.get("alias",""),"부작용":", ".join(v.get("aes",[]))})
             if HAS_PD:
-                df = __pd.DataFrame(rows); q = st.text_input("🔎 검색", key="drug_search_ac")
+                df = ___pd.DataFrame(rows); q = st.text_input("🔎 검색", key="drug_search_ac")
                 if q: 
                     ql=q.lower()
                     df = df[df.apply(lambda r: any(ql in str(x).lower() for x in r.values), axis=1)]
@@ -420,7 +420,7 @@ def main():
         with view_tab2:
             rows=[{"계열":k,"주의사항":", ".join(v)} for k,v in ABX_GUIDE.items()]
             if HAS_PD:
-                df = __pd.DataFrame(rows); q = st.text_input("🔎 검색", key="drug_search_abx")
+                df = ___pd.DataFrame(rows); q = st.text_input("🔎 검색", key="drug_search_abx")
                 if q:
                     ql=q.lower()
                     df = df[df.apply(lambda r: any(ql in str(x).lower() for x in r.values), axis=1)]
