@@ -1,0 +1,4 @@
+실행 방법
+1) Python 3.10+ 권장, `pip install streamlit` 설치
+2) 터미널에서 `streamlit run app.py` 실행
+3) 모바일 줄꼬임 방지, 별명#PIN 기반 저장/그래프 사용 가능
