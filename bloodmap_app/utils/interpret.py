@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 from .inputs import entered
-from ..config import (ORDER, LBL_Hb, LBL_ANC, LBL_Alb, LBL_CRP, LBL_Glu)
+try:
+    from ..config import (ORDER, LBL_Hb, LBL_ANC, LBL_Alb, LBL_CRP, LBL_Glu)
+except Exception:
+    from config import (ORDER, LBL_Hb, LBL_ANC, LBL_Alb, LBL_CRP, LBL_Glu)
 from ..data.foods import FOODS, ANC_FOOD_RULES
 from ..data.drugs import ANTICANCER, ABX_GUIDE
 

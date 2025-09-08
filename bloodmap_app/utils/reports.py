@@ -42,7 +42,10 @@ def md_to_pdf_bytes_fontlocked(md_text: str):
         from reportlab.pdfgen import canvas
         from reportlab.pdfbase import pdfmetrics
         from reportlab.pdfbase.ttfonts import TTFont
+        try:
         from ..config import FONT_PATH_REG
+    except Exception:
+        from config import FONT_PATH_REG
         pdfmetrics.registerFont(TTFont("NanumGothic", FONT_PATH_REG))
         buf = BytesIO(); c = canvas.Canvas(buf, pagesize=A4)
         width, height = A4; x, y = 40, height-40
