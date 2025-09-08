@@ -258,7 +258,13 @@ def main():
         st.info(f"핵심: {info.get('핵심','')} · 진단: {info.get('진단','')} · 특징: {info.get('특징','')}")
         with st.expander("🧒 증상 체크리스트", expanded=True):
             sel_sym = []
-            for i, s in enumerate(PED_SYMPTOMS.get(infect_sel, [])):
+            # --- Robust fallback for missing symptom lists ---
+            base_sym = PED_SYMPTOMS.get(infect_sel)
+            if not base_sym:
+                base_sym = PED_SYMPTOMS.get("공통")
+            if not base_sym:
+                base_sym = ["발열", "기침", "콧물", "인후통", "복통", "구토", "설사", "발진", "무기력", "호흡곤란"]
+            for i, s in enumerate(base_sym):
                 if st.checkbox(s, key=f"sym_{infect_sel}_{i}"):
                     sel_sym.append(s)
             reds = list(set(PED_RED_FLAGS.get("공통", []) + PED_RED_FLAGS.get(infect_sel, [])))
@@ -267,6 +273,7 @@ def main():
                 for i, r in enumerate(reds):
                     st.checkbox(r, key=f"red_{infect_sel}_{i}")
         st.session_state["infect_symptoms"] = sel_sym
+
 
     table_mode = st.checkbox("⚙️ PC용 표 모드(가로형)", help="모바일은 세로형 고정 → 줄꼬임 없음.")
 
