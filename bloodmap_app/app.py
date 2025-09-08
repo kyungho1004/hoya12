@@ -145,6 +145,74 @@ def calc_homa_ir(glu_fasting, insulin):
     except Exception:
         return None
 
+
+def stage_egfr(egfr):
+    """Return (stage, label) per KDIGO based on eGFR (mL/min/1.73m²)."""
+    try:
+        e = float(egfr)
+    except Exception:
+        return None, None
+    if e >= 90:   return "G1", "정상/고정상 (≥90)"
+    if 60 <= e < 90:  return "G2", "경도 감소 (60–89)"
+    if 45 <= e < 60:  return "G3a", "중등도 감소 (45–59)"
+    if 30 <= e < 45:  return "G3b", "중등도~중증 감소 (30–44)"
+    if 15 <= e < 30:  return "G4", "중증 감소 (15–29)"
+    return "G5", "신부전 (<15)"
+
+def stage_acr(acr_mg_g):
+    """Return (stage, label) A1/A2/A3 based on UACR mg/g."""
+    try:
+        a = float(acr_mg_g)
+    except Exception:
+        return None, None
+    if a < 30: return "A1", "정상-경도 증가 (<30 mg/g)"
+    if a <= 300: return "A2", "중등도 증가 (30–300 mg/g)"
+    return "A3", "중증 증가 (>300 mg/g)"
+
+def child_pugh_score(albumin, bilirubin, inr, ascites, enceph):
+    """
+    albumin g/dL, bilirubin mg/dL, inr float,
+    ascites: '없음','경미','중증'
+    enceph: '없음','경미','중증'
+    Return (score, klass[A/B/C]).
+    """
+    def _alb(a):
+        try:
+            a=float(a)
+        except Exception:
+            return 0
+        if a > 3.5: return 1
+        if 2.8 <= a <= 3.5: return 2
+        return 3
+    def _tb(b):
+        try:
+            b=float(b)
+        except Exception:
+            return 0
+        if b < 2: return 1
+        if 2 <= b <= 3: return 2
+        return 3
+    def _inr(x):
+        try:
+            x=float(x)
+        except Exception:
+            return 0
+        if x < 1.7: return 1
+        if 1.7 <= x <= 2.3: return 2
+        return 3
+    def _cat(v):
+        if v == "없음": return 1
+        if v == "경미": return 2
+        if v == "중증": return 3
+        return 0
+    s = _alb(albumin) + _tb(bilirubin) + _inr(inr) + _cat(ascites) + _cat(enceph)
+    if s == 0:
+        return 0, None
+    if 5 <= s <= 6: k="A"
+    elif 7 <= s <= 9: k="B"
+    else: k="C"
+    return s, k
+
 def calc_egfr(creatinine, age=60, sex="F"):
     try:
         scr = float(creatinine)
@@ -344,9 +412,22 @@ def main():
 
     if mode == "일반/암":
         st.markdown("### 💊 항암제 선택 및 입력")
+        # Regimen presets
+        preset = st.selectbox("레짐 프리셋", ["없음","APL(ATRA+ATO)","유방 AC-T","대장 FOLFOX","대장 FOLFIRI","림프종 CHOP"], index=0, help="선택 후 '프리셋 적용'을 누르면 아래 항암제 선택에 반영됩니다.")
+        if st.button("프리셋 적용"):
+            preset_map = {
+                "없음": [],
+                "APL(ATRA+ATO)": ["ATRA","Arsenic trioxide","Idarubicin"],
+                "유방 AC-T": ["Doxorubicin","Cyclophosphamide","Paclitaxel"],
+                "대장 FOLFOX": ["Oxaliplatin","5-FU","Leucovorin"],
+                "대장 FOLFIRI": ["Irinotecan","5-FU","Leucovorin"],
+                "림프종 CHOP": ["Cyclophosphamide","Doxorubicin","Vincristine","Prednisolone"],
+            }
+            cur = st.session_state.get("selected_drugs", [])
+            st.session_state["selected_drugs"] = list(dict.fromkeys(cur + preset_map.get(preset, [])))
         drug_search = st.text_input("🔍 항암제 검색", key="drug_search")
         drug_choices = [d for d in drug_list if not drug_search or drug_search.lower() in d.lower() or drug_search.lower() in ANTICANCER.get(d,{}).get("alias","").lower()]
-        selected_drugs = st.multiselect("항암제 선택", drug_choices, default=[])
+        selected_drugs = st.multiselect("항암제 선택", drug_choices, default=st.session_state.get("selected_drugs", []), key="selected_drugs")
 
         for d in selected_drugs:
             alias = ANTICANCER.get(d,{}).get("alias","")
@@ -420,6 +501,18 @@ def main():
             render_inputs_table()
         else:
             render_inputs_vertical()
+        # 이전 기록 불러오기
+        if nickname_key and st.session_state.records.get(nickname_key):
+            if st.button("↩️ 이전 기록 불러오기", help="같은 별명#PIN의 가장 최근 수치를 현재 폼에 채웁니다."):
+                last = st.session_state.records[nickname_key][-1]
+                labs = last.get("labs", {})
+                # 채울 수 있는 현재 입력 key를 찾아 값 넣기
+                for lab, val in labs.items():
+                    for pref in ("v_", "l_", "r_"):
+                        k = f"{pref}{lab}"
+                        if k in st.session_state:
+                            st.session_state[k] = val
+                st.success("이전 기록을 폼에 채웠습니다.")
     elif mode == "소아(일상/호흡기)":
         def _parse_num_ped(label, key, decimals=1, placeholder=""):
             raw = st.text_input(label, key=key, placeholder=placeholder)
@@ -464,30 +557,56 @@ def main():
             extra_vals["CH50"] = num_input_generic("CH50 (U/mL)", key="ex_ch50", decimals=1, placeholder="예: 50")
 
         if t_urine_basic:
-            st.markdown("**요검사(기본)** — (영문명 병기)")
-            u_prot = num_input_generic("요단백(Urine protein, mg/dL)", key="ex_upr", decimals=1, placeholder="예: 30")
-            u_bld  = num_input_generic("잠혈(Hematuria, 0/1 또는 RBC/hpf)", key="ex_ubld", decimals=1, placeholder="예: 0")
-            u_glu  = num_input_generic("요당(Glycosuria, mg/dL)", key="ex_uglu", decimals=1, placeholder="예: 0")
-            u_cr   = num_input_generic("소변 크레아티닌(Urine Cr, mg/dL)", key="ex_ucr", decimals=1, placeholder="예: 100")
-            u_alb  = num_input_generic("소변 알부민(Urine albumin, mg/L)", key="ex_ualb", decimals=1, placeholder="예: 30")
-            upcr = acr = None
-            if u_cr and u_prot:
-                upcr = round((u_prot * 1000.0) / float(u_cr), 1)
-                st.info(f"UPCR(요단백/Cr): **{upcr} mg/g** (≈ 1000×[mg/dL]/[mg/dL])")
-            if u_cr and u_alb:
-                acr = round((u_alb * 100.0) / float(u_cr), 1)
-                st.info(f"ACR(소변 알부민/Cr): **{acr} mg/g** (≈ 100×[mg/L]/[mg/dL])")
-            if acr is not None:
-                extra_vals["ACR(mg/g)"] = acr
-            if upcr is not None:
-                extra_vals["UPCR(mg/g)"] = upcr
-            extra_vals["Urine protein"] = u_prot
-            extra_vals["Hematuria"] = u_bld
-            extra_vals["Glycosuria"] = u_glu
-            extra_vals["Urine Cr"] = u_cr
-            extra_vals["Urine albumin"] = u_alb
+            st.markdown("**요검사(기본)** — 정성 + 정량(선택)")
+            # 정성(스트립) 결과
+            cq = st.columns(4)
+            with cq[0]:
+                hematuria_q = st.selectbox("혈뇨(정성)", ["", "+", "++", "+++"], index=0)
+            with cq[1]:
+                proteinuria_q = st.selectbox("단백뇨(정성)", ["", "-", "+", "++"], index=0)
+            with cq[2]:
+                wbc_q = st.selectbox("백혈구(정성)", ["", "-", "+", "++"], index=0)
+            with cq[3]:
+                gly_q = st.selectbox("요당(정성)", ["", "-", "+++"], index=0)
 
-        if t_lipid_basic:
+            # 설명 매핑
+            _desc_hema = {"+":"소량 검출","++":"중등도 검출","+++":"고농도 검출"}
+            _desc_prot = {"-":"음성","+":"경도 검출","++":"중등도 검출"}
+            _desc_wbc  = {"-":"음성","+":"의심 수준","++":"양성"}
+            _desc_gly  = {"-":"음성","+++":"고농도 검출"}
+
+            if hematuria_q:
+                extra_vals["혈뇨(정성)"] = f"{hematuria_q} ({_desc_hema.get(hematuria_q,'')})"
+            if proteinuria_q:
+                extra_vals["단백뇨(정성)"] = f"{proteinuria_q} ({_desc_prot.get(proteinuria_q,'')})"
+            if wbc_q:
+                extra_vals["백혈구뇨(정성)"] = f"{wbc_q} ({_desc_wbc.get(wbc_q,'')})"
+            if gly_q:
+                extra_vals["요당(정성)"] = f"{gly_q} ({_desc_gly.get(gly_q,'')})"
+
+            # 정량(선택): UPCR/ACR 계산용
+            with st.expander("정량(선택) — UPCR/ACR 계산", expanded=False):
+                u_prot = num_input_generic("요단백 (mg/dL)", key="ex_upr", decimals=1, placeholder="예: 30")
+                u_cr   = num_input_generic("소변 Cr (mg/dL)", key="ex_ucr", decimals=1, placeholder="예: 100")
+                u_alb  = num_input_generic("소변 알부민 (mg/L)", key="ex_ualb", decimals=1, placeholder="예: 30")
+                upcr = acr = None
+                if u_cr and u_prot:
+                    upcr = round((u_prot * 1000.0) / float(u_cr), 1)
+                    st.info(f"UPCR(요단백/Cr): **{upcr} mg/g** (≈ 1000×[mg/dL]/[mg/dL])")
+                if u_cr and u_alb:
+                    acr = round((u_alb * 100.0) / float(u_cr), 1)
+                    st.info(f"ACR(소변 알부민/Cr): **{acr} mg/g** (≈ 100×[mg/L]/[mg/dL])")
+                if acr is not None:
+                    extra_vals["ACR(mg/g)"] = acr
+                    a, a_label = stage_acr(acr)
+                    if a:
+                        st.caption(f"Albuminuria A-stage: **{a}** · {a_label}")
+                        extra_vals["Albuminuria stage"] = f"{a} ({a_label})"
+                if upcr is not None:
+                    extra_vals["UPCR(mg/g)"] = upcr
+                extra_vals["Urine Cr"] = u_cr
+                extra_vals["Urine albumin"] = u_alb
+if t_lipid_basic:
             st.markdown("**지질(기본)**")
             extra_vals["TG"] = num_input_generic("Triglyceride (mg/dL)", key="ex_tg", decimals=0, placeholder="예: 150")
             extra_vals["TC"] = num_input_generic("Total Cholesterol (mg/dL)", key="ex_tc", decimals=0, placeholder="예: 180")
@@ -527,6 +646,7 @@ def main():
             ca_corr = calc_corrected_ca(vals.get(LBL_Ca), vals.get(LBL_Alb))
             if ca_corr is not None:
                 st.info(f"보정 칼슘(Alb 반영): **{ca_corr} mg/dL**")
+                st.caption("공식: Ca + 0.8×(4.0 - Alb), mg/dL 기준")
                 extra_vals["Corrected Ca"] = ca_corr
 
         if t_kidney:
@@ -537,6 +657,11 @@ def main():
             if egfr is not None:
                 st.info(f"eGFR(자동계산): **{egfr} mL/min/1.73m²**")
                 extra_vals["eGFR"] = egfr
+                g, g_label = stage_egfr(egfr)
+                if g:
+                    st.caption(f"CKD G-stage: **{g}** · {g_label}")
+                    extra_vals["CKD G-stage"] = f"{g} ({g_label})"
+
             # UACR/UPCR는 위 '요검사(기본)'에 포함
 
         if t_thy:
@@ -561,6 +686,7 @@ def main():
                 homa = calc_homa_ir(glu_f, insulin) if glu_f and insulin else None
                 if homa is not None:
                     st.info(f"HOMA-IR: **{homa}**")
+                    st.caption("HOMA-IR = (공복혈당×인슐린)/405")
                     extra_vals["HOMA-IR"] = homa
 
         if t_lipidx:
@@ -569,6 +695,11 @@ def main():
             hdl = num_input_generic("HDL-C (mg/dL)", key="lx_hdl", decimals=0, placeholder="예: 50")
             tg  = extra_vals.get("TG") or num_input_generic("Triglyceride (mg/dL)", key="lx_tg", decimals=0, placeholder="예: 120")
             ldl_fw = calc_friedewald_ldl(tc, hdl, tg)
+            try:
+                if tg is not None and float(tg) >= 400:
+                    st.warning("TG ≥ 400 mg/dL: Friedewald LDL 계산이 비활성화됩니다.")
+            except Exception:
+                pass
             non_hdl = calc_non_hdl(tc, hdl) if tc and hdl else None
             if non_hdl is not None:
                 st.info(f"Non-HDL-C: **{non_hdl} mg/dL**")
@@ -701,7 +832,10 @@ def main():
         cmp_lines = compare_with_previous(nickname_key, {k: vals.get(k) for k in ORDER if entered(vals.get(k))}) if (mode=="일반/암") else []
         food_lines = food_suggestions(vals, anc_place) if (mode=="일반/암") else []
 
+        a4_opt = st.checkbox("🖨️ A4 프린트 최적화(섹션 구분선 추가)", value=True)
         report_md = build_report(mode, meta, {k: v for k, v in vals.items() if entered(v)}, cmp_lines, extra_vals, meds_lines, food_lines, abx_lines)
+        if a4_opt:
+            report_md = report_md.replace("### ", "\n\n---\n\n### ")
 
         st.download_button("📥 보고서(.md) 다운로드", data=report_md.encode("utf-8"),
                            file_name=f"bloodmap_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
@@ -742,6 +876,10 @@ def main():
 
     st.caption(FOOTER_CAFE)
     st.markdown("> " + DISCLAIMER)
+    try:
+        st.caption(f"🧩 패키지: {PKG} · 모듈 로딩 정상")
+    except Exception:
+        pass
 
 if __name__ == "__main__":
     main()
