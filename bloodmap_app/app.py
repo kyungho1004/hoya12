@@ -189,7 +189,7 @@ if mode == "일반/암":
     
 
 st.subheader("🔲 TOP 패널 (토글로 확장)")
-    auto_open = st.checkbox("자주 쓰는 항목 빠르게 열기", value=True, help="빈혈/전해질/신장/갑상선/염증/지질을 자동으로 표시")
+auto_open = st.checkbox("자주 쓰는 항목 빠르게 열기", value=True, help="빈혈/전해질/신장/갑상선/염증/지질을 자동으로 표시")
     # 빈혈
     t_anemia = st.checkbox("빈혈 패널", value=auto_open)
     if t_anemia:
