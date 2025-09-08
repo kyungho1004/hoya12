@@ -5,13 +5,20 @@ try:
     from . import utils
     from .drug_data import solid_targeted, ko
 except Exception:
-    # Fallback when run as a script (no package context)
-    import sys, os
-    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-    import utils  # type: ignore
-    from drug_data import solid_targeted, ko  # type: ignore
+    # Collision-proof local import by file path
+    import sys, os, importlib.util
+    _DIR = os.path.dirname(os.path.abspath(__file__))
+    def _load_local(mod_name, filename):
+        spec = importlib.util.spec_from_file_location(mod_name, os.path.join(_DIR, filename))
+        mod = importlib.util.module_from_spec(spec)
+        assert spec and spec.loader
+        spec.loader.exec_module(mod)
+        return mod
+    utils = _load_local("bloodmap_app_utils", "utils.py")  # type: ignore
+    _drug = _load_local("bloodmap_app_drug_data", "drug_data.py")  # type: ignore
+    solid_targeted, ko = _drug.solid_targeted, _drug.ko  # type: ignore
 
-APP_TITLE = "🩸 피수치 가이드 / BloodMap — v3.14.3b (KST)"
+APP_TITLE = "🩸 피수치 가이드 / BloodMap — v3.14.3c (KST)"
 APP_SIGNATURE = "制作者: Hoya/GPT · 자문: Hoya/GPT"
 RUNNY_OPTIONS = ["없음","흰색","연한색","누런색","피섞임"]
 DYSP_3 = ["적게","조금","심함"]  # 요청: 호흡 난이도 3단계
