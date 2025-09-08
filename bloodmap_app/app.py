@@ -177,7 +177,9 @@ if mode == "일반/암":
             ascites = st.selectbox("복수", ["없음","경미","중증"])
         with cp_c3:
             enceph = st.selectbox("간성뇌병증", ["없음","경미","중증"])
-        extra["Child-Pugh 입력"] = {"Alb": cp_albumin, "TB": cp_bili, "INR": cp_inr, "Ascites": ascites, "Encephalopathy": enceph}
+        has_cp_input = (cp_albumin is not None) or (cp_bili is not None) or (cp_inr is not None) or (ascites != "없음") or (enceph != "없음")
+        if has_cp_input:
+            extra["Child-Pugh 입력"] = {"Alb": cp_albumin, "TB": cp_bili, "INR": cp_inr, "Ascites": ascites, "Encephalopathy": enceph}
         sc, klass = child_pugh_score(cp_albumin, cp_bili, cp_inr, ascites, enceph)
         if sc and sc >= 5:
             st.info(f"Child-Pugh 총점: **{sc}** → 등급 **{klass}**")
