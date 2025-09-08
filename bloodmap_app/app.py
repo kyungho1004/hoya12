@@ -85,6 +85,15 @@ def main():
         group = st.selectbox("암 그룹 선택", ["미선택/일반", "혈액암", "고형암", "소아암", "희귀암"])
         if group == "혈액암":
         heme_options = [
+            ("AML", "급성 골수성 백혈병(AML)"),
+            ("APL", "급성 전골수구성 백혈병(APL)"),
+            ("ALL", "급성 림프구성 백혈병(ALL)"),
+            ("CML", "만성 골수성 백혈병(CML)"),
+            ("CLL", "만성 림프구성 백혈병(CLL)"),
+        ]
+        cancer_label = st.selectbox("혈액암 종류", [label for code, label in heme_options])
+        _heme_code = next(code for code, label in heme_options if label == cancer_label)
+        cancer = cancer_label  # 표시용(한글)
             ("AML","급성 골수성 백혈병(AML)"),
             ("APL","급성 전골수구성 백혈병(APL)"),
             ("ALL","급성 림프구성 백혈병(ALL)"),
