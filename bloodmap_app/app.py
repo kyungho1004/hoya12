@@ -22,12 +22,6 @@ from .utils.reports import build_report, md_to_pdf_bytes_fontlocked
 from .utils.graphs import render_graphs
 from .utils.schedule import render_schedule
 
-try:
-    import pandas as pd
-    HAS_PD = True
-except Exception:
-    HAS_PD = False
-
 def _nickname_with_pin():
     col1, col2 = st.columns([2,1])
     with col1:
@@ -51,40 +45,44 @@ def _load_css():
 # === 계산 유틸 ===
 def calc_corrected_ca(total_ca, albumin):
     try:
-        # mg/dL 기준 보정: Corrected Ca = Ca + 0.8*(4.0 - Alb)
-        if total_ca is None or albumin is None: return None
+        if total_ca is None or albumin is None:
+            return None
         return round(float(total_ca) + 0.8*(4.0 - float(albumin)), 2)
-    except: return None
+    except Exception:
+        return None
 
 def calc_friedewald_ldl(tc, hdl, tg):
     try:
-        if tg is None or float(tg) >= 400: return None
+        if tg is None or float(tg) >= 400:
+            return None
         return round(float(tc) - float(hdl) - float(tg)/5.0, 1)
-    except: return None
+    except Exception:
+        return None
 
 def calc_non_hdl(tc, hdl):
     try:
         return round(float(tc) - float(hdl), 1)
-    except: return None
+    except Exception:
+        return None
 
 def calc_homa_ir(glu_fasting, insulin):
     try:
-        # HOMA-IR = (FPG[mg/dL] * Insulin[µU/mL]) / 405
         return round((float(glu_fasting) * float(insulin)) / 405.0, 2)
-    except: return None
+    except Exception:
+        return None
 
 def calc_egfr(creatinine, age=60, sex="F"):
-    # 간단한 CKD-EPI 2021 근사 (성별 고정 파라미터만 반영)
     try:
         scr = float(creatinine)
-        k = 0.7 if sex=="F" else 0.9
-        alpha = -0.241 if sex=="F" else -0.302
+        k = 0.7 if sex == "F" else 0.9
+        alpha = -0.241 if sex == "F" else -0.302
         min_scr_k = min(scr/k, 1)
         max_scr_k = max(scr/k, 1)
-        sex_factor = 1.012 if sex=="F" else 1.0
+        sex_factor = 1.012 if sex == "F" else 1.0
         egfr = 142 * (min_scr_k**alpha) * (max_scr_k**(-1.200)) * (0.9938**float(age)) * sex_factor
         return int(round(egfr, 0))
-    except: return None
+    except Exception:
+        return None
 
 def main():
     st.set_page_config(page_title=PAGE_TITLE, layout="centered")
@@ -103,9 +101,9 @@ def main():
         st.code("https://hdzwo5ginueir7hknzzfg4.streamlit.app/", language="text")
     st.caption("✅ 모바일 줄꼬임 방지 · 별명+PIN 저장/그래프 · 암별/소아/희귀암/육종 패널 · PDF 한글 폰트 고정 · 수치 변화 비교 · 항암 스케줄표 · ANC 가이드")
 
-    os.makedirs("fonts", exist_ok=True)
-    from .utils import counter as _bm_counter
+    # 조회수
     try:
+        from .utils import counter as _bm_counter
         _bm_counter.bump()
         st.caption(f"👀 조회수(방문): {_bm_counter.count()}")
     except Exception:
@@ -201,7 +199,7 @@ def main():
     meds = {}
     extras = {}
 
-    # === 항암제 ===
+    # 항암제 입력
     def _get_drug_list():
         if not (mode == "일반/암" and group and group != "미선택/일반" and cancer):
             return []
@@ -337,8 +335,10 @@ def main():
                     vals[name] = num_input_generic(f"{name}", key=f"r_{name}", decimals=1, placeholder="예: 3.5")
 
     if mode == "일반/암":
-        if table_mode: render_inputs_table()
-        else: render_inputs_vertical()
+        if table_mode:
+            render_inputs_table()
+        else:
+            render_inputs_vertical()
     elif mode == "소아(일상/호흡기)":
         def _parse_num_ped(label, key, decimals=1, placeholder=""):
             raw = st.text_input(label, key=key, placeholder=placeholder)
@@ -352,19 +352,18 @@ def main():
         nasal_flaring= _parse_num_ped("콧벌렁임(0/1)", key="ped_nf", decimals=0, placeholder="0 또는 1")
         apnea        = _parse_num_ped("무호흡(0/1)", key="ped_ap", decimals=0, placeholder="0 또는 1")
 
-    # =============== 특수검사(토글) 기존 + TOP8 확장 ===============
+    # ===== 특수검사(기본) + TOP8 확장 =====
     extra_vals = {}
 
     if mode == "일반/암":
         st.divider()
         st.header("3️⃣ 특수 검사(토글)")
 
-        # --- 기존 항목 ---
         col = st.columns(4)
         with col[0]:
             t_coag = st.checkbox("응고패널(PT/aPTT 등)")
         with col[1]:
-            pass  # (보체는 확장 패널로 이동)
+            t_comp = st.checkbox("보체 검사(C3/C4/CH50)")
         with col[2]:
             t_urine_basic = st.checkbox("요검사(단백/잠혈/요당/요Cr)")
         with col[3]:
@@ -376,6 +375,12 @@ def main():
             extra_vals["aPTT"] = num_input_generic("aPTT (sec)", key="ex_aptt", decimals=1, placeholder="예: 32.0")
             extra_vals["Fibrinogen"] = num_input_generic("Fibrinogen (mg/dL)", key="ex_fbg", decimals=1, placeholder="예: 250")
             extra_vals["D-dimer"] = num_input_generic("D-dimer (µg/mL FEU)", key="ex_dd", decimals=2, placeholder="예: 0.50")
+
+        if t_comp:
+            st.markdown("**보체(C3/C4/CH50)**")
+            extra_vals["C3"] = num_input_generic("C3 (mg/dL)", key="ex_c3", decimals=1, placeholder="예: 90")
+            extra_vals["C4"] = num_input_generic("C4 (mg/dL)", key="ex_c4", decimals=1, placeholder="예: 20")
+            extra_vals["CH50"] = num_input_generic("CH50 (U/mL)", key="ex_ch50", decimals=1, placeholder="예: 50")
 
         if t_urine_basic:
             st.markdown("**요검사(기본)** — (영문명 병기)")
@@ -391,8 +396,10 @@ def main():
             if u_cr and u_alb:
                 acr = round((u_alb * 100.0) / float(u_cr), 1)
                 st.info(f"ACR(소변 알부민/Cr): **{acr} mg/g** (≈ 100×[mg/L]/[mg/dL])")
-            if acr is not None: extra_vals["UPCR(mg/g)"] = upcr
-            if upcr is not None: extra_vals["ACR(mg/g)"] = acr
+            if acr is not None:
+                extra_vals["ACR(mg/g)"] = acr
+            if upcr is not None:
+                extra_vals["UPCR(mg/g)"] = upcr
             extra_vals["Urine protein"] = u_prot
             extra_vals["Hematuria"] = u_bld
             extra_vals["Glycosuria"] = u_glu
@@ -420,7 +427,6 @@ def main():
         with c4:
             t_lipidx = st.checkbox("지질 확장")
             t_biomkr = st.checkbox("암별 분자/표지자")
-            t_compx  = st.checkbox("보체 검사")
 
         if t_anemia:
             st.markdown("**빈혈 패널**")
@@ -450,7 +456,7 @@ def main():
             if egfr is not None:
                 st.info(f"eGFR(자동계산): **{egfr} mL/min/1.73m²**")
                 extra_vals["eGFR"] = egfr
-            # UACR/UPCR는 위 '요검사(기본)'에 포함되어 있어 자동 표기됨
+            # UACR/UPCR는 위 '요검사(기본)'에 포함
 
         if t_thy:
             st.markdown("**갑상선 패널**")
@@ -463,7 +469,7 @@ def main():
             st.markdown("**염증/패혈증 패널**")
             extra_vals["Procalcitonin"] = num_input_generic("Procalcitonin (ng/mL)", key="sep_pct", decimals=2, placeholder="예: 0.12")
             extra_vals["Lactate"] = num_input_generic("Lactate(젖산, mmol/L)", key="sep_lac", decimals=1, placeholder="예: 1.8")
-            # CRP는 기본 패널 유지
+            # CRP는 기본 유지
 
         if t_glu:
             st.markdown("**당대사/대사증후군**")
@@ -491,15 +497,8 @@ def main():
                 extra_vals["LDL(Friedewald)"] = ldl_fw
             extra_vals["ApoB"] = num_input_generic("ApoB (mg/dL)", key="lx_apob", decimals=0, placeholder="예: 90")
 
-
-if t_compx:
-    st.markdown("**보체(C3/C4/CH50)**")
-    extra_vals["C3"] = num_input_generic("C3 (mg/dL)", key="ex_c3x", decimals=1, placeholder="예: 90")
-    extra_vals["C4"] = num_input_generic("C4 (mg/dL)", key="ex_c4x", decimals=1, placeholder="예: 20")
-    extra_vals["CH50"] = num_input_generic("CH50 (U/mL)", key="ex_ch50x", decimals=1, placeholder="예: 50")
         if t_biomkr and group and cancer:
             st.markdown("**암별 분자/표지자 (조건부 노출)**")
-            # 진단명 기반 제안
             if group == "고형암":
                 if "폐암" in cancer:
                     st.caption("폐암: EGFR/ALK/ROS1/RET/NTRK, PD-L1(CPS)")
@@ -531,7 +530,7 @@ if t_compx:
                     st.caption("CML: BCR-ABL(IS)")
                     extra_vals["BCR-ABL(IS)"] = num_input_generic("BCR-ABL(IS, %)", key="bio_bcrabl", decimals=2, placeholder="예: 0.12")
 
-    # === 암별 디테일: 토글로 전환 ===
+    # === 암별 디테일(토글) ===
     if mode == "일반/암" and group and group != "미선택/일반" and cancer:
         st.divider()
         if st.checkbox("4️⃣ 암별 디테일(토글)", value=False, help="자주 나가지 않아 기본은 숨김"):
@@ -544,21 +543,7 @@ if t_compx:
                 extra_vals["ALP"] = num_input_generic("ALP(U/L)", key="ex_alp", decimals=0, placeholder="예: 100")
                 extra_vals["CK"] = num_input_generic("CK(U/L)", key="ex_ck", decimals=0, placeholder="예: 150")
 
-    # === 보너스 UI ===
-    if mode == "일반/암":
-        with st.expander("🧍 ECOG 수행도(0–4)", expanded=False):
-            extra_vals["ECOG"] = st.selectbox("ECOG", [None,0,1,2,3,4], index=0)
-        # Child-Pugh는 간암(HCC) 선택 시만
-        if group == "고형암" and cancer and "간암" in cancer:
-            with st.expander("🧮 Child-Pugh 계산기 (간암/HCC)", expanded=False):
-                cp_albumin = num_input_generic("Albumin (g/dL)", key="cp_alb", decimals=1, placeholder="예: 3.2")
-                cp_bili = num_input_generic("Total Bilirubin (mg/dL)", key="cp_tb", decimals=1, placeholder="예: 1.8")
-                cp_inr = num_input_generic("INR", key="cp_inr", decimals=2, placeholder="예: 1.2")
-                ascites = st.selectbox("복수", ["없음","경미","중증"], key="cp_asc")
-                enceph = st.selectbox("간성뇌병증", ["없음","경미","중증"], key="cp_ence")
-                # 점수화는 리포트에서 텍스트만 표기(세부 스코어링은 이후 버전에서 확장 가능)
-                extra_vals["Child-Pugh 입력"] = {"Alb": cp_albumin, "TB": cp_bili, "INR": cp_inr, "Ascites": ascites, "Encephalopathy": enceph}
-
+    # 스케줄/그래프
     render_schedule(nickname_key)
 
     st.divider()
@@ -569,17 +554,19 @@ if t_compx:
 
         if mode == "일반/암":
             lines = interpret_labs(vals, extras)
-            for line in lines: st.write(line)
+            for line in lines:
+                st.write(line)
 
             if nickname_key and "records" in st.session_state and st.session_state.records.get(nickname_key):
                 st.markdown("### 🔍 수치 변화 비교 (이전 기록 대비)")
                 cmp_lines = compare_with_previous(nickname_key, {k: vals.get(k) for k in ORDER if entered(vals.get(k))})
                 if cmp_lines:
-                    for l in cmp_lines: st.write(l)
+                    for l in cmp_lines:
+                        st.write(l)
                 else:
                     st.info("비교할 이전 기록이 없거나 값이 부족합니다.")
 
-            shown = [ (k, v) for k, v in (extra_vals or {}).items() if entered(v) or isinstance(v, dict) ]
+            shown = [(k, v) for k, v in (extra_vals or {}).items() if entered(v) or isinstance(v, dict)]
             if shown:
                 st.markdown("### 🧬 특수/확장/암별 디테일 수치")
                 for k, v in shown:
@@ -588,7 +575,8 @@ if t_compx:
             fs = food_suggestions(vals, anc_place)
             if fs:
                 st.markdown("### 🥗 음식 가이드 (계절/레시피 포함)")
-                for f in fs: st.markdown(f)
+                for f in fs:
+                    st.markdown(f)
         elif mode == "소아(일상/호흡기)":
             st.info("위 위험도 배너를 참고하세요.")
         else:
@@ -596,13 +584,15 @@ if t_compx:
 
         if meds:
             st.markdown("### 💊 항암제 부작용·상호작용 요약")
-            for line in summarize_meds(meds): st.write(line)
+            for line in summarize_meds(meds):
+                st.write(line)
 
         if extras.get("abx"):
             abx_lines = abx_summary(extras["abx"])
             if abx_lines:
                 st.markdown("### 🧪 항생제 주의 요약")
-                for l in abx_lines: st.write(l)
+                for l in abx_lines:
+                    st.write(l)
 
         st.markdown("### 🌡️ 발열 가이드")
         st.write(FEVER_GUIDE)
@@ -610,13 +600,16 @@ if t_compx:
         meta = {"group": group, "cancer": cancer, "infect_sel": infect_sel, "anc_place": anc_place, "ped_topic": ped_topic}
         if mode == "소아(일상/호흡기)":
             def _ent(x):
-                try: return x is not None and float(x)!=0
-                except: return False
+                try:
+                    return x is not None and float(x) != 0
+                except Exception:
+                    return False
             meta["ped_inputs"] = {}
-            for k,lab in [("나이(개월)", "ped_age"), ("체온(℃)", "ped_temp"), ("호흡수(/분)", "ped_rr"), ("SpO₂(%)", "ped_spo2"), ("24시간 소변 횟수", "ped_u"),
-                          ("흉곽 함몰","ped_ret"),("콧벌렁임","ped_nf"),("무호흡","ped_ap")]:
+            for k, lab in [("나이(개월)", "ped_age"), ("체온(℃)", "ped_temp"), ("호흡수(/분)", "ped_rr"), ("SpO₂(%)", "ped_spo2"), ("24시간 소변 횟수", "ped_u"),
+                           ("흉곽 함몰", "ped_ret"), ("콧벌렁임", "ped_nf"), ("무호흡", "ped_ap")]:
                 v = st.session_state.get(lab)
-                if _ent(v): meta["ped_inputs"][k] = v
+                if _ent(v):
+                    meta["ped_inputs"][k] = v
         elif mode == "소아(감염질환)":
             info = PED_INFECT.get(infect_sel, {})
             meta["infect_info"] = {"핵심": info.get("핵심",""), "진단": info.get("진단",""), "특징": info.get("특징","")}
@@ -644,7 +637,7 @@ if t_compx:
                                mime="application/pdf")
         except FileNotFoundError as e:
             st.warning(str(e))
-        except Exception as e:
+        except Exception:
             st.info("PDF 모듈이 없거나 오류가 발생했습니다. (pip install reportlab)")
 
         if nickname_key and nickname_key.strip():
