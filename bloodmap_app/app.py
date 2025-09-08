@@ -220,8 +220,9 @@ if mode == "일반/암":
 
     # TOP 패널
     st.subheader("🔲 TOP 패널 (토글로 확장)")
+    auto_open = st.checkbox("자주 쓰는 항목 빠르게 열기", value=True, help="빈혈/전해질/신장/갑상선/염증/지질을 자동으로 표시")
     # 빈혈
-    t_anemia = st.checkbox("빈혈 패널", value=False)
+    t_anemia = st.checkbox("빈혈 패널", value=auto_open)
     if t_anemia:
         c = st.columns(4)
         with c[0]: extra["Fe"] = num_input("철 Fe (µg/dL)", "fe", decimals=0)
@@ -234,7 +235,7 @@ if mode == "일반/암":
         with c2[2]: extra["Folate"] = num_input("엽산(Folate, ng/mL)", "folate", decimals=1)
 
     # 전해질 확장
-    t_elec = st.checkbox("전해질 확장", value=False)
+    t_elec = st.checkbox("전해질 확장", value=auto_open)
     if t_elec:
         c = st.columns(4)
         with c[0]: extra["Mg"] = num_input("Magnesium (mg/dL)", "mg", decimals=2)
@@ -249,7 +250,7 @@ if mode == "일반/암":
                     extra["Corrected Ca"] = ca_corr
 
     # 신장/단백뇨
-    t_kid = st.checkbox("신장/단백뇨 패널", value=False)
+    t_kid = st.checkbox("신장/단백뇨 패널", value=auto_open)
     if t_kid:
         c = st.columns(4)
         with c[0]: age = num_input("나이 (세)", "age", decimals=0, placeholder="예: 60")
@@ -272,7 +273,7 @@ if mode == "일반/암":
             st.caption("UACR/UPCR 정량은 아래 요검사(정량)에서 입력")
 
     # 갑상선
-    t_thy = st.checkbox("갑상선 패널", value=False)
+    t_thy = st.checkbox("갑상선 패널", value=auto_open)
     if t_thy:
         c = st.columns(3)
         with c[0]: extra["TSH"] = num_input("TSH (µIU/mL)", "tsh", 0.1, 2)
@@ -282,7 +283,7 @@ if mode == "일반/암":
                 extra["TT3"] = num_input("Total T3 (ng/dL)", "tt3", 1, 0)
 
     # 염증/패혈증
-    t_sep = st.checkbox("염증/패혈증 패널", value=False)
+    t_sep = st.checkbox("염증/패혈증 패널", value=auto_open)
     if t_sep:
         c = st.columns(3)
         with c[0]: extra["CRP"] = num_input("CRP (mg/dL)", "crp", 0.1, 2)
@@ -300,7 +301,7 @@ if mode == "일반/암":
                 extra["HOMA-IR"] = h
 
     # 지질 확장
-    t_lipid = st.checkbox("지질 확장", value=False)
+    t_lipid = st.checkbox("지질 확장", value=auto_open)
     if t_lipid:
         c = st.columns(4)
         with c[0]: tc = num_input("Total Cholesterol (mg/dL)", "tc", 1, 0)
