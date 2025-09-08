@@ -150,7 +150,42 @@ meta = {"nickname": nick, "pin": pin, "time": datetime.now().strftime("%Y-%m-%d 
 
 # =================== Mode: 일반/암 =====================
 if mode == "일반/암":
-    st.subheader("🧪 기본 입력")
+    st.subheader("🧬 암 그룹/진단 선택")
+    group = st.selectbox("암 그룹 선택", ["미선택/일반", "혈액암", "고형암", "육종", "희귀암"])
+    cancer = ""
+    if group == "혈액암":
+        heme_display = [
+            "급성 골수성 백혈병(AML)",
+            "급성 전골수구성 백혈병(APL)",
+            "급성 림프모구성 백혈병(ALL)",
+            "만성 골수성 백혈병(CML)",
+            "만성 림프구성 백혈병(CLL)",
+        ]
+        cancer = st.selectbox("혈액암(진단명)", heme_display)
+
+    elif group == "고형암":
+        cancer = st.selectbox("고형암(진단명)", [
+            "폐암(Lung cancer)","유방암(Breast cancer)","위암(Gastric cancer)",
+            "대장암(Colorectal cancer)","간암(HCC)","췌장암(Pancreatic cancer)",
+            "담도암(Cholangiocarcinoma)","자궁내막암(Endometrial cancer)",
+            "구강암/후두암","피부암(흑색종)","신장암(RCC)",
+            "갑상선암","난소암","자궁경부암","전립선암","뇌종양(Glioma)","식도암","방광암"
+        ])
+
+    elif group == "육종":
+        cancer = st.selectbox("육종(진단명)", [
+            "골육종(Osteosarcoma)","연부조직 육종(Soft tissue sarcoma)"
+        ])
+
+    elif group == "희귀암":
+        cancer = st.selectbox("희귀암(진단명)", [
+            "지정 없음(기타)"
+        ])
+
+    # TOP 패널
+    
+
+st.subheader("🧪 기본 입력")
     cg = st.columns(5)
     with cg[0]: vals["Ca"] = num_input("칼슘 Ca (mg/dL)", "ca", decimals=1, placeholder="예: 8.8")
     with cg[1]: vals["Albumin"] = num_input("Albumin (g/dL)", "alb", decimals=1, placeholder="예: 3.0")
@@ -188,11 +223,13 @@ if mode == "일반/암":
     # 암 그룹 & 진단
     
 
+
+
 st.subheader("🔲 TOP 패널 (토글로 확장)")
 auto_open = st.checkbox("자주 쓰는 항목 빠르게 열기", value=True, help="빈혈/전해질/신장/갑상선/염증/지질을 자동으로 표시")
     # 빈혈
 t_anemia = st.checkbox("빈혈 패널", value=auto_open)
-    if t_anemia:
+if t_anemia:
         c = st.columns(4)
         with c[0]: extra["Fe"] = num_input("철 Fe (µg/dL)", "fe", decimals=0)
         with c[1]: extra["Ferritin"] = num_input("Ferritin (Fer, ng/mL)", "ferr", decimals=0)
@@ -205,7 +242,7 @@ t_anemia = st.checkbox("빈혈 패널", value=auto_open)
 
     # 전해질 확장
 t_elec = st.checkbox("전해질 확장", value=auto_open)
-    if t_elec:
+if t_elec:
         c = st.columns(4)
         with c[0]: extra["Mg"] = num_input("Magnesium (mg/dL)", "mg", decimals=2)
         with c[1]: extra["Phos"] = num_input("Phosphate (Phos/P, mg/dL)", "phos", decimals=1)
@@ -220,7 +257,7 @@ t_elec = st.checkbox("전해질 확장", value=auto_open)
 
     # 신장/단백뇨
 t_kid = st.checkbox("신장/단백뇨 패널", value=auto_open)
-    if t_kid:
+if t_kid:
         c = st.columns(4)
         with c[0]: age = num_input("나이 (세)", "age", decimals=0, placeholder="예: 60")
         with c[1]: sex = st.selectbox("성별", ["F","M"])
@@ -243,7 +280,7 @@ t_kid = st.checkbox("신장/단백뇨 패널", value=auto_open)
 
     # 갑상선
 t_thy = st.checkbox("갑상선 패널", value=auto_open)
-    if t_thy:
+if t_thy:
         c = st.columns(3)
         with c[0]: extra["TSH"] = num_input("TSH (µIU/mL)", "tsh", 0.1, 2)
         with c[1]: extra["FT4"] = num_input("Free T4 (ng/dL)", "ft4", 0.1, 2)
@@ -253,7 +290,7 @@ t_thy = st.checkbox("갑상선 패널", value=auto_open)
 
     # 염증/패혈증
 t_sep = st.checkbox("염증/패혈증 패널", value=auto_open)
-    if t_sep:
+if t_sep:
         c = st.columns(3)
         with c[0]: extra["CRP"] = num_input("CRP (mg/dL)", "crp", 0.1, 2)
         with c[1]: extra["PCT"] = num_input("Procalcitonin (PCT, ng/mL)", "pct", 0.1, 2)
@@ -271,7 +308,7 @@ t_sep = st.checkbox("염증/패혈증 패널", value=auto_open)
 
     # 지질 확장
 t_lipid = st.checkbox("지질 확장", value=auto_open)
-    if t_lipid:
+if t_lipid:
         c = st.columns(4)
         with c[0]: tc = num_input("Total Cholesterol (mg/dL)", "tc", 1, 0)
         with c[1]: hdl = num_input("HDL-C (mg/dL)", "hdl", 1, 0)
@@ -285,6 +322,8 @@ t_lipid = st.checkbox("지질 확장", value=auto_open)
             if float(tg) >= 400:
                 st.warning("TG ≥ 400 mg/dL: Friedewald LDL 계산이 비활성화됩니다.")
             
+
+
 
 with st.expander("🧬 특수 검사 (보체)", expanded=False):
         col = st.columns(3)
@@ -341,40 +380,7 @@ with st.expander("🧬 특수 검사 (보체)", expanded=False):
                     elif g < 60: st.warning("eGFR 30–59: 주의")
                     
 
-st.subheader("🧬 암 그룹/진단 선택")
-    group = st.selectbox("암 그룹 선택", ["미선택/일반", "혈액암", "고형암", "육종", "희귀암"])
-    cancer = ""
-    if group == "혈액암":
-        heme_display = [
-            "급성 골수성 백혈병(AML)",
-            "급성 전골수구성 백혈병(APL)",
-            "급성 림프모구성 백혈병(ALL)",
-            "만성 골수성 백혈병(CML)",
-            "만성 림프구성 백혈병(CLL)",
-        ]
-        cancer = st.selectbox("혈액암(진단명)", heme_display)
-
-    elif group == "고형암":
-        cancer = st.selectbox("고형암(진단명)", [
-            "폐암(Lung cancer)","유방암(Breast cancer)","위암(Gastric cancer)",
-            "대장암(Colorectal cancer)","간암(HCC)","췌장암(Pancreatic cancer)",
-            "담도암(Cholangiocarcinoma)","자궁내막암(Endometrial cancer)",
-            "구강암/후두암","피부암(흑색종)","신장암(RCC)",
-            "갑상선암","난소암","자궁경부암","전립선암","뇌종양(Glioma)","식도암","방광암"
-        ])
-
-    elif group == "육종":
-        cancer = st.selectbox("육종(진단명)", [
-            "골육종(Osteosarcoma)","연부조직 육종(Soft tissue sarcoma)"
-        ])
-
-    elif group == "희귀암":
-        cancer = st.selectbox("희귀암(진단명)", [
-            "지정 없음(기타)"
-        ])
-
-    # TOP 패널
-    else: st.info("eGFR ≥ 60: 통상 범주")
+else: st.info("eGFR ≥ 60: 통상 범주")
                 except: pass
             if cp:
                 if "C" in str(cp): st.error("Child-Pugh C: 감량/금기 검토")
@@ -568,5 +574,18 @@ if a4_opt:
 
 if show_report:
     st.markdown(report_md)
+
+
+st.markdown("---")
+if st.button("🍽️ 해석하기 / 음식 가이드 보기"):
+    st.markdown("""
+### 🥗 음식 가이드 (간단 요약)
+- **빈혈(철결핍) 의심**: 살코기, 간, 조개류, 시금치 등 철분 많은 음식 + **비타민 C** 함께 섭취.
+- **고칼륨 위험(신장/단백뇨 패널 이상)**: 바나나·오렌지·토마토·감자 과다섭취 주의, 채소는 **데쳐서** 드세요.
+- **간기능 저하/간암(HCC)**: 과도한 **알코올 금지**, 단백질은 **적정량**(살코기·두부) 위주, 가공식품 나트륨 제한.
+- **당대사(공복혈당/HbA1c 상승)**: 설탕/정제탄수화물 줄이고 **식이섬유**·단백질 위주, 야간 간식 줄이기.
+- **지질 이상(Non-HDL/ApoB↑)**: 튀김/가공육 ↓, **등푸른생선·견과·올리브유** ↑, 규칙 운동.
+> ⚠️ 개인 상태에 따라 달라질 수 있으며, 본 가이드는 참고만 하세요. 반드시 **담당 의료진** 지침을 우선하세요.
+""")
 
 st.download_button("⬇️ 보고서 .md 다운로드", report_md, file_name="report.md")
