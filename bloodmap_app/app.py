@@ -750,19 +750,19 @@ def main():
             # 정성(스트립) 결과
             cq = st.columns(4)
             with cq[0]:
-                hematuria_q = st.selectbox("혈뇨(정성)", ["", "+", "++", "+++"], index=0)
+                hematuria_q = st.selectbox("혈뇨(정성)", ["", "소량", "중등도", "고농도"], index=0)
             with cq[1]:
-                proteinuria_q = st.selectbox("단백뇨(정성)", ["", "-", "+", "++"], index=0)
+                proteinuria_q = st.selectbox("단백뇨(정성)", ["", "음성(없음)", "소량", "중등도"], index=0)
             with cq[2]:
-                wbc_q = st.selectbox("백혈구(정성)", ["", "-", "+", "++"], index=0)
+                wbc_q = st.selectbox("백혈구(정성)", ["", "음성(없음)", "의심", "양성"], index=0)
             with cq[3]:
-                gly_q = st.selectbox("요당(정성)", ["", "-", "+++"], index=0)
+                gly_q = st.selectbox("요당(정성)", ["", "음성(없음)", "고농도"], index=0)
 
             # 설명 매핑
-            _desc_hema = {"+":"소량 검출","++":"중등도 검출","+++":"고농도 검출"}
-            _desc_prot = {"-":"음성","+":"경도 검출","++":"중등도 검출"}
-            _desc_wbc  = {"-":"음성","+":"의심 수준","++":"양성"}
-            _desc_gly  = {"-":"음성","+++":"고농도 검출"}
+            _desc_hema = {"소량":"소량 검출","중등도":"중등도 검출","고농도":"고농도 검출"}
+            _desc_prot = {"음성(없음)":"음성","소량":"경도 검출","중등도":"중등도 검출"}
+            _desc_wbc  = {"음성(없음)":"음성","의심":"의심 수준","양성":"양성"}
+            _desc_gly  = {"음성(없음)":"음성","고농도":"고농도 검출"}
 
             if hematuria_q:
                 extra_vals["혈뇨(정성)"] = f"{hematuria_q} ({_desc_hema.get(hematuria_q,'')})"
