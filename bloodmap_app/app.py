@@ -567,9 +567,9 @@ def build_report(mode, meta, vals, extra):
 
 report_md = build_report(mode, meta, {k:v for k,v in vals.items() if entered(v)}, extra)
 if a4_opt:
-    report_md = report_md.replace(\"## \", \"\\n\\n---\\n\\n## \")
+    report_md = report_md.replace("## ", "\\n\\n---\\n\\n## ")
 
 if show_report:
     st.markdown(report_md)
 
-st.download_button(\"⬇️ 보고서 .md 다운로드\", report_md, file_name=\"report.md\")
+st.download_button("⬇️ 보고서 .md 다운로드", report_md, file_name="report.md")
