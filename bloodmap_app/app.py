@@ -364,6 +364,38 @@ def main():
             obs2["경련(열성경련 포함)"] = st.checkbox("경련(열성경련 포함)", key="gi_obs7")
             st.session_state["ped_obs_gi"] = {k:v for k,v in obs2.items() if v}
 
+        # 👶 질환별 핵심 입력(간단)
+        with st.expander("👶 질환별 핵심 입력(간단)", expanded=True):
+            core = {}
+            name = (infect_sel or "").lower()
+
+            # 아데노바이러스(PCF) — 눈곱/결막충혈
+            if ("아데노" in name) or ("adeno" in name) or ("pcf" in name):
+                eye_opt = st.selectbox("눈곱(eye discharge)", ["없음", "있음"], key="gi_adeno_eye")
+                core["눈곱"] = eye_opt
+                core["결막충혈"] = st.checkbox("결막 충혈/충혈성 눈", key="gi_adeno_conj")
+
+            # 파라인플루엔자 — 설사 횟수(간단)
+            if ("파라" in name) or ("parainfluenza" in name):
+                core["설사 횟수(회/일)"] = st.number_input("설사 횟수(회/일)", min_value=0, max_value=50, step=1, key="gi_para_stool")
+
+            # 로타/노로 — 설사/구토 횟수
+            if ("로타" in name) or ("rotavirus" in name) or ("노로" in name) or ("norovirus" in name):
+                core["설사 횟수(회/일)"] = st.number_input("설사 횟수(회/일)", min_value=0, max_value=50, step=1, key="gi_rota_stool")
+                core["구토 횟수(회/일)"] = st.number_input("구토 횟수(회/일)", min_value=0, max_value=50, step=1, key="gi_rota_vomit")
+
+            # RSV — 쌕쌕거림/흉곽함몰
+            if ("rsv" in name):
+                core["쌕쌕거림(천명)"] = st.checkbox("쌕쌕거림(천명)", key="gi_rsv_wheeze")
+                core["흉곽 함몰"] = st.checkbox("흉곽 함몰", key="gi_rsv_retract")
+
+            # 인플루엔자 — 근육통/두통/기침 심함
+            if ("인플루엔자" in name) or ("influenza" in name) or ("독감" in name):
+                core["근육통/전신통"] = st.checkbox("근육통/전신통", key="gi_flu_myalgia")
+                core["기침 심함"] = st.checkbox("기침 심함", key="gi_flu_cough")
+
+            st.session_state["ped_infect_core"] = {k:v for k,v in core.items() if (isinstance(v, bool) and v) or (isinstance(v, str) and v) or (isinstance(v, (int,float)) and v>0)}
+
         with st.expander("🧮 해열제 용량 계산기", expanded=False):
             wt2 = st.text_input("체중(kg)", key="antipy_wt_gi", placeholder="예: 10.5")
             med2 = st.selectbox("해열제", ["아세트아미노펜(acetaminophen)", "이부프로펜(ibuprofen)"], key="antipy_med_gi")
@@ -955,6 +987,9 @@ def main():
             info = PED_INFECT.get(infect_sel, {})
             meta["infect_info"] = {"핵심": info.get("핵심",""), "진단": info.get("진단",""), "특징": info.get("특징","")}
             meta["infect_symptoms"] = st.session_state.get("infect_symptoms", [])
+            core = st.session_state.get("ped_infect_core", {})
+            if core:
+                meta["infect_core"] = core
 
         meds_lines = summarize_meds(meds) if meds else []
         abx_lines = abx_summary(extras.get("abx", {})) if extras.get("abx") else []
