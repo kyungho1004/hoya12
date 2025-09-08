@@ -606,7 +606,7 @@ def main():
                     extra_vals["UPCR(mg/g)"] = upcr
                 extra_vals["Urine Cr"] = u_cr
                 extra_vals["Urine albumin"] = u_alb
-if t_lipid_basic:
+        if t_lipid_basic:
             st.markdown("**지질(기본)**")
             extra_vals["TG"] = num_input_generic("Triglyceride (mg/dL)", key="ex_tg", decimals=0, placeholder="예: 150")
             extra_vals["TC"] = num_input_generic("Total Cholesterol (mg/dL)", key="ex_tc", decimals=0, placeholder="예: 180")
