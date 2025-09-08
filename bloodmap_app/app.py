@@ -266,7 +266,7 @@ def main():
 
     extra_vals = {}
     if mode == "일반/암" and group and group != "미선택/일반" and (cancer or sarcoma_sub):
-        items_map = {
+        
             "AML": [("PT","PT","sec",1),("aPTT","aPTT","sec",1),("Fibrinogen","Fibrinogen","mg/dL",1),("D-dimer","D-dimer","µg/mL FEU",2)],
             "APL": [("PT","PT","sec",1),("aPTT","aPTT","sec",1),("Fibrinogen","Fibrinogen","mg/dL",1),("D-dimer","D-dimer","µg/mL FEU",2),("DIC Score","DIC Score","pt",0)],
             "ALL": [("PT","PT","sec",1),("aPTT","aPTT","sec",1),("CNS Sx","CNS 증상 여부(0/1)","",0)],
@@ -288,12 +288,31 @@ def main():
         if cancer == "육종(Sarcoma)" and sarcoma_sub:
             if "골육종" in sarcoma_sub: items = [("ALP","ALP","U/L",0)]
             elif "횡문근육종" in sarcoma_sub: items = [("CK","CK","U/L",0)]
-        if items:
-            st.divider(); st.header("3️⃣ 암별 디테일 수치")
+        show_cancer_special = st.checkbox("🧬 암별 특수검사 입력(토글)", value=True)
+            if items and show_cancer_special:
+                st.divider(); st.header("3️⃣ 암별 디테일 수치")
             for key, label, unit, decs in items:
                 ph = f"예: {('0' if decs==0 else '0.'+('0'*decs))}" if decs is not None else ""
                 val = num_input_generic(f"{label}" + (f" ({unit})" if unit else ""), key=f"extra_{key}", decimals=decs, placeholder=ph)
                 extra_vals[key] = val
+
+            # --- Optional common panels (toggles) ---
+            st.divider(); st.header("4️⃣ 선택 패널(토글)")
+            ua_on = st.checkbox("소변 검사(요검사) 입력", key="opt_ua")
+            if ua_on:
+                extra_vals["UA_RBC"] = num_input_generic("요 RBC(/HPF)", key="ua_rbc", decimals=0, placeholder="예: 5")
+                extra_vals["UA_WBC"] = num_input_generic("요 WBC(/HPF)", key="ua_wbc", decimals=0, placeholder="예: 3")
+                extra_vals["UA_Protein"] = num_input_generic("요 단백질(mg/dL)", key="ua_pro", decimals=0, placeholder="예: 30")
+                extra_vals["UA_SG"] = num_input_generic("요 비중(SG)", key="ua_sg", decimals=3, placeholder="예: 1.020")
+                extra_vals["UA_pH"] = num_input_generic("요 pH", key="ua_ph", decimals=1, placeholder="예: 6.0")
+                extra_vals["UA_Ketone"] = num_input_generic("요 케톤(0/1)", key="ua_ket", decimals=0, placeholder="0 또는 1")
+                extra_vals["UA_Nitrite"] = num_input_generic("요 니트라이트(0/1)", key="ua_nit", decimals=0, placeholder="0 또는 1")
+            lipid_on = st.checkbox("지질 패널(총콜레스테롤/LDL/HDL/TG) 입력", key="opt_lipid")
+            if lipid_on:
+                extra_vals["TC"] = num_input_generic("총 콜레스테롤 TC (mg/dL)", key="lip_tc", decimals=0, placeholder="예: 180")
+                extra_vals["LDL_C"] = num_input_generic("LDL-C (mg/dL)", key="lip_ldl", decimals=0, placeholder="예: 110")
+                extra_vals["HDL_C"] = num_input_generic("HDL-C (mg/dL)", key="lip_hdl", decimals=0, placeholder="예: 50")
+                extra_vals["TG"] = num_input_generic("Triglyceride TG (mg/dL)", key="lip_tg", decimals=0, placeholder="예: 120")
     elif mode == "소아(일상/호흡기)":
         st.divider(); st.header("3️⃣ 소아 생활 가이드")
         def ped_banner(age_m, temp_c, rr, spo2, urine_24h, retraction, nasal_flaring, apnea):
