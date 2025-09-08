@@ -343,7 +343,7 @@ def main():
         </style>''',
         unsafe_allow_html=True
     )
-st.title(APP_TITLE)
+    st.title(APP_TITLE)
     st.caption(APP_SIGNATURE)
 
     # Nickname + PIN
