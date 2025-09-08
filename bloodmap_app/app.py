@@ -4,23 +4,51 @@ from datetime import datetime, date
 import os
 import streamlit as st
 
-from .config import (APP_TITLE, PAGE_TITLE, MADE_BY, CAFE_LINK_MD, FOOTER_CAFE,
-                    DISCLAIMER, ORDER, FEVER_GUIDE,
-                    LBL_WBC, LBL_Hb, LBL_PLT, LBL_ANC, LBL_Ca, LBL_P, LBL_Na, LBL_K,
-                    LBL_Alb, LBL_Glu, LBL_TP, LBL_AST, LBL_ALT, LBL_LDH, LBL_CRP, LBL_Cr, LBL_UA, LBL_TB, LBL_BUN, LBL_BNP,
-                    FONT_PATH_REG)
-from .data.drugs import ANTICANCER, ABX_GUIDE
-from .data.foods import FOODS
+# ---- Robust imports (relative -> absolute fallback) ----
+try:
+    from .config import (APP_TITLE, PAGE_TITLE, MADE_BY, CAFE_LINK_MD, FOOTER_CAFE,
+                         DISCLAIMER, ORDER, FEVER_GUIDE,
+                         LBL_WBC, LBL_Hb, LBL_PLT, LBL_ANC, LBL_Ca, LBL_P, LBL_Na, LBL_K,
+                         LBL_Alb, LBL_Glu, LBL_TP, LBL_AST, LBL_ALT, LBL_LDH, LBL_CRP, LBL_Cr, LBL_UA, LBL_TB, LBL_BUN, LBL_BNP,
+                         FONT_PATH_REG)
+except Exception:
+    from config import (APP_TITLE, PAGE_TITLE, MADE_BY, CAFE_LINK_MD, FOOTER_CAFE,
+                        DISCLAIMER, ORDER, FEVER_GUIDE,
+                        LBL_WBC, LBL_Hb, LBL_PLT, LBL_ANC, LBL_Ca, LBL_P, LBL_Na, LBL_K,
+                        LBL_Alb, LBL_Glu, LBL_TP, LBL_AST, LBL_ALT, LBL_LDH, LBL_CRP, LBL_Cr, LBL_UA, LBL_TB, LBL_BUN, LBL_BNP,
+                        FONT_PATH_REG)
+
+try:
+    from .data.drugs import ANTICANCER, ABX_GUIDE
+except Exception:
+    from data.drugs import ANTICANCER, ABX_GUIDE
+
+try:
+    from .data.foods import FOODS
+except Exception:
+    from data.foods import FOODS
+
 try:
     from .data.ped import PED_TOPICS, PED_INPUTS_INFO, PED_INFECT, PED_SYMPTOMS, PED_RED_FLAGS
 except Exception:
-    from .data.ped import PED_TOPICS, PED_INPUTS_INFO, PED_INFECT
-    PED_SYMPTOMS, PED_RED_FLAGS = {}, {}
-from .utils.inputs import num_input_generic, entered, _parse_numeric
-from .utils.interpret import interpret_labs, compare_with_previous, food_suggestions, summarize_meds, abx_summary
-from .utils.reports import build_report, md_to_pdf_bytes_fontlocked
-from .utils.graphs import render_graphs
-from .utils.schedule import render_schedule
+    try:
+        from data.ped import PED_TOPICS, PED_INPUTS_INFO, PED_INFECT, PED_SYMPTOMS, PED_RED_FLAGS
+    except Exception:
+        from .data.ped import PED_TOPICS, PED_INPUTS_INFO, PED_INFECT  # last resort
+        PED_SYMPTOMS, PED_RED_FLAGS = {}, {}
+
+try:
+    from .utils.inputs import num_input_generic, entered, _parse_numeric
+    from .utils.interpret import interpret_labs, compare_with_previous, food_suggestions, summarize_meds, abx_summary
+    from .utils.reports import build_report, md_to_pdf_bytes_fontlocked
+    from .utils.graphs import render_graphs
+    from .utils.schedule import render_schedule
+except Exception:
+    from utils.inputs import num_input_generic, entered, _parse_numeric
+    from utils.interpret import interpret_labs, compare_with_previous, food_suggestions, summarize_meds, abx_summary
+    from utils.reports import build_report, md_to_pdf_bytes_fontlocked
+    from utils.graphs import render_graphs
+    from utils.schedule import render_schedule
 
 def _nickname_with_pin():
     col1, col2 = st.columns([2,1])
