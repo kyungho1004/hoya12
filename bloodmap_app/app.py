@@ -42,7 +42,7 @@ DIET_GUIDES = {
     "Ca_low":      ["연어통조림","두부","케일","브로콜리","(참깨 제외)"],
     # 확장
     "Glucose_high": ["현미밥(소량)","삶은 달걀","두부샐러드(익힌 채소)","사과 반 조각(껍질 제거)","오트밀죽"],
-    "Liver_high":   ["꽁치/고등어 대신 흰살생선","두부","채소볶음(기름 적게)","쌀죽/미음","무가당 요거트(소량)"],
+    "Liver_high":   ["흰살생선","두부","채소볶음(기름 적게)","쌀죽/미음","무가당 요거트(소량)"],
 }
 NEUTROPENIA_FOOD_SAFETY = [
     "생채소 금지, 충분히 익혀서 섭취",
@@ -160,7 +160,7 @@ def build_pdf(md_text: str) -> Optional[bytes]:
     c.save(); buffer.seek(0)
     return buffer.getvalue()
 
-# ========= Labs model & interpretation =========
+# ========= Models =========
 @dataclass
 class Labs:
     wbc: Optional[float] = None
@@ -184,6 +184,25 @@ class Labs:
     bun: Optional[float] = None
     bnp: Optional[float] = None
 
+@dataclass
+class Peds:
+    appetite: Optional[str] = None
+    fever_now: Optional[bool] = None
+    temp_c: Optional[float] = None
+    cough: Optional[str] = None
+    dyspnea: Optional[str] = None
+    cyanosis: Optional[bool] = None
+    spo2: Optional[float] = None
+    rsv: Optional[bool] = None
+    adeno: Optional[bool] = None
+    rota: Optional[bool] = None
+    influenza: Optional[bool] = None
+    parainfluenza: Optional[bool] = None
+    hfm: Optional[bool] = None
+    noro: Optional[bool] = None
+    mycoplasma: Optional[bool] = None
+
+# ========= Interpretation =========
 def interpret_labs(labs: Labs) -> List[Tuple[str, List[str]]]:
     sections: List[Tuple[str, List[str]]] = []
 
@@ -224,26 +243,6 @@ def interpret_labs(labs: Labs) -> List[Tuple[str, List[str]]]:
 
     return sections
 
-# ========= Pediatric guide model & interpretation =========
-@dataclass
-class Peds:
-    appetite: Optional[str] = None
-    fever_now: Optional[bool] = None
-    temp_c: Optional[float] = None
-    cough: Optional[str] = None
-    dyspnea: Optional[str] = None
-    cyanosis: Optional[bool] = None
-    spo2: Optional[float] = None
-    # infections (checkbox-like)
-    rsv: Optional[bool] = None
-    adeno: Optional[bool] = None
-    rota: Optional[bool] = None
-    influenza: Optional[bool] = None
-    parainfluenza: Optional[bool] = None
-    hfm: Optional[bool] = None  # 수족구
-    noro: Optional[bool] = None
-    mycoplasma: Optional[bool] = None
-
 def interpret_peds(p: Peds) -> List[Tuple[str, List[str]]]:
     lines: List[str] = []
     alerts: List[str] = []
@@ -264,14 +263,13 @@ def interpret_peds(p: Peds) -> List[Tuple[str, List[str]]]:
     if p.dyspnea in ["많이","심함"]:
         alerts.append(f"호흡곤란 {p.dyspnea} → 응급 평가 고려")
 
-    # Symptom guidance
+    # Symptoms
     if p.cough in ["보통","많이","심함"]:
         tips.append("기침 심하면 실내 가습/수분, 휴식 · 악화 시 진료")
-
     if p.appetite == "없음":
         tips.append("식욕 없음 → 소량·자주 수분/죽 위주, 탈수 주의")
 
-    # Infectious disease hints
+    # Infections
     infomap = [
         ("RSV", p.rsv, "영아/소아에서 천명·호흡곤란 주의"),
         ("아데노", p.adeno, "결막염/고열 가능, 수분/해열"),
@@ -298,7 +296,7 @@ def interpret_peds(p: Peds) -> List[Tuple[str, List[str]]]:
     if tips:
         info_lines += [f"- {x}" for x in tips]
     if info_lines:
-        sections.append(("소아 — 일상/호흡기 가이드", info_lines))
+        sections.append(("소아 — 일상/호흡기/감염 가이드", info_lines))
     return sections
 
 # ========= UI =========
@@ -315,10 +313,36 @@ def main():
         st.warning("PIN은 숫자 4자리로 입력해주세요.")
     key_id = f"{nickname}#{pin}" if nickname and pin and pin.isdigit() and len(pin)==4 else None
 
-    # Disease selection
+    # 1) 일상/호흡기/감염 + 암종류
     st.divider()
-    st.subheader("암 그룹 / 진단")
-    grp = st.selectbox("그룹", ["혈액암","육종(진단명 분리)","고형암(기타)"])
+    st.subheader("일상 · 호흡기/감염 · 암종류")
+    # 소아 입력
+    g1, g2, g3, g4 = st.columns(4)
+    with g1:
+        appetite = st.selectbox("식욕", ["모름","있음","없음"], index=0)
+        fever_now = st.checkbox("발열 있음")
+        temp_c = st.number_input("체온(℃)", min_value=0.0, step=0.1, format="%.1f")
+    with g2:
+        cough = st.selectbox("기침", ["안함","조금","보통","많이","심함"], index=0)
+        dyspnea = st.selectbox("호흡곤란", ["없음","조금","보통","많이","심함"], index=0)
+        cyanosis = st.checkbox("청색증")
+    with g3:
+        has_pulseox = st.checkbox("산소포화도 측정기 있음")
+        spo2 = st.number_input("SpO₂(%)", min_value=0.0, max_value=100.0, step=0.1, format="%.1f") if has_pulseox else None
+    with g4:
+        st.markdown("**감염 의심(체크)**")
+        rsv = st.checkbox("RSV")
+        adeno = st.checkbox("아데노")
+        rota = st.checkbox("로타")
+        influenza = st.checkbox("인플루엔자")
+        parainfluenza = st.checkbox("파라인플루엔자")
+        hfm = st.checkbox("수족구")
+        noro = st.checkbox("노로")
+        mycoplasma = st.checkbox("마이코플라즈마")
+
+    # 암종류 선택
+    st.markdown("---")
+    grp = st.selectbox("암 그룹", ["혈액암","육종(진단명 분리)","고형암(기타)"])
     if grp == "혈액암":
         dx = st.selectbox("진단명", HEMATO_LIST)
     elif grp == "육종(진단명 분리)":
@@ -326,9 +350,34 @@ def main():
     else:
         dx = st.selectbox("고형암", SOLID_LIST)
 
-    # Labs
+    # 소아 해열제 빠른 계산 (부가도구)
+    with st.expander("소아 해열제 빠른 계산 (중앙값 기준, ml 단일 표기)"):
+        pc1, pc2, pc3 = st.columns([1,1,2])
+        with pc1:
+            wt = st.number_input("체중(kg)", min_value=0.0, step=0.1, format="%.1f", key="wt_calc")
+        with pc2:
+            acet_conc = st.selectbox("아세트아미노펜 농도", ["160 mg/5 ml","120 mg/5 ml"], key="acet_calc")
+            ibu_conc  = st.selectbox("이부프로펜 농도", ["100 mg/5 ml"], key="ibu_calc")
+        with pc3:
+            if wt > 0:
+                ml_acet = dose_ml_acetaminophen(wt, acet_conc)
+                ml_ibu  = dose_ml_ibuprofen(wt, ibu_conc)
+                if ml_acet is not None:
+                    st.info(f"아세트아미노펜 권장 1회: **{ml_acet:.1f} ml**  (간격 4–6시간, 하루 최대 5회)")
+                if ml_ibu is not None:
+                    st.info(f"이부프로펜 권장 1회: **{ml_ibu:.1f} ml**  (간격 6–8시간)")
+
+    # 2) 항암제
     st.divider()
-    st.subheader("피수치 입력")
+    st.subheader("항암제")
+    default_chemo = CHEMO_BY_DX.get(dx, [])
+    st.caption("암종에 맞는 항암제가 먼저 보입니다. 필요 시 추가 선택하세요.")
+    sel_chemo = st.multiselect("항암제(한글 병기)", default_chemo + CHEMO_COMMON, default=default_chemo)
+    sel_abx   = st.multiselect("항생제(한글 병기)", ANTIBIOTICS_COMMON, default=[])
+
+    # 3) 피수치 (심플)
+    st.divider()
+    st.subheader("피수치")
     c1, c2, c3, c4 = st.columns(4)
     with c1:
         wbc = st.number_input("WBC", min_value=0.0, step=0.1, format="%.1f")
@@ -355,7 +404,7 @@ def main():
         bun = st.number_input("BUN", min_value=0.0, step=0.1, format="%.1f")
         bnp = st.number_input("BNP(선택)", min_value=0.0, step=1.0, format="%.0f")
 
-    # 특수검사(피수치 아래)
+    # 4) 특수검사
     st.divider()
     st.subheader("특수검사 (토글)")
     t1, t2, t3, t4, t5 = st.columns(5)
@@ -402,63 +451,12 @@ def main():
         pct     = e2.number_input("Procalcitonin", min_value=0.0, step=0.01, format="%.2f")
         lactate = e3.number_input("Lactate", min_value=0.0, step=0.1, format="%.1f")
 
-    # Pediatric antipyretic quick calc
-    st.divider()
-    st.subheader("소아 해열제 빠른 계산 (중앙값 기준, ml 단일 표기)")
-    pc1, pc2, pc3 = st.columns([1,1,2])
-    with pc1:
-        wt = st.number_input("체중(kg)", min_value=0.0, step=0.1, format="%.1f")
-    with pc2:
-        acet_conc = st.selectbox("아세트아미노펜 농도", ["160 mg/5 ml","120 mg/5 ml"])
-        ibu_conc  = st.selectbox("이부프로펜 농도", ["100 mg/5 ml"])
-    with pc3:
-        if wt > 0:
-            ml_acet = dose_ml_acetaminophen(wt, acet_conc)
-            ml_ibu  = dose_ml_ibuprofen(wt, ibu_conc)
-            if ml_acet is not None:
-                st.info(f"아세트아미노펜 권장 1회: **{ml_acet:.1f} ml**  (간격 4–6시간, 하루 최대 5회)")
-            if ml_ibu is not None:
-                st.info(f"이부프로펜 권장 1회: **{ml_ibu:.1f} ml**  (간격 6–8시간)")
-
-    # Pediatric daily/resp/infection guide (UI)
-    st.divider()
-    st.subheader("소아 가이드 (일상/호흡기/감염)")
-    g1, g2, g3, g4 = st.columns(4)
-    with g1:
-        appetite = st.selectbox("식욕", ["모름","있음","없음"], index=0)
-        fever_now = st.checkbox("발열 있음")
-        temp_c = st.number_input("체온(℃)", min_value=0.0, step=0.1, format="%.1f")
-    with g2:
-        cough = st.selectbox("기침", ["안함","조금","보통","많이","심함"], index=0)
-        dyspnea = st.selectbox("호흡곤란", ["없음","조금","보통","많이","심함"], index=0)
-        cyanosis = st.checkbox("청색증")
-    with g3:
-        has_pulseox = st.checkbox("산소포화도 측정기 있음")
-        spo2 = st.number_input("SpO₂(%)", min_value=0.0, max_value=100.0, step=0.1, format="%.1f") if has_pulseox else None
-    with g4:
-        st.markdown("**감염 의심(체크)**")
-        rsv = st.checkbox("RSV")
-        adeno = st.checkbox("아데노")
-        rota = st.checkbox("로타")
-        influenza = st.checkbox("인플루엔자")
-        parainfluenza = st.checkbox("파라인플루엔자")
-        hfm = st.checkbox("수족구")
-        noro = st.checkbox("노로")
-        mycoplasma = st.checkbox("마이코플라즈마")
-
-    # 약물 선택 (항암제/항생제)
-    st.divider()
-    st.subheader("약물 선택")
-    default_chemo = CHEMO_BY_DX.get(dx, [])
-    st.caption("암종에 맞는 항암제가 먼저 보이며, 필요 시 추가 선택하세요.")
-    sel_chemo = st.multiselect("항암제(한글 병기)", default_chemo + CHEMO_COMMON, default=default_chemo)
-    sel_abx   = st.multiselect("항생제(한글 병기)", ANTIBIOTICS_COMMON, default=[])
-
-    # 해석하기
+    # 5) 해석하기
     st.divider()
     go = st.button("🔎 해석하기", type="primary", use_container_width=True)
 
     if go:
+        # Labs collect
         labs = Labs(
             wbc=wbc or None, hb=hb or None, plt=plt or None, anc=anc or None,
             ca=ca or None, p=p or None, na=na or None, k=k or None, albumin=albumin or None,
@@ -467,9 +465,22 @@ def main():
             bun=bun or None, bnp=bnp or None
         )
 
-        sections = []
+        # Pediatric collect
+        peds = Peds(
+            appetite=appetite if appetite!="모름" else None,
+            fever_now=bool(fever_now),
+            temp_c=temp_c if temp_c>0 else None,
+            cough=cough,
+            dyspnea=dyspnea,
+            cyanosis=bool(cyanosis),
+            spo2=spo2 if (has_pulseox and (spo2 is not None) and spo2 > 0) else None,
+            rsv=rsv, adeno=adeno, rota=rota, influenza=influenza, parainfluenza=parainfluenza,
+            hfm=hfm, noro=noro, mycoplasma=mycoplasma
+        )
 
-        # 약물 경고(확장)
+        sections: List[Tuple[str, List[str]]] = []
+
+        # 확장된 항암제 경고
         warn = []
         for d in sel_chemo:
             if "MTX" in d:
@@ -492,27 +503,13 @@ def main():
                 warn += ["[G-CSF] 골통증 흔함, 드물게 비장비대/파열 — 좌상복부 통증 즉시 진료"]
             if "Hydroxyurea" in d:
                 warn += ["[Hydroxyurea] 골수억제/피부변화 — 상처치유 지연 주의"]
-
         if warn:
             sections.append(("약물 주의 요약(확장)", warn))
 
-        # Labs -> diet & summary
+        # 소아/일상 해석이 최상단
+        sections = interpret_peds(peds) + sections
+        # Labs 해석 + 식이가이드
         sections += interpret_labs(labs)
-
-        # Pediatric blocks
-        peds = Peds(
-            appetite=appetite if appetite!="모름" else None,
-            fever_now=bool(fever_now),
-            temp_c=temp_c if temp_c>0 else None,
-            cough=cough,
-            dyspnea=dyspnea,
-            cyanosis=bool(cyanosis),
-            spo2=spo2 if (has_pulseox and (spo2 is not None) and spo2 > 0) else None,
-            rsv=rsv, adeno=adeno, rota=rota, influenza=influenza, parainfluenza=parainfluenza,
-            hfm=hfm, noro=noro, mycoplasma=mycoplasma
-        )
-        p_sections = interpret_peds(peds)
-        sections = p_sections + sections  # 소아 결과를 최상단에
 
         # 화면 표시
         st.success("해석 완료 — 아래 결과를 확인하세요.")
@@ -521,11 +518,10 @@ def main():
             for ln in lines:
                 st.markdown(f"{ln if ln.startswith('- ') else '- ' + ln}")
 
-        # Export TXT/PDF
+        # Export
         md_text = build_sections_md(sections)
         txt_text = build_txt(md_text)
         pdf_bytes = build_pdf(md_text) if PDF_AVAILABLE else None
-
         st.divider()
         st.write("📄 결과 저장")
         cdl1, cdl2 = st.columns(2)
