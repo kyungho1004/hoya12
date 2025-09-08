@@ -213,6 +213,23 @@ def child_pugh_score(albumin, bilirubin, inr, ascites, enceph):
     else: k="C"
     return s, k
 
+
+def dose_acetaminophen(weight_kg):
+    """Return (low_mg, high_mg) per dose using 10–15 mg/kg."""
+    try:
+        w = float(weight_kg)
+        return round(w*10), round(w*15)
+    except Exception:
+        return None, None
+
+def dose_ibuprofen(weight_kg):
+    """Return (low_mg, high_mg) per dose using 5–10 mg/kg."""
+    try:
+        w = float(weight_kg)
+        return round(w*5), round(w*10)
+    except Exception:
+        return None, None
+
 def calc_egfr(creatinine, age=60, sex="F"):
     try:
         scr = float(creatinine)
@@ -328,9 +345,60 @@ def main():
             age_m_gi = st.text_input("나이(개월)", key="pedinf_age_m", placeholder="예: 18")
             temp_c_gi = st.text_input("체온(℃)", key="pedinf_temp_c", placeholder="예: 38.2")
             rr_gi = st.text_input("호흡수(/분)", key="pedinf_rr", placeholder="예: 42")
+            spo2_na_gi = st.checkbox("산소포화도 측정기 없음/측정 불가", key="pedinf_spo2_na", value=True)
+        if not spo2_na_gi:
             spo2_gi = st.text_input("산소포화도(%)", key="pedinf_spo2", placeholder="예: 96")
+        else:
+            spo2_gi = ""
             hr_gi = st.text_input("심박수(/분)", key="pedinf_hr", placeholder="예: 120")
             wt_kg_gi = st.text_input("체중(kg)", key="pedinf_wt", placeholder="예: 10.5")
+
+        with st.expander("👀 보호자 관찰 체크리스트", expanded=False):
+            obs2 = {}
+            obs2["숨 가빠보임(호흡곤란)"] = st.checkbox("숨 가빠보임(호흡곤란)", key="gi_obs1")
+            obs2["청색증 의심(입술/손발)"] = st.checkbox("청색증 의심(입술/손발)", key="gi_obs2")
+            obs2["말수 감소·축 늘어짐"]   = st.checkbox("말수 감소·축 늘어짐/보챔", key="gi_obs3")
+            obs2["탈수 의심(마른입/눈물↓/소변↓)"] = st.checkbox("탈수 의심(마른 입술/눈물 적음/소변 감소)", key="gi_obs4")
+            obs2["고열(≥40.0℃)"] = st.checkbox("고열(≥40.0℃)", key="gi_obs5")
+            obs2["3개월 미만 발열(≥38.0℃)"] = st.checkbox("3개월 미만 발열(≥38.0℃)", key="gi_obs6")
+            obs2["경련(열성경련 포함)"] = st.checkbox("경련(열성경련 포함)", key="gi_obs7")
+            st.session_state["ped_obs_gi"] = {k:v for k,v in obs2.items() if v}
+
+        with st.expander("🧮 해열제 용량 계산기", expanded=False):
+            wt2 = st.text_input("체중(kg)", key="antipy_wt_gi", placeholder="예: 10.5")
+            med2 = st.selectbox("해열제", ["아세트아미노펜(acetaminophen)", "이부프로펜(ibuprofen)"], key="antipy_med_gi")
+            if med2.startswith("아세트"):
+                mg_low, mg_high = dose_acetaminophen(wt2)
+                conc2 = st.selectbox("시럽 농도", ["160 mg/5 mL", "120 mg/5 mL"], key="antipy_conc_acet_gi")
+                if mg_low and mg_high:
+                    try:
+                        mg_num = int(conc2.split("mg/")[0])
+                    except Exception:
+                        mg_num = 160
+                    try:
+                        ml_denom = int(conc2.split("mg/")[1].split()[0].replace("mL",""))
+                    except Exception:
+                        ml_denom = 5
+                    ml_low  = round(mg_low  * ml_denom / mg_num, 1)
+                    ml_high = round(mg_high * ml_denom / mg_num, 1)
+                    st.info(f"권장 1회 용량: **{mg_low}–{mg_high} mg** ≈ **{ml_low}–{ml_high} mL** ({conc2})")
+                    st.caption("간격: 4–6시간, 최대 5회/일. 복용 전 제품 라벨·의료진 지침을 확인하세요.")
+            else:
+                mg_low, mg_high = dose_ibuprofen(wt2)
+                conc2 = st.selectbox("시럽 농도", ["100 mg/5 mL"], key="antipy_conc_ibu_gi")
+                if mg_low and mg_high:
+                    try:
+                        mg_num = int(conc2.split("mg/")[0])
+                    except Exception:
+                        mg_num = 100
+                    try:
+                        ml_denom = int(conc2.split("mg/")[1].split()[0].replace("mL",""))
+                    except Exception:
+                        ml_denom = 5
+                    ml_low  = round(mg_low  * ml_denom / mg_num, 1)
+                    ml_high = round(mg_high * ml_denom / mg_num, 1)
+                    st.info(f"권장 1회 용량: **{mg_low}–{mg_high} mg** ≈ **{ml_low}–{ml_high} mL** ({conc2})")
+                    st.caption("간격: 6–8시간, 생후 6개월 미만은 의료진과 상담 필요. 최대 일일 용량 준수.")
 
         with st.expander("🧒 증상 체크리스트", expanded=True):
             sel_sym = []
@@ -528,11 +596,64 @@ def main():
         age_m        = _parse_num_ped("나이(개월)", key="ped_age", decimals=0, placeholder="예: 18")
         temp_c       = _parse_num_ped("체온(℃)", key="ped_temp", decimals=1, placeholder="예: 38.2")
         rr           = _parse_num_ped("호흡수(/분)", key="ped_rr", decimals=0, placeholder="예: 42")
-        spo2         = _parse_num_ped("산소포화도(%)", key="ped_spo2", decimals=0, placeholder="예: 96")
+        spo2_unknown = st.checkbox("산소포화도 측정기 없음/측정 불가", key="ped_spo2_na", value=True)
+        if not spo2_unknown:
+            spo2 = _parse_num_ped("산소포화도(%)", key="ped_spo2", decimals=0, placeholder="예: 96")
+        else:
+            spo2 = None
         urine_24h    = _parse_num_ped("24시간 소변 횟수", key="ped_u", decimals=0, placeholder="예: 6")
         retraction   = _parse_num_ped("흉곽 함몰(0/1)", key="ped_ret", decimals=0, placeholder="0 또는 1")
         nasal_flaring= _parse_num_ped("콧벌렁임(0/1)", key="ped_nf", decimals=0, placeholder="0 또는 1")
         apnea        = _parse_num_ped("무호흡(0/1)", key="ped_ap", decimals=0, placeholder="0 또는 1")
+
+        with st.expander("👀 보호자 관찰 체크리스트", expanded=False):
+            obs = {}
+            obs["숨 가빠보임(호흡곤란)"] = st.checkbox("숨 가빠보임(호흡곤란)", key="obs1")
+            obs["청색증 의심(입술/손발)"] = st.checkbox("청색증 의심(입술/손발)", key="obs2")
+            obs["말수 감소·축 늘어짐"]   = st.checkbox("말수 감소·축 늘어짐/보챔", key="obs3")
+            obs["탈수 의심(마른입/눈물↓/소변↓)"] = st.checkbox("탈수 의심(마른 입술/눈물 적음/소변 감소)", key="obs4")
+            obs["고열(≥40.0℃)"] = st.checkbox("고열(≥40.0℃)", key="obs5")
+            obs["3개월 미만 발열(≥38.0℃)"] = st.checkbox("3개월 미만 발열(≥38.0℃)", key="obs6")
+            obs["경련(열성경련 포함)"] = st.checkbox("경련(열성경련 포함)", key="obs7")
+            st.session_state["ped_obs"] = {k:v for k,v in obs.items() if v}
+
+        with st.expander("🧮 해열제 용량 계산기", expanded=False):
+            wt = st.text_input("체중(kg)", key="antipy_wt", placeholder="예: 10.5")
+            med = st.selectbox("해열제", ["아세트아미노펜(acetaminophen)", "이부프로펜(ibuprofen)"], key="antipy_med")
+            if med.startswith("아세트"):
+                mg_low, mg_high = dose_acetaminophen(wt)
+                conc = st.selectbox("시럽 농도", ["160 mg/5 mL", "120 mg/5 mL"], key="antipy_conc_acet")
+                if mg_low and mg_high:
+                    num, denom = map(int, conc.split()[0].split("mg/")[0]), int(conc.split("/")[1].split()[0])
+                    # safer parse
+                    try:
+                        mg_num = int(conc.split("mg/")[0])
+                    except Exception:
+                        mg_num = 160
+                    try:
+                        ml_denom = int(conc.split("mg/")[1].split()[0].replace("mL",""))
+                    except Exception:
+                        ml_denom = 5
+                    ml_low  = round(mg_low  * ml_denom / mg_num, 1)
+                    ml_high = round(mg_high * ml_denom / mg_num, 1)
+                    st.info(f"권장 1회 용량: **{mg_low}–{mg_high} mg** ≈ **{ml_low}–{ml_high} mL** ({conc})")
+                    st.caption("간격: 4–6시간, 최대 5회/일. 복용 전 제품 라벨·의료진 지침을 확인하세요.")
+            else:
+                mg_low, mg_high = dose_ibuprofen(wt)
+                conc = st.selectbox("시럽 농도", ["100 mg/5 mL"], key="antipy_conc_ibu")
+                if mg_low and mg_high:
+                    try:
+                        mg_num = int(conc.split("mg/")[0])
+                    except Exception:
+                        mg_num = 100
+                    try:
+                        ml_denom = int(conc.split("mg/")[1].split()[0].replace("mL",""))
+                    except Exception:
+                        ml_denom = 5
+                    ml_low  = round(mg_low  * ml_denom / mg_num, 1)
+                    ml_high = round(mg_high * ml_denom / mg_num, 1)
+                    st.info(f"권장 1회 용량: **{mg_low}–{mg_high} mg** ≈ **{ml_low}–{ml_high} mL** ({conc})")
+                    st.caption("간격: 6–8시간, 생후 6개월 미만은 의료진과 상담 필요. 최대 일일 용량 준수.")
 
     # ===== 특수검사(기본) + TOP8 확장 =====
     extra_vals = {}
