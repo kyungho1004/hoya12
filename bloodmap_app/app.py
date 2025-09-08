@@ -412,31 +412,31 @@ def main():
             pmbcl_only = ["Pembrolizumab (PMBCL; 해외 활발 사용, 국내 미승인)"]
         
             # DLBCL/FL/MCL 등 세부별 가중(필요 시 정렬만 바꿔줌)
+            # DLBCL/FL/MCL 등 세부별 가중(필요 시 정렬만 바꿔줌)
             if "PMBCL" in cancer:
-        drug_choices = ["DA-EPOCH-R"] + base_choices + pmbcl_only
+                drug_choices = ["DA-EPOCH-R"] + base_choices + pmbcl_only
             elif "DLBCL" in cancer or "HGBL" in cancer or "3B" in cancer:
-        drug_choices = ["R-CHOP","Pola-R-CHP","DA-EPOCH-R"] + base_choices
+                drug_choices = ["R-CHOP","Pola-R-CHP","DA-EPOCH-R"] + base_choices
             elif "3A" in cancer:
-        drug_choices = ["R-CHOP","Pola-R-CHP"] + [x for x in base_choices if x not in ["DA-EPOCH-R"]]
+                drug_choices = ["R-CHOP","Pola-R-CHP"] + [x for x in base_choices if x not in ["DA-EPOCH-R"]]
             elif "FL 1-2" in cancer or "1-2" in cancer:
-        drug_choices = ["BR","R-CVP"] + base_choices
+                drug_choices = ["BR","R-CVP"] + base_choices
             elif "MCL" in cancer:
-        drug_choices = ["BR","R-CHOP"] + base_choices + ["Ibrutinib (R/R)", "Acalabrutinib (R/R)", "Zanubrutinib (R/R)"]
+                drug_choices = ["BR","R-CHOP"] + base_choices + ["Ibrutinib (R/R)", "Acalabrutinib (R/R)", "Zanubrutinib (R/R)"]
             elif "MZL" in cancer:
-        drug_choices = ["BR","R-CVP"] + base_choices
+                drug_choices = ["BR","R-CVP"] + base_choices
             elif "Burkitt" in cancer:
-        drug_choices = ["CODOX-M/IVAC-R","Hyper-CVAD-R"] + base_choices
+                drug_choices = ["CODOX-M/IVAC-R","Hyper-CVAD-R"] + base_choices
             else:
-        drug_choices = base_choices
-        
+                drug_choices = base_choices
+
             # ✅ 기본값-옵션 교집합으로 보호
             _def = st.session_state.get("selected_drugs", [])
             if isinstance(_def, str):
-        _def = [_def]
+                _def = [_def]
             _def = [x for x in _def if x in drug_choices]
             selected_drugs = st.multiselect("항암제 선택", drug_choices, default=_def, key="selected_drugs")
             st.caption("세포/자가세포치료(CAR-T, 자가이식)는 제외됩니다. 국내 미승인이라도 해외에서 활발히 쓰이는 일부는 참고용으로 회색 표시될 수 있습니다.")
-        
         else:
             st.info("암 그룹을 선택하면 해당 암종에 맞는 **항암제 목록과 추가 수치 패널**이 자동 노출됩니다.")
         # ✅ 진단 변경 시 항암제 선택 초기화
