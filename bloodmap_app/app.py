@@ -331,6 +331,20 @@ def interpret_peds(p: Peds) -> List[Tuple[str, List[str]]]:
 # ========= UI =========
 def main():
     st.set_page_config(page_title="피수치 가이드 / BloodMap", layout="centered")
+
+# --- Hide +/- buttons on number_input (and native spinners) ---
+st.markdown(
+    \"\"\"
+    <style>
+    [data-testid="stNumberInput"] button {display:none !important;}
+    /* Hide native spin buttons */
+    input[type=number]::-webkit-outer-spin-button,
+    input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    input[type=number] { -moz-appearance: textfield; }
+    </style>
+    \"\"\", unsafe_allow_html=True
+)
+
     st.title(APP_TITLE)
     st.caption(APP_SIGNATURE)
 
