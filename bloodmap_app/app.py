@@ -566,16 +566,11 @@ def build_report(mode, meta, vals, extra):
                     lines.append(f"- {k}: **{v}**")
     lines.append("")
     lines.append("> ⚠️ 본 수치는 참고용이며 개발자와 무관하며, 수치 기반 임의조정은 금지입니다. 반드시 의료진과 상의 후 결정하시기 바랍니다.")
-    return "
-".join(lines)
+    return "\n".join(lines)
 
 report_md = build_report(mode, meta, {k:v for k,v in vals.items() if entered(v)}, extra)
 if a4_opt:
-    report_md = report_md.replace("## ", "
-
----
-
-## ")
+    report_md = report_md.replace("## ", "\n\n---\n\n## ")
 
 if show_report:
     st.markdown(report_md)
