@@ -64,9 +64,62 @@ def stage_acr(acr_mg_g):
     return "A3", "중증 증가 (>300 mg/g)"
 
 def child_pugh_score(albumin, bilirubin, inr, ascites, enceph):
-    """
-    Returns (score, class). If any of albumin/bilirubin/INR is missing/invalid,
-    return (0, None) so it won't be displayed.
+    """Return (score, class). If albumin/bilirubin/INR any missing -> (0, None)."""
+    def _alb(a):
+        try:
+            a = float(a)
+        except Exception:
+            return None
+        if a > 3.5:
+            return 1
+        elif 2.8 <= a <= 3.5:
+            return 2
+        else:
+            return 3
+
+    def _tb(b):
+        try:
+            b = float(b)
+        except Exception:
+            return None
+        if b < 2:
+            return 1
+        elif 2 <= b <= 3:
+            return 2
+        else:
+            return 3
+
+    def _inr(x):
+        try:
+            x = float(x)
+        except Exception:
+            return None
+        if x < 1.7:
+            return 1
+        elif 1.7 <= x <= 2.3:
+            return 2
+        else:
+            return 3
+
+    def _cat(v):
+        mapping = {"없음": 1, "경미": 2, "중증": 3}
+        return mapping.get(v, 0)
+
+    a_s = _alb(albumin)
+    b_s = _tb(bilirubin)
+    i_s = _inr(inr)
+
+    if a_s is None or b_s is None or i_s is None:
+        return 0, None
+
+    total = a_s + b_s + i_s + _cat(ascites) + _cat(enceph)
+    if 5 <= total <= 6:
+        klass = "A"
+    elif 7 <= total <= 9:
+        klass = "B"
+    else:
+        klass = "C"
+    return total, klass
     """
     def _alb(a):
         try:
