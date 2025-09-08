@@ -266,53 +266,157 @@ def main():
 
     extra_vals = {}
     if mode == "일반/암" and group and group != "미선택/일반" and (cancer or sarcoma_sub):
-        
-            "AML": [("PT","PT","sec",1),("aPTT","aPTT","sec",1),("Fibrinogen","Fibrinogen","mg/dL",1),("D-dimer","D-dimer","µg/mL FEU",2)],
-            "APL": [("PT","PT","sec",1),("aPTT","aPTT","sec",1),("Fibrinogen","Fibrinogen","mg/dL",1),("D-dimer","D-dimer","µg/mL FEU",2),("DIC Score","DIC Score","pt",0)],
-            "ALL": [("PT","PT","sec",1),("aPTT","aPTT","sec",1),("CNS Sx","CNS 증상 여부(0/1)","",0)],
-            "CML": [("BCR-ABL PCR","BCR-ABL PCR","%IS",2),("Basophil%","기저호염기구 비율","%",1)],
-            "CLL": [("IgG","IgG","mg/dL",0),("IgA","IgA","mg/dL",0),("IgM","IgM","mg/dL",0)],
-            "폐암(Lung cancer)": [("CEA","CEA","ng/mL",1),("CYFRA 21-1","CYFRA 21-1","ng/mL",1),("NSE","NSE","ng/mL",1)],
-            "유방암(Breast cancer)": [("CA15-3","CA15-3","U/mL",1),("CEA","CEA","ng/mL",1),("HER2","HER2","IHC/FISH",0),("ER/PR","ER/PR","%",0)],
-            "위암(Gastric cancer)": [("CEA","CEA","ng/mL",1),("CA72-4","CA72-4","U/mL",1),("CA19-9","CA19-9","U/mL",1)],
-            "대장암(Cololoractal cancer)": [("CEA","CEA","ng/mL",1),("CA19-9","CA19-9","U/mL",1)],
-            "간암(HCC)": [("AFP","AFP","ng/mL",1),("PIVKA-II","PIVKA-II(DCP)","mAU/mL",0)],
-            "피부암(흑색종)": [("S100","S100","µg/L",1),("LDH","LDH","U/L",0)],
-            "육종(Sarcoma)": [("ALP","ALP","U/L",0),("CK","CK","U/L",0)],
-            "신장암(RCC)": [("CEA","CEA","ng/mL",1),("LDH","LDH","U/L",0)],
-            "식도암": [("SCC Ag","SCC antigen","ng/mL",1),("CEA","CEA","ng/mL",1)],
-            "방광암": [("NMP22","NMP22","U/mL",1),("UBC","UBC","µg/L",1)],
+        # --- 암별 특수검사 맵 ---
+        items_map = {
+            # 혈액암
+            "AML": [
+                ("PT","PT","sec",1), ("aPTT","aPTT","sec",1),
+                ("Fibrinogen","Fibrinogen","mg/dL",1), ("D-dimer","D-dimer","µg/mL FEU",2),
+                ("LDH","LDH","U/L",0)
+            ],
+            "APL": [
+                ("PT","PT","sec",1), ("aPTT","aPTT","sec",1),
+                ("Fibrinogen","Fibrinogen","mg/dL",1), ("D-dimer","D-dimer","µg/mL FEU",2),
+                ("DIC Score","DIC Score","pt",0)
+            ],
+            "ALL": [
+                ("PT","PT","sec",1), ("aPTT","aPTT","sec",1),
+                ("CNS Sx","CNS 증상 여부(0/1)","",0)
+            ],
+            "CML": [
+                ("BCR-ABL PCR","BCR-ABL PCR","%IS",2), ("Basophil%","기저호염기구 비율","%",1)
+            ],
+            "CLL": [
+                ("IgG","IgG","mg/dL",0), ("IgA","IgA","mg/dL",0), ("IgM","IgM","mg/dL",0)
+            ],
+
+            # 고형암
+            "폐암(Lung cancer)": [
+                ("CEA","CEA","ng/mL",1), ("CYFRA 21-1","CYFRA 21-1","ng/mL",1),
+                ("NSE","NSE","ng/mL",1), ("ProGRP","ProGRP","pg/mL",0)
+            ],
+            "유방암(Breast cancer)": [
+                ("CA15-3","CA15-3","U/mL",1), ("CEA","CEA","ng/mL",1),
+                ("HER2","HER2","IHC/FISH",0), ("ER/PR","ER/PR","%",0)
+            ],
+            "위암(Gastric cancer)": [
+                ("CEA","CEA","ng/mL",1), ("CA72-4","CA72-4","U/mL",1), ("CA19-9","CA19-9","U/mL",1)
+            ],
+            "대장암(Cololoractal cancer)": [
+                ("CEA","CEA","ng/mL",1), ("CA19-9","CA19-9","U/mL",1)
+            ],
+            "간암(HCC)": [
+                ("AFP","AFP","ng/mL",1), ("PIVKA-II","PIVKA-II(DCP)","mAU/mL",0)
+            ],
+            "췌장암(Pancreatic cancer)": [
+                ("CA19-9","CA19-9","U/mL",1), ("CEA","CEA","ng/mL",1)
+            ],
+            "담도암(Cholangiocarcinoma)": [
+                ("CA19-9","CA19-9","U/mL",1), ("CEA","CEA","ng/mL",1), ("ALP","ALP","U/L",0)
+            ],
+            "자궁내막암(Endometrial cancer)": [
+                ("CA125","CA-125","U/mL",1)
+            ],
+            "난소암": [
+                ("CA125","CA-125","U/mL",1), ("HE4","HE4","pmol/L",0)
+            ],
+            "자궁경부암": [
+                ("SCC Ag","SCC antigen","ng/mL",1)
+            ],
+            "전립선암": [
+                ("PSA","PSA","ng/mL",1), ("ALP","ALP(골전이 평가)","U/L",0)
+            ],
+            "갑상선암": [
+                ("Tg","Thyroglobulin","ng/mL",1), ("Anti-Tg","Anti-Tg","IU/mL",0)
+            ],
+            "구강암/후두암": [
+                ("SCC Ag","SCC antigen","ng/mL",1)
+            ],
+            "피부암(흑색종)": [
+                ("S100","S100","µg/L",1), ("LDH","LDH","U/L",0)
+            ],
+            "육종(Sarcoma)": [
+                ("ALP","ALP","U/L",0), ("CK","CK","U/L",0)
+            ],
+            "신장암(RCC)": [
+                ("LDH","LDH","U/L",0)
+            ],
+            "뇌종양(Glioma)": [
+                ("LDH","LDH","U/L",0)
+            ],
+            "식도암": [
+                ("SCC Ag","SCC antigen","ng/mL",1), ("CEA","CEA","ng/mL",1)
+            ],
+            "방광암": [
+                ("NMP22","NMP22","U/mL",1), ("UBC","UBC","µg/L",1)
+            ],
+
+            # 소아암
+            "Neuroblastoma": [
+                ("Urine VMA","소변 VMA","mg/gCr",1), ("Urine HVA","소변 HVA","mg/gCr",1), ("NSE","NSE","ng/mL",1)
+            ],
+            "Wilms tumor": [
+                ("Urine RBC","소변 적혈구","/HPF",0), ("Creatinine","크레아티닌","mg/dL",1)
+            ],
+
+            # 희귀암
+            "담낭암(Gallbladder cancer)": [
+                ("CA19-9","CA19-9","U/mL",1), ("CEA","CEA","ng/mL",1)
+            ],
+            "부신암(Adrenal cancer)": [
+                ("Cortisol","코르티솔","µg/dL",1), ("DHEA-S","DHEA-S","µg/dL",1)
+            ],
+            "망막모세포종(Retinoblastoma)": [
+                ("LDH","LDH","U/L",0)
+            ],
+            "흉선종/흉선암(Thymoma/Thymic carcinoma)": [
+                ("AChR Ab","AChR 항체","nmol/L",2)
+            ],
+            "신경내분비종양(NET)": [
+                ("CgA","Chromogranin A","ng/mL",1), ("Urine 5-HIAA","소변 5-HIAA","mg/24h",1)
+            ],
+            "간모세포종(Hepatoblastoma)": [
+                ("AFP","AFP","ng/mL",1)
+            ],
+            "비인두암(NPC)": [
+                ("EBV DNA","EBV DNA","IU/mL",0), ("CEA","CEA","ng/mL",1)
+            ],
+            "GIST": [
+                ("LDH","LDH","U/L",0)
+            ],
         }
         key_cancer = _heme_code if (group == "혈액암" and _heme_code) else cancer
         items = items_map.get(key_cancer, [])
         if cancer == "육종(Sarcoma)" and sarcoma_sub:
             if "골육종" in sarcoma_sub: items = [("ALP","ALP","U/L",0)]
             elif "횡문근육종" in sarcoma_sub: items = [("CK","CK","U/L",0)]
+
+        # 토글: 암별 특수검사 표시 여부
         show_cancer_special = st.checkbox("🧬 암별 특수검사 입력(토글)", value=True)
-            if items and show_cancer_special:
-                st.divider(); st.header("3️⃣ 암별 디테일 수치")
+        if items and show_cancer_special:
+            st.divider(); st.header("3️⃣ 암별 디테일 수치")
             for key, label, unit, decs in items:
                 ph = f"예: {('0' if decs==0 else '0.'+('0'*decs))}" if decs is not None else ""
                 val = num_input_generic(f"{label}" + (f" ({unit})" if unit else ""), key=f"extra_{key}", decimals=decs, placeholder=ph)
                 extra_vals[key] = val
 
-            # --- Optional common panels (toggles) ---
-            st.divider(); st.header("4️⃣ 선택 패널(토글)")
-            ua_on = st.checkbox("소변 검사(요검사) 입력", key="opt_ua")
-            if ua_on:
-                extra_vals["UA_RBC"] = num_input_generic("요 RBC(/HPF)", key="ua_rbc", decimals=0, placeholder="예: 5")
-                extra_vals["UA_WBC"] = num_input_generic("요 WBC(/HPF)", key="ua_wbc", decimals=0, placeholder="예: 3")
-                extra_vals["UA_Protein"] = num_input_generic("요 단백질(mg/dL)", key="ua_pro", decimals=0, placeholder="예: 30")
-                extra_vals["UA_SG"] = num_input_generic("요 비중(SG)", key="ua_sg", decimals=3, placeholder="예: 1.020")
-                extra_vals["UA_pH"] = num_input_generic("요 pH", key="ua_ph", decimals=1, placeholder="예: 6.0")
-                extra_vals["UA_Ketone"] = num_input_generic("요 케톤(0/1)", key="ua_ket", decimals=0, placeholder="0 또는 1")
-                extra_vals["UA_Nitrite"] = num_input_generic("요 니트라이트(0/1)", key="ua_nit", decimals=0, placeholder="0 또는 1")
-            lipid_on = st.checkbox("지질 패널(총콜레스테롤/LDL/HDL/TG) 입력", key="opt_lipid")
-            if lipid_on:
-                extra_vals["TC"] = num_input_generic("총 콜레스테롤 TC (mg/dL)", key="lip_tc", decimals=0, placeholder="예: 180")
-                extra_vals["LDL_C"] = num_input_generic("LDL-C (mg/dL)", key="lip_ldl", decimals=0, placeholder="예: 110")
-                extra_vals["HDL_C"] = num_input_generic("HDL-C (mg/dL)", key="lip_hdl", decimals=0, placeholder="예: 50")
-                extra_vals["TG"] = num_input_generic("Triglyceride TG (mg/dL)", key="lip_tg", decimals=0, placeholder="예: 120")
+        # 선택 패널(토글): 소변검사, 지질 패널
+        st.divider(); st.header("4️⃣ 선택 패널(토글)")
+        ua_on = st.checkbox("소변 검사(요검사) 입력", key="opt_ua")
+        if ua_on:
+            extra_vals["UA_RBC"] = num_input_generic("요 RBC(/HPF)", key="ua_rbc", decimals=0, placeholder="예: 5")
+            extra_vals["UA_WBC"] = num_input_generic("요 WBC(/HPF)", key="ua_wbc", decimals=0, placeholder="예: 3")
+            extra_vals["UA_Protein"] = num_input_generic("요 단백질(mg/dL)", key="ua_pro", decimals=0, placeholder="예: 30")
+            extra_vals["UA_SG"] = num_input_generic("요 비중(SG)", key="ua_sg", decimals=3, placeholder="예: 1.020")
+            extra_vals["UA_pH"] = num_input_generic("요 pH", key="ua_ph", decimals=1, placeholder="예: 6.0")
+            extra_vals["UA_Ketone"] = num_input_generic("요 케톤(0/1)", key="ua_ket", decimals=0, placeholder="0 또는 1")
+            extra_vals["UA_Nitrite"] = num_input_generic("요 니트라이트(0/1)", key="ua_nit", decimals=0, placeholder="0 또는 1")
+        lipid_on = st.checkbox("지질 패널(총콜레스테롤/LDL/HDL/TG) 입력", key="opt_lipid")
+        if lipid_on:
+            extra_vals["TC"] = num_input_generic("총 콜레스테롤 TC (mg/dL)", key="lip_tc", decimals=0, placeholder="예: 180")
+            extra_vals["LDL_C"] = num_input_generic("LDL-C (mg/dL)", key="lip_ldl", decimals=0, placeholder="예: 110")
+            extra_vals["HDL_C"] = num_input_generic("HDL-C (mg/dL)", key="lip_hdl", decimals=0, placeholder="예: 50")
+            extra_vals["TG"] = num_input_generic("Triglyceride TG (mg/dL)", key="lip_tg", decimals=0, placeholder="예: 120")
     elif mode == "소아(일상/호흡기)":
         st.divider(); st.header("3️⃣ 소아 생활 가이드")
         def ped_banner(age_m, temp_c, rr, spo2, urine_24h, retraction, nasal_flaring, apnea):
