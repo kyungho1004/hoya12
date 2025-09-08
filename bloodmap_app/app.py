@@ -242,6 +242,77 @@ def calc_egfr(creatinine, age=60, sex="F"):
         return int(round(egfr, 0))
     except Exception:
         return None
+def _interpret_urine(ev: dict):
+    """
+    Make caregiver-friendly interpretations for urine findings.
+    Inputs (if present in ev):
+      - "적혈구(소변, /HPF)" (int)
+      - "백혈구(소변, /HPF)" (int)
+      - "UPCR(mg/g)" (float)
+      - "ACR(mg/g)" (float)
+      - qualitative keys like "혈뇨(정성)", "단백뇨(정성)", "백혈구뇨(정성)", "요당(정성)"
+    Returns: list[str]
+    """
+    lines = []
+    def _isnum(x):
+        try:
+            float(x)
+            return True
+        except Exception:
+            return False
+
+    rbc = ev.get("적혈구(소변, /HPF)")
+    wbc = ev.get("백혈구(소변, /HPF)")
+    upcr = ev.get("UPCR(mg/g)")
+    acr = ev.get("ACR(mg/g)")
+
+    # RBC /HPF
+    if _isnum(rbc):
+        rbc = float(rbc)
+        if rbc <= 2:
+            lines.append(f"소변 적혈구(RBC, /HPF): {int(rbc)} — 일반적으로 **정상 범위(0–2/HPF)**로 해석됩니다.")
+        elif 3 <= rbc <= 5:
+            lines.append(f"소변 적혈구(RBC, /HPF): {int(rbc)} — **경미한 혈뇨(추적 권장)** 가능. 운동/생리/채뇨오염 여부 확인하세요.")
+        else:
+            lines.append(f"소변 적혈구(RBC, /HPF): {int(rbc)} — **유의한 혈뇨** 가능. 반복 검사 및 원인 평가(요로감염·결석 등) 고려.")
+    # WBC /HPF
+    if _isnum(wbc):
+        wbc = float(wbc)
+        if wbc <= 5:
+            lines.append(f"소변 백혈구(WBC, /HPF): {int(wbc)} — 일반적으로 **정상 범위(≤5/HPF)**.")
+        elif 6 <= wbc <= 9:
+            lines.append(f"소변 백혈구(WBC, /HPF): {int(wbc)} — **경미한 백혈구뇨** 가능. 증상(배뇨통/빈뇨/발열) 동반 시 추적.")
+        else:
+            lines.append(f"소변 백혈구(WBC, /HPF): {int(wbc)} — **유의한 백혈구뇨(UTI 의심)** 가능. 증상·배양검사 고려.")
+    # UPCR
+    if _isnum(upcr):
+        upcr = float(upcr)
+        if upcr < 150:
+            lines.append(f"UPCR: {upcr:.1f} mg/g — **정상~경미** 범위(성인 기준 <150). 지속 시 추적 권장.")
+        elif upcr < 300:
+            lines.append(f"UPCR: {upcr:.1f} mg/g — **경도 단백뇨** 가능(150–300). 수분상태/운동/발열 영향 배제 후 재검.")
+        elif upcr < 1000:
+            lines.append(f"UPCR: {upcr:.1f} mg/g — **중등도 단백뇨** 범위(300–1000). 신장 평가 필요.")
+        else:
+            lines.append(f"UPCR: {upcr:.1f} mg/g — **중증 단백뇨(>1000)** 가능. 의료진과 상담 권장.")
+    # ACR
+    if _isnum(acr):
+        acr = float(acr)
+        if acr < 30:
+            lines.append(f"ACR: {acr:.1f} mg/g — **A1(정상-경도)**.")
+        elif acr <= 300:
+            lines.append(f"ACR: {acr:.1f} mg/g — **A2(중등도 증가)**.")
+        else:
+            lines.append(f"ACR: {acr:.1f} mg/g — **A3(중증 증가)**.")
+    # Qualitative summaries (if provided)
+    for k in ["혈뇨(정성)","단백뇨(정성)","백혈구뇨(정성)","요당(정성)"]:
+        v = ev.get(k)
+        if v:
+            lines.append(f"{k}: {v}")
+    if lines:
+        lines.append("※ 해석은 참고용입니다. 증상이 있거나 수치가 반복 상승하면 의료진과 상담하세요.")
+    return lines
+
 
 def main():
     st.set_page_config(page_title=PAGE_TITLE, layout="centered")
@@ -750,22 +821,40 @@ def main():
             # 정성(스트립) 결과
             cq = st.columns(4)
             with cq[0]:
-                hematuria_q = st.selectbox("혈뇨(정성)", ["", "소량", "중등도", "고농도"], index=0)
+                hematuria_q = st.selectbox("적혈구(소변, 정성)", ["", "+", "++", "+++"], index=0)
             with cq[1]:
-                proteinuria_q = st.selectbox("단백뇨(정성)", ["", "음성(없음)", "소량", "중등도"], index=0)
+                proteinuria_q = st.selectbox("단백뇨(정성)", ["", "-", "+", "++"], index=0)
             with cq[2]:
-                wbc_q = st.selectbox("백혈구(정성)", ["", "음성(없음)", "의심", "양성"], index=0)
+                wbc_q = st.selectbox("백혈구(소변, 정성)", ["", "-", "+", "++"], index=0)", "의심", "양성"], index=0)
             with cq[3]:
-                gly_q = st.selectbox("요당(정성)", ["", "음성(없음)", "고농도"], index=0)
+                gly_q = st.selectbox("요당(정성)", ["", "-", "+++"], index=0)
+
+
+            # 👇 정량 수치 입력 (/HPF)
+            rbc_ur = num_input_generic("적혈구(소변, /HPF)", key="u_rbc_hpf", decimals=0, placeholder="예: 5")
+            wbc_ur = num_input_generic("백혈구(소변, /HPF)", key="u_wbc_hpf", decimals=0, placeholder="예: 10")
+            if rbc_ur is not None:
+                extra_vals["적혈구(소변, /HPF)"] = rbc_ur
+            if wbc_ur is not None:
+                extra_vals["백혈구(소변, /HPF)"] = wbc_ur
 
             # 설명 매핑
-            _desc_hema = {"소량":"소량 검출","중등도":"중등도 검출","고농도":"고농도 검출"}
-            _desc_prot = {"음성(없음)":"음성","소량":"경도 검출","중등도":"중등도 검출"}
-            _desc_wbc  = {"음성(없음)":"음성","의심":"의심 수준","양성":"양성"}
-            _desc_gly  = {"음성(없음)":"음성","고농도":"고농도 검출"}
+
+        # 💡 Caregiver-friendly aliases for urine qualitative tests
+        if "혈뇨(정성)" in extra_vals and "적혈구(소변, 정성)" not in extra_vals:
+            extra_vals["적혈구(소변, 정성)"] = extra_vals["혈뇨(정성)"]
+        if "백혈구(정성)" in extra_vals and "백혈구(소변, 정성)" not in extra_vals:
+            extra_vals["백혈구(소변, 정성)"] = extra_vals["백혈구(정성)"]
+
+            _desc_hema = {"+":"소량 검출","++":"중등도 검출","+++":"고농도 검출"}
+            _desc_prot = {"-":"음성","+":"경도 검출","++":"중등도 검출"}
+            _desc_wbc  = {"-":"음성","+":"의심 수준","++":"양성"}
+            _desc_gly  = {"-":"음성","+++":"고농도 검출"}
 
             if hematuria_q:
                 extra_vals["혈뇨(정성)"] = f"{hematuria_q} ({_desc_hema.get(hematuria_q,'')})"
+            # alias for caregiver-friendly label
+            extra_vals["적혈구(소변, 정성)"] = extra_vals.get("혈뇨(정성)", "")
             if proteinuria_q:
                 extra_vals["단백뇨(정성)"] = f"{proteinuria_q} ({_desc_prot.get(proteinuria_q,'')})"
             if wbc_q:
@@ -793,6 +882,10 @@ def main():
                         extra_vals["Albuminuria stage"] = f"{a} ({a_label})"
                 if upcr is not None:
                     extra_vals["UPCR(mg/g)"] = upcr
+                # 수기 입력(선택): Pro/Cr, urine (mg/g)
+                upcr_manual = num_input_generic("Pro/Cr, urine (mg/g)", key="ex_upcr_manual", decimals=1, placeholder="예: 350.0")
+                if upcr_manual is not None:
+                    extra_vals["UPCR(mg/g)"] = upcr_manual
                 extra_vals["Urine Cr"] = u_cr
                 extra_vals["Urine albumin"] = u_alb
         if t_lipid_basic:
@@ -958,6 +1051,13 @@ def main():
             for line in lines:
                 st.write(line)
 
+
+            # 요검사 추가 해석
+            urine_lines = _interpret_urine(extra_vals)
+            if urine_lines:
+                st.markdown("### 🧪 요검사 해석")
+                for ul in urine_lines:
+                    st.write(ul)
             if nickname_key and "records" in st.session_state and st.session_state.records.get(nickname_key):
                 st.markdown("### 🔍 수치 변화 비교 (이전 기록 대비)")
                 cmp_lines = compare_with_previous(nickname_key, {k: vals.get(k) for k in ORDER if entered(vals.get(k))})
@@ -1025,9 +1125,14 @@ def main():
         food_lines = food_suggestions(vals, anc_place) if (mode=="일반/암") else []
 
         a4_opt = st.checkbox("🖨️ A4 프린트 최적화(섹션 구분선 추가)", value=True)
+        urine_lines_for_report = _interpret_urine(extra_vals)
+
         report_md = build_report(mode, meta, {k: v for k, v in vals.items() if entered(v)}, cmp_lines, extra_vals, meds_lines, food_lines, abx_lines)
         if a4_opt:
             report_md = report_md.replace("### ", "\n\n---\n\n### ")
+        # Add urine interpretation section to report
+        if urine_lines_for_report:
+            report_md += "\n\n---\n\n### 🧪 요검사 해석\n" + "\n".join(["- " + l for l in urine_lines_for_report]) + "\n"
 
         st.download_button("📥 보고서(.md) 다운로드", data=report_md.encode("utf-8"),
                            file_name=f"bloodmap_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
