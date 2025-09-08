@@ -147,7 +147,7 @@ def calc_homa_ir(glu_fasting, insulin):
 
 
 def stage_egfr(egfr):
-    """Return (stage, label) per KDIGO based on eGFR (ml/min/1.73m²)."""
+    """Return (stage, label) per KDIGO based on eGFR (mL/min/1.73m²)."""
     try:
         e = float(egfr)
     except Exception:
@@ -242,73 +242,54 @@ def calc_egfr(creatinine, age=60, sex="F"):
         return int(round(egfr, 0))
     except Exception:
         return None
-def _interpret_urine(ev: dict):
-    """
-    Make caregiver-friendly interpretations for urine findings.
-    Inputs (if present in ev):
-      - "적혈구(소변, /HPF)" (int)
-      - "백혈구(소변, /HPF)" (int)
-      - "UPCR(mg/g)" (float)
-      - "ACR(mg/g)" (float)
-      - qualitative keys like "혈뇨(정성)", "단백뇨(정성)", "백혈구뇨(정성)", "요당(정성)"
-    Returns: list[str]
-    """
+
+
+def _interpret_urine(extras: dict):
     lines = []
     def _isnum(x):
         try:
-            float(x)
-            return True
+            return x is not None and float(x) == float(x)
         except Exception:
             return False
+    rbc = extras.get("적혈구(소변, /HPF)")
+    wbc = extras.get("백혈구(소변, /HPF)")
+    upcr = extras.get("UPCR(mg/g)")
+    acr  = extras.get("ACR(mg/g)")
 
-    rbc = ev.get("적혈구(소변, /HPF)")
-    wbc = ev.get("백혈구(소변, /HPF)")
-    upcr = ev.get("UPCR(mg/g)")
-    acr = ev.get("ACR(mg/g)")
-
-    # RBC /HPF
     if _isnum(rbc):
-        rbc = float(rbc)
-        if rbc <= 2:
-            lines.append(f"소변 적혈구(RBC, /HPF): {int(rbc)} — 일반적으로 **정상 범위(0–2/HPF)**로 해석됩니다.")
-        elif 3 <= rbc <= 5:
-            lines.append(f"소변 적혈구(RBC, /HPF): {int(rbc)} — **경미한 혈뇨(추적 권장)** 가능. 운동/생리/채뇨오염 여부 확인하세요.")
+        r = float(rbc)
+        if r <= 2:
+            lines.append(f"소변 적혈구(/HPF): {int(r)} — **정상범위(0–2)**로 보입니다.")
+        elif 3 <= r <= 5:
+            lines.append(f"소변 적혈구(/HPF): {int(r)} — **경미한 혈뇨 가능**(운동/생리/채뇨오염 확인 후 추적).")
         else:
-            lines.append(f"소변 적혈구(RBC, /HPF): {int(rbc)} — **유의한 혈뇨** 가능. 반복 검사 및 원인 평가(요로감염·결석 등) 고려.")
-    # WBC /HPF
+            lines.append(f"소변 적혈구(/HPF): {int(r)} — **유의한 혈뇨** 가능. 반복 검사·원인 평가(UTI/결석 등) 고려.")
     if _isnum(wbc):
-        wbc = float(wbc)
-        if wbc <= 5:
-            lines.append(f"소변 백혈구(WBC, /HPF): {int(wbc)} — 일반적으로 **정상 범위(≤5/HPF)**.")
-        elif 6 <= wbc <= 9:
-            lines.append(f"소변 백혈구(WBC, /HPF): {int(wbc)} — **경미한 백혈구뇨** 가능. 증상(배뇨통/빈뇨/발열) 동반 시 추적.")
+        w = float(wbc)
+        if w <= 5:
+            lines.append(f"소변 백혈구(/HPF): {int(w)} — **정상(≤5)**.")
+        elif 6 <= w <= 9:
+            lines.append(f"소변 백혈구(/HPF): {int(w)} — **경미한 백혈구뇨** 가능. 증상 동반 시 추적.")
         else:
-            lines.append(f"소변 백혈구(WBC, /HPF): {int(wbc)} — **유의한 백혈구뇨(UTI 의심)** 가능. 증상·배양검사 고려.")
-    # UPCR
+            lines.append(f"소변 백혈구(/HPF): {int(w)} — **유의한 백혈구뇨(UTI 의심)** 가능. 증상·배양 고려.")
     if _isnum(upcr):
-        upcr = float(upcr)
-        if upcr < 150:
-            lines.append(f"UPCR: {upcr:.1f} mg/g — **정상~경미** 범위(성인 기준 <150). 지속 시 추적 권장.")
-        elif upcr < 300:
-            lines.append(f"UPCR: {upcr:.1f} mg/g — **경도 단백뇨** 가능(150–300). 수분상태/운동/발열 영향 배제 후 재검.")
-        elif upcr < 1000:
-            lines.append(f"UPCR: {upcr:.1f} mg/g — **중등도 단백뇨** 범위(300–1000). 신장 평가 필요.")
+        u = float(upcr)
+        if u < 150:
+            lines.append(f"UPCR: {u:.1f} mg/g — **정상~경미**(<150).")
+        elif u < 300:
+            lines.append(f"UPCR: {u:.1f} mg/g — **경도 단백뇨**(150–300).")
+        elif u < 1000:
+            lines.append(f"UPCR: {u:.1f} mg/g — **중등도 단백뇨**(300–1000).")
         else:
-            lines.append(f"UPCR: {upcr:.1f} mg/g — **중증 단백뇨(>1000)** 가능. 의료진과 상담 권장.")
-    # ACR
+            lines.append(f"UPCR: {u:.1f} mg/g — **중증 단백뇨**(>1000).")
     if _isnum(acr):
-        acr = float(acr)
-        if acr < 30:
-            lines.append(f"ACR: {acr:.1f} mg/g — **A1(정상-경도)**.")
-        elif acr <= 300:
-            lines.append(f"ACR: {acr:.1f} mg/g — **A2(중등도 증가)**.")
+        a = float(acr)
+        if a < 30:
+            lines.append(f"ACR: {a:.1f} mg/g — **A1(정상-경도)**.")
+        elif a <= 300:
+            lines.append(f"ACR: {a:.1f} mg/g — **A2(중등도 증가)**.")
         else:
-            lines.append(f"ACR: {acr:.1f} mg/g — **A3(중증 증가)**.")
-    # Qualitative summaries (if provided)
-    for k in ["혈뇨(정성)","단백뇨(정성)","백혈구뇨(정성)","요당(정성)"]:
-        v = ev.get(k)
-        if v:
-            lines.append(f"{k}: {v}")
+            lines.append(f"ACR: {a:.1f} mg/g — **A3(중증 증가)**.")
     if lines:
         lines.append("※ 해석은 참고용입니다. 증상이 있거나 수치가 반복 상승하면 의료진과 상담하세요.")
     return lines
@@ -472,7 +453,7 @@ def main():
             med2 = st.selectbox("해열제", ["아세트아미노펜(acetaminophen)", "이부프로펜(ibuprofen)"], key="antipy_med_gi")
             if med2.startswith("아세트"):
                 mg_low, mg_high = dose_acetaminophen(wt2)
-                conc2 = st.selectbox("시럽 농도", ["160 mg/5 ml", "120 mg/5 ml"], key="antipy_conc_acet_gi")
+                conc2 = st.selectbox("시럽 농도", ["160 mg/5 mL", "120 mg/5 mL"], key="antipy_conc_acet_gi")
                 if mg_low and mg_high:
                     try:
                         mg_num = int(conc2.split("mg/")[0])
@@ -484,11 +465,11 @@ def main():
                         ml_denom = 5
                     ml_low  = round(mg_low  * ml_denom / mg_num, 1)
                     ml_high = round(mg_high * ml_denom / mg_num, 1)
-                    st.info(f"권장 1회 용량: **{mg_low}–{mg_high} mg** ≈ **{ml_low}–{ml_high} ml** ({conc2})")
+                    st.info(f"권장 1회 용량: **{mg_low}–{mg_high} mg** ≈ **{ml_low}–{ml_high} mL** ({conc2})")
                     st.caption("간격: 4–6시간, 최대 5회/일. 복용 전 제품 라벨·의료진 지침을 확인하세요.")
             else:
                 mg_low, mg_high = dose_ibuprofen(wt2)
-                conc2 = st.selectbox("시럽 농도", ["100 mg/5 ml"], key="antipy_conc_ibu_gi")
+                conc2 = st.selectbox("시럽 농도", ["100 mg/5 mL"], key="antipy_conc_ibu_gi")
                 if mg_low and mg_high:
                     try:
                         mg_num = int(conc2.split("mg/")[0])
@@ -500,12 +481,8 @@ def main():
                         ml_denom = 5
                     ml_low  = round(mg_low  * ml_denom / mg_num, 1)
                     ml_high = round(mg_high * ml_denom / mg_num, 1)
-                    st.info(f"권장 1회 용량: **{mg_low}–{mg_high} mg** ≈ **{ml_low}–{ml_high} ml** ({conc2})")
-                    st.caption("간격: 6–8시간, 생후 6개월 미만은 의료진과 상담 필요. 최대 4회/일.")
-
-        with st.expander("🧪 피수치 입력(선택)", expanded=False):
-            st.caption("필요 시에만 입력하세요. 입력한 값만 해석에 포함됩니다.")
-            render_inputs_vertical()
+                    st.info(f"권장 1회 용량: **{mg_low}–{mg_high} mg** ≈ **{ml_low}–{ml_high} mL** ({conc2})")
+                    st.caption("간격: 6–8시간, 생후 6개월 미만은 의료진과 상담 필요. 최대 일일 용량 준수.")
 
         with st.expander("🧒 증상 체크리스트", expanded=True):
             sel_sym = []
@@ -534,11 +511,6 @@ def main():
                     st.checkbox(r, key=f"red_{infect_sel}_{i}")
         st.session_state["infect_symptoms"] = sel_sym
 
-        with st.expander("🧪 피수치 입력(선택)", expanded=False):
-            st.caption("필요 시에만 입력하세요. 입력한 값만 해석에 포함됩니다.")
-            render_inputs_vertical()
-
-
 
 
     table_mode = st.checkbox("⚙️ PC용 표 모드(가로형)", help="모바일은 세로형 고정 → 줄꼬임 없음.")
@@ -559,24 +531,25 @@ def main():
             "CLL": ["Fludarabine","Cyclophosphamide"],
         }
         solid_by_cancer = {
-            "폐암(Lung cancer)": ["Cisplatin", "Carboplatin", "Paclitaxel", "Docetaxel", "Gemcitabine", "Pemetrexed", "Gefitinib", "Erlotinib", "Osimertinib", "Alectinib", "Bevacizumab", "Pembrolizumab", "Nivolumab", "Atezolizumab", "Durvalumab", "Ramucirumab"],
-            "유방암(Breast cancer)": ["Doxorubicin", "Cyclophosphamide", "Paclitaxel", "Docetaxel", "Trastuzumab", "Bevacizumab", "Pertuzumab", "Trastuzumab emtansine", "Trastuzumab deruxtecan"],
-            "위암(Gastric cancer)": ["Cisplatin", "Oxaliplatin", "5-FU", "Capecitabine", "Paclitaxel", "Trastuzumab", "Pembrolizumab", "Ramucirumab", "Trastuzumab deruxtecan", "Nivolumab"],
-            "대장암(Cololoractal cancer)": ["5-FU", "Capecitabine", "Oxaliplatin", "Irinotecan", "Bevacizumab", "Cetuximab", "Panitumumab", "Regorafenib"],
-            "간암(HCC)": ["Sorafenib", "Lenvatinib", "Bevacizumab", "Pembrolizumab", "Nivolumab", "Atezolizumab", "Durvalumab", "Tremelimumab"],
-            "췌장암(Pancreatic cancer)": ["Gemcitabine", "Oxaliplatin", "Irinotecan", "5-FU", "Nab-paclitaxel"],
+            "폐암(Lung cancer)": ["Cisplatin","Carboplatin","Paclitaxel","Docetaxel","Gemcitabine","Pemetrexed",
+                               "Gefitinib","Erlotinib","Osimertinib","Alectinib","Bevacizumab","Pembrolizumab","Nivolumab"],
+            "유방암(Breast cancer)": ["Doxorubicin","Cyclophosphamide","Paclitaxel","Docetaxel","Trastuzumab","Bevacizumab"],
+            "위암(Gastric cancer)": ["Cisplatin","Oxaliplatin","5-FU","Capecitabine","Paclitaxel","Trastuzumab","Pembrolizumab"],
+            "대장암(Cololoractal cancer)": ["5-FU","Capecitabine","Oxaliplatin","Irinotecan","Bevacizumab"],
+            "간암(HCC)": ["Sorafenib","Lenvatinib","Bevacizumab","Pembrolizumab","Nivolumab"],
+            "췌장암(Pancreatic cancer)": ["Gemcitabine","Oxaliplatin","Irinotecan","5-FU"],
             "담도암(Cholangiocarcinoma)": ["Gemcitabine","Cisplatin","Bevacizumab"],
             "자궁내막암(Endometrial cancer)": ["Carboplatin","Paclitaxel"],
             "구강암/후두암": ["Cisplatin","5-FU","Docetaxel"],
-            "피부암(흑색종)": ["Dacarbazine", "Paclitaxel", "Nivolumab", "Pembrolizumab", "Ipilimumab"],
-            "신장암(RCC)": ["Sunitinib", "Pazopanib", "Bevacizumab", "Nivolumab", "Pembrolizumab", "Axitinib", "Cabozantinib"],
-            "갑상선암": ["Lenvatinib", "Sorafenib", "Cabozantinib", "Vandetanib"],
-            "난소암": ["Carboplatin", "Paclitaxel", "Bevacizumab", "Olaparib", "Niraparib"],
-            "자궁경부암": ["Cisplatin", "Paclitaxel", "Bevacizumab", "Pembrolizumab"],
+            "피부암(흑색종)": ["Dacarbazine","Paclitaxel","Nivolumab","Pembrolizumab"],
+            "신장암(RCC)": ["Sunitinib","Pazopanib","Bevacizumab","Nivolumab","Pembrolizumab"],
+            "갑상선암": ["Lenvatinib","Sorafenib"],
+            "난소암": ["Carboplatin","Paclitaxel","Bevacizumab"],
+            "자궁경부암": ["Cisplatin","Paclitaxel","Bevacizumab"],
             "전립선암": ["Docetaxel","Cabazitaxel"],
-            "뇌종양(Glioma)": ["Temozolomide", "Bevacizumab", "Lomustine"],
+            "뇌종양(Glioma)": ["Temozolomide","Bevacizumab"],
             "식도암": ["Cisplatin","5-FU","Paclitaxel","Nivolumab","Pembrolizumab"],
-            "방광암": ["Cisplatin", "Gemcitabine", "Bevacizumab", "Pembrolizumab", "Nivolumab", "Atezolizumab"],
+            "방광암": ["Cisplatin","Gemcitabine","Bevacizumab","Pembrolizumab","Nivolumab"],
         }
         sarcoma_by_dx = {
             "연부조직육종(Soft tissue sarcoma)": ["Doxorubicin","Ifosfamide","Pazopanib","Gemcitabine","Docetaxel"],
@@ -662,7 +635,7 @@ def main():
 
     vals = {}
 
-    def render_inputs_vertical():
+    def render_inputs_vertical(vals):
         st.markdown("**기본 패널**")
         for name in ORDER:
             if name == LBL_CRP:
@@ -672,7 +645,7 @@ def main():
             else:
                 vals[name] = num_input_generic(f"{name}", key=f"v_{name}", decimals=1, placeholder="예: 3.5")
 
-    def render_inputs_table():
+    def render_inputs_table(vals):
         st.markdown("**기본 패널 (표 모드)**")
         left, right = st.columns(2)
         half = (len(ORDER)+1)//2
@@ -695,9 +668,9 @@ def main():
 
     if mode == "일반/암":
         if table_mode:
-            render_inputs_table()
+            render_inputs_table(vals)
         else:
-            render_inputs_vertical()
+            render_inputs_vertical(vals)
         # 이전 기록 불러오기
         if nickname_key and st.session_state.records.get(nickname_key):
             if st.button("↩️ 이전 기록 불러오기", help="같은 별명#PIN의 가장 최근 수치를 현재 폼에 채웁니다."):
@@ -729,8 +702,8 @@ def main():
 
         # 👶 간단 증상 입력(보호자 친화)
         with st.expander("👶 증상(간단 선택)", expanded=True):
-            runny = st.selectbox("콧물", ["없음","흰색","연한색","노란색","피섞임"], key="ped_runny")
-            cough_sev = st.selectbox("기침", ["없음","조금","보통","많이","심함"], key="ped_cough_sev")
+            runny = st.selectbox("콧물", ["없음","흰색","노란색","피섞임"], key="ped_runny")
+            cough_sev = st.selectbox("기침", ["없음","조금","보통","심함"], key="ped_cough_sev")
             st.session_state["ped_simple_sym"] = {"콧물": runny, "기침": cough_sev}
 
         with st.expander("👀 보호자 관찰 체크리스트", expanded=False):
@@ -749,7 +722,7 @@ def main():
             med = st.selectbox("해열제", ["아세트아미노펜(acetaminophen)", "이부프로펜(ibuprofen)"], key="antipy_med")
             if med.startswith("아세트"):
                 mg_low, mg_high = dose_acetaminophen(wt)
-                conc = st.selectbox("시럽 농도", ["160 mg/5 ml", "120 mg/5 ml"], key="antipy_conc_acet")
+                conc = st.selectbox("시럽 농도", ["160 mg/5 mL", "120 mg/5 mL"], key="antipy_conc_acet")
                 if mg_low and mg_high:
                     num, denom = map(int, conc.split()[0].split("mg/")[0]), int(conc.split("/")[1].split()[0])
                     # safer parse
@@ -763,11 +736,11 @@ def main():
                         ml_denom = 5
                     ml_low  = round(mg_low  * ml_denom / mg_num, 1)
                     ml_high = round(mg_high * ml_denom / mg_num, 1)
-                    st.info(f"권장 1회 용량: **{mg_low}–{mg_high} mg** ≈ **{ml_low}–{ml_high} ml** ({conc})")
+                    st.info(f"권장 1회 용량: **{mg_low}–{mg_high} mg** ≈ **{ml_low}–{ml_high} mL** ({conc})")
                     st.caption("간격: 4–6시간, 최대 5회/일. 복용 전 제품 라벨·의료진 지침을 확인하세요.")
             else:
                 mg_low, mg_high = dose_ibuprofen(wt)
-                conc = st.selectbox("시럽 농도", ["100 mg/5 ml"], key="antipy_conc_ibu")
+                conc = st.selectbox("시럽 농도", ["100 mg/5 mL"], key="antipy_conc_ibu")
                 if mg_low and mg_high:
                     try:
                         mg_num = int(conc.split("mg/")[0])
@@ -779,12 +752,8 @@ def main():
                         ml_denom = 5
                     ml_low  = round(mg_low  * ml_denom / mg_num, 1)
                     ml_high = round(mg_high * ml_denom / mg_num, 1)
-                    st.info(f"권장 1회 용량: **{mg_low}–{mg_high} mg** ≈ **{ml_low}–{ml_high} ml** ({conc})")
-                    st.caption("간격: 6–8시간, 생후 6개월 미만은 의료진과 상담 필요. 최대 4회/일.")
-
-        with st.expander("🧪 피수치 입력(선택)", expanded=False):
-            st.caption("필요 시에만 입력하세요. 입력한 값만 해석에 포함됩니다.")
-            render_inputs_vertical()
+                    st.info(f"권장 1회 용량: **{mg_low}–{mg_high} mg** ≈ **{ml_low}–{ml_high} mL** ({conc})")
+                    st.caption("간격: 6–8시간, 생후 6개월 미만은 의료진과 상담 필요. 최대 일일 용량 준수.")
 
     # ===== 특수검사(기본) + TOP8 확장 =====
     extra_vals = {}
@@ -821,31 +790,24 @@ def main():
             # 정성(스트립) 결과
             cq = st.columns(4)
             with cq[0]:
-                hematuria_q = st.selectbox("적혈구(소변, 정성)", ["", "+", "++", "+++"], index=0)
+                hematuria_q = st.selectbox("혈뇨(정성)", ["", "+", "++", "+++"], index=0)
             with cq[1]:
                 proteinuria_q = st.selectbox("단백뇨(정성)", ["", "-", "+", "++"], index=0)
             with cq[2]:
-                wbc_q = st.selectbox("백혈구(소변, 정성)", ["", "-", "+", "++"], index=0)
+                wbc_q = st.selectbox("백혈구(정성)", ["", "-", "+", "++"], index=0)
             with cq[3]:
                 gly_q = st.selectbox("요당(정성)", ["", "-", "+++"], index=0)
 
 
-            # 👇 정량 수치 입력 (/HPF)
-            rbc_ur = num_input_generic("적혈구(소변, /HPF)", key="u_rbc_hpf", decimals=0, placeholder="예: 5")
-            wbc_ur = num_input_generic("백혈구(소변, /HPF)", key="u_wbc_hpf", decimals=0, placeholder="예: 10")
-            if rbc_ur is not None:
-                extra_vals["적혈구(소변, /HPF)"] = rbc_ur
-            if wbc_ur is not None:
-                extra_vals["백혈구(소변, /HPF)"] = wbc_ur
+            # 👇 정량(/HPF) 수치 입력
+            u_rbc_hpf = num_input_generic("적혈구(소변, /HPF)", key="u_rbc_hpf", decimals=0, placeholder="예: 3")
+            u_wbc_hpf = num_input_generic("백혈구(소변, /HPF)", key="u_wbc_hpf", decimals=0, placeholder="예: 10")
+            if u_rbc_hpf is not None:
+                extra_vals["적혈구(소변, /HPF)"] = u_rbc_hpf
+            if u_wbc_hpf is not None:
+                extra_vals["백혈구(소변, /HPF)"] = u_wbc_hpf
 
             # 설명 매핑
-
-        # 💡 Caregiver-friendly aliases for urine qualitative tests
-        if "혈뇨(정성)" in extra_vals and "적혈구(소변, 정성)" not in extra_vals:
-            extra_vals["적혈구(소변, 정성)"] = extra_vals["혈뇨(정성)"]
-        if "백혈구(정성)" in extra_vals and "백혈구(소변, 정성)" not in extra_vals:
-            extra_vals["백혈구(소변, 정성)"] = extra_vals["백혈구(정성)"]
-
             _desc_hema = {"+":"소량 검출","++":"중등도 검출","+++":"고농도 검출"}
             _desc_prot = {"-":"음성","+":"경도 검출","++":"중등도 검출"}
             _desc_wbc  = {"-":"음성","+":"의심 수준","++":"양성"}
@@ -853,8 +815,6 @@ def main():
 
             if hematuria_q:
                 extra_vals["혈뇨(정성)"] = f"{hematuria_q} ({_desc_hema.get(hematuria_q,'')})"
-            # alias for caregiver-friendly label
-            extra_vals["적혈구(소변, 정성)"] = extra_vals.get("혈뇨(정성)", "")
             if proteinuria_q:
                 extra_vals["단백뇨(정성)"] = f"{proteinuria_q} ({_desc_prot.get(proteinuria_q,'')})"
             if wbc_q:
@@ -874,6 +834,11 @@ def main():
                 if u_cr and u_alb:
                     acr = round((u_alb * 100.0) / float(u_cr), 1)
                     st.info(f"ACR(소변 알부민/Cr): **{acr} mg/g** (≈ 100×[mg/L]/[mg/dL])")
+                # 수기 입력: Pro/Cr, urine (mg/g)
+                upcr_manual = num_input_generic("Pro/Cr, urine (mg/g)", key="ex_upcr_manual", decimals=1, placeholder="예: 350.0")
+                if upcr_manual is not None:
+                    upcr = upcr_manual
+    
                 if acr is not None:
                     extra_vals["ACR(mg/g)"] = acr
                     a, a_label = stage_acr(acr)
@@ -882,10 +847,6 @@ def main():
                         extra_vals["Albuminuria stage"] = f"{a} ({a_label})"
                 if upcr is not None:
                     extra_vals["UPCR(mg/g)"] = upcr
-                # 수기 입력(선택): Pro/Cr, urine (mg/g)
-                upcr_manual = num_input_generic("Pro/Cr, urine (mg/g)", key="ex_upcr_manual", decimals=1, placeholder="예: 350.0")
-                if upcr_manual is not None:
-                    extra_vals["UPCR(mg/g)"] = upcr_manual
                 extra_vals["Urine Cr"] = u_cr
                 extra_vals["Urine albumin"] = u_alb
         if t_lipid_basic:
@@ -937,7 +898,7 @@ def main():
             sex = st.selectbox("성별", ["F","M"], key="kid_sex")
             egfr = calc_egfr(vals.get(LBL_Cr), age=age or 60, sex=sex)
             if egfr is not None:
-                st.info(f"eGFR(자동계산): **{egfr} ml/min/1.73m²**")
+                st.info(f"eGFR(자동계산): **{egfr} mL/min/1.73m²**")
                 extra_vals["eGFR"] = egfr
                 g, g_label = stage_egfr(egfr)
                 if g:
@@ -1051,13 +1012,13 @@ def main():
             for line in lines:
                 st.write(line)
 
-
-            # 요검사 추가 해석
+            # 요검사 해석
             urine_lines = _interpret_urine(extra_vals)
             if urine_lines:
                 st.markdown("### 🧪 요검사 해석")
                 for ul in urine_lines:
                     st.write(ul)
+
             if nickname_key and "records" in st.session_state and st.session_state.records.get(nickname_key):
                 st.markdown("### 🔍 수치 변화 비교 (이전 기록 대비)")
                 cmp_lines = compare_with_previous(nickname_key, {k: vals.get(k) for k in ORDER if entered(vals.get(k))})
@@ -1126,13 +1087,14 @@ def main():
 
         a4_opt = st.checkbox("🖨️ A4 프린트 최적화(섹션 구분선 추가)", value=True)
         urine_lines_for_report = _interpret_urine(extra_vals)
-
         report_md = build_report(mode, meta, {k: v for k, v in vals.items() if entered(v)}, cmp_lines, extra_vals, meds_lines, food_lines, abx_lines)
+        # 요검사 해석을 보고서에도 추가
+        if urine_lines_for_report:
+            report_md += "\n\n---\n\n### 🧪 요검사 해석\n" + "\n".join(["- " + l for l in urine_lines_for_report])
+        # 발열 가이드 + 면책 문구를 하단에 항상 추가
+        report_md += "\n\n---\n\n### 🌡️ 발열 가이드\n" + FEVER_GUIDE + "\n\n> " + DISCLAIMER
         if a4_opt:
             report_md = report_md.replace("### ", "\n\n---\n\n### ")
-        # Add urine interpretation section to report
-        if urine_lines_for_report:
-            report_md += "\n\n---\n\n### 🧪 요검사 해석\n" + "\n".join(["- " + l for l in urine_lines_for_report]) + "\n"
 
         st.download_button("📥 보고서(.md) 다운로드", data=report_md.encode("utf-8"),
                            file_name=f"bloodmap_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
