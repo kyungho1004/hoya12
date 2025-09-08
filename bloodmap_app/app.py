@@ -825,7 +825,7 @@ def main():
             with cq[1]:
                 proteinuria_q = st.selectbox("단백뇨(정성)", ["", "-", "+", "++"], index=0)
             with cq[2]:
-                wbc_q = st.selectbox("백혈구(소변, 정성)", ["", "-", "+", "++"], index=0)", "의심", "양성"], index=0)
+                wbc_q = st.selectbox("백혈구(소변, 정성)", ["", "-", "+", "++"], index=0)
             with cq[3]:
                 gly_q = st.selectbox("요당(정성)", ["", "-", "+++"], index=0)
 
