@@ -353,7 +353,7 @@ def main():
     }
 
     if mode == "일반/암":
-        group = st.selectbox("암 그룹 선택", ["미선택/일반", "혈액암", "고형암", "육종", "희귀암"])
+        group = st.selectbox("암 그룹 선택", ["미선택/일반", "혈액암", "고형암", "육종", "희귀암", "림프종"])
         if group == "혈액암":
             heme_display = [
                 "급성 골수성 백혈병(AML)",
@@ -383,9 +383,9 @@ def main():
                 "간모세포종(Hepatoblastoma)","비인두암(NPC)","GIST"
             ])
         
-elif group == "림프종":
-    st.subheader("림프종 진단 / 약물 선택")
-    lymph_display = [
+        elif group == "림프종":
+            st.subheader("림프종 진단 / 약물 선택")
+            lymph_display = [
         "미만성 거대 B세포 림프종(DLBCL)",
         "원발 종격동 B세포 림프종(PMBCL)",
         "여포성 림프종 1-2등급(FL 1-2)",
@@ -395,11 +395,11 @@ elif group == "림프종":
         "변연대 림프종(MZL)",
         "고등급 B세포 림프종(HGBL)",
         "버킷 림프종(Burkitt)",
-    ]
-    cancer = st.selectbox("림프종(진단명)", lymph_display)
-
-    # 기본 항암제/표적 리스트(세포/자가치료 제외)
-    base_choices = [
+            ]
+            cancer = st.selectbox("림프종(진단명)", lymph_display)
+        
+            # 기본 항암제/표적 리스트(세포/자가치료 제외)
+            base_choices = [
         # 1차/변형
         "R-CHOP","Pola-R-CHP","DA-EPOCH-R",
         # 구제
@@ -407,36 +407,36 @@ elif group == "림프종":
         # 표적/항체·ADC·면역
         "Pola-BR","Tafasitamab + Lenalidomide","Loncastuximab",
         "Glofitamab","Epcoritamab","Selinexor",
-    ]
-    # PMBCL 전용(국내 미승인, 해외 활발 사용: 참고용)
-    pmbcl_only = ["Pembrolizumab (PMBCL; 해외 활발 사용, 국내 미승인)"]
-
-    # DLBCL/FL/MCL 등 세부별 가중(필요 시 정렬만 바꿔줌)
-    if "PMBCL" in cancer:
+            ]
+            # PMBCL 전용(국내 미승인, 해외 활발 사용: 참고용)
+            pmbcl_only = ["Pembrolizumab (PMBCL; 해외 활발 사용, 국내 미승인)"]
+        
+            # DLBCL/FL/MCL 등 세부별 가중(필요 시 정렬만 바꿔줌)
+            if "PMBCL" in cancer:
         drug_choices = ["DA-EPOCH-R"] + base_choices + pmbcl_only
-    elif "DLBCL" in cancer or "HGBL" in cancer or "3B" in cancer:
+            elif "DLBCL" in cancer or "HGBL" in cancer or "3B" in cancer:
         drug_choices = ["R-CHOP","Pola-R-CHP","DA-EPOCH-R"] + base_choices
-    elif "3A" in cancer:
+            elif "3A" in cancer:
         drug_choices = ["R-CHOP","Pola-R-CHP"] + [x for x in base_choices if x not in ["DA-EPOCH-R"]]
-    elif "FL 1-2" in cancer or "1-2" in cancer:
+            elif "FL 1-2" in cancer or "1-2" in cancer:
         drug_choices = ["BR","R-CVP"] + base_choices
-    elif "MCL" in cancer:
+            elif "MCL" in cancer:
         drug_choices = ["BR","R-CHOP"] + base_choices + ["Ibrutinib (R/R)", "Acalabrutinib (R/R)", "Zanubrutinib (R/R)"]
-    elif "MZL" in cancer:
+            elif "MZL" in cancer:
         drug_choices = ["BR","R-CVP"] + base_choices
-    elif "Burkitt" in cancer:
+            elif "Burkitt" in cancer:
         drug_choices = ["CODOX-M/IVAC-R","Hyper-CVAD-R"] + base_choices
-    else:
+            else:
         drug_choices = base_choices
-
-    # ✅ 기본값-옵션 교집합으로 보호
-    _def = st.session_state.get("selected_drugs", [])
-    if isinstance(_def, str):
+        
+            # ✅ 기본값-옵션 교집합으로 보호
+            _def = st.session_state.get("selected_drugs", [])
+            if isinstance(_def, str):
         _def = [_def]
-    _def = [x for x in _def if x in drug_choices]
-    selected_drugs = st.multiselect("항암제 선택", drug_choices, default=_def, key="selected_drugs")
-    st.caption("세포/자가세포치료(CAR-T, 자가이식)는 제외됩니다. 국내 미승인이라도 해외에서 활발히 쓰이는 일부는 참고용으로 회색 표시될 수 있습니다.")
-
+            _def = [x for x in _def if x in drug_choices]
+            selected_drugs = st.multiselect("항암제 선택", drug_choices, default=_def, key="selected_drugs")
+            st.caption("세포/자가세포치료(CAR-T, 자가이식)는 제외됩니다. 국내 미승인이라도 해외에서 활발히 쓰이는 일부는 참고용으로 회색 표시될 수 있습니다.")
+        
         else:
             st.info("암 그룹을 선택하면 해당 암종에 맞는 **항암제 목록과 추가 수치 패널**이 자동 노출됩니다.")
         # ✅ 진단 변경 시 항암제 선택 초기화
