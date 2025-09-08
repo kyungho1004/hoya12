@@ -112,6 +112,7 @@ def main():
         st.markdown("### 🧒 소아 일상 주제"); st.caption(PED_INPUTS_INFO)
         ped_topic = st.selectbox("소아 주제", PED_TOPICS)
     else:
+        
         st.markdown("### 🧫 소아 감염질환")
         infect_sel = st.selectbox("질환 선택", list(PED_INFECT.keys()))
         if HAS_PD:
@@ -119,13 +120,14 @@ def main():
                 "핵심": PED_INFECT[infect_sel].get("핵심",""),
                 "진단": PED_INFECT[infect_sel].get("진단",""),
                 "특징": PED_INFECT[infect_sel].get("특징",""),
-            }], index=[infect_sel]); st.table(_df)
+            }], index=[infect_sel])
+            st.table(_df)
         else:
             st.markdown(f"**{infect_sel}**")
-                        _info = PED_INFECT.get(infect_sel, {});
+            _info = PED_INFECT.get(infect_sel, {})
             st.write("- 핵심:", _info.get("핵심", ""))
-                        st.write("- 진단:", _info.get("진단", ""))
-            st.write(f"- 특징: {PED_INFECT[infect_sel].get('특징','")}")
+            st.write("- 진단:", _info.get("진단", ""))
+            st.write("- 특징:", _info.get("특징", ""))
 
     table_mode = st.checkbox("⚙️ PC용 표 모드(가로형)")
 
