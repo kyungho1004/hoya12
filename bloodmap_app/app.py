@@ -364,7 +364,8 @@ def build_diet_guide(labs: Dict[str, Any], qn: Dict[str, Any], mode: str) -> Lis
             out.append("eGFR < 60 → 저염(나트륨 2g/일 내외), 단백질 과다 섭취 피하기, 칼륨/인 제한은 단계별로(의료진 지침).")
     except: pass
     if entered(g("Hb")) and g("Hb") < 10:
-        out.append("빈혈 → 식단(살코기·간·시금치·콩), 식사 중 차·커피 피하기. (원인 따라 다름)")
+        out.append("빈혈 → 식단(살코기·간·시금치·콩), 식사 중 차·커피 피하기. (⚠️ 철분제와 비타민C를 함께 복용하면 흡수가 촉진됩니다.\n"
+        "하지만 항암 치료 중이거나 백혈병 환자는 반드시 주치의와 상담 후 복용 여부를 결정해야 합니다.)")
     if entered(g("CRP")) and g("CRP") >= 0.5:
         out.append("염증 ↑ → 수분·휴식, 자극적인 튀김/가공식품 줄이고, 익힌 채소·단백질 균형.")
     return out
