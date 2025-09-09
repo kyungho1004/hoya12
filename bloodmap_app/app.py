@@ -543,93 +543,126 @@ def main():
             ]
             cancer = st.selectbox("혈액암(진단명)", heme_display)
 
-        # 진단 변경 시 현재 그룹 키의 선택 초기화
-        try:
-            dx_key = f"{group}:{cancer}"
-            if st.session_state.get("dx_key") != dx_key:
-                st.session_state["dx_key"] = dx_key
-                drug_key = f"selected_drugs_{group}"
-                st.session_state[drug_key] = []
-        except Exception:
-            pass
-
+            # 진단 변경 시 현재 그룹 키의 선택 초기화
+            try:
+                dx_key = f"{group}:{cancer}"
+                if st.session_state.get("dx_key") != dx_key:
+                    st.session_state["dx_key"] = dx_key
+                    drug_key = f"selected_drugs_{group}"
+                    st.session_state[drug_key] = []
+            except Exception:
+                pass
         elif group == "고형암":
             cancer = st.selectbox("고형암(진단명)", [
+
                 "폐암(Lung cancer)","유방암(Breast cancer)","위암(Gastric cancer)",
                 "대장암(Cololoractal cancer)","간암(HCC)","췌장암(Pancreatic cancer)",
                 "담도암(Cholangiocarcinoma)","자궁내막암(Endometrial cancer)",
                 "구강암/후두암","피부암(흑색종)","신장암(RCC)",
                 "갑상선암","난소암","자궁경부암","전립선암","뇌종양(Glioma)","식도암","방광암"
             ])
+            # 진단 변경 시 현재 그룹 키의 선택 초기화
+            try:
+                dx_key = f"{group}:{cancer}"
+                if st.session_state.get("dx_key") != dx_key:
+                    st.session_state["dx_key"] = dx_key
+                    drug_key = f"selected_drugs_{group}"
+                    st.session_state[drug_key] = []
+            except Exception:
+                pass
+
         elif group == "육종":
             cancer = st.selectbox("육종(진단명)", [
+
                 "연부조직육종(Soft tissue sarcoma)","골육종(Osteosarcoma)","유잉육종(Ewing sarcoma)",
                 "평활근육종(Leiomyosarcoma)","지방육종(Liposarcoma)","악성 섬유성 조직구종(UPS/MFH)"
             ])
+            # 진단 변경 시 현재 그룹 키의 선택 초기화
+            try:
+                dx_key = f"{group}:{cancer}"
+                if st.session_state.get("dx_key") != dx_key:
+                    st.session_state["dx_key"] = dx_key
+                    drug_key = f"selected_drugs_{group}"
+                    st.session_state[drug_key] = []
+            except Exception:
+                pass
+
         elif group == "희귀암":
             cancer = st.selectbox("희귀암(진단명)", [
+
                 "담낭암(Gallbladder cancer)","부신암(Adrenal cancer)","망막모세포종(Retinoblastoma)",
                 "흉선종/흉선암(Thymoma/Thymic carcinoma)","신경내분비종양(NET)",
                 "간모세포종(Hepatoblastoma)","비인두암(NPC)","GIST"
             ])
-elif group == "림프종":
-    st.subheader("림프종 진단 / 약물 선택")
-    lymph_display = [
-        "미만성 거대 B세포 림프종(DLBCL)",
-        "원발 종격동 B세포 림프종(PMBCL)",
-        "여포성 림프종 1-2등급(FL 1-2)",
-        "여포성 림프종 3A(FL 3A)",
-        "여포성 림프종 3B(FL 3B)",
-        "외투세포 림프종(MCL)",
-        "변연대 림프종(MZL)",
-        "고등급 B세포 림프종(HGBL)",
-        "버킷 림프종(Burkitt)",
-    ]
-    cancer = st.selectbox("림프종(진단명)", lymph_display)
+            # 진단 변경 시 현재 그룹 키의 선택 초기화
+            try:
+                dx_key = f"{group}:{cancer}"
+                if st.session_state.get("dx_key") != dx_key:
+                    st.session_state["dx_key"] = dx_key
+                    drug_key = f"selected_drugs_{group}"
+                    st.session_state[drug_key] = []
+            except Exception:
+                pass
 
-        # 진단 변경 시 현재 그룹 키의 선택 초기화
-        try:
-            dx_key = f"{group}:{cancer}"
-            if st.session_state.get("dx_key") != dx_key:
-                st.session_state["dx_key"] = dx_key
-                drug_key = f"selected_drugs_{group}"
-                st.session_state[drug_key] = []
-        except Exception:
-            pass
+        
+        elif group == "림프종":
+            st.subheader("림프종 진단 / 약물 선택")
+            lymph_display = [
+                "미만성 거대 B세포 림프종(DLBCL)",
+                "원발 종격동 B세포 림프종(PMBCL)",
+                "여포성 림프종 1-2등급(FL 1-2)",
+                "여포성 림프종 3A(FL 3A)",
+                "여포성 림프종 3B(FL 3B)",
+                "외투세포 림프종(MCL)",
+                "변연대 림프종(MZL)",
+                "고등급 B세포 림프종(HGBL)",
+                "버킷 림프종(Burkitt)",
+            ]
+            cancer = st.selectbox("림프종(진단명)", lymph_display)
 
+            # 진단 변경 시 현재 그룹 키의 선택 초기화
+            try:
+                dx_key = f"{group}:{cancer}"
+                if st.session_state.get("dx_key") != dx_key:
+                    st.session_state["dx_key"] = dx_key
+                    drug_key = f"selected_drugs_{group}"
+                    st.session_state[drug_key] = []
+            except Exception:
+                pass
 
-    base_choices = [
-        "R-CHOP","Pola-R-CHP","DA-EPOCH-R",
-        "R-ICE","R-DHAP","R-GDP","R-GemOx","R-ESHAP",
-        "Pola-BR","Tafasitamab + Lenalidomide","Loncastuximab",
-        "Glofitamab","Epcoritamab","Selinexor",
-    ]
-    pmbcl_only = ["Pembrolizumab (PMBCL; 해외 활발 사용, 국내 미승인)"]
+            base_choices = [
+                "R-CHOP","Pola-R-CHP","DA-EPOCH-R",
+                "R-ICE","R-DHAP","R-GDP","R-GemOx","R-ESHAP",
+                "Pola-BR","Tafasitamab + Lenalidomide","Loncastuximab",
+                "Glofitamab","Epcoritamab","Selinexor",
+            ]
+            pmbcl_only = ["Pembrolizumab (PMBCL; 해외 활발 사용, 국내 미승인)"]
 
-    if "PMBCL" in cancer:
-        drug_choices = ["DA-EPOCH-R"] + base_choices + pmbcl_only
-    elif "DLBCL" in cancer or "HGBL" in cancer or "3B" in cancer:
-        drug_choices = ["R-CHOP","Pola-R-CHP","DA-EPOCH-R"] + base_choices
-    elif "3A" in cancer:
-        drug_choices = ["R-CHOP","Pola-R-CHP"] + [x for x in base_choices if x not in ["DA-EPOCH-R"]]
-    elif "FL 1-2" in cancer or "1-2" in cancer:
-        drug_choices = ["BR","R-CVP"] + base_choices
-    elif "MCL" in cancer:
-        drug_choices = ["BR","R-CHOP"] + base_choices + ["Ibrutinib (R/R)", "Acalabrutinib (R/R)", "Zanubrutinib (R/R)"]
-    elif "MZL" in cancer:
-        drug_choices = ["BR","R-CVP"] + base_choices
-    elif "Burkitt" in cancer:
-        drug_choices = ["CODOX-M/IVAC-R","Hyper-CVAD-R"] + base_choices
-    else:
-        drug_choices = base_choices
+            if "PMBCL" in cancer:
+                drug_choices = ["DA-EPOCH-R"] + base_choices + pmbcl_only
+            elif "DLBCL" in cancer or "HGBL" in cancer or "3B" in cancer:
+                drug_choices = ["R-CHOP","Pola-R-CHP","DA-EPOCH-R"] + base_choices
+            elif "3A" in cancer:
+                drug_choices = ["R-CHOP","Pola-R-CHP"] + [x for x in base_choices if x not in ["DA-EPOCH-R"]]
+            elif "FL 1-2" in cancer or "1-2" in cancer:
+                drug_choices = ["BR","R-CVP"] + base_choices
+            elif "MCL" in cancer:
+                drug_choices = ["BR","R-CHOP"] + base_choices + ["Ibrutinib (R/R)", "Acalabrutinib (R/R)", "Zanubrutinib (R/R)"]
+            elif "MZL" in cancer:
+                drug_choices = ["BR","R-CVP"] + base_choices
+            elif "Burkitt" in cancer:
+                drug_choices = ["CODOX-M/IVAC-R","Hyper-CVAD-R"] + base_choices
+            else:
+                drug_choices = base_choices
 
-    # 그룹별 동적 키로 충돌 방지
-    drug_key = f"selected_drugs_{group}"
-    _def = st.session_state.get(drug_key, [])
-    if isinstance(_def, str): _def = [_def]
-    _def = [x for x in _def if x in drug_choices]
-    selected_drugs = st.multiselect("항암제 선택", drug_choices, default=_def, key=drug_key)
-    st.caption("세포/자가세포치료는 제외됩니다. 국내 미승인이더라도 해외에서 활발히 쓰이는 일부는 참고용으로 회색 표시될 수 있습니다.")
+            # 그룹별 동적 키로 충돌 방지
+            drug_key = f"selected_drugs_{group}"
+            _def = st.session_state.get(drug_key, [])
+            if isinstance(_def, str):
+                _def = [_def]
+            _def = [x for x in _def if x in drug_choices]
+            selected_drugs = st.multiselect("항암제 선택", drug_choices, default=_def, key=drug_key)
+            st.caption("세포/자가세포치료는 제외됩니다. 국내 미승인이더라도 해외에서 활발히 쓰이는 일부는 참고용으로 회색 표시될 수 있습니다.")
 
         else:
             st.info("암 그룹을 선택하면 해당 암종에 맞는 **항암제 목록과 추가 수치 패널**이 자동 노출됩니다.")
