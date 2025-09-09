@@ -1,32 +1,52 @@
 # -*- coding: utf-8 -*-
-import os, sys
+# === Robust, package-safe imports (no bare `from utils ...`) ===
+import os, sys, importlib
 PKG_DIR = os.path.dirname(__file__)
-if PKG_DIR and PKG_DIR not in sys.path:
-    sys.path.insert(0, PKG_DIR)
+PKG_NAME = os.path.basename(PKG_DIR)
+PARENT_DIR = os.path.dirname(PKG_DIR)
+if PARENT_DIR not in sys.path:
+    sys.path.insert(0, PARENT_DIR)  # allow `import <pkg>.*` even if this file is run directly
 
+def _imp(mod):
+    return importlib.import_module(f"{PKG_NAME}.{mod}")
+
+# Import modules via the actual package name (e.g., bloodmap_app.*)
+cfg = _imp("config")
 try:
-    from .config import (APP_TITLE, PAGE_TITLE, MADE_BY, CAFE_LINK_MD, FOOTER_CAFE, DISCLAIMER, ORDER, FEVER_GUIDE)
-    from .utils import user_key, init_state
-    from .storage import get_user_key as std_key, load_session, append_history
-    from .helpers import (compute_acr, compute_upcr, interpret_acr, interpret_upcr,
-                          interpret_ast, interpret_alt, interpret_na, interpret_k, interpret_ca,
-                          pediatric_guides, build_report_md, build_report_txt, build_report_pdf_bytes)
-    from .counter import bump, count
-    from . import drug_data
+    u = _imp("app_utils")  # prefer app_utils if present
 except Exception:
-    from config import (APP_TITLE, PAGE_TITLE, MADE_BY, CAFE_LINK_MD, FOOTER_CAFE, DISCLAIMER, ORDER, FEVER_GUIDE)
-    from utils import user_key, init_state
-    from storage import get_user_key as std_key, load_session, append_history
-    from helpers import (compute_acr, compute_upcr, interpret_acr, interpret_upcr,
-                         interpret_ast, interpret_alt, interpret_na, interpret_k, interpret_ca,
-                         pediatric_guides, build_report_md, build_report_txt, build_report_pdf_bytes)
-    from counter import bump, count
-    import drug_data
+    u = _imp("utils")      # else fall back to utils (file or package)
+
+store = _imp("storage")
+hp = _imp("helpers")
+ctr = _imp("counter")
+drug_data = _imp("drug_data")
+
+# Re-export the names used below
+APP_TITLE = cfg.APP_TITLE
+PAGE_TITLE = cfg.PAGE_TITLE
+MADE_BY = cfg.MADE_BY
+CAFE_LINK_MD = cfg.CAFE_LINK_MD
+FOOTER_CAFE = cfg.FOOTER_CAFE
+DISCLAIMER = cfg.DISCLAIMER
+ORDER = cfg.ORDER
+FEVER_GUIDE = cfg.FEVER_GUIDE
+user_key, init_state = u.user_key, u.init_state
+get_user_key, load_session, append_history = store.get_user_key, store.load_session, store.append_history
+compute_acr, compute_upcr = hp.compute_acr, hp.compute_upcr
+interpret_acr, interpret_upcr = hp.interpret_acr, hp.interpret_upcr
+interpret_ast, interpret_alt = hp.interpret_ast, hp.interpret_alt
+interpret_na, interpret_k, interpret_ca = hp.interpret_na, hp.interpret_k, hp.interpret_ca
+pediatric_guides = hp.pediatric_guides
+build_report_md, build_report_txt, build_report_pdf_bytes = hp.build_report_md, hp.build_report_txt, hp.build_report_pdf_bytes
+bump, count = ctr.bump, ctr.count
+# === End robust imports ===
 
 import streamlit as st
 import pandas as pd
 import datetime
 
+# --- Cancer dictionaries (보호자 눈높이 샘플) ---
 ONCO_CATEGORIES = ["혈액암", "림프종", "고형암", "육종", "희귀암"]
 
 BLOOD_CANCERS = {
@@ -59,7 +79,7 @@ ABX_SIMPLE = {
     "세페핌": "광범위 베타락탐 — 발열 중성구감소증 1차 약제로 자주 사용.",
     "피페라실린/타조박탐": "그람+/그람-/혐기균 커버 — 복합감염에 널리 사용.",
     "메로페넴": "광범위 카바페넴 — 다제내성 위험 시 고려.",
-    "반코마이신": "MRSA 등 그람+ 커장 — 신장기능/혈중농도 모니터.",
+    "반코마이신": "MRSA 등 그람+ 커버 — 신장기능/혈중농도 모니터.",
     "레보플록사신": "경구 가능 — QT연장/건병증 주의.",
 }
 
