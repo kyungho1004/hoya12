@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
-# BloodMap — 소아/암 통합 + 특수검사(지질·응고·보체·요검사·갑상선·당대사·패혈증·빈혈패널) 복구판
+# BloodMap — 소아/암 통합 + 특수검사(지질·응고·보체·요검사·갑상선·당대사·패혈증·빈혈패널)
 # 면역/세포치료 제외. 소아 해열제: 1회 권장량만 표기. 별명+PIN 저장/그래프, 식이가이드 포함.
+# ✅ 변경점: [해석하기]는 별명·PIN 없어도 바로 실행, [저장하기]는 별명#PIN 있을 때만 저장.
+#           별명·PIN 없으면 그래프 섹션은 안내만 표시(그래프 미노출).
 
 import os, json
 from datetime import datetime, date
@@ -8,8 +10,9 @@ from typing import Dict, Any, List, Optional, Tuple
 import streamlit as st
 import pandas as pd
 
+st.set_page_config(page_title="BloodMap", layout="centered")
+
 APP_TITLE  = "피수치 가이드 (BloodMap)"
-PAGE_TITLE = "BloodMap"
 MADE_BY    = "제작: Hoya/GPT"
 DISCLAIMER = (
     "본 수치는 참고용이며, 해석 결과는 개발자와 무관합니다.  "
@@ -32,12 +35,8 @@ KR = {
     "TB":"총빌리루빈","BUN":"BUN","BNP":"BNP",
 }
 def label(abbr: str) -> str:
-    # 예: "PLT (혈소판)"
     base = KR.get(abbr, abbr)
-    # abbr 대문자만 앞에 붙이고 뒤엔 한글 병기
-    han = base
-    if "(" in base:
-        han = base.split("(")[-1].rstrip(")")
+    han = base.split("(")[-1].rstrip(")") if "(" in base else base
     return f"{abbr} ({han})"
 
 # ------------------ 저장/불러오기 ------------------
@@ -333,25 +332,16 @@ def build_diet_guide(labs: Dict[str, Any], qn: Dict[str, Any], mode: str) -> Lis
     out: List[str] = []
     g = lambda k: labs.get(k)
 
-    # 백혈구/ANC
     if entered(g("ANC")) and g("ANC") < 500:
         out.append("ANC < 500 → 익힌 음식만(회/덜익은 고기·달걀·생채소/새싹 금지), 과일은 껍질 제거·흐르는 물 세척, 남은 음식 2시간 넘기지 않기, 생수는 밀봉 제품.")
     elif entered(g("ANC")) and g("ANC") < 1000:
         out.append("ANC 500~1000 → 외식·뷔페·길거리 음식 주의, 가열 충분히, 손 위생 철저.")
-
-    # 혈소판
     if entered(g("PLT")) and g("PLT") < 50:
         out.append("혈소판 < 50 → 딱딱·날카로운 음식(뼈있는 생선, 질긴 육포, 딱딱한 견과류) 조심, 빨대·강한 가글 금지, 술 금지. (진통제/항혈소판제는 의료진과 상의)")
-
-    # 간수치
     if (entered(g("AST")) and g("AST") >= 50) or (entered(g("ALT")) and g("ALT") >= 55):
         out.append("간수치 상승 → 술/허브보충제 중단, 튀김·기름진 음식 줄이기, 아세트아미노펜 과량 금지, 수분·균형식. 지속 시 상담.")
-
-    # 알부민
     if entered(g("Alb")) and g("Alb") < 3.5:
         out.append("알부민 낮음 → 단백질 보강(살코기·생선·달걀·두부/콩·유제품), 소량씩 자주. 부종/신질환 있으면 개인지침 우선.")
-
-    # 지질
     TG = qn.get("TG")
     if TG is not None:
         try:
@@ -360,35 +350,23 @@ def build_diet_guide(labs: Dict[str, Any], qn: Dict[str, Any], mode: str) -> Lis
                 out.append("TG ≥ 500 → 🟥 췌장염 위험: 초저지방 식사(총 지방 10~15% 이내), 단 음료/과자·술 즉시 중단, 정제탄수 줄이고 생선(오메가3)·채소 위주.")
             elif t >= 200:
                 out.append("TG 200~499 → 당분·과당·술 줄이고, 튀김/가공육 제한, 통곡·채소·운동 늘리기.")
-        except:
-            pass
+        except: pass
     LDL = qn.get("LDL"); NHDL = qn.get("Non-HDL-C")
     try:
         if (LDL is not None and float(LDL) >= 160) or (NHDL is not None and float(NHDL) >= 160):
             out.append("LDL/Non-HDL 상승 → 트랜스/포화지방 줄이고, 올리브유·등푸른생선·견과류로 대체, 식이섬유(귀리·보리·채소) 충분히.")
-    except:
-        pass
-
-    # 요산
+    except: pass
     if entered(g("UA")) and g("UA") > 7.0:
-        out.append("요산 높음 → 내장류·멸치/정어리·육수/맥주·과당음료 줄이고, 물 충분히.")
-
-    # 신장/나트륨·단백질
+        out.append("요산 높음 → 내장류·멸치/정어리·육수·맥주·과당음료 줄이고, 물 충분히.")
     egfr = qn.get("eGFR")
     try:
         if egfr is not None and float(egfr) < 60:
             out.append("eGFR < 60 → 저염(나트륨 2g/일 내외), 단백질 과다 섭취 피하기, 칼륨/인 제한은 단계별로(의료진 지침).")
-    except:
-        pass
-
-    # 빈혈
+    except: pass
     if entered(g("Hb")) and g("Hb") < 10:
-        out.append("빈혈 →  식단(살코기·간·시금치·콩), 식사 중 차·커피 피하기. (원인 따라 다름 철분제 와 비타민c는 꼭 주치의와 상담후 섭취하시기바랍니다)")
-
-    # CRP 높음(염증)
+        out.append("빈혈 → 식단(살코기·간·시금치·콩), 식사 중 차·커피 피하기. (원인 따라 다름)")
     if entered(g("CRP")) and g("CRP") >= 0.5:
         out.append("염증 ↑ → 수분·휴식, 자극적인 튀김/가공식품 줄이고, 익힌 채소·단백질 균형.")
-
     return out
 
 # ------------------ 보고서 빌더 ------------------
@@ -400,7 +378,7 @@ def build_report_md(nick_pin: str, dt: date, mode: str, group: str, dx: str,
                     ped_dx: Optional[str]=None, ped_symptoms: Optional[List[str]]=None, ped_tips: Optional[List[str]]=None) -> str:
     L = []
     L.append(f"# {APP_TITLE}\n")
-    L.append(f"- 사용자: {nick_pin}  ")
+    L.append(f"- 사용자: {nick_pin or '저장 안 함(임시 해석)'}  ")
     L.append(f"- 검사일: {dt.isoformat()}  ")
     L.append(f"- 모드: {mode}  ")
     if mode == "암 진단 모드":
@@ -447,8 +425,7 @@ def build_report_md(nick_pin: str, dt: date, mode: str, group: str, dx: str,
     L.append("```")
     return "\n".join(L)
 
-# ------------------ 암 카탈로그(요약) & 약물 설명 ------------------
-# 👉 면역/세포치료는 제외. (요청 반영)
+# ------------------ 암 카탈로그(면역/세포치료 제외) & 약물 설명 ------------------
 HEME_DISPLAY = [
     "급성 골수성 백혈병(AML)","급성 전골수구성 백혈병(APL)","급성 림프모구성 백혈병(ALL)",
     "만성 골수성 백혈병(CML)","만성 림프구성 백혈병(CLL)",
@@ -594,10 +571,8 @@ drug_info = {
 }
 
 # ------------------ Streamlit UI ------------------
-st.set_page_config(page_title=PAGE_TITLE, layout="centered")
 st.title(APP_TITLE)
 st.caption(MADE_BY)
-
 if "store" not in st.session_state: st.session_state.store = load_records()
 
 st.subheader("사용자 식별")
@@ -622,7 +597,7 @@ def lab_inputs(always_show: bool) -> Dict[str, Any]:
             vals[abbr] = val
     return vals
 
-# ----------- 특수검사 입력 (복구판: 지질·응고·보체·요검사·전해질·갑상선·당대사·패혈증·빈혈패널) -----------
+# ----------- 특수검사 입력 -----------
 def special_inputs() -> Tuple[Dict[str,str], Dict[str,float], List[str]]:
     qc, qn, info = {}, {}, []
     st.markdown("### 특수검사 (토글)")
@@ -697,7 +672,7 @@ def special_inputs() -> Tuple[Dict[str,str], Dict[str,float], List[str]]:
             qn["Corrected Ca"] = ca_corr
             info.append(f"보정 칼슘(Alb 반영): {ca_corr} mg/dL")
 
-    # 갑상선/당대사/패혈증
+    # 갑상선·당대사·패혈증
     with st.expander("갑상선·당대사·패혈증", expanded=False):
         t1,t2,t3 = st.columns(3)
         qn["TSH"] = parse_float(t1.text_input("TSH (µIU/mL)", key="thy_tsh"))
@@ -729,9 +704,7 @@ def special_inputs() -> Tuple[Dict[str,str], Dict[str,float], List[str]]:
         qn["Folate"]          = parse_float(b3.text_input("Folate (ng/mL)", key="an_folate"))
     return qc, qn, info
 
-# ------------------ 본문 ------------------
-st.set_page_config(page_title=PAGE_TITLE, layout="centered")
-
+# ------------------ 본문: 소아/암 모드 ------------------
 if mode == "소아 일상/질환":
     st.info("소아 감염/일상 중심: 항암제는 숨김 처리됩니다.")
     st.markdown("### 소아 질환 선택")
@@ -774,11 +747,9 @@ else:
     else:
         dx = ""
 
-    # 순서: 암선택 → 치료단계 → 항암제/표적치료제 선택
     tx_phase = st.selectbox("치료 단계", ["", "유지요법", "외래 항암", "입원 항암", "완료(추적관찰)"], index=0, key="tx_phase")
     tx_catalog = {}
     if group:
-        # 매핑
         if group == "혈액암": tx_catalog = TX["혈액암"].get(HEME_KEY.get(dx, dx), {"항암제":[], "표적치료제":[]})
         elif group == "림프종": tx_catalog = TX["림프종"].get(LYMPH_KEY.get(dx, dx), {"항암제":[], "표적치료제":[]})
         elif group == "고형암": tx_catalog = TX["고형암"].get(SOLID_KEY.get(dx, dx), {"항암제":[], "표적치료제":[]})
@@ -808,7 +779,7 @@ else:
     qc, qn, calc_info = special_inputs()
     ped_dx = ped_sx = None
 
-# ------------------ eGFR 계산 ------------------
+# ------------------ eGFR 계산 (선택) ------------------
 st.markdown("### eGFR 계산 (선택)")
 age = parse_float(st.text_input("나이(세)", key="kid_age"))
 sex = st.selectbox("성별", ["F","M"], key="kid_sex")
@@ -818,12 +789,14 @@ if entered(locals().get("labs", {}).get("Cr")) and age:
     if egfr is not None:
         st.info(f"eGFR(자동): {egfr} mL/min/1.73m²")
 
-# ------------------ 해석/저장 ------------------
+# ------------------ 해석 / 저장 분리 ------------------
 st.divider()
 colA, colB, colC = st.columns([1,1,1])
-run_analyze = colA.button("🔎 해석하기 & 저장", use_container_width=True, key="btn_analyze")
-clear_user  = colB.button("🗑️ 이 사용자 기록 전체 삭제", use_container_width=True, key="btn_clear")
+run_analyze = colA.button("🔎 해석하기", use_container_width=True, key="btn_analyze_only")
+save_now    = colB.button("💾 저장하기", use_container_width=True, key="btn_save_only")
 load_last   = colC.button("↩️ 가장 최근 기록으로 폼 채우기", use_container_width=True, key="btn_fill")
+
+clear_user = st.button("🗑️ 이 사용자 기록 전체 삭제", use_container_width=True, key="btn_clear")
 
 if clear_user and nick_key:
     st.session_state.store.pop(nick_key, None)
@@ -839,44 +812,42 @@ if load_last and nick_key:
             st.session_state[f"lab_{abbr}"] = str(val)
         st.success("최근 기록을 폼에 반영했습니다. (입력란 확인)")
 
-if run_analyze:
-    if not nick_key:
-        st.warning("별명과 PIN(숫자 4자리)을 먼저 입력해주세요.")
-    else:
-        qn_for_eval = {**locals().get("qn", {}), **({"eGFR": egfr} if egfr is not None else {})}
-        lab_notes  = interpret_labs(labs)
-        spec_notes = interpret_special_extended(locals().get("qc", {}), qn_for_eval, base_vals=labs, profile="adult")
-        food_lines = build_diet_guide(labs, qn_for_eval, mode)
+def do_analysis(show_result: bool=True) -> dict:
+    qn_for_eval = {**locals().get("qn", {}), **({"eGFR": egfr} if egfr is not None else {})}
+    lab_notes  = interpret_labs(labs)
+    spec_notes = interpret_special_extended(locals().get("qc", {}), qn_for_eval, base_vals=labs, profile="adult")
+    food_lines = build_diet_guide(labs, qn_for_eval, mode)
+    ped_tips_local = build_ped_tips(locals().get("ped_dx",""), locals().get("ped_sx",[]), locals().get("tc")) if mode=="소아 일상/질환" else None
 
+    if show_result:
         if lab_notes:
             st.subheader("해석 요약")
             for m in lab_notes: st.write("• " + m)
-        if calc_info:
+        if locals().get("calc_info"):
             st.subheader("자동 계산")
-            for m in calc_info: st.write("• " + m)
+            for m in locals().get("calc_info"): st.write("• " + m)
         if spec_notes:
             st.subheader("특수검사 해석")
             for m in spec_notes: st.write("• " + m)
         if food_lines:
             st.subheader("🍽️ 피수치별 음식/식이 가이드")
             for t in food_lines: st.write("• " + t)
-        if mode == "소아 일상/질환" and ped_dx:
+        if mode == "소아 일상/질환" and locals().get("ped_dx"):
             st.subheader("👶 소아 증상/질환 해석")
-            for t in build_ped_tips(ped_dx, ped_sx, locals().get("tc")): st.write("• " + t)
+            for t in ped_tips_local: st.write("• " + t)
 
-        # 보고서 저장
+        # 보고서 다운로드(저장과 무관)
         group = locals().get("group","") if mode=="암 진단 모드" else ""
         dx    = locals().get("dx","")    if mode=="암 진단 모드" else ""
         tx_catalog = locals().get("tx_catalog", {"항암제":[], "표적치료제":[]}) if mode=="암 진단 모드" else {}
         tx_phase   = locals().get("tx_phase","") if mode=="암 진단 모드" else ""
         tx_selected= locals().get("tx_selected", []) if mode=="암 진단 모드" else []
-
         report_md = build_report_md(
             nick_key, test_date, mode, group, dx, labs, lab_notes, spec_notes,
             tx_catalog, tx_phase, tx_selected, food_lines,
             ped_dx = locals().get("ped_dx") if mode=="소아 일상/질환" else None,
             ped_symptoms = locals().get("ped_sx") if mode=="소아 일상/질환" else None,
-            ped_tips = build_ped_tips(locals().get("ped_dx",""), locals().get("ped_sx",[]), locals().get("tc")) if mode=="소아 일상/질환" else None
+            ped_tips = ped_tips_local if mode=="소아 일상/질환" else None
         )
         st.download_button("📥 보고서(.md) 다운로드", data=report_md.encode("utf-8"),
                            file_name=f"bloodmap_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
@@ -885,27 +856,52 @@ if run_analyze:
                            file_name=f"bloodmap_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
                            mime="text/plain")
 
+    return {
+        "qn_for_eval": qn_for_eval,
+        "lab_notes": lab_notes,
+        "spec_notes": spec_notes,
+        "food_lines": food_lines,
+        "ped_tips": ped_tips_local
+    }
+
+# 해석하기: 별명/PIN 없어도 실행
+if run_analyze:
+    payload = do_analysis(show_result=True)
+    st.session_state["analysis_payload"] = payload
+    st.info("임시 해석 완료(저장은 하지 않았습니다). 별명·PIN 입력 후 [저장하기]를 누르면 기록됩니다.")
+
+# 저장하기: 별명#PIN 필요
+if save_now:
+    if not nick_key:
+        st.warning("별명과 PIN(숫자 4자리)을 입력해야 저장할 수 있어요. 지금은 해석만 가능합니다.")
+    else:
+        # 최신 분석이 없다면 즉석 재분석 후 저장
+        payload = st.session_state.get("analysis_payload") or do_analysis(show_result=False)
+        qn_for_eval = payload["qn_for_eval"]
         rec = {
             "ts": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "date": test_date.isoformat(),
-            "mode": mode, "group": group, "dx": dx,
-            "tx_phase": tx_phase, "tx_selected": tx_selected,
+            "mode": mode,
+            "group": locals().get("group","") if mode=="암 진단 모드" else "",
+            "dx":    locals().get("dx","")    if mode=="암 진단 모드" else "",
+            "tx_phase": locals().get("tx_phase","") if mode=="암 진단 모드" else "",
+            "tx_selected": locals().get("tx_selected", []) if mode=="암 진단 모드" else [],
             "labs": {k: labs.get(k) for k in ORDER if entered(labs.get(k))},
             "special": {"qc": locals().get("qc", {}), "qn": qn_for_eval},
             "pediatric": {"dx": locals().get("ped_dx") if mode=="소아 일상/질환" else "", "symptoms": locals().get("ped_sx") if mode=="소아 일상/질환" else []}
         }
         st.session_state.store.setdefault(nick_key, []).append(rec)
         save_records(st.session_state.store)
-        st.success("저장 완료! 아래 그래프로 추이를 확인하세요.")
+        st.success("저장 완료! 아래 그래프로 추이를 확인할 수 있어요.")
 
 # ------------------ 그래프 ------------------
 st.header("📈 추이 그래프 (별명#PIN 기준)")
 if not nick_key:
-    st.info("별명과 PIN을 입력하면 그래프를 사용할 수 있어요.")
+    st.info("별명과 PIN을 입력하면 그래프를 사용할 수 있어요. (저장 전에는 그래프가 표시되지 않습니다)")
 else:
     user_records = st.session_state.store.get(nick_key, [])
     if not user_records:
-        st.info("저장된 기록이 없습니다. '해석하기 & 저장'을 먼저 눌러주세요.")
+        st.info("저장된 기록이 없습니다. [해석하기] 후 [저장하기]를 눌러 기록을 남겨주세요.")
     else:
         rows = []
         for r in user_records:
