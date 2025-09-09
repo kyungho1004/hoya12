@@ -295,6 +295,185 @@ def _interpret_urine(extras: dict):
     return lines
 
 
+
+def _badge(txt, level="info"):
+    colors = {"ok":"#16a34a","mild":"#f59e0b","mod":"#fb923c","high":"#dc2626","info":"#2563eb","dim":"#6b7280"}
+    col = colors.get(level, "#2563eb")
+    return f'<span style="display:inline-block;padding:2px 8px;border-radius:9999px;background:rgba(0,0,0,0.04);color:{col};border:1px solid {col};font-size:12px;margin-right:6px;">{txt}</span>'
+
+def _strip_html(s: str) -> str:
+    import re
+    return re.sub(r'<[^>]+>', '', s or '')
+
+
+def _interpret_specials(extras: dict, base_vals: dict = None):
+    out = []
+    def _num(x):
+        try: return float(x)
+        except Exception: return None
+    def _rng(x, bounds):
+        v = _num(x)
+        if v is None: return None, None
+        for up, lvl, lab in bounds:
+            if v <= up: return lvl, lab
+        return bounds[-1][1], bounds[-1][2]
+
+    # Complements
+    c3, c4, ch50 = extras.get("C3"), extras.get("C4"), extras.get("CH50")
+    if c3 is not None:
+        lvl, lab = _rng(c3, [(89.9,"mild","낮음(소모/결핍 가능)"),(180,"ok","정상"),(9999,"mild","상승")])
+        out.append(_badge("C3", lvl or "dim")+f"C3: {c3} mg/dL — {lab}")
+    if c4 is not None:
+        lvl, lab = _rng(c4, [(9.9,"mild","낮음(자가면역/고전경로 가능)"),(40,"ok","정상"),(9999,"mild","상승")])
+        out.append(_badge("C4", lvl or "dim")+f"C4: {c4} mg/dL — {lab}")
+    if ch50 is not None:
+        lvl, lab = _rng(ch50, [(40,"mild","낮음(결핍/소모)"),(90,"ok","정상"),(9999,"mild","상승")])
+        out.append(_badge("CH50", lvl or "dim")+f"CH50: {ch50} U/mL — {lab}")
+
+    # Coag
+    pt, inr, aptt = extras.get("PT"), extras.get("INR") or extras.get("PT(INR)") or extras.get("PT-INR"), extras.get("aPTT")
+    fbg = extras.get("Fibrinogen")
+    dd  = extras.get("D-dimer")
+    if pt is not None:
+        lvl, lab = _rng(pt, [(13.5,"ok","정상"),(15,"mild","약간 지연"),(20,"mod","지연"),(9999,"high","현저히 지연")])
+        out.append(_badge("PT", lvl or "dim")+f"PT: {pt} sec — {lab}")
+    if inr is not None:
+        lvl, lab = _rng(inr, [(1.1,"ok","정상"),(1.5,"mild","연장"),(2.5,"mod","의미있는 연장"),(9999,"high","고위험")])
+        out.append(_badge("INR", lvl or "dim")+f"INR: {inr} — {lab}")
+    if aptt is not None:
+        lvl, lab = _rng(aptt, [(35,"ok","정상"),(45,"mild","연장"),(60,"mod","의미있는 연장"),(9999,"high","현저히 연장")])
+        out.append(_badge("aPTT", lvl or "dim")+f"aPTT: {aptt} sec — {lab}")
+    if fbg is not None:
+        lvl, lab = _rng(fbg, [(150,"mild","낮음(DIC/간질환)"),(400,"ok","정상(150–400)"),(9999,"mild","상승")])
+        out.append(_badge("Fbg", lvl or "dim")+f"Fibrinogen: {fbg} mg/dL — {lab}")
+    if dd is not None:
+        lvl, lab = _rng(dd, [(0.49,"ok","정상"),(2.0,"mild","상승"),(5.0,"mod","높음"),(9999,"high","매우 높음")])
+        out.append(_badge("D-dimer", lvl or "dim")+f"D-dimer: {dd} µg/mL FEU — {lab}")
+
+    # Lipids
+    tg  = extras.get("TG") or extras.get("Triglyceride (TG, mg/dL)")
+    tc  = extras.get("TC") or extras.get("Total Cholesterol (TC, mg/dL)")
+    hdl = extras.get("HDL") or extras.get("HDL-C (HDL, mg/dL)")
+    ldl = extras.get("LDL(Friedewald)") or extras.get("LDL")
+    non_hdl = extras.get("Non-HDL-C")
+    if tg is not None:
+        lvl, lab = _rng(tg, [(149,"ok","정상"),(199,"mild","경계"),(499,"mod","높음"),(9999,"high","매우 높음")])
+        out.append(_badge("TG", lvl or "dim")+f"TG: {tg} mg/dL — {lab}")
+    if tc is not None:
+        lvl, lab = _rng(tc, [(199,"ok","정상"),(239,"mild","경계"),(9999,"mod","높음")])
+        out.append(_badge("TC", lvl or "dim")+f"TC: {tc} mg/dL — {lab}")
+    if hdl is not None:
+        h = _num(hdl)
+        if h is not None:
+            if h < 40: out.append(_badge("HDL","high")+f"HDL-C: {h} — 낮음(<40)")
+            elif h < 60: out.append(_badge("HDL","mild")+f"HDL-C: {h} — 보통(40–59)")
+            else: out.append(_badge("HDL","ok")+f"HDL-C: {h} — 높음(≥60)")
+    if ldl is not None:
+        lvl, lab = _rng(ldl, [(99,"ok","최적"),(129,"mild","양호"),(159,"mild","경계"),(189,"mod","높음"),(9999,"high","매우 높음")])
+        out.append(_badge("LDL", lvl or "dim")+f"LDL-C: {ldl} mg/dL — {lab}")
+    if non_hdl is not None:
+        lvl, lab = _rng(non_hdl, [(129,"ok","표준 위험"),(159,"mild","경계"),(189,"mod","높음"),(9999,"high","매우 높음")])
+        out.append(_badge("Non-HDL", lvl or "dim")+f"Non-HDL-C: {non_hdl} mg/dL — {lab}")
+
+    # Kidney
+    e = extras.get("eGFR") or ((base_vals or {}).get("eGFR") if isinstance(base_vals, dict) else None)
+    if e is not None:
+        g = _num(e)
+        if g is not None:
+            if g >= 90:   out.append(_badge("eGFR","ok")+f"eGFR: {g} — G1")
+            elif g >= 60: out.append(_badge("eGFR","ok")+f"eGFR: {g} — G2")
+            elif g >= 45: out.append(_badge("eGFR","mild")+f"eGFR: {g} — G3a")
+            elif g >= 30: out.append(_badge("eGFR","mod")+f"eGFR: {g} — G3b")
+            elif g >= 15: out.append(_badge("eGFR","high")+f"eGFR: {g} — G4")
+            else:         out.append(_badge("eGFR","high")+f"eGFR: {g} — G5")
+
+    # Electrolytes (extended)
+    mg, phos, ica, ca_corr = extras.get("Mg"), extras.get("Phos(인)"), extras.get("iCa(이온화칼슘)"), extras.get("Corrected Ca")
+    if mg is not None:
+        lvl, lab = _rng(mg, [(1.6,"mild","낮음"),(2.3,"ok","정상"),(9999,"mild","상승")])
+        out.append(_badge("Mg", lvl or "dim")+f"Mg: {mg} mg/dL — {lab}")
+    if phos is not None:
+        lvl, lab = _rng(phos, [(2.4,"mild","낮음"),(4.5,"ok","정상"),(9999,"mild","상승")])
+        out.append(_badge("P", lvl or "dim")+f"Phosphate: {phos} mg/dL — {lab}")
+    if ica is not None:
+        lvl, lab = _rng(ica, [(1.10,"mild","낮음"),(1.32,"ok","정상"),(9999,"mild","상승")])
+        out.append(_badge("iCa", lvl or "dim")+f"이온화Ca: {ica} mmol/L — {lab}")
+    if ca_corr is not None:
+        lvl, lab = _rng(ca_corr, [(8.5,"mild","낮음"),(10.2,"ok","정상"),(9999,"mild","상승")])
+        out.append(_badge("Ca(corr)", lvl or "dim")+f"보정 Ca: {ca_corr} mg/dL — {lab}")
+
+    # Inflammation / Sepsis
+    crp = extras.get("CRP") or ((base_vals or {}).get("CRP") if isinstance(base_vals, dict) else None)
+    pct = extras.get("Procalcitonin"); lac = extras.get("Lactate")
+    if crp is not None:
+        lvl, lab = _rng(crp, [(3,"ok","정상/저등급"),(10,"mild","상승"),(100,"mod","높음"),(9999,"high","매우 높음")])
+        out.append(_badge("CRP", lvl or "dim")+f"CRP: {crp} mg/L — {lab}")
+    if pct is not None:
+        lvl, lab = _rng(pct, [(0.1,"ok","정상"),(0.25,"mild","경계"),(0.5,"mod","상승"),(2,"mod","높음"),(9999,"high","매우 높음")])
+        out.append(_badge("PCT", lvl or "dim")+f"PCT: {pct} ng/mL — {lab}")
+    if lac is not None:
+        lvl, lab = _rng(lac, [(2.0,"ok","정상"),(4.0,"mod","상승"),(9999,"high","매우 높음")])
+        out.append(_badge("Lactate", lvl or "dim")+f"Lactate: {lac} mmol/L — {lab}")
+
+    # Thyroid
+    tsh, ft4, tt3 = extras.get("TSH"), extras.get("Free T4"), extras.get("Total T3")
+    if tsh is not None:
+        lvl, lab = _rng(tsh, [(0.39,"mild","낮음"),(4.0,"ok","정상"),(10,"mild","상승"),(9999,"mod","현저히 상승")])
+        out.append(_badge("TSH", lvl or "dim")+f"TSH: {tsh} µIU/mL — {lab}")
+    if ft4 is not None:
+        lvl, lab = _rng(ft4, [(0.79,"mild","낮음"),(1.8,"ok","정상"),(9999,"mild","상승")])
+        out.append(_badge("FT4", lvl or "dim")+f"Free T4: {ft4} ng/dL — {lab}")
+    if tt3 is not None:
+        lvl, lab = _rng(tt3, [(79,"mild","낮음"),(200,"ok","정상"),(9999,"mild","상승")])
+        out.append(_badge("T3", lvl or "dim")+f"Total T3: {tt3} ng/dL — {lab}")
+    if _num(tsh) is not None and _num(ft4) is not None:
+        T, F = _num(tsh), _num(ft4)
+        if T > 4.0 and F < 0.8:
+            out.append(_badge("THY","mod")+"패턴: **원발성 갑상선기능저하증**(TSH↑, FT4↓) 의심.")
+        if T < 0.4 and F > 1.8:
+            out.append(_badge("THY","mod")+"패턴: **갑상선기능항진증**(TSH↓, FT4↑) 의심.")
+
+    # Glucose / Metabolic
+    glu, a1c, homa = extras.get("공복혈당( mg/dL )"), extras.get("HbA1c"), extras.get("HOMA-IR")
+    if glu is not None:
+        lvl, lab = _rng(glu, [(99,"ok","정상"),(125,"mild","공복혈당장애"),(9999,"mod","당뇨 의심")])
+        out.append(_badge("Glu", lvl or "dim")+f"공복혈당: {glu} mg/dL — {lab}")
+    if a1c is not None:
+        lvl, lab = _rng(a1c, [(5.6,"ok","정상"),(6.4,"mild","당뇨 전단계"),(9999,"mod","당뇨 의심")])
+        out.append(_badge("A1c", lvl or "dim")+f"HbA1c: {a1c}% — {lab}")
+    if homa is not None:
+        lvl, lab = _rng(homa, [(2.5,"ok","정상"),(4.0,"mild","저항성 의심"),(9999,"mod","인슐린 저항성")])
+        out.append(_badge("HOMA-IR", lvl or "dim")+f"HOMA-IR: {homa} — {lab}")
+
+    # Anemia
+    fe, ferr, tibc = extras.get("Fe(철)"), extras.get("Ferritin"), extras.get("TIBC")
+    tsat = extras.get("Transferrin sat.(%)") or extras.get("TSAT")
+    retic, b12, fol = extras.get("Reticulocyte(%)"), extras.get("Vitamin B12"), extras.get("Folate")
+    if fe is not None:
+        lvl, lab = _rng(fe, [(59,"mild","낮음(철결핍)"),(180,"ok","정상"),(9999,"mild","상승")])
+        out.append(_badge("Fe", lvl or "dim")+f"Fe: {fe} µg/dL — {lab}")
+    if ferr is not None:
+        lvl, lab = _rng(ferr, [(14,"mild","낮음"),(30,"mild","경계"),(400,"ok","정상"),(9999,"mild","상승(염증/저장)")])
+        out.append(_badge("Ferritin", lvl or "dim")+f"Ferritin: {ferr} ng/mL — {lab}")
+    if tibc is not None:
+        lvl, lab = _rng(tibc, [(250,"mild","낮음"),(360,"ok","정상"),(9999,"mild","상승(철결핍 시 ↑)")])
+        out.append(_badge("TIBC", lvl or "dim")+f"TIBC: {tibc} µg/dL — {lab}")
+    if tsat is not None:
+        lvl, lab = _rng(tsat, [(19.9,"mild","낮음(<20%)"),(50,"ok","정상(20–50%)"),(9999,"mild","상승")])
+        out.append(_badge("TSAT", lvl or "dim")+f"TSAT: {tsat}% — {lab}")
+    if retic is not None:
+        lvl, lab = _rng(retic, [(0.5,"mild","낮음"),(2.0,"ok","정상"),(9999,"mild","상승")])
+        out.append(_badge("Retic", lvl or "dim")+f"Reticulocyte: {retic}% — {lab}")
+    if b12 is not None:
+        lvl, lab = _rng(b12, [(199,"mild","낮음"),(900,"ok","정상"),(9999,"mild","상승")])
+        out.append(_badge("B12", lvl or "dim")+f"Vitamin B12: {b12} pg/mL — {lab}")
+    if fol is not None:
+        lvl, lab = _rng(fol, [(3.9,"mild","낮음(<4)"),(20,"ok","정상"),(9999,"mild","상승")])
+        out.append(_badge("Folate", lvl or "dim")+f"Folate: {fol} ng/mL — {lab}")
+
+    return [x for x in out if x]
+
+
 def main():
     st.set_page_config(page_title=PAGE_TITLE, layout="centered")
     _load_css()
@@ -353,7 +532,7 @@ def main():
     }
 
     if mode == "일반/암":
-        group = st.selectbox("암 그룹 선택", ["미선택/일반", "혈액암", "고형암", "육종", "희귀암", "림프종"])
+        group = st.selectbox("암 그룹 선택", ["미선택/일반", "혈액암", "고형암", "육종", "희귀암"])
         if group == "혈액암":
             heme_display = [
                 "급성 골수성 백혈병(AML)",
@@ -382,71 +561,8 @@ def main():
                 "흉선종/흉선암(Thymoma/Thymic carcinoma)","신경내분비종양(NET)",
                 "간모세포종(Hepatoblastoma)","비인두암(NPC)","GIST"
             ])
-        
-        elif group == "림프종":
-            st.subheader("림프종 진단 / 약물 선택")
-            lymph_display = [
-        "미만성 거대 B세포 림프종(DLBCL)",
-        "원발 종격동 B세포 림프종(PMBCL)",
-        "여포성 림프종 1-2등급(FL 1-2)",
-        "여포성 림프종 3A(FL 3A)",
-        "여포성 림프종 3B(FL 3B)",
-        "외투세포 림프종(MCL)",
-        "변연대 림프종(MZL)",
-        "고등급 B세포 림프종(HGBL)",
-        "버킷 림프종(Burkitt)",
-            ]
-            cancer = st.selectbox("림프종(진단명)", lymph_display)
-        
-            # 기본 항암제/표적 리스트(세포/자가치료 제외)
-            base_choices = [
-        # 1차/변형
-        "R-CHOP","Pola-R-CHP","DA-EPOCH-R",
-        # 구제
-        "R-ICE","R-DHAP","R-GDP","R-GemOx","R-ESHAP",
-        # 표적/항체·ADC·면역
-        "Pola-BR","Tafasitamab + Lenalidomide","Loncastuximab",
-        "Glofitamab","Epcoritamab","Selinexor",
-            ]
-            # PMBCL 전용(국내 미승인, 해외 활발 사용: 참고용)
-            pmbcl_only = ["Pembrolizumab (PMBCL; 해외 활발 사용, 국내 미승인)"]
-        
-            # DLBCL/FL/MCL 등 세부별 가중(필요 시 정렬만 바꿔줌)
-            # DLBCL/FL/MCL 등 세부별 가중(필요 시 정렬만 바꿔줌)
-            if "PMBCL" in cancer:
-                drug_choices = ["DA-EPOCH-R"] + base_choices + pmbcl_only
-            elif "DLBCL" in cancer or "HGBL" in cancer or "3B" in cancer:
-                drug_choices = ["R-CHOP","Pola-R-CHP","DA-EPOCH-R"] + base_choices
-            elif "3A" in cancer:
-                drug_choices = ["R-CHOP","Pola-R-CHP"] + [x for x in base_choices if x not in ["DA-EPOCH-R"]]
-            elif "FL 1-2" in cancer or "1-2" in cancer:
-                drug_choices = ["BR","R-CVP"] + base_choices
-            elif "MCL" in cancer:
-                drug_choices = ["BR","R-CHOP"] + base_choices + ["Ibrutinib (R/R)", "Acalabrutinib (R/R)", "Zanubrutinib (R/R)"]
-            elif "MZL" in cancer:
-                drug_choices = ["BR","R-CVP"] + base_choices
-            elif "Burkitt" in cancer:
-                drug_choices = ["CODOX-M/IVAC-R","Hyper-CVAD-R"] + base_choices
-            else:
-                drug_choices = base_choices
-
-            # ✅ 기본값-옵션 교집합으로 보호
-            _def = st.session_state.get("selected_drugs", [])
-            if isinstance(_def, str):
-                _def = [_def]
-            _def = [x for x in _def if x in drug_choices]
-            selected_drugs = st.multiselect("항암제 선택", drug_choices, default=_def, key="selected_drugs")
-            st.caption("세포/자가세포치료(CAR-T, 자가이식)는 제외됩니다. 국내 미승인이라도 해외에서 활발히 쓰이는 일부는 참고용으로 회색 표시될 수 있습니다.")
         else:
             st.info("암 그룹을 선택하면 해당 암종에 맞는 **항암제 목록과 추가 수치 패널**이 자동 노출됩니다.")
-        # ✅ 진단 변경 시 항암제 선택 초기화
-        try:
-            _dx = f"{group}:{cancer}" if "cancer" in locals() else str(group)
-            if st.session_state.get("dx_key") != _dx:
-                st.session_state["dx_key"] = _dx
-                st.session_state["selected_drugs"] = []
-        except Exception:
-            pass
     elif mode == "소아(일상/호흡기)":
         st.markdown("### 🧒 소아 일상 주제 선택")
         st.caption(PED_INPUTS_INFO)
@@ -660,12 +776,7 @@ def main():
             st.session_state["selected_drugs"] = list(dict.fromkeys(cur + preset_map.get(preset, [])))
         drug_search = st.text_input("🔍 항암제 검색", key="drug_search")
         drug_choices = [d for d in drug_list if not drug_search or drug_search.lower() in d.lower() or drug_search.lower() in ANTICANCER.get(d,{}).get("alias","").lower()]
-        # ✅ 기본값이 옵션에 없으면 Streamlit이 에러를 내므로, 교집합만 유지
-        _def = st.session_state.get("selected_drugs", [])
-        if isinstance(_def, str):
-            _def = [_def]
-        _def = [x for x in _def if x in drug_choices]
-        selected_drugs = st.multiselect("항암제 선택", drug_choices, default=_def, key="selected_drugs")
+        selected_drugs = st.multiselect("항암제 선택", drug_choices, default=st.session_state.get("selected_drugs", []), key="selected_drugs")
 
         for d in selected_drugs:
             alias = ANTICANCER.get(d,{}).get("alias","")
@@ -1085,7 +1196,13 @@ def main():
             if urine_lines:
                 st.markdown("### 🧪 요검사 해석")
                 for ul in urine_lines:
-                    st.write(ul)
+                st.write(ul)
+            # 특수검사 해석 (색 배지)
+            spec_lines = _interpret_specials(extra_vals, vals)
+            if spec_lines:
+                st.markdown("### 🧬 특수검사 해석")
+                for sl in spec_lines:
+                    st.markdown(sl, unsafe_allow_html=True)
 
             if nickname_key and "records" in st.session_state and st.session_state.records.get(nickname_key):
                 st.markdown("### 🔍 수치 변화 비교 (이전 기록 대비)")
@@ -1155,11 +1272,14 @@ def main():
 
         a4_opt = st.checkbox("🖨️ A4 프린트 최적화(섹션 구분선 추가)", value=True)
         urine_lines_for_report = _interpret_urine(extra_vals)
+        spec_lines_for_report = _interpret_specials(extra_vals, vals)
         report_md = build_report(mode, meta, {k: v for k, v in vals.items() if entered(v)}, cmp_lines, extra_vals, meds_lines, food_lines, abx_lines)
         # 요검사 해석을 보고서에도 추가
         if urine_lines_for_report:
-            report_md += "\n\n---\n\n### 🧪 요검사 해석\n" + "\n".join(["- " + l for l in urine_lines_for_report])
+            report_md += "\n\n---\n\n### 🧪 요검사 해석\n" + "\n".join(["- " + _strip_html(l) for l in urine_lines_for_report])
         # 발열 가이드 + 면책 문구를 하단에 항상 추가
+        if spec_lines_for_report:
+            report_md += "\n\n### 🧬 특수검사 해석\n" + "\n".join(["- " + _strip_html(l) for l in spec_lines_for_report])
         report_md += "\n\n---\n\n### 🌡️ 발열 가이드\n" + FEVER_GUIDE + "\n\n> " + DISCLAIMER
         if a4_opt:
             report_md = report_md.replace("### ", "\n\n---\n\n### ")
