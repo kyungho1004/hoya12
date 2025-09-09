@@ -552,6 +552,7 @@ def main():
 
     if mode == "일반/암":
         group = st.selectbox("암 그룹 선택", ["미선택/일반", "혈액암", "고형암", "육종", "희귀암", "림프종"])
+        drug_list = _get_drug_list()
         if group == "혈액암":
             heme_display = [
                 "급성 골수성 백혈병(AML)",
