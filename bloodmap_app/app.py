@@ -376,7 +376,7 @@ def build_diet_guide(labs: Dict[str, Any], qn: Dict[str, Any], mode: str) -> Lis
 
     # 빈혈
     if entered(g("Hb")) and g("Hb") < 10:
-        out.append("빈혈 → 철분 풍부한 식단(살코기·간·시금치·콩), 비타민C 함께, 식사 중 차/커피는 피하기. (원인에 따라 달라질 수 있음)")
+        out.append("빈혈 → 풍부한 식단(살코기·간·시금치·콩),식사 중 차/커피는 피하기. (원인에 따라 달라질 수 있음)")
 
     # CRP 높음(염증)
     if entered(g("CRP")) and g("CRP") >= 0.5:
