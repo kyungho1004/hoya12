@@ -1192,13 +1192,17 @@ def main():
                 st.write(line)
 
             # 요검사 해석
+            
+            # 요검사 해석
             urine_lines = _interpret_urine(extra_vals)
             if urine_lines:
                 st.markdown("### 🧪 요검사 해석")
                 for ul in urine_lines:
-                st.write(ul)
+                    st.write(ul)
+
             # 특수검사 해석 (색 배지)
             spec_lines = _interpret_specials(extra_vals, vals)
+
             if spec_lines:
                 st.markdown("### 🧬 특수검사 해석")
                 for sl in spec_lines:
