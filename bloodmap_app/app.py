@@ -343,8 +343,7 @@ def build_report_md(nick_pin: str, dt: date, mode: str, group: str, dx: str,
         L.append("")
     if lab_notes:
         L.append("## 해석 요약"); [L.append(f"- {m}") for m in lab_notes]; L.append("")
-    if spec_notes:
-        L.append("## 특수검사 해석"); [L.append(f"- {m}") for m in spec_notes]); L.append("")
+    L.append("### 특수검사 해석"); L.extend([f"- {m}" for m in spec_notes]); L.append("")
     if mode == "암 진단 모드":
         L.append("## 치료 카탈로그(추천)")
         for sec in ["항암제","표적치료제"]:
