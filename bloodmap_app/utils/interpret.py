@@ -1,129 +1,76 @@
+
 # -*- coding: utf-8 -*-
-from .inputs import entered
-
-# --- Safe imports: package or script context ---
-try:
-    from ..config import (ORDER, LBL_Hb, LBL_ANC, LBL_Alb, LBL_CRP, LBL_Glu)
-except Exception:
-    from config import (ORDER, LBL_Hb, LBL_ANC, LBL_Alb, LBL_CRP, LBL_Glu)
-
-try:
-    from ..data.foods import FOODS, ANC_FOOD_RULES
-except Exception:
-    from data.foods import FOODS, ANC_FOOD_RULES
-
-try:
-    from ..data.drugs import ANTICANCER, ABX_GUIDE
-except Exception:
-    from data.drugs import ANTICANCER, ABX_GUIDE
-
-
-def _fmt(k, v):
-    try:
-        return f"{k}: {float(v):g}"
-    except Exception:
-        return f"{k}: {v}"
-
+import streamlit as st
 
 def interpret_labs(vals, extras):
     lines = []
-    shown = [(k, vals.get(k)) for k in ORDER if entered(vals.get(k))]
-    if not shown:
-        return ["입력된 수치가 없습니다."]
-    lines.append("**입력 수치 요약**")
-    for k, v in shown:
-        lines.append(f"- {_fmt(k, v)}")
-
-    anc = vals.get(LBL_ANC)
-    hb = vals.get(LBL_Hb)
-    alb = vals.get(LBL_Alb)
-    crp = vals.get(LBL_CRP)
-    glu = vals.get(LBL_Glu)
-
-    if anc and anc < 500:
-        lines.append("⚠️ ANC 500 미만: 생채소 금지, 익힌 음식만 섭취. 남은 음식 2시간 이후 섭취 금지.")
-    if hb and hb < 8.0:
-        lines.append("⚠️ Hb 낮음: 빈혈 증상 관찰. 철분제는 혈액질환 환자에서 주치의 상의 필수.")
-    if alb and alb < 3.0:
-        lines.append("ℹ️ 알부민 낮음: 고단백 식사 권고.")
-    if crp and crp >= 1.0:
-        lines.append("⚠️ CRP 상승: 감염/염증 의심, 발열/호흡 증상 확인.")
-    if glu and glu >= 200:
-        lines.append("ℹ️ 혈당 높음: 저당 식이/수분 보충.")
+    # 간단한 예시: CRP/LDH/UA/BNP 중심으로 몇 줄 생성
+    try:
+        crp = vals.get("CRP")
+        if crp is not None:
+            if float(crp) <= 3: lines.append("CRP: 낮거나 정상 — 저등급 염증 가능.")
+            elif float(crp) <= 10: lines.append("CRP: 상승 — 감염/염증 가능.")
+            else: lines.append("CRP: 높은 편 — 임상 맥락 고려하여 평가.")
+    except Exception:
+        pass
+    try:
+        ldh = vals.get("LDH")
+        if ldh and float(ldh) > 480:
+            lines.append("LDH 상승 — 용혈/조직손상/종양활성 가능성.")
+    except Exception:
+        pass
+    try:
+        ua = vals.get("Uric Acid(UA)") or vals.get("UA") or vals.get("Uric Acid")
+        if ua and float(ua) > 7.0:
+            lines.append("요산 상승 — TLS/통풍 위험 평가.")
+    except Exception:
+        pass
     return lines
 
-
-def compare_with_previous(patient_id, current_vals):
-    from streamlit import session_state as S
-    prev = (S.records.get(patient_id) or [])[-1] if (getattr(S, "records", None) and S.records.get(patient_id)) else None
-    if not prev or not prev.get("labs"):
-        return []
-    lines = ["**이전 기록과 비교**"]
-    for k, v in current_vals.items():
-        if v is None:
-            continue
-        pv = prev["labs"].get(k)
-        if pv is None:
-            continue
-        try:
-            diff = float(v) - float(pv)
-            arrow = "↑" if diff > 0 else ("↓" if diff < 0 else "→")
-            lines.append(f"- {k}: {pv} → {v} ({arrow} {diff:+g})")
-        except Exception:
-            pass
-    return lines
-
-
-def food_suggestions(vals, anc_place):
+def compare_with_previous(nickname_key, cur_vals):
+    S = st.session_state
+    prevs = S.get("records", {}).get(nickname_key, [])
+    if not prevs: return []
+    last = prevs[-1].get("labs", {})
     out = []
-    alb = vals.get("Albumin(알부민)")
-    k = vals.get("K(포타슘)")
-    hb = vals.get("Hb(혈색소)")
-    na = vals.get("Na(소디움)")
-    ca = vals.get("Ca(칼슘)")
-    if alb is not None and alb < 3.0:
-        out.append("**알부민 낮음 추천:** " + ", ".join(FOODS["Albumin_low"]))
-    if k is not None and k < 3.5:
-        out.append("**칼륨 낮음 추천:** " + ", ".join(FOODS["K_low"]))
-    if hb is not None and hb < 9.0:
-        out.append("**Hb 낮음 추천:** " + ", ".join(FOODS["Hb_low"]) + "  \n⚠️ 항암·혈액질환 환자 **철분제 비권장**(주치의와 상의).")
-    if na is not None and na < 135:
-        out.append("**나트륨 낮음 추천:** " + ", ".join(FOODS["Na_low"]))
-    if ca is not None and ca < 8.5:
-        out.append("**칼슘 낮음 추천:** " + ", ".join(FOODS["Ca_low"]))
-    out.extend(ANC_FOOD_RULES)
+    for k, v in (cur_vals or {}).items():
+        try:
+            pv = last.get(k)
+            if pv is None or v is None: 
+                continue
+            dv = float(v) - float(pv)
+            if abs(dv) >= 0.1:
+                out.append(f"{k}: 이전 대비 {dv:+.1f} 변화")
+        except Exception:
+            continue
     return out
 
+def food_suggestions(vals, anc_place):
+    tips = []
+    anc = vals.get("ANC(호중구)") or vals.get("ANC")
+    try:
+        anc = float(anc) if anc is not None else None
+    except Exception:
+        anc = None
+    if anc is not None and anc < 1000:
+        tips += ["익힌 음식 위주", "조리 후 2시간 지난 음식 금지", "껍질 과일/생채소는 담당의 지침 확인"]
+    else:
+        tips += ["균형 잡힌 식단", "수분 충분히(하루 1.5~2L)", "단백질과 채소 적절히"]
+    if anc_place == "가정":
+        tips.append("가정: 냉장/가열 위생 관리")
+    else:
+        tips.append("병원: 면회·공용물품 접촉 주의")
+    return [f"- {t}" for t in tips]
 
 def summarize_meds(meds: dict):
-    lines = []
-    for d, info in meds.items():
-        meta = ANTICANCER.get(d, {})
-        alias = meta.get("alias", "")
-        aes = meta.get("aes", [])
-        base = f"- {d}" + (f" ({alias})" if alias else "")
-        if "form" in info:
-            base += f" · 제형: {info['form']}"
-        if "dose" in info:
-            base += f" · 용량: {info['dose']}"
-        if "dose_or_tabs" in info:
-            base += f" · 알약/용량: {info['dose_or_tabs']}"
-        lines.append(base)
-        if aes:
-            lines.append("  · 주의: " + ", ".join(aes))
-        if d == "ATRA":
-            lines.append("  · 분화증후군 의심: 발열/호흡곤란/부종/저혈압 → 즉시 의료진 연락.")
-        if d == "MTX":
-            lines.append("  · MTX: 간독성/점막염 주의, 엽산 보충 논의.")
-    return lines
-
+    out = []
+    for k, v in (meds or {}).items():
+        dose = v.get("dose_or_tabs") or v.get("dose") or ""
+        out.append(f"{k}: 투여량 {dose}")
+    return out
 
 def abx_summary(abx_dict: dict):
-    lines = []
-    for cat, dose in abx_dict.items():
-        tips = ABX_GUIDE.get(cat, [])
-        base = f"- {cat}" + (f" · 용량: {dose}" if dose else "")
-        lines.append(base)
-        if tips:
-            lines.append("  · 주의: " + ", ".join(tips))
-    return lines
+    out = []
+    for k, v in (abx_dict or {}).items():
+        out.append(f"{k}: 입력한 용량 {v}")
+    return out
