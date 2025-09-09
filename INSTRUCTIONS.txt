@@ -1,4 +1,6 @@
 실행 방법
-1) Python 3.10+ 권장, `pip install streamlit` 설치
-2) 터미널에서 `streamlit run app.py` 실행
-3) 모바일 줄꼬임 방지, 별명#PIN 기반 저장/그래프 사용 가능
+1) Python 3.10+ 권장
+2) 가상환경(선택) 활성화 후, 아래 명령을 순서대로 실행하세요.
+   pip install -r requirements.txt
+   streamlit run streamlit_app.py
+3) 모바일 UI 최적화(줄바꿈/간격) 및 별명#PIN 기반 저장/그래프 기능 포함
