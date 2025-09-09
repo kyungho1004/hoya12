@@ -1,11 +1,3 @@
-# -*- coding: utf-8 -*-
-"""Graph helpers (skeleton)."""
-import matplotlib.pyplot as plt
-
-def simple_trend_plot(values, ylabel="Value"):
-    fig = plt.figure()
-    plt.plot(range(1, len(values)+1), values, marker='o')
-    plt.xlabel("회차")
-    plt.ylabel(ylabel)
-    plt.title("추이 그래프")
-    return fig
+import streamlit as st
+def render_graphs():
+    st.caption("그래프 모듈(간이): 추후 실제 구현으로 교체 예정")
