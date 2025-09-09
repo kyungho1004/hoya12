@@ -306,7 +306,7 @@ def _strip_html(s: str) -> str:
     return re.sub(r'<[^>]+>', '', s or '')
 
 
-def _interpret_specials(extras: dict, base_vals: dict = None):
+def _interpret_specials(extras: dict, base_vals: dict = None, profile: str = 'adult'):
     out = []
     def _num(x):
         try: return float(x)
@@ -351,28 +351,34 @@ def _interpret_specials(extras: dict, base_vals: dict = None):
         out.append(_badge("D-dimer", lvl or "dim")+f"D-dimer: {dd} µg/mL FEU — {lab}")
 
     # Lipids
+    ped = (str(profile).lower().startswith('p'))
     tg  = extras.get("TG") or extras.get("Triglyceride (TG, mg/dL)")
     tc  = extras.get("TC") or extras.get("Total Cholesterol (TC, mg/dL)")
     hdl = extras.get("HDL") or extras.get("HDL-C (HDL, mg/dL)")
     ldl = extras.get("LDL(Friedewald)") or extras.get("LDL")
     non_hdl = extras.get("Non-HDL-C")
     if tg is not None:
-        lvl, lab = _rng(tg, [(149,"ok","정상"),(199,"mild","경계"),(499,"mod","높음"),(9999,"high","매우 높음")])
+        lvl, lab = _rng(tg, ([(149,"ok","정상"),(199,"mild","경계"),(499,"mod","높음"),(9999,"high","매우 높음")] if not ped else [(89,"ok","정상(<90)"),(129,"mild","경계(90–129)"),(499,"mod","높음(≥130)"),(9999,"high","매우 높음(≥500)")] ))
         out.append(_badge("TG", lvl or "dim")+f"TG: {tg} mg/dL — {lab}")
     if tc is not None:
-        lvl, lab = _rng(tc, [(199,"ok","정상"),(239,"mild","경계"),(9999,"mod","높음")])
+        lvl, lab = _rng(tc, ([(199,"ok","정상"),(239,"mild","경계"),(9999,"mod","높음")] if not ped else [(169,"ok","정상(<170)"),(199,"mild","경계(170–199)"),(9999,"mod","높음(≥200)")] ))
         out.append(_badge("TC", lvl or "dim")+f"TC: {tc} mg/dL — {lab}")
     if hdl is not None:
         h = _num(hdl)
         if h is not None:
-            if h < 40: out.append(_badge("HDL","high")+f"HDL-C: {h} — 낮음(<40)")
-            elif h < 60: out.append(_badge("HDL","mild")+f"HDL-C: {h} — 보통(40–59)")
-            else: out.append(_badge("HDL","ok")+f"HDL-C: {h} — 높음(≥60)")
+            if not ped:
+                if h < 40: out.append(_badge("HDL","high")+f"HDL-C: {h} — 낮음(<40)")
+                elif h < 60: out.append(_badge("HDL","mild")+f"HDL-C: {h} — 보통(40–59)")
+                else: out.append(_badge("HDL","ok")+f"HDL-C: {h} — 높음(≥60)")
+            else:
+                if h < 40: out.append(_badge("HDL","high")+f"HDL-C: {h} — 낮음(<40)")
+                elif h < 45: out.append(_badge("HDL","mild")+f"HDL-C: {h} — 보통(40–44)")
+                else: out.append(_badge("HDL","ok")+f"HDL-C: {h} — 높음(≥45)")
     if ldl is not None:
-        lvl, lab = _rng(ldl, [(99,"ok","최적"),(129,"mild","양호"),(159,"mild","경계"),(189,"mod","높음"),(9999,"high","매우 높음")])
+        lvl, lab = _rng(ldl, ([(99,"ok","최적"),(129,"mild","양호"),(159,"mild","경계"),(189,"mod","높음"),(9999,"high","매우 높음")] if not ped else [(109,"ok","정상(<110)"),(129,"mild","경계(110–129)"),(159,"mod","높음(≥130)"),(9999,"high","매우 높음(≥160)")] ))
         out.append(_badge("LDL", lvl or "dim")+f"LDL-C: {ldl} mg/dL — {lab}")
     if non_hdl is not None:
-        lvl, lab = _rng(non_hdl, [(129,"ok","표준 위험"),(159,"mild","경계"),(189,"mod","높음"),(9999,"high","매우 높음")])
+        lvl, lab = _rng(non_hdl, ([(129,"ok","표준 위험"),(159,"mild","경계"),(189,"mod","높음"),(9999,"high","매우 높음")] if not ped else [(119,"ok","정상(<120)"),(144,"mild","경계(120–144)"),(189,"mod","높음(≥145)"),(9999,"high","매우 높음(≥190)")] ))
         out.append(_badge("Non-HDL", lvl or "dim")+f"Non-HDL-C: {non_hdl} mg/dL — {lab}")
 
     # Kidney
@@ -529,6 +535,19 @@ def main():
         '급성 림프모구성 백혈병(ALL)': 'ALL',
         '만성 골수성 백혈병(CML)': 'CML',
         '만성 림프구성 백혈병(CLL)': 'CLL',
+    
+}
+
+    lymphoma_key_map = {
+        "미만성 거대 B세포 림프종(DLBCL)": "DLBCL",
+        "원발 종격동 B세포 림프종(PMBCL)": "PMBCL",
+        "여포성 림프종 1-2등급(FL 1-2)": "FL12",
+        "여포성 림프종 3A(FL 3A)": "FL3A",
+        "여포성 림프종 3B(FL 3B)": "FL3B",
+        "외투세포 림프종(MCL)": "MCL",
+        "변연대 림프종(MZL)": "MZL",
+        "고등급 B세포 림프종(HGBL)": "HGBL",
+        "버킷 림프종(Burkitt)": "BL",
     }
 
     if mode == "일반/암":
@@ -619,6 +638,10 @@ def main():
                 "버킷 림프종(Burkitt)",
             ]
             cancer = st.selectbox("림프종(진단명)", lymph_display)
+
+            # 내부 저장: 코드 슬러그 + 한글 라벨
+            st.session_state["dx_label"] = cancer
+            st.session_state["dx_slug"] = lymphoma_key_map.get(cancer, cancer)
 
             # 진단 변경 시 현재 그룹 키의 선택 초기화
             try:
@@ -857,10 +880,23 @@ def main():
             "고형암": solid_by_cancer.get(cancer, []),
             "육종": sarcoma_by_dx.get(cancer, []),
             "희귀암": rare_by_cancer.get(cancer, []),
+            "림프종": lymphoma_by_dx.get(lymphoma_key_map.get(cancer, cancer), []),
         }
         return list(dict.fromkeys(default_drugs_by_group.get(group, [])))
 
-    drug_list = _get_drug_list()
+
+        lymphoma_by_dx = {
+            "DLBCL": ["R-CHOP","Pola-R-CHP","DA-EPOCH-R","R-ICE","R-DHAP","R-GDP","R-GemOx","R-ESHAP","Pola-BR","Tafasitamab + Lenalidomide","Loncastuximab","Glofitamab","Epcoritamab","Selinexor"],
+            "PMBCL": ["DA-EPOCH-R","R-ICE","R-DHAP","R-GDP","R-GemOx","Pembrolizumab (PMBCL; 해외 활발 사용, 국내 미승인)","Glofitamab","Epcoritamab"],
+            "FL12":  ["BR","R-CVP","R-CHOP","Obinutuzumab + BR","Lenalidomide + Rituximab"],
+            "FL3A":  ["R-CHOP","Pola-R-CHP","BR"],
+            "FL3B":  ["R-CHOP","Pola-R-CHP","DA-EPOCH-R"],
+            "MCL":   ["BR","R-CHOP","Ibrutinib (R/R)","Acalabrutinib (R/R)","Zanubrutinib (R/R)","R-ICE","R-DHAP"],
+            "MZL":   ["BR","R-CVP","R-CHOP"],
+            "HGBL":  ["R-CHOP","Pola-R-CHP","DA-EPOCH-R","R-ICE","R-DHAP","R-GDP"],
+            "BL":    ["CODOX-M/IVAC-R","Hyper-CVAD-R","R-ICE"],
+        }
+        drug_list = _get_drug_list()
 
     if mode == "일반/암":
         st.markdown("### 💊 항암제 선택 및 입력")
@@ -1304,7 +1340,9 @@ def main():
                     st.write(ul)
 
             # 특수검사 해석 (색 배지)
-            spec_lines = _interpret_specials(extra_vals, vals)
+            ref_profile = st.radio("컷오프 기준", ["성인(기본)", "소아"], index=0, horizontal=True, help="지질/일부 항목은 소아 기준이 다릅니다")
+            _prof = "peds" if ref_profile == "소아" else "adult"
+            spec_lines = _interpret_specials(extra_vals, vals, profile=_prof)
 
             if spec_lines:
                 st.markdown("### 🧬 특수검사 해석")
@@ -1379,7 +1417,7 @@ def main():
 
         a4_opt = st.checkbox("🖨️ A4 프린트 최적화(섹션 구분선 추가)", value=True)
         urine_lines_for_report = _interpret_urine(extra_vals)
-        spec_lines_for_report = _interpret_specials(extra_vals, vals)
+        spec_lines_for_report = _interpret_specials(extra_vals, vals, profile=_prof)
         report_md = build_report(mode, meta, {k: v for k, v in vals.items() if entered(v)}, cmp_lines, extra_vals, meds_lines, food_lines, abx_lines)
         # 요검사 해석을 보고서에도 추가
         if urine_lines_for_report:
