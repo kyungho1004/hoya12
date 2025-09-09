@@ -519,7 +519,7 @@ def main():
     extras = {}
 
 # === 암 모드: 항암제/항생제 입력 통합 UI ===
-if mode == "일반/암":
+if False:  # disabled stray top-level block; real UI handled inside main()
     st.markdown("### 💊 항암제 선택 및 입력")
     try:
         base_list = _get_drug_list() or []
