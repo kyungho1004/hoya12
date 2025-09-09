@@ -71,3 +71,71 @@ INFO = {
 
 def get_info(drug: str):
     return INFO.get(drug, None)
+
+INFO.update({
+    "Bevacizumab": {
+        "ko": "베바시주맙",
+        "moa": "VEGF 억제 항체(혈관신생 차단)",
+        "warn": "출혈/천공 위험, 고혈압, 단백뇨",
+    },
+    "Ramucirumab": {
+        "ko": "라무시루맙",
+        "moa": "VEGFR2 억제 항체",
+        "warn": "출혈/혈전, 고혈압, 단백뇨",
+    },
+    "Cetuximab (EGFR mAb)": {
+        "ko": "세툭시맙",
+        "moa": "EGFR 표적 단클론항체",
+        "warn": "주입반응, 피부발진, 저마그네슘혈증",
+    },
+    "Pembrolizumab": {
+        "ko": "펨브롤리주맙",
+        "moa": "PD-1 면역관문 억제",
+        "warn": "면역관련 이상반응(피부/간/폐/내분비)",
+    },
+    "Atezolizumab": {
+        "ko": "아테졸리주맙",
+        "moa": "PD-L1 면역관문 억제",
+        "warn": "면역관련 이상반응, 피로",
+    },
+    "Durvalumab": {
+        "ko": "더발루맙",
+        "moa": "PD-L1 면역관문 억제",
+        "warn": "면역관련 이상반응",
+    },
+    "Sorafenib": {
+        "ko": "소라페닙",
+        "moa": "다중 키나아제 TKI (RAF/VEGFR 등)",
+        "warn": "손발증후군, 고혈압, 피로",
+    },
+    "Lenvatinib": {
+        "ko": "렌바티닙",
+        "moa": "다중 키나아제 TKI (VEGFR 등)",
+        "warn": "고혈압, 단백뇨, 피로",
+    },
+    "FOLFOX": {
+        "ko": "FOLFOX (5-FU+류코보린+옥살리플라틴)",
+        "moa": "DNA 합성 저해/교차결합",
+        "warn": "골수억제, 말초신경병증(옥살리), 구토",
+    },
+    "FOLFIRI": {
+        "ko": "FOLFIRI (5-FU+류코보린+이리노테칸)",
+        "moa": "DNA 합성 저해/Topo I 억제",
+        "warn": "골수억제, 설사(이리노테칸)",
+    },
+    "FOLFIRINOX": {
+        "ko": "FOLFIRINOX (5-FU+류코보린+이리노테칸+옥살리)",
+        "moa": "복합 항암요법",
+        "warn": "강한 골수억제, 설사, 말초신경병증",
+    },
+    "Osimertinib (EGFR TKI)": {
+        "ko": "오시머티닙",
+        "moa": "EGFR 변이 선택적 TKI",
+        "warn": "피부발진, 설사, 드물게 간질성 폐질환",
+    },
+    "Alectinib (ALK TKI)": {
+        "ko": "알렉티닙",
+        "moa": "ALK 억제제",
+        "warn": "피로, 변비, 간수치 상승",
+    },
+})
