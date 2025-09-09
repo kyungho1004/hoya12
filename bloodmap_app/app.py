@@ -1012,6 +1012,52 @@ def _get_drug_list():
     # 스케줄/그래프
     render_schedule(nickname_key)
 
+    
+# === 암 모드: 항암제/항생제 입력 통합 UI ===
+if mode == "일반/암":
+    st.markdown("### 💊 항암제 선택 및 입력")
+    try:
+        base_list = _get_drug_list() or []
+    except Exception:
+        base_list = []
+    drug_search = st.text_input("🔍 항암제 검색", key="drug_search")
+    # 전체 목록: 프리셋 + 모든 항암제 키
+    try:
+        all_drugs = sorted(set(list(base_list) + list(ANTICANCER.keys())))
+    except Exception:
+        all_drugs = base_list
+    drug_choices = [d for d in all_drugs if not drug_search or drug_search.lower() in d.lower() or drug_search.lower() in ANTICANCER.get(d,{}).get("alias","").lower()]
+    drug_key = f"selected_drugs_{group}"
+    _def = st.session_state.get(drug_key, [])
+    if isinstance(_def, str):
+        _def = [_def]
+    _def = [x for x in _def if x in drug_choices]
+    selected_drugs = st.multiselect("항암제 선택", drug_choices, default=_def, key=drug_key)
+    meds = {}
+    for d in selected_drugs:
+        amt = num_input_generic(f"{d} - 용량/회수", key=f"med_{d}", decimals=1, placeholder="예: 1")
+        if entered(amt):
+            meds[d] = {"dose_or_tabs": amt}
+    extras["anticancer"] = meds
+
+    st.markdown("### 🧪 항생제 선택 및 입력")
+    extras["abx"] = {}
+    abx_search = st.text_input("🔍 항생제 검색", key="abx_search")
+    try:
+        abx_pool = list(ABX_GUIDE.keys())
+    except Exception:
+        abx_pool = [k for k in globals().get("ABX", {}).keys()]
+    def _hit(a):
+        q = (abx_search or "").lower().strip()
+        if not q:
+            return True
+        tips = ABX_GUIDE.get(a, [])
+        return (q in a.lower()) or any(q in str(t).lower() for t in tips)
+    abx_choices = [a for a in abx_pool if _hit(a)]
+    selected_abx = st.multiselect("항생제 계열 선택", abx_choices, default=[])
+    for abx in selected_abx:
+        extras["abx"][abx] = num_input_generic(f"{abx} - 복용/주입량", key=f"abx_{abx}", decimals=1, placeholder="예: 1")
+
     st.divider()
     run = st.button("🔎 해석하기", use_container_width=True)
 
