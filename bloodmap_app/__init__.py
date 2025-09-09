@@ -1,1 +1,1 @@
-# BloodMap package init
+# makes bloodmap_app a package
