@@ -15,6 +15,35 @@ from utils.storage import register_user, append_record, get_records
 from data.drugs import list_diagnoses, get_default_drugs, get_targeted, common_antibiotics
 from data.drug_info import get_info
 from data.foods import foods_for, ANC_LOW_GUIDE
+
+# --- Foods helper ---
+def _food_block(labs: dict):
+    shown = False
+    if labs.get('Albumin', 4.0) < 3.5:
+        st.write('### 음식 추천 (알부민 낮음)')
+        st.write(', '.join(foods_for('알부민 낮음')))
+        shown = True
+    if 'K' in labs and labs['K'] < 3.5:
+        st.write('### 음식 추천 (칼륨 낮음)')
+        st.write(', '.join(foods_for('칼륨 낮음')))
+        shown = True
+    if 'Hb' in labs and labs['Hb'] < 10:
+        st.write('### 음식 추천 (Hb 낮음)')
+        st.write(', '.join(foods_for('Hb 낮음')))
+        shown = True
+    if 'Na' in labs and labs['Na'] < 135:
+        st.write('### 음식 추천 (나트륨 낮음)')
+        st.write(', '.join(foods_for('나트륨 낮음')))
+        shown = True
+    if 'Ca' in labs and labs['Ca'] < 8.6:
+        st.write('### 음식 추천 (칼슘 낮음)')
+        st.write(', '.join(foods_for('칼슘 낮음')))
+        shown = True
+    if 'ANC' in labs and labs['ANC'] < 500:
+        st.info('호중구 낮음 가이드: ' + ' · '.join(ANC_LOW_GUIDE))
+        shown = True
+    return shown
+
 from data import drugs as drugs_table
 
 APP_NAME = "BloodMap 피수치 가이드 v3.14+ (지침 반영)"
@@ -68,40 +97,62 @@ def render_special_tests():
 
 def cancer_mode(ukey: str):
     st.header("🧬 암 진단 모드")
-    cols = st.columns(3)
+    from data import drugs as D
+
+    cols = st.columns([1,1,1])
     group = cols[0].selectbox("암 카테고리", ["혈액암", "림프종", "고형암", "육종", "희귀암"])
-    dx = cols[1].selectbox("진단명", list_diagnoses(group))
-    biomarker = cols[2].text_input("Biomarker(선택): EGFR / ALK / ROS1 / HER2 / RAS WT / KIT/PDGFRA 등")
-    st.caption(f"선택: **{group} - {dx}**")
+
+    # Show diagnosis list next to category (helper text)
+    if group == "혈액암":
+        cols[0].caption("진단: " + ", ".join(D.list_diagnoses("혈액암")))
+    elif group == "림프종":
+        cols[0].caption("진단: " + ", ".join(D.list_diagnoses("림프종")))
+
+    # Diagnosis picker (grouped UI for solid)
+    if group == "고형암":
+        organ = cols[1].selectbox("고형암 분류(장기)", D.list_solid_groups())
+        dx_list = D.list_solid_by_group(organ)
+        dx = cols[2].selectbox("진단명", dx_list if dx_list else D.list_diagnoses("고형암"))
+    else:
+        dx = cols[1].selectbox("진단명", D.list_diagnoses(group))
+        cols[2].markdown("")
+
+    biomarker = st.text_input("Biomarker(선택): EGFR / ALK / ROS1 / HER2 / RAS WT / BRAF V600E / MSI-H / FGFR2 / RET / NTRK 등")
+    st.caption(f"선택: **[{group}] - [{dx}]**")
+
+    # Sections toggles
+    show_chemo = st.checkbox("항암제/레짐 보기", value=True)
+    show_targ = st.checkbox("표적치료제 보기 (바이오마커 입력 시)", value=False)
+    show_abx  = st.checkbox("항생제 보기", value=False)
 
     # Drugs
-    st.subheader("연결 약물")
-    def_drugs = get_default_drugs(group, dx)
-    targ = get_targeted(group, dx, biomarker) if biomarker else []
-    abx = common_antibiotics()
-    st.write("**항암제/레짐**")
-    for d in def_drugs:
-        info = get_info(d)
-        if info:
-            st.markdown(f"- **{info['ko']}** ({d}) · _기전_: {info['moa']} · _주의_: {info['warn']}")
-        else:
-            st.markdown(f"- {d}")
-    if targ:
-        st.write("**표적치료제 (Biomarker 기반)**")
-        for d in targ:
+    if show_chemo:
+        st.subheader("항암제/레짐")
+        for d in D.get_default_drugs(group, dx):
+            info = get_info(d)
+            if info:
+                st.markdown(f"- **{info['ko']}** ({d}) · _기전_: {info['moa']} · _주의_: {info['warn']}")
+            else:
+                st.markdown(f"- {d}")
+
+    if show_targ and biomarker:
+        st.subheader("표적치료제 (Biomarker 기반)")
+        for d in D.get_targeted(group, dx, biomarker):
             info = get_info(d) or {}
             nm = info.get("ko", d)
             st.markdown(f"- **{nm}** ({d}) · _기전_: {info.get('moa','N/A')} · _주의_: {info.get('warn','N/A')}")
-    st.write("**항생제 (암환자에서 자주 사용)**")
-    for d in abx:
-        st.markdown(f"- {d}")
+
+    if show_abx:
+        st.subheader("항생제 (암환자에서 자주 사용)")
+        for d in D.common_antibiotics():
+            st.markdown(f"- {d}")
 
     # Labs - always visible
     st.subheader("피수치 입력")
     labs = collect_basic_inputs()
     on_diur = st.checkbox("이뇨제 복용 중", value=False)
     items = []
-    if labs:
+    if labs and st.button('해석하기', key='btn_cancer_interpret', use_container_width=True):
         items = interpret_labs(labs)
         for k, v, level, hint in items:
             st.markdown(f"- **{k}**: {v} → <span class='badge {status_color(level)}'>{level}</span> · {hint}", unsafe_allow_html=True)
@@ -109,6 +160,7 @@ def cancer_mode(ukey: str):
         tips = diuretic_checks(labs, on_diur)
         for t in tips:
             st.warning(t)
+        _food_block(labs)
 
     render_special_tests()
 
@@ -137,6 +189,7 @@ def cancer_mode(ukey: str):
             except Exception:
                 st.caption("PDF: 폰트 미배치 등으로 실패 시 .md/.txt를 사용하세요.")
 
+
 def ped_mode(ukey: str):
     st.header("📌 소아 일상/질환 모드")
     w = st.number_input("체중 (kg)", min_value=0.0, step=0.5)
@@ -152,10 +205,11 @@ def ped_mode(ukey: str):
         st.markdown(f"- **{g}℃**: {txt}")
     if st.checkbox("피수치 입력 보이기 (토글)"):
         labs = collect_basic_inputs()
-        if labs:
+        if labs and st.button('해석하기', key='btn_ped_interpret', use_container_width=True):
             items = interpret_labs(labs)
             for k, v, level, hint in items:
                 st.markdown(f"- **{k}**: {v} → <span class='badge {status_color(level)}'>{level}</span> · {hint}", unsafe_allow_html=True)
+            _food_block(labs)
     st.caption("항암제는 소아 모드에서 숨김 처리됩니다.")
 
 def trends_page(ukey: str):
@@ -197,12 +251,12 @@ def main():
         pass
     ukey = sidebar_user()
 
-    tab = st.sidebar.radio("모드", ["소아 (일상/질환)", "암 (진단/치료)", "기록/그래프"])
-    if tab.startswith("소아"):
+    tab1, tab2, tab3 = st.tabs(["소아 (일상/질환)", "암 (진단/치료)", "기록/그래프"])
+    with tab1:
         ped_mode(ukey)
-    elif tab.startswith("암"):
+    with tab2:
         cancer_mode(ukey)
-    else:
+    with tab3:
         trends_page(ukey)
 
     st.markdown("> " + DISCLAIMER)
