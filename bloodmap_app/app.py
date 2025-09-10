@@ -595,9 +595,9 @@ else:
     if diag_sel == "직접 입력…":
         diag_sel = st.text_input("진단명 직접 입력 (영어+한글 가능)", placeholder="예: Colorectal adenocarcinoma(대장선암)")
 
-    # 약제 자동 추천(항암제/표적/항생제)
+    # 약제 "보기용" 자동 제안(항암제/표적/항생제)
     rec = drug_reco(category, diag_sel)
-    st.markdown("#### 💊 자동 약제 제안")
+    st.markdown("#### 💊 보기용 약제 제안 (자동)")
     c1, c2, c3 = st.columns(3)
     with c1:
         st.markdown("**항암제**")
@@ -616,7 +616,7 @@ else:
             st.caption("표적치료 정보 없음 또는 진단별 상이")
 
     with c3:
-        st.markdown("**자주 쓰는 항생제**")
+        st.markdown("**자주 쓰는 항생제(진단별)**")
         for d in rec["항생제"]:
             st.markdown(f"- {d['name']}  \n  · 작용: {d['moa']}  \n  · 주의: {d['se']}")
 
@@ -643,6 +643,31 @@ else:
             for d in COMMON_STEROIDS: blk.append(f"{d['name']} | 작용:{d['moa']} | 주의:{d['se']}")
             copy_button("\n".join(blk), "📋 공통 목록 복사")
         # ---- 공통 목록 끝 ----
+
+    # 안내: 자동 저장/처방 안 함
+    st.caption("※ 위 목록은 '보기용 추천'입니다. 자동 저장/처방되지 않으며, 보고서에는 '내가 선택한 약제'만 포함됩니다.")
+
+    # ✍️ 내 선택 약제 (보고서 포함용)
+    st.markdown("#### ✍️ 내 선택 약제 (보고서에 포함)")
+    sel1, sel2, sel3 = st.columns(3)
+    with sel1:
+        pick_chemo  = st.multiselect("항암제", [d['name'] for d in rec["항암제"]], default=[])
+        pick_target = st.multiselect("표적치료제", [d['name'] for d in rec["표적치료제"]], default=[])
+    with sel2:
+        pick_abx = st.multiselect("항생제(공통 포함)",
+                              [d['name'] for d in rec["항생제"]] + [d['name'] for d in COMMON_ABX],
+                              default=[])
+    with sel3:
+        pick_af = st.multiselect("항진균제(공통)", [d['name'] for d in COMMON_ANTIFUNGALS], default=[])
+        pick_st = st.multiselect("스테로이드(공통)", [d['name'] for d in COMMON_STEROIDS], default=[])
+
+    def _find_detail(name):
+        pools = [rec["항암제"], rec["표적치료제"], rec["항생제"], COMMON_ABX, COMMON_ANTIFUNGALS, COMMON_STEROIDS]
+        for pool in pools:
+            for d in pool:
+                if d["name"] == name:
+                    return d
+        return {"name": name, "moa": "-", "se": "-"}
 
     st.divider()
     st.markdown("#### 🧫 피수치 입력 (항상 표시)")
@@ -682,34 +707,40 @@ else:
         diet_list = foods_from_labs(labs)
         anc_safety = anc_food_safety(labs.get("ANC"))
 
-        # 암+약제 요약 블록 (보고서용)
+        # 암+약제 요약 블록 (보고서용) — "내가 선택한 약"만 포함
         drug_block_lines = [f"- 진단: **{category} - {diag_sel}**"]
-        if rec["항암제"]:
-            drug_block_lines.append("  - 항암제:")
-            for d in rec["항암제"]:
+
+        if pick_chemo:
+            drug_block_lines.append("  - 항암제(선택):")
+            for name in pick_chemo:
+                d = _find_detail(name)
                 drug_block_lines.append(f"    - {d['name']} | 기전: {d['moa']} | 부작용: {d['se']}")
-        if rec["표적치료제"]:
-            drug_block_lines.append("  - 표적치료제(Biomarker):")
-            for d in rec["표적치료제"]:
+
+        if pick_target:
+            drug_block_lines.append("  - 표적치료제(선택):")
+            for name in pick_target:
+                d = _find_detail(name)
                 drug_block_lines.append(f"    - {d['name']} | 기전: {d['moa']} | 부작용: {d['se']}")
-        if rec["항생제"]:
-            drug_block_lines.append("  - 자주 쓰는 항생제:")
-            for d in rec["항생제"]:
+
+        if pick_abx:
+            drug_block_lines.append("  - 항생제(선택):")
+            for name in pick_abx:
+                d = _find_detail(name)
                 drug_block_lines.append(f"    - {d['name']} | 작용: {d['moa']} | 주의: {d['se']}")
-        # 공통 목록도 보고서에 포함
-        if COMMON_ABX:
-            drug_block_lines.append("  - 공통 항생제:")
-            for d in COMMON_ABX:
+
+        if pick_af:
+            drug_block_lines.append("  - 항진균제(선택):")
+            for name in pick_af:
+                d = _find_detail(name)
                 drug_block_lines.append(f"    - {d['name']} | 작용: {d['moa']} | 주의: {d['se']}")
-        if COMMON_ANTIFUNGALS:
-            drug_block_lines.append("  - 공통 항진균제:")
-            for d in COMMON_ANTIFUNGALS:
+
+        if pick_st:
+            drug_block_lines.append("  - 스테로이드/면역억제(선택):")
+            for name in pick_st:
+                d = _find_detail(name)
                 drug_block_lines.append(f"    - {d['name']} | 작용: {d['moa']} | 주의: {d['se']}")
-        if COMMON_STEROIDS:
-            drug_block_lines.append("  - 공통 스테로이드/면역억제:")
-            for d in COMMON_STEROIDS:
-                drug_block_lines.append(f"    - {d['name']} | 작용: {d['moa']} | 주의: {d['se']}")
-        drug_block = "\n".join(drug_block_lines)
+
+        drug_block = "\n".join(drug_block_lines) if len(drug_block_lines) > 1 else ""
 
         # 화면 출력
         st.markdown("### ✅ 해석 결과")
@@ -725,7 +756,13 @@ else:
         if diet_list:
             st.markdown("- 좋은 예시: " + ", ".join(diet_list))
         for ln in anc_safety: st.markdown(f"- {ln}")
-        # 복사 버튼
+
+        # 선택 약제 요약(화면)
+        if drug_block:
+            st.markdown("**내가 선택한 약제 요약**")
+            st.code(drug_block, language="text")
+
+        # 복사 버튼(화면 요약)
         screen_text = []
         screen_text += ["[피수치 해석]"] + [ln for ln in lab_lines]
         if sp_lines: 
@@ -734,9 +771,11 @@ else:
             screen_text += ["[식이가이드(예시)]"]
             if diet_list: screen_text += ["좋은 예시: " + ", ".join(diet_list)]
             screen_text += anc_safety
+        if drug_block:
+            screen_text += ["[선택 약제 요약]", drug_block]
         copy_button("\n".join(screen_text), "📋 화면 결과 복사")
 
-        # 보고서 만들기 + 다운로드
+        # 보고서 만들기 + 다운로드 (선택 약제만 포함)
         md_text = make_report_md(
             header="BloodMap 보고서",
             labs=labs,
