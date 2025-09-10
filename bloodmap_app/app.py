@@ -21,48 +21,39 @@ def _load_mod(path_in_pkg):
             continue
     return None
 
-
-# config (single-file mode: use safe defaults; external config is optional)
-try:
-    from types import SimpleNamespace
-except Exception:
-    class SimpleNamespace: pass
-_cfg = SimpleNamespace()  # no external config file required
-
-# Label overrides (defaults preserved)
+# config
+_cfg = _load_mod("config")
+if _cfg is None:
+    raise ImportError("Cannot import config module (tried both package and top-level).")
+APP_TITLE = getattr(_cfg, "APP_TITLE", "BloodMap")
+PAGE_TITLE = getattr(_cfg, "PAGE_TITLE", "BloodMap")
+MADE_BY = getattr(_cfg, "MADE_BY", "")
+CAFE_LINK_MD = getattr(_cfg, "CAFE_LINK_MD", "")
+FOOTER_CAFE = getattr(_cfg, "FOOTER_CAFE", "")
+DISCLAIMER = getattr(_cfg, "DISCLAIMER", "")
+ORDER = getattr(_cfg, "ORDER", [])
+FEVER_GUIDE = getattr(_cfg, "FEVER_GUIDE", "")
 LBL_WBC = getattr(_cfg, "LBL_WBC", "WBC")
-LBL_Hb  = getattr(_cfg, "LBL_Hb",  "Hb")
+LBL_Hb = getattr(_cfg, "LBL_Hb", "Hb")
 LBL_PLT = getattr(_cfg, "LBL_PLT", "PLT")
 LBL_ANC = getattr(_cfg, "LBL_ANC", "ANC")
-LBL_Ca  = getattr(_cfg, "LBL_Ca",  "Ca")
-LBL_P   = getattr(_cfg, "LBL_P",   "P")
-LBL_Na  = getattr(_cfg, "LBL_Na",  "Na")
-LBL_K   = getattr(_cfg, "LBL_K",   "K")
+LBL_Ca = getattr(_cfg, "LBL_Ca", "Ca")
+LBL_P = getattr(_cfg, "LBL_P", "P")
+LBL_Na = getattr(_cfg, "LBL_Na", "Na")
+LBL_K = getattr(_cfg, "LBL_K", "K")
 LBL_Alb = getattr(_cfg, "LBL_Alb", "Alb")
 LBL_Glu = getattr(_cfg, "LBL_Glu", "Glu")
-LBL_TP  = getattr(_cfg, "LBL_TP",  "TP")
+LBL_TP = getattr(_cfg, "LBL_TP", "TP")
 LBL_AST = getattr(_cfg, "LBL_AST", "AST")
 LBL_ALT = getattr(_cfg, "LBL_ALT", "ALT")
 LBL_LDH = getattr(_cfg, "LBL_LDH", "LDH")
 LBL_CRP = getattr(_cfg, "LBL_CRP", "CRP")
-LBL_Cr  = getattr(_cfg, "LBL_Cr",  "Cr")
-LBL_UA  = getattr(_cfg, "LBL_UA",  "UA")
-LBL_TB  = getattr(_cfg, "LBL_TB",  "TB")
+LBL_Cr = getattr(_cfg, "LBL_Cr", "Cr")
+LBL_UA = getattr(_cfg, "LBL_UA", "UA")
+LBL_TB = getattr(_cfg, "LBL_TB", "TB")
 LBL_BUN = getattr(_cfg, "LBL_BUN", "BUN")
 LBL_BNP = getattr(_cfg, "LBL_BNP", "BNP")
 FONT_PATH_REG = getattr(_cfg, "FONT_PATH_REG", None)
-
-# optional data modules (ignored if missing)
-def _load_mod(modname: str):
-    try:
-        import importlib
-        return importlib.import_module(modname)
-    except Exception:
-        return None
-
-_drugs = _load_mod("data.drugs")
-_foods = _load_mod("data.foods")
-_ped   = _load_mod("data.ped")
 
 # data modules
 _drugs = _load_mod("data.drugs")
