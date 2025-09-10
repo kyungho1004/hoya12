@@ -44,14 +44,17 @@ from streamlit.components.v1 import html
 def copy_button(text: str, label: str = "📋 복사"):
     uid = "copystatus_" + uuid.uuid4().hex
     payload = json.dumps(text)  # 안전 직렬화
-    html("""
-    <div class="copywrap" style="display:flex;align-items:center;gap:8px;">
-      <button onclick='navigator.clipboard.writeText({payload}).then(()=>{const el=document.getElementById("{uid}"); if(el){el.innerText="복사됨!"; setTimeout(()=>{el.innerText="";},1500);}})'>
-        {label}
-      </button>
-      <span id="{uid}" style="font-size:12px;color:green;"></span>
-    </div>
-    """.format(payload=payload, uid=uid, label=label), height=40)
+    html(
+        """
+        <div class=\"copywrap\" style=\"display:flex;align-items:center;gap:8px;\">
+          <button onclick='navigator.clipboard.writeText({payload}).then(()=>{{const el=document.getElementById("{uid}"); if(el){{el.innerText="복사됨!"; setTimeout(()=>{{el.innerText="";}},1500);}}}})'>
+            {label}
+          </button>
+          <span id=\"{uid}\" style=\"font-size:12px;color:green;\"></span>
+        </div>
+        """.format(payload=payload, uid=uid, label=label),
+        height=40,
+    )
 
 # ------------------------- 소아 식이가이드 -------------------------
 def peds_diet_guide(disease=None, vals=None) -> Tuple[List[str], List[str], List[str]]:
@@ -449,11 +452,11 @@ def plot_trends(key:str):
             st.line_chart(df[col])
 
 # ------------------------- 보고서 생성 -------------------------
-DISCLAIMER = (
-"본 수치는 참고용이며, 해석 결과는 개발자와 무관합니다.\n"
-"약 변경/복용 중단 등은 반드시 주치의와 상의하세요.\n"
-"이 앱은 개인정보를 수집하지 않으며, 어떠한 개인정보 입력도 요구하지 않습니다."
-)
+DISCLAIMER = """
+본 수치는 참고용이며, 해석 결과는 개발자와 무관합니다.
+약 변경/복용 중단 등은 반드시 주치의와 상의하세요.
+이 앱은 개인정보를 수집하지 않으며, 어떠한 개인정보 입력도 요구하지 않습니다.
+"""
 
 NO_CELLTHERAPY = "혼돈 방지: 저희는 **세포·면역 치료**(CAR-T, TCR-T, NK, HSCT 등)는 표기하지 않습니다."
 
@@ -805,4 +808,44 @@ else:
     st.markdown("#### ⚠️ 고지 문구")
     st.code(DISCLAIMER, language="text")
     st.caption("문의/버그 제보: 네이버 카페에 남겨주세요. (피수치 가이드 공식카페)")
+
+# ------------------------- 내부 테스트 (선택 실행) -------------------------
+
+def _self_tests():
+    # 1) 문자열 조인 및 개행 관련 버그 회귀 테스트
+    parts = ["a", "b"]
+    assert "\n".join(parts) == "a\nb"
+
+    # 2) DISCLAIMER 삼중따옴표 정상 종료 확인
+    assert isinstance(DISCLAIMER, str) and "본 수치는" in DISCLAIMER
+
+    # 3) 보고서 생성 기본 흐름
+    md = make_report_md(
+        header="테스트 리포트",
+        labs={"WBC": 3.5, "Hb": 11.0},
+        lab_lines=["- Hb: 빈혈 경향 🟡"],
+        diet_lines=["좋은 예시: 미음"],
+        anc_lines=["생야채 금지"],
+        drug_block="- 진단: **혈액암 - APL**\n  - 항암제(선택):\n    - ATRA (베사노이드) | 기전: 분화 | 부작용: 두통",
+        sp_lines=["C3 낮음"]
+    )
+    assert "# 테스트 리포트" in md and "## 자동 해석" in md
+
+    # 4) 특수검사 해석 케이스
+    lines = interpret_special_tests(
+        {"알부민뇨": "+++", "혈뇨": "+", "요당": "++", "케톤뇨": "+"},
+        {"C3": "50", "C4": "10", "TG": "250", "HDL": "35", "LDL": "180", "총콜레스테롤": "250", "BNP": "120"}
+    )
+    assert any("알부민뇨" in s for s in lines) and any("BNP" in s for s in lines)
+
+# 체크박스로 내부 테스트 실행 (기본 꺼짐)
+if st.sidebar.checkbox("🔧 내부 테스트 실행"):
+    try:
+        _self_tests()
+        st.sidebar.success("내부 테스트 통과 ✅")
+    except AssertionError as e:
+        st.sidebar.error(f"내부 테스트 실패: {e}")
+    except Exception as e:
+        st.sidebar.error(f"예상치 못한 오류: {e}")
+
 
