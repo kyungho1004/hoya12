@@ -597,55 +597,55 @@ else:
     diag_sel = st.selectbox("진단명", diag_options)
     if diag_sel == "직접 입력…":
         diag_sel = st.text_input("진단명 직접 입력 (영어+한글 가능)", placeholder="예: Colorectal adenocarcinoma(대장선암)")
-
     # 약제 "보기용" 자동 제안(항암제/표적/항생제)
-    rec = drug_reco(category, diag_sel)
-    st.markdown("#### 💊 보기용 약제 제안 (자동)")
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        st.markdown("**항암제**")
-        if rec["항암제"]:
-            for d in rec["항암제"]:
-                st.markdown(f"- {d['name']}  \n  · 기전: {d['moa']}  \n  · 부작용: {d['se']}")
-        else:
-            st.caption("권장 항암제 정보 없음(진단별 상이)")
+    # 👉 전체 섹션을 토글(Expander)로 감쌉니다.
+    with st.expander("💊 보기용 약제 제안 (자동)", expanded=False):
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.markdown("**항암제**")
+            if rec["항암제"]:
+                for d in rec["항암제"]:
+                    st.markdown(f"- {d['name']}  \n  · 기전: {d['moa']}  \n  · 부작용: {d['se']}")
+            else:
+                st.caption("권장 항암제 정보 없음(진단별 상이)")
 
-    with c2:
-        st.markdown("**표적치료제 (Biomarker)**")
-        if rec["표적치료제"]:
-            for d in rec["표적치료제"]:
-                st.markdown(f"- {d['name']}  \n  · 기전: {d['moa']}  \n  · 부작용: {d['se']}")
-        else:
-            st.caption("표적치료 정보 없음 또는 진단별 상이")
+        with c2:
+            st.markdown("**표적치료제 (Biomarker)**")
+            if rec["표적치료제"]:
+                for d in rec["표적치료제"]:
+                    st.markdown(f"- {d['name']}  \n  · 기전: {d['moa']}  \n  · 부작용: {d['se']}")
+            else:
+                st.caption("표적치료 정보 없음 또는 진단별 상이")
 
-    with c3:
-        st.markdown("**자주 쓰는 항생제(진단별)**")
-        for d in rec["항생제"]:
-            st.markdown(f"- {d['name']}  \n  · 작용: {d['moa']}  \n  · 주의: {d['se']}")
-
-        # ---- 공통 목록(항생제/항진균/스테로이드) 표시 ----
-        with st.expander("공통 목록 (항생제/항진균/스테로이드)", expanded=False):
-            st.markdown("**항생제 (공통)**")
-            for d in COMMON_ABX:
+        with c3:
+            st.markdown("**자주 쓰는 항생제(진단별)**")
+            for d in rec["항생제"]:
                 st.markdown(f"- {d['name']}  \n  · 작용: {d['moa']}  \n  · 주의: {d['se']}")
 
-            st.markdown("**항진균제 (공통)**")
-            for d in COMMON_ANTIFUNGALS:
-                st.markdown(f"- {d['name']}  \n  · 작용: {d['moa']}  \n  · 주의: {d['se']}")
+            # ---- 공통 목록(항생제/항진균/스테로이드) 표시 ----
+            with st.expander("공통 목록 (항생제/항진균/스테로이드)", expanded=False):
+                st.markdown("**항생제 (공통)**")
+                for d in COMMON_ABX:
+                    st.markdown(f"- {d['name']}  \n  · 작용: {d['moa']}  \n  · 주의: {d['se']}")
 
-            st.markdown("**스테로이드/면역억제 (공통)**")
-            for d in COMMON_STEROIDS:
-                st.markdown(f"- {d['name']}  \n  · 작용: {d['moa']}  \n  · 주의: {d['se']}")
+                st.markdown("**항진균제 (공통)**")
+                for d in COMMON_ANTIFUNGALS:
+                    st.markdown(f"- {d['name']}  \n  · 작용: {d['moa']}  \n  · 주의: {d['se']}")
 
-            # 복사 버튼
-            blk = []
-            for d in COMMON_ABX: blk.append(f"{d['name']} | 작용:{d['moa']} | 주의:{d['se']}")
-            blk.append("--- 항진균제 ---")
-            for d in COMMON_ANTIFUNGALS: blk.append(f"{d['name']} | 작용:{d['moa']} | 주의:{d['se']}")
-            blk.append("--- 스테로이드/면역억제 ---")
-            for d in COMMON_STEROIDS: blk.append(f"{d['name']} | 작용:{d['moa']} | 주의:{d['se']}")
-            copy_button("\n".join(blk), "📋 공통 목록 복사")
-        # ---- 공통 목록 끝 ----
+                st.markdown("**스테로이드/면역억제 (공통)**")
+                for d in COMMON_STEROIDS:
+                    st.markdown(f"- {d['name']}  \n  · 작용: {d['moa']}  \n  · 주의: {d['se']}")
+
+                # 복사 버튼
+                blk = []
+                for d in COMMON_ABX: blk.append(f"{d['name']} | 작용:{d['moa']} | 주의:{d['se']}")
+                blk.append("--- 항진균제 ---")
+                for d in COMMON_ANTIFUNGALS: blk.append(f"{d['name']} | 작용:{d['moa']} | 주의:{d['se']}")
+                blk.append("--- 스테로이드/면역억제 ---")
+                for d in COMMON_STEROIDS: blk.append(f"{d['name']} | 작용:{d['moa']} | 주의:{d['se']}")
+                copy_button("\n".join(blk), "📋 공통 목록 복사")
+            # ---- 공통 목록 끝 ----
+
 
     # 안내: 자동 저장/처방 안 함
     st.caption("※ 위 목록은 '보기용 추천'입니다. 자동 저장/처방되지 않으며, 보고서에는 '내가 선택한 약제'만 포함됩니다.")
