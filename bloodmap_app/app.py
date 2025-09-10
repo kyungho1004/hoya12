@@ -11,7 +11,7 @@ import streamlit as st
 import pandas as pd
 from datetime import date, datetime, timedelta
 
-st.set_page_config(page_title="BloodMap", page_icon="🩸", layout="centered")
+st.set_page_config(page_title="블러드맵 피수치가이드", page_icon="🩸", layout="centered")
 
 # ------------------------- 공통 유틸 -------------------------
 def _clean_num(s):
