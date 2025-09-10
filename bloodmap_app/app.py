@@ -28,12 +28,12 @@ RECORDS_PATH = "records.json"
 ORDER = ["WBC","Hb","PLT","ANC","Ca","P","Na","K","Alb","Glu","TP",
          "AST","ALT","LDH","CRP","Cr","UA","TB","BUN","BNP"]
 KR = {
-    "WBC":"백혈구","Hb":"혈색소","PLT":"혈소판(PLT)","ANC":"호중구면연력(ANC)",
+    "WBC":"백혈구","Hb":"혈색소","PLT":"혈소판(PLT)","ANC":"호중구(ANC)",
     "Ca":"칼슘","P":"인","Na":"소디움","K":"포타슘",
     "Alb":"알부민","Glu":"혈당","TP":"총단백",
     "AST":"AST(간 효소)","ALT":"ALT(간세포)","LDH":"LDH",
     "CRP":"CRP(염증)","Cr":"크레아티닌","UA":"요산",
-    "TB":"총빌리루빈","BUN":"BUN(심부전지표)","BNP":"BNP(심부전지표)",
+    "TB":"총빌리루빈","BUN":"BUN","BNP":"BNP",
 }
 def label(abbr: str) -> str:
     base = KR.get(abbr, abbr)
@@ -662,7 +662,7 @@ if "store" not in st.session_state: st.session_state.store = load_records()
 # 사용자 식별
 st.subheader("사용자 식별")
 c1, c2 = st.columns([2,1])
-nickname = c1.text_input("별명", placeholder="예: 우진이아빠", key="nickname")
+nickname = c1.text_input("별명", placeholder="예: 민수아빠", key="nickname")
 pin      = c2.text_input("PIN(4자리)", max_chars=4, placeholder="예: 1234", key="pin")
 pin_clean = "".join([c for c in (pin or "") if c.isdigit()])[:4]
 nick_key  = f"{nickname.strip()}#{pin_clean}" if nickname and pin_clean else ""
@@ -1129,4 +1129,3 @@ else:
 
 st.markdown("---")
 st.code(DISCLAIMER, language="text")
-
