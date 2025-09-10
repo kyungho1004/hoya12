@@ -46,7 +46,7 @@ def copy_button(text: str, label: str = "📋 복사"):
     payload = json.dumps(text)  # 안전 직렬화
     html("""
     <div class="copywrap" style="display:flex;align-items:center;gap:8px;">
-      <button onclick='navigator.clipboard.writeText({payload}).then(()=>{{const el=document.getElementById("{uid}"); if(el){{el.innerText="복사됨!"; setTimeout(()=>{{el.innerText="";}},1500);}}}})'>
+      <button onclick='navigator.clipboard.writeText({payload}).then(()=>{const el=document.getElementById("{uid}"); if(el){el.innerText="복사됨!"; setTimeout(()=>{el.innerText="";},1500);}})'>
         {label}
       </button>
       <span id="{uid}" style="font-size:12px;color:green;"></span>
@@ -205,6 +205,33 @@ DRUGS = {
     }
 }
 
+# --- 공통 감염/지지요법 목록 (암종 무관 기본 세트) ---
+COMMON_ABX = [
+    {"name": "Piperacillin/Tazobactam (피페/타조)", "moa": "광범위", "se": "알레르기, 설사"},
+    {"name": "Cefepime (세페핌)", "moa": "광범위", "se": "설사, 발진"},
+    {"name": "Meropenem (메로페넴)", "moa": "광범위", "se": "설사, 발열, 경련"},
+    {"name": "Vancomycin (반코마이신)", "moa": "MRSA 등 그람양성균", "se": "신장독성, Red-man syndrome"},
+    {"name": "Amikacin (아미카신)", "moa": "그람음성균", "se": "청각독성, 신장독성"},
+    {"name": "Clindamycin (클린다마이신)", "moa": "혐기성균", "se": "설사, 위장 장애"},
+    {"name": "Metronidazole (메트로니다졸)", "moa": "혐기성균", "se": "금주 필요, 구토, 구내염"},
+    {"name": "Cefotaxime (세포탁심)", "moa": "그람양성/음성", "se": "설사, 피부 발진"},
+    {"name": "Levofloxacin (레보플록사신)", "moa": "광범위", "se": "건염, QT 연장, 불면"},
+    {"name": "Trimethoprim/Sulfamethoxazole (박트림)", "moa": "Pneumocystis 예방", "se": "저혈당, 피부 발진, 골수억제"},
+    {"name": "Linezolid (리네졸리드)", "moa": "MRSA, VRE", "se": "혈소판감소증, 시신경염"},
+]
+
+COMMON_ANTIFUNGALS = [
+    {"name": "Fluconazole (플루코나졸)", "moa": "칸디다, 항진균", "se": "간수치 상승, 위장장애"},
+    {"name": "Amphotericin B (암포테리신)", "moa": "광범위 항진균", "se": "신장독성, 오한, 발열"},
+    {"name": "Caspofungin (카스포펀진)", "moa": "항진균", "se": "간기능 이상, 발진"},
+]
+
+COMMON_STEROIDS = [
+    {"name": "Dexamethasone (덱사메타손)", "moa": "항염/면역억제", "se": "혈당 상승, 불면, 위장장애"},
+    {"name": "Prednisolone (프레드니솔론)", "moa": "항염/면역억제", "se": "부종, 감염 위험 증가"},
+    {"name": "Hydrocortisone (하이드로코티손)", "moa": "응급 스테로이드", "se": "혈당상승, 부종"},
+]
+
 # 고형암 다른 진단 예시(직접입력 허용)
 SOLID_LIST = ["폐선암", "유방암", "위암", "대장암", "간세포암", "췌장암", "담도암", "직접 입력…"]
 SARCOMA_LIST = ["Osteosarcoma(골육종)", "Ewing sarcoma", "Leiomyosarcoma", "직접 입력…"]
@@ -272,7 +299,7 @@ def interpret_special_tests(q:Dict, n:Dict) -> List[str]:
 LAB_ORDER = [
     ("WBC (백혈구)", "WBC"),
     ("Hb (혈색소)", "Hb"),
-    ("혈소판 (PLT)", "PLT"),
+    ("혈소판", "PLT"),
     ("ANC (호중구)", "ANC"),
     ("Ca (칼슘)", "Ca"),
     ("P (인)", "P"),
@@ -544,7 +571,7 @@ if mode == "소아 일상/질환":
         # 간단 5개만 예시 (소아 모듈에서는 수치 입력은 참고용)
         wbc_s = st.text_input("WBC (백혈구)")
         hb_s  = st.text_input("Hb (혈색소)")
-        plt_s = st.text_input("혈소판 (PLT)")
+        plt_s = st.text_input("혈소판")
         crp_s = st.text_input("CRP")
         anc_s = st.text_input("ANC (호중구)")
 
@@ -592,6 +619,30 @@ else:
         st.markdown("**자주 쓰는 항생제**")
         for d in rec["항생제"]:
             st.markdown(f"- {d['name']}  \n  · 작용: {d['moa']}  \n  · 주의: {d['se']}")
+
+        # ---- 공통 목록(항생제/항진균/스테로이드) 표시 ----
+        with st.expander("공통 목록 (항생제/항진균/스테로이드)", expanded=False):
+            st.markdown("**항생제 (공통)**")
+            for d in COMMON_ABX:
+                st.markdown(f"- {d['name']}  \n  · 작용: {d['moa']}  \n  · 주의: {d['se']}")
+
+            st.markdown("**항진균제 (공통)**")
+            for d in COMMON_ANTIFUNGALS:
+                st.markdown(f"- {d['name']}  \n  · 작용: {d['moa']}  \n  · 주의: {d['se']}")
+
+            st.markdown("**스테로이드/면역억제 (공통)**")
+            for d in COMMON_STEROIDS:
+                st.markdown(f"- {d['name']}  \n  · 작용: {d['moa']}  \n  · 주의: {d['se']}")
+
+            # 복사 버튼
+            blk = []
+            for d in COMMON_ABX: blk.append(f"{d['name']} | 작용:{d['moa']} | 주의:{d['se']}")
+            blk.append("--- 항진균제 ---")
+            for d in COMMON_ANTIFUNGALS: blk.append(f"{d['name']} | 작용:{d['moa']} | 주의:{d['se']}")
+            blk.append("--- 스테로이드/면역억제 ---")
+            for d in COMMON_STEROIDS: blk.append(f"{d['name']} | 작용:{d['moa']} | 주의:{d['se']}")
+            copy_button("\n".join(blk), "📋 공통 목록 복사")
+        # ---- 공통 목록 끝 ----
 
     st.divider()
     st.markdown("#### 🧫 피수치 입력 (항상 표시)")
@@ -644,6 +695,19 @@ else:
         if rec["항생제"]:
             drug_block_lines.append("  - 자주 쓰는 항생제:")
             for d in rec["항생제"]:
+                drug_block_lines.append(f"    - {d['name']} | 작용: {d['moa']} | 주의: {d['se']}")
+        # 공통 목록도 보고서에 포함
+        if COMMON_ABX:
+            drug_block_lines.append("  - 공통 항생제:")
+            for d in COMMON_ABX:
+                drug_block_lines.append(f"    - {d['name']} | 작용: {d['moa']} | 주의: {d['se']}")
+        if COMMON_ANTIFUNGALS:
+            drug_block_lines.append("  - 공통 항진균제:")
+            for d in COMMON_ANTIFUNGALS:
+                drug_block_lines.append(f"    - {d['name']} | 작용: {d['moa']} | 주의: {d['se']}")
+        if COMMON_STEROIDS:
+            drug_block_lines.append("  - 공통 스테로이드/면역억제:")
+            for d in COMMON_STEROIDS:
                 drug_block_lines.append(f"    - {d['name']} | 작용: {d['moa']} | 주의: {d['se']}")
         drug_block = "\n".join(drug_block_lines)
 
@@ -702,3 +766,4 @@ else:
     st.markdown("#### ⚠️ 고지 문구")
     st.code(DISCLAIMER, language="text")
     st.caption("문의/버그 제보: 네이버 카페에 남겨주세요. (피수치 가이드 공식카페)")
+
