@@ -1,9 +1,10 @@
-# app.py — BloodMap (로타/마이코플라즈마 추가 + 암별 자동추천 + 상/하단 고지 추가)
+# app.py — BloodMap (소아 식이가이드 추가 · 로타/마이코 포함 확인 · 해열제 1회용량만 표기)
 # - 상단 헤더: 제작 Hoya/GPT · 자문 Hoya/GPT + 안내 고지
 # - 암: 카테고리/진단명(한글 병기) + 자동 추천(항암제/표적·면역/항생제) 제시 + 개별 선택 가능
 # - 소아: 질환별 필요한 증상만(코로나/무증상/수족구/장염/편도염/열감기/RSV/아데노/독감/로타/마이코)
 #        SpO₂는 "측정기 있음" 체크 시에만 입력칸 노출
-# - 피수치: 숫자만(±,+,- 제거), 특수검사 토글, 해열제(1회 평균 ml, 0.5 반올림, 교차시간)
+#        🥗 질환별 식이가이드(예시) 추가
+# - 피수치: 숫자만(±,+,- 제거), 특수검사 토글, 해열제(1회 평균 ml만 표기, 0.5 반올림, 교차시간 안내)
 # - 별명+PIN 저장/그래프, 항암 스케줄 생성기
 # 실행: streamlit run app.py
 
@@ -199,16 +200,16 @@ ACET_MG_PER_ML = 160/5  # 32 mg/mL
 IBU_MG_PER_ML  = 100/5  # 20 mg/mL
 
 def apap_ml(weight_kg, mg_per_ml=ACET_MG_PER_ML):
-    if not weight_kg: return None, None
+    if not weight_kg: return None
     mg = 12.5 * float(weight_kg)  # 평균값만
     ml = mg / mg_per_ml
-    return round_half(ml), 5  # 최대 가능 횟수(일반적)
+    return round_half(ml)
 
 def ibu_ml(weight_kg, mg_per_ml=IBU_MG_PER_ML):
-    if not weight_kg: return None, None
+    if not weight_kg: return None
     mg = 10.0 * float(weight_kg)
     ml = mg / mg_per_ml
-    return round_half(ml), 4
+    return round_half(ml)
 
 def antipyretic_card():
     st.markdown("#### 🔥 해열제 (1회 평균 용량 기준)")
@@ -225,9 +226,9 @@ def antipyretic_card():
             mg = st.number_input("아세트아미노펜 mg", min_value=1, step=1, value=160)
             ml = st.number_input("용량 mL", min_value=1.0, step=0.5, value=5.0)
             mgml = mg/ml
-        one, times = apap_ml(wt, mgml)
+        one = apap_ml(wt, mgml)
         if one:
-            st.success(f"**1회 용량: {one:.1f} mL** · **최대 {times}회/일**")
+            st.success(f"**1회 용량: {one:.1f} mL**")
             st.caption("같은 약 간격 4–6시간 · 교차 사용은 보통 4시간 간격")
     else:
         mgml = IBU_MG_PER_ML
@@ -235,9 +236,9 @@ def antipyretic_card():
             mg = st.number_input("이부프로펜 mg", min_value=1, step=1, value=100)
             ml = st.number_input("용량 mL", min_value=1.0, step=0.5, value=5.0)
             mgml = mg/ml
-        one, times = ibu_ml(wt, mgml)
+        one = ibu_ml(wt, mgml)
         if one:
-            st.success(f"**1회 용량: {one:.1f} mL** · **최대 {times}회/일**")
+            st.success(f"**1회 용량: {one:.1f} mL**")
             st.caption("같은 약 간격 6–8시간 · 교차 사용은 보통 4시간 간격")
 
 # ------------------------- 특수검사 (토글) -------------------------
@@ -372,7 +373,7 @@ def auto_recs(dx_text: str):
     if "melanoma" in dx or "흑색종" in dx:
         rec["targeted"] += ["Pembrolizumab","Nivolumab"]
     if "rcc" in dx or "신장암" in dx:
-        rec["targeted"] += ["Sorafenib"]  # (예시) 다른 TKI는 생략
+        rec["targeted"] += ["Sorafenib"]  # (예시)
     if "glioma" in dx or "뇌종양" in dx:
         rec["chemo"] += ["Temozolomide"]
 
@@ -391,6 +392,52 @@ def auto_recs(dx_text: str):
     rec["targeted"] = list(dict.fromkeys(rec["targeted"]))
     rec["abx"] = list(dict.fromkeys(rec["abx"]))
     return rec
+
+# ------------------------- 소아 식이가이드 -------------------------
+def peds_diet_guide(disease: str, vals: dict):
+    d = (disease or "").lower()
+    foods = []
+    avoid = []
+    tips  = []
+
+    if "로타" in d or "장염" in d:
+        foods = ["쌀미음/야채죽", "바나나", "삶은 감자·당근", "구운 식빵/크래커", "연두부"]
+        avoid = ["과일 주스·탄산", "튀김/매운 음식", "생채소/껍질 있는 과일", "유당 많은 음식(설사 악화 시)"]
+        tips  = ["소량씩 자주 수분 보충", "구토 후 10분 쉬고 한 모금씩", "모유 수유 중이면 지속"]
+    elif "독감" in d:
+        foods = ["닭고기·야채죽", "계란찜", "연두부", "사과퓨레/배숙", "미지근한 국물"]
+        avoid = ["매운/자극적인 음식", "튀김/기름진 음식", "카페인 음료"]
+        tips  = ["고열·근육통 완화되면 평소 식사로 빠르게 회복", "충분한 수분"]
+    elif "rsv" in d or "상기도염" in d:
+        foods = ["미지근한 물/보리차", "맑은 국/미음", "연두부", "계란찜", "바나나/사과퓨레"]
+        avoid = ["과도한 차가운 간식", "기름진 음식", "질식 위험 작은 알갱이(견과류 등)"]
+        tips  = ["작게·자주 먹이기", "가습·코세척 등 환경 관리"]
+    elif "아데노" in d:
+        foods = ["부드러운 죽", "계란찜", "연두부", "사과퓨레", "감자/당근 삶은 것"]
+        avoid = ["매운/자극", "튀김", "과도한 단 음료"]
+        tips  = ["결막염 동반 시 위생 철저(수건 분리)"]
+    elif "마이코" in d:
+        foods = ["닭가슴살죽", "계란찜", "연두부", "흰살생선 죽", "담백한 국"]
+        avoid = ["매운/자극", "튀김/기름진 음식", "카페인 음료"]
+        tips  = ["기침 심하면 자극 음식 피하고 수분 늘리기"]
+    elif "수족구" in d:
+        foods = ["차갑지 않은 부드러운 음식", "바나나", "요거트(자극 적음)", "연두부", "계란찜"]
+        avoid = ["뜨겁고 매운 음식", "산성 강한 과일(오렌지/파인애플 등)", "튀김"]
+        tips  = ["삼킴 통증 시 온도/질감 조절, 탈수 주의"]
+    elif "편도염" in d:
+        foods = ["부드러운 죽/미음", "계란찜", "연두부", "따뜻한 국물", "바나나"]
+        avoid = ["매운/딱딱한 음식", "튀김"]
+        tips  = ["통증 조절하며 수분 충분히"]
+    elif "코로나" in d:
+        foods = ["부드러운 죽", "연두부/계란찜", "사과퓨레", "바나나", "맑은 국"]
+        avoid = ["매운/자극", "튀김/기름진 음식"]
+        tips  = ["가족 간 전파 예방, 수분 충분히"]
+    else:  # 열감기(상기도염) 기본
+        foods = ["부드러운 죽/미음", "계란찜", "연두부", "사과퓨레", "따뜻한 국물"]
+        avoid = ["매운/자극", "튀김"]
+        tips  = ["3일 이상 고열 지속/악화 시 진료"]
+
+    return foods, avoid, tips
 
 # ------------------------- 메인 -------------------------
 def main():
@@ -547,7 +594,7 @@ def main():
         st.markdown("### 소아 질환 선택")
         disease = st.selectbox("질환", [
             "코로나","코로나(무증상)","수족구","장염(비특이적)","편도염","열감기(상기도염)",
-            "RSV(호흡기세포융합바이러스)","아데노바이러스","독감(인플루엔자)","로타바이러스(로타)", "마이코플라즈마(비정형 폐렴)"
+            "RSV(호흡기세포융합바이러스)","아데노바이러스","독감(인플루엔자)","로타바이러스(로타)","마이코플라즈마(비정형 폐렴)"
         ])
 
         st.markdown("#### 🧒 기본 계측")
@@ -646,6 +693,20 @@ def main():
                 if P is not None and P<150000: info.append("PLT 낮음 → 출혈 주의")
                 if C is not None and C>=3: info.append("CRP 상승 → 염증/감염 가능")
                 st.info("\n".join(["• "+m for m in (info or ["입력 없음"]) ]))
+
+        # 🥗 소아 식이가이드(예시)
+        with st.expander("🥗 식이가이드 (예시)", expanded=True):
+            foods, avoid, tips = peds_diet_guide(disease, vals)
+            st.markdown("**권장 예시**")
+            for f in foods: st.write("- " + f)
+            st.markdown("**피해야 할 예시**")
+            for a in avoid: st.write("- " + a)
+            if tips:
+                st.markdown("**케어 팁**")
+                for t in tips: st.write("- " + t)
+            report_sections.append((f"소아 식이가이드 — {disease}",
+                                    [f"권장: {', '.join(foods)}",
+                                     f"회피: {', '.join(avoid)}"] + ([f"팁: {', '.join(tips)}"] if tips else [])))
 
         # 해석하기
         if st.button("🔎 소아 해석하기"):
