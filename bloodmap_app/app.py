@@ -884,8 +884,8 @@ else:
 def _self_tests():
     # 1) 문자열 조인 및 개행 관련 회귀 테스트
     parts = ["a", "b"]
-    joined = "\\n".join(parts)
-    assert joined == "a\\nb"
+    joined = "\n".join(parts)
+    assert joined == "a\nb"
 
     # 2) DISCLAIMER 삼중따옴표 정상 종료 확인
     assert isinstance(DISCLAIMER, str) and ("본 수치는" in DISCLAIMER)
@@ -897,7 +897,7 @@ def _self_tests():
         lab_lines=["- Hb: 빈혈 경향 🟡"],
         diet_lines=["좋은 예시: 미음"],
         anc_lines=["생야채 금지"],
-        drug_block="- 진단: **혈액암 - APL**\\n  - 항암제(선택):\\n    - ATRA (베사노이드) | 기전: 분화 | 부작용: 두통",
+        drug_block="- 진단: **혈액암 - APL**\n  - 항암제(선택):\n    - ATRA (베사노이드) | 기전: 분화 | 부작용: 두통",
         sp_lines=["C3 낮음"]
     )
     assert "# 테스트 리포트" in md
@@ -928,3 +928,4 @@ if st.sidebar.checkbox("🔧 내부 테스트 실행"):
         st.sidebar.error(f"내부 테스트 실패: {e}")
     except Exception as e:
         st.sidebar.error(f"예상치 못한 오류: {e}")
+
