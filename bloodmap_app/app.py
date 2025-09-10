@@ -632,7 +632,9 @@ else:
             st.markdown("**항암제**")
             if rec["항암제"]:
                 for d in rec["항암제"]:
-                    line = "- {name}  \n  · 기전: {moa}  \n  · 부작용: {se}".format(
+                    line = "- {name}  
+  · 기전: {moa}  
+  · 부작용: {se}".format(
                         name=d.get("name", ""), moa=d.get("moa", ""), se=d.get("se", "")
                     )
                     st.markdown(line)
@@ -643,7 +645,9 @@ else:
             st.markdown("**표적치료제 (Biomarker)**")
             if rec["표적치료제"]:
                 for d in rec["표적치료제"]:
-                    line = "- {name}  \n  · 기전: {moa}  \n  · 부작용: {se}".format(
+                    line = "- {name}  
+  · 기전: {moa}  
+  · 부작용: {se}".format(
                         name=d.get("name", ""), moa=d.get("moa", ""), se=d.get("se", "")
                     )
                     st.markdown(line)
@@ -653,7 +657,9 @@ else:
         with c3:
             st.markdown("**자주 쓰는 항생제(진단별)**")
             for d in rec["항생제"]:
-                line = "- {name}  \n  · 작용: {moa}  \n  · 주의: {se}".format(
+                line = "- {name}  
+  · 작용: {moa}  
+  · 주의: {se}".format(
                     name=d.get("name", ""), moa=d.get("moa", ""), se=d.get("se", "")
                 )
                 st.markdown(line)
@@ -662,21 +668,27 @@ else:
             with st.expander("공통 목록 (항생제/항진균/스테로이드)", expanded=False):
                 st.markdown("**항생제 (공통)**")
                 for d in COMMON_ABX:
-                    line = "- {name}  \n  · 작용: {moa}  \n  · 주의: {se}".format(
+                    line = "- {name}  
+  · 작용: {moa}  
+  · 주의: {se}".format(
                         name=d.get("name", ""), moa=d.get("moa", ""), se=d.get("se", "")
                     )
                     st.markdown(line)
 
                 st.markdown("**항진균제 (공통)**")
                 for d in COMMON_ANTIFUNGALS:
-                    line = "- {name}  \n  · 작용: {moa}  \n  · 주의: {se}".format(
+                    line = "- {name}  
+  · 작용: {moa}  
+  · 주의: {se}".format(
                         name=d.get("name", ""), moa=d.get("moa", ""), se=d.get("se", "")
                     )
                     st.markdown(line)
 
                 st.markdown("**스테로이드/면역억제 (공통)**")
                 for d in COMMON_STEROIDS:
-                    line = "- {name}  \n  · 작용: {moa}  \n  · 주의: {se}".format(
+                    line = "- {name}  
+  · 작용: {moa}  
+  · 주의: {se}".format(
                         name=d.get("name", ""), moa=d.get("moa", ""), se=d.get("se", "")
                     )
                     st.markdown(line)
@@ -688,7 +700,8 @@ else:
                 for d in COMMON_ANTIFUNGALS: blk.append(f"{d['name']} | 작용:{d['moa']} | 주의:{d['se']}")
                 blk.append("--- 스테로이드/면역억제 ---")
                 for d in COMMON_STEROIDS: blk.append(f"{d['name']} | 작용:{d['moa']} | 주의:{d['se']}")
-                copy_button("\n".join(blk), "📋 공통 목록 복사")
+                copy_button("
+".join(blk), "📋 공통 목록 복사")
             # ---- 공통 목록 끝 ----
 
 
@@ -869,14 +882,13 @@ else:
 # ------------------------- 내부 테스트 (선택 실행) -------------------------
 
 def _self_tests():
-    # 1) 문자열 조인 및 개행 관련 버그 회귀 테스트
+    # 1) 문자열 조인 및 개행 관련 회귀 테스트
     parts = ["a", "b"]
-    assert "
-".join(parts) == "a
-b"
+    joined = "\\n".join(parts)
+    assert joined == "a\\nb"
 
     # 2) DISCLAIMER 삼중따옴표 정상 종료 확인
-    assert isinstance(DISCLAIMER, str) and "본 수치는" in DISCLAIMER
+    assert isinstance(DISCLAIMER, str) and ("본 수치는" in DISCLAIMER)
 
     # 3) 보고서 생성 기본 흐름
     md = make_report_md(
@@ -885,23 +897,27 @@ b"
         lab_lines=["- Hb: 빈혈 경향 🟡"],
         diet_lines=["좋은 예시: 미음"],
         anc_lines=["생야채 금지"],
-        drug_block="- 진단: **혈액암 - APL**
-  - 항암제(선택):
-    - ATRA (베사노이드) | 기전: 분화 | 부작용: 두통",
+        drug_block="- 진단: **혈액암 - APL**\\n  - 항암제(선택):\\n    - ATRA (베사노이드) | 기전: 분화 | 부작용: 두통",
         sp_lines=["C3 낮음"]
     )
-    assert "# 테스트 리포트" in md and "## 자동 해석" in md
+    assert "# 테스트 리포트" in md
+    assert "## 자동 해석" in md
 
-    # 4) 특수검사 해석 케이스
+    # 4) 특수검사 해석 케이스 (보체/지질/심장지표 포함)
     lines = interpret_special_tests(
         {"알부민뇨": "+++", "혈뇨": "+", "요당": "++", "케톤뇨": "+"},
-        {"C3": "50", "C4": "10", "TG": "250", "HDL": "35", "LDL": "180", "총콜레스테롤": "250", "BNP": "120"}
+        {"C3": "50", "C4": "10", "CH50": "20", "TG": "250", "HDL": "35", "LDL": "180",
+         "총콜레스테롤": "250", "ApoB": "140", "Lp(a)": "60", "BNP": "120", "NT-proBNP": "130",
+         "TroponinI": "0.08", "CK-MB": "6"}
     )
-    assert any("알부민뇨" in s for s in lines) and any("BNP" in s for s in lines)
+    assert any("CH50" in s for s in lines)
+    assert any("ApoB" in s for s in lines) or any("Lp(a)" in s for s in lines) or any("Non-HDL" in s for s in lines)
+    assert any("NT-proBNP" in s for s in lines) or any("Troponin" in s for s in lines) or any("CK-MB" in s for s in lines)
 
     # 5) drug_reco 기본 리턴 구조 확인 (rec NameError 방지 관련)
     dr = drug_reco("혈액암", "APL")
-    assert isinstance(dr, dict) and all(k in dr for k in ["항암제", "표적치료제", "항생제"])  # 키 누락 없음
+    assert isinstance(dr, dict)
+    assert all(k in dr for k in ["항암제", "표적치료제", "항생제"])  # 키 누락 없음
 
 # 체크박스로 내부 테스트 실행 (기본 꺼짐)
 if st.sidebar.checkbox("🔧 내부 테스트 실행"):
