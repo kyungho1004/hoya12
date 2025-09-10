@@ -148,36 +148,37 @@ else:
         return []
 
     def build_report(nickname, pin, mode, lines, urine_lines, extra_sections, disclaimer):
-        md = f"# BloodMap 보고서
+    md = f"""# BloodMap 보고서
 
 - 사용자: {nickname}#{pin or '----'}
 - 모드: {mode}
 
 ## 해석 결과
+"""
+    for L in (lines or []):
+        md += f"- {L}
 "
-        for L in (lines or []):
-            md += f"- {L}
-"
-        if urine_lines:
-            md += "
+    if urine_lines:
+        md += "
 ## 요검사
 "
-            for L in urine_lines:
-                md += f"- {L}
+        for L in urine_lines:
+            md += f"- {L}
 "
-        for title, items in (extra_sections or []):
-            md += f"
+    for title, items in (extra_sections or []):
+        md += f"
 ## {title}
 "
-            for L in (items or []):
-                md += f"- {L}
+        for L in (items or []):
+            md += f"- {L}
 "
-        if disclaimer:
-            md += f"
+    if disclaimer:
+        md += f"
 
 {disclaimer}
 "
-        return md
+    return md
+
 
     def md_to_pdf_bytes_fontlocked(md_text):
         # PDF 생성기를 사용할 수 없는 환경이므로, 상위 로직의 try/except에 맡긴다.
