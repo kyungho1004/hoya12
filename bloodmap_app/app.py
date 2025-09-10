@@ -71,30 +71,124 @@ PED_SYMPTOMS = getattr(_ped, "PED_SYMPTOMS", {})
 PED_RED_FLAGS = getattr(_ped, "PED_RED_FLAGS", {})
 
 # utils modules
+
+# utils modules
 _utils_inputs = _load_mod("utils.inputs")
 _utils_interpret = _load_mod("utils.interpret")
 _utils_reports = _load_mod("utils.reports")
 _utils_graphs = _load_mod("utils.graphs")
 _utils_schedule = _load_mod("utils.schedule")
 
-if not all([_utils_inputs, _utils_interpret, _utils_reports, _utils_graphs, _utils_schedule]):
-    raise ImportError("Cannot import required utils modules under the package.")
+_FALLBACK_UTILS = not all([_utils_inputs, _utils_interpret, _utils_reports, _utils_graphs, _utils_schedule])
 
-num_input_generic = getattr(_utils_inputs, "num_input_generic")
-entered = getattr(_utils_inputs, "entered")
-_parse_numeric = getattr(_utils_inputs, "_parse_numeric")
+if not _FALLBACK_UTILS:
+    num_input_generic = getattr(_utils_inputs, "num_input_generic")
+    entered = getattr(_utils_inputs, "entered")
+    _parse_numeric = getattr(_utils_inputs, "_parse_numeric")
 
-interpret_labs = getattr(_utils_interpret, "interpret_labs")
-compare_with_previous = getattr(_utils_interpret, "compare_with_previous")
-food_suggestions = getattr(_utils_interpret, "food_suggestions")
-summarize_meds = getattr(_utils_interpret, "summarize_meds")
-abx_summary = getattr(_utils_interpret, "abx_summary")
+    interpret_labs = getattr(_utils_interpret, "interpret_labs")
+    compare_with_previous = getattr(_utils_interpret, "compare_with_previous")
+    food_suggestions = getattr(_utils_interpret, "food_suggestions")
+    summarize_meds = getattr(_utils_interpret, "summarize_meds")
+    abx_summary = getattr(_utils_interpret, "abx_summary")
 
-build_report = getattr(_utils_reports, "build_report")
-md_to_pdf_bytes_fontlocked = getattr(_utils_reports, "md_to_pdf_bytes_fontlocked")
+    build_report = getattr(_utils_reports, "build_report")
+    md_to_pdf_bytes_fontlocked = getattr(_utils_reports, "md_to_pdf_bytes_fontlocked")
 
-render_graphs = getattr(_utils_graphs, "render_graphs")
-render_schedule = getattr(_utils_schedule, "render_schedule")
+    render_graphs = getattr(_utils_graphs, "render_graphs")
+    render_schedule = getattr(_utils_schedule, "render_schedule")
+else:
+    # ---- Minimal safe fallbacks so the app can run even without utils/ ----
+    import streamlit as st
+
+    def num_input_generic(label, key=None, unit="", min_value=None, max_value=None, step=None, help=None, format=None):
+        lbl = label + (f" ({unit})" if unit else "")
+        return st.number_input(lbl, key=key, min_value=min_value, max_value=max_value, step=step, help=help)
+
+    def entered(v):
+        return (v is not None) and (str(v).strip() != "")
+
+    def _parse_numeric(x):
+        try:
+            return None if x is None or x=="" else float(x)
+        except Exception:
+            return None
+
+    def interpret_labs(vals, extras):
+        lines = []
+        try:
+            for k, v in (vals or {}).items():
+                if entered(v):
+                    lines.append(f"{k}: {v}")
+        except Exception:
+            pass
+        if not lines:
+            lines = ["입력된 수치가 없습니다."]
+        # 간단한 특수 검사도 표시
+        try:
+            if extras:
+                lines.append("— 특수검사 요약 —")
+                for k, v in extras.items():
+                    if entered(v):
+                        lines.append(f"{k}: {v}")
+        except Exception:
+            pass
+        return lines
+
+    def compare_with_previous(*args, **kwargs):
+        return []
+
+    def food_suggestions(*args, **kwargs):
+        return []
+
+    def summarize_meds(*args, **kwargs):
+        return []
+
+    def abx_summary(*args, **kwargs):
+        return []
+
+    def build_report(nickname, pin, mode, lines, urine_lines, extra_sections, disclaimer):
+        md = f"# BloodMap 보고서
+
+- 사용자: {nickname}#{pin or '----'}
+- 모드: {mode}
+
+## 해석 결과
+"
+        for L in (lines or []):
+            md += f"- {L}
+"
+        if urine_lines:
+            md += "
+## 요검사
+"
+            for L in urine_lines:
+                md += f"- {L}
+"
+        for title, items in (extra_sections or []):
+            md += f"
+## {title}
+"
+            for L in (items or []):
+                md += f"- {L}
+"
+        if disclaimer:
+            md += f"
+
+{disclaimer}
+"
+        return md
+
+    def md_to_pdf_bytes_fontlocked(md_text):
+        # PDF 생성기를 사용할 수 없는 환경이므로, 상위 로직의 try/except에 맡긴다.
+        raise RuntimeError("PDF generator unavailable in fallback mode.")
+
+    def render_graphs(*args, **kwargs):
+        st.info("그래프 기능은 준비 중입니다. (utils가 없어서 최소 모드로 실행 중)")
+
+    def render_schedule(*args, **kwargs):
+        # 요청에 따라 스케줄은 비활성화
+        pass
 
 def _nickname_with_pin():
     col1, col2 = st.columns([2,1])
