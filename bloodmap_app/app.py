@@ -3,6 +3,19 @@
 from datetime import datetime, date
 import os
 import streamlit as st
+
+# ===== SAFE_DEFAULTS_PATCH =====
+if "PAGE_TITLE" not in globals():
+    PAGE_TITLE = "피수치 가이드 (BloodMap)"
+if "APP_TITLE" not in globals():
+    APP_TITLE = "피수치 가이드 (BloodMap)"
+if "DISCLAIMER" not in globals():
+    DISCLAIMER = (
+        "본 수치는 참고용이며, 해석 결과는 개발자와 무관합니다.\n"
+        "약 변경, 복용 중단 등은 반드시 주치의와 상의 후 결정하시기 바랍니다.\n"
+        "이 앱은 개인정보를 절대 수집하지 않으며, 어떠한 개인정보 입력도 요구하지 않습니다."
+    )
+# =================================
 import importlib
 
 # ---- Robust dynamic imports (package-aware) ----
@@ -490,7 +503,7 @@ def _interpret_specials(extras: dict, base_vals: dict = None, profile: str = 'ad
 
 
 def main():
-    st.set_page_config(page_title=PAGE_TITLE, layout="centered")
+    st.set_page_config(page_title=globals().get("PAGE_TITLE","피수치 가이드 (BloodMap)"), layout="centered")
     _load_css()
     st.title(APP_TITLE)
     st.markdown(MADE_BY)
