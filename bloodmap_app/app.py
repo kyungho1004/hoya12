@@ -1,7 +1,9 @@
-# app.py — BloodMap (RSV/아데노/독감 추가 + 약물 DB 확장 + APL에 MTX/6MP 포함)
-# - 암: 카테고리/진단명(한글 병기) + 항암제/표적치료제/항생제 (영어+한글, 개인 선택)
-# - 소아 가이드: 질환별 필요한 증상만 노출 (RSV/아데노/독감 추가), SpO2는 "측정기 있음" 체크 시 노출
-# - 피수치: 숫자만 처리(±,+,- 제거), 특수검사 토글, 해열제(1회 평균 ml, 0.5 반올림, 교차시간)
+# app.py — BloodMap (로타/마이코플라즈마 추가 + 암별 자동추천 + 상/하단 고지 추가)
+# - 상단 헤더: 제작 Hoya/GPT · 자문 Hoya/GPT + 안내 고지
+# - 암: 카테고리/진단명(한글 병기) + 자동 추천(항암제/표적·면역/항생제) 제시 + 개별 선택 가능
+# - 소아: 질환별 필요한 증상만(코로나/무증상/수족구/장염/편도염/열감기/RSV/아데노/독감/로타/마이코)
+#        SpO₂는 "측정기 있음" 체크 시에만 입력칸 노출
+# - 피수치: 숫자만(±,+,- 제거), 특수검사 토글, 해열제(1회 평균 ml, 0.5 반올림, 교차시간)
 # - 별명+PIN 저장/그래프, 항암 스케줄 생성기
 # 실행: streamlit run app.py
 
@@ -11,7 +13,7 @@ from datetime import date, datetime, timedelta
 
 st.set_page_config(page_title="BloodMap", page_icon="🩸", layout="centered")
 
-# ------------------------- 유틸 -------------------------
+# ------------------------- 공통 유틸 -------------------------
 def _clean_num(s):
     """±, +, - 제거하고 float 변환. 실패 시 None"""
     if s is None:
@@ -53,11 +55,23 @@ def rr_thr_by_age_m(m):
 # ------------------------- 약물 DB (영어명: {alias(한글), moa/note, ae}) -------------------------
 # APL 유지치료 관련 MTX/6-MP 포함 완료
 CHEMO = {
-    # 핵심/확장 항암
+    # APL/혈액암 핵심
     "ATRA (Tretinoin)": {"alias":"트레티노인(ATRA)", "moa":"RARα 작용·분화유도", "ae":"두통, 분화증후군"},
     "Arsenic Trioxide": {"alias":"삼산화비소(ATO)", "moa":"PML-RARα 분해", "ae":"QT 연장, 분화증후군"},
     "Daunorubicin": {"alias":"다우노루비신", "moa":"Topo II 억제/프리라디칼", "ae":"심독성"},
     "Idarubicin": {"alias":"이다루비신", "moa":"Topo II 억제", "ae":"심독성"},
+    "Cytarabine": {"alias":"시타라빈(ARA-C)", "moa":"피리미딘 유사체", "ae":"골수억제, 결막염"},
+    "MTX": {"alias":"메토트렉세이트", "moa":"DHFR 억제", "ae":"간독성, 골수억제"},
+    "Methotrexate": {"alias":"메토트렉세이트", "moa":"DHFR 억제", "ae":"간독성, 골수억제"},
+    "6-Mercaptopurine": {"alias":"6-머캅토퓨린(6-MP)", "moa":"푸린 합성 저해", "ae":"골수억제, 간독성"},
+    "Thioguanine": {"alias":"티오구아닌(6-TG)", "moa":"푸린 유사체", "ae":"골수억제, 간독성"},
+    "Vincristine": {"alias":"빈크리스틴", "moa":"미세소관 억제", "ae":"말초신경병증, 변비"},
+    "Vinblastine": {"alias":"빈블라스틴", "moa":"미세소관 억제", "ae":"골수억제"},
+    "Cyclophosphamide": {"alias":"사이클로포스파미드", "moa":"알킬화제", "ae":"출혈성 방광염"},
+    "Etoposide": {"alias":"에토포시드", "moa":"Topo II 억제", "ae":"골수억제"},
+    "Doxorubicin": {"alias":"독소루비신", "moa":"Topo II 억제/프리라디칼", "ae":"심독성"},
+    "Prednisone": {"alias":"프레드니손", "moa":"글루코코르티코이드", "ae":"고혈당, 감염위험"},
+    # 고형암/기타
     "Cisplatin": {"alias":"시스플라틴", "moa":"DNA 가닥 교차결합(백금제)", "ae":"신독성, 이독성, 오심"},
     "Carboplatin": {"alias":"카보플라틴", "moa":"백금제", "ae":"골수억제"},
     "Oxaliplatin": {"alias":"옥살리플라틴", "moa":"백금제", "ae":"말초신경병증"},
@@ -68,19 +82,10 @@ CHEMO = {
     "Paclitaxel": {"alias":"파클리탁셀", "moa":"미세소관 안정화", "ae":"말초신경병증"},
     "Gemcitabine": {"alias":"젬시타빈", "moa":"핵산합성 억제", "ae":"골수억제"},
     "Pemetrexed": {"alias":"페메트렉시드", "moa":"엽산길 억제", "ae":"피로, 골수억제"},
-    "Doxorubicin": {"alias":"독소루비신", "moa":"Topo II 억제/프리라디칼", "ae":"심독성"},
-    "Cyclophosphamide": {"alias":"사이클로포스파미드", "moa":"알킬화제", "ae":"출혈성 방광염"},
     "Ifosfamide": {"alias":"이포스파미드", "moa":"알킬화제", "ae":"신경독성, 방광염"},
-    "Etoposide": {"alias":"에토포시드", "moa":"Topo II 억제", "ae":"골수억제"},
-    "Cytarabine": {"alias":"시타라빈(ARA-C)", "moa":"피리미딘 유사체", "ae":"골수억제, 결막염"},
-    "MTX": {"alias":"메토트렉세이트", "moa":"DHFR 억제", "ae":"간독성, 골수억제"},
-    "Methotrexate": {"alias":"메토트렉세이트", "moa":"DHFR 억제", "ae":"간독성, 골수억제"},
-    "6-Mercaptopurine": {"alias":"6-머캅토퓨린(6-MP)", "moa":"푸린 합성 저해", "ae":"골수억제, 간독성"},
-    "Thioguanine": {"alias":"티오구아닌(6-TG)", "moa":"푸린 유사체", "ae":"골수억제, 간독성"},
-    "Vincristine": {"alias":"빈크리스틴", "moa":"미세소관 억제", "ae":"말초신경병증, 변비"},
-    "Vinblastine": {"alias":"빈블라스틴", "moa":"미세소관 억제", "ae":"골수억제"},
     "Bleomycin": {"alias":"블레오마이신", "moa":"DNA 절단", "ae":"폐독성"},
     "Hydroxyurea": {"alias":"하이드록시우레아", "moa":"리보뉴클레오타이드 환원효소 억제", "ae":"골수억제"},
+    "Temozolomide": {"alias":"테모졸로마이드", "moa":"알킬화제", "ae":"골수억제"},
 }
 
 TARGETED = {
@@ -90,7 +95,7 @@ TARGETED = {
     "Blinatumomab": {"alias":"블리나투모맙", "moa":"CD19 BiTE", "ae":"CRS, 신경독성"},
     "Inotuzumab ozogamicin": {"alias":"이노투주맙", "moa":"CD22 ADC", "ae":"간정맥폐쇄"},
     "Daratumumab": {"alias":"다라투무맙", "moa":"CD38 단일클론항체", "ae":"수액반응"},
-    "Imatinib": {"alias":"이마티닙", "moa":"BCR-ABL TKI", "ae":"부종, 근육통"},
+    "Imatinib": {"alias":"이마티닙", "moa":"BCR-ABL TKI/GIST", "ae":"부종, 근육통"},
     "Dasatinib": {"alias":"다사티닙", "moa":"BCR-ABL TKI", "ae":"혈소판감소, 흉막삼출"},
     "Nilotinib": {"alias":"닐로티닙", "moa":"BCR-ABL TKI", "ae":"QT 연장"},
     "Osimertinib": {"alias":"오시머티닙", "moa":"EGFR TKI", "ae":"발진, 설사, QT 연장"},
@@ -105,8 +110,8 @@ TARGETED = {
     "Pembrolizumab": {"alias":"펨브롤리주맙", "moa":"PD-1 억제", "ae":"면역이상반응"},
     "Nivolumab": {"alias":"니볼루맙", "moa":"PD-1 억제", "ae":"면역이상반응"},
     "Atezolizumab": {"alias":"아테졸리주맙", "moa":"PD-L1 억제", "ae":"면역이상반응"},
-    "Sorafenib": {"alias":"소라페닙", "moa":"다중 키나아제 억제", "ae":"수족증후군, 고혈압"},
-    "Lenvatinib": {"alias":"렌바티닙", "moa":"다중 키나아제 억제", "ae":"고혈압, 피로"},
+    "Sorafenib": {"alias":"소라페닙", "moa":"다중 키나아제 억제(HCC/RCC)", "ae":"수족증후군, 고혈압"},
+    "Lenvatinib": {"alias":"렌바티닙", "moa":"다중 키나아제 억제(HCC/갑상선)", "ae":"고혈압, 피로"},
     "Olaparib": {"alias":"올라파립", "moa":"PARP 억제", "ae":"빈혈, 피로"},
     "Sotorasib": {"alias":"소토라십", "moa":"KRAS G12C 억제", "ae":"간수치상승"},
 }
@@ -157,7 +162,7 @@ SOLID = [
     "폐암(Lung cancer)", "유방암(Breast cancer)", "위암(Gastric cancer)", "대장암(Colorectal cancer)",
     "간암(HCC)", "췌장암(Pancreatic cancer)", "담도암(Cholangiocarcinoma)", "자궁내막암(Endometrial cancer)",
     "구강/후두암", "흑색종(Melanoma)", "신장암(RCC)", "갑상선암", "난소암", "자궁경부암", "전립선암",
-    "뇌종양(Glioma)", "식도암", "방광암"
+    "뇌종양(Glioma)", "식도암", "방광암", "GIST"
 ]
 SARCOMA = [
     "연부조직육종(Soft tissue sarcoma)", "골육종(Osteosarcoma)", "유잉육종(Ewing sarcoma)",
@@ -166,7 +171,7 @@ SARCOMA = [
 RARE = [
     "담낭암(Gallbladder cancer)", "부신암(Adrenal cancer)", "망막모세포종(Retinoblastoma)",
     "흉선종/흉선암(Thymoma/Thymic carcinoma)", "신경내분비종양(NET)", "간모세포종(Hepatoblastoma)",
-    "비인두암(NPC)", "GIST"
+    "비인두암(NPC)"
 ]
 
 # ------------------------- 피수치 라벨(한글 병기) -------------------------
@@ -306,10 +311,98 @@ def schedule_block():
     if isinstance(df, pd.DataFrame) and not df.empty:
         st.dataframe(df, use_container_width=True, height=180)
 
+# ------------------------- 암 자동 추천 -------------------------
+def _labelize(db_keys, db):
+    return [f"{k} ({db[k]['alias']})" for k in db_keys if k in db]
+
+def auto_recs(dx_text: str):
+    """진단명으로 간단 추천 세트 반환"""
+    dx = (dx_text or "").lower()
+    rec = {"chemo":[], "targeted":[], "abx":[]}
+
+    # 혈액암
+    if "apl" in dx:
+        rec["chemo"] = ["ATRA (Tretinoin)","Arsenic Trioxide","Idarubicin","MTX","6-Mercaptopurine"]
+        rec["targeted"] = []
+        rec["abx"] = ["Piperacillin/Tazobactam","Cefepime"]
+    elif "aml" in dx:
+        rec["chemo"] = ["Cytarabine","Daunorubicin","Idarubicin"]
+        rec["abx"] = ["Piperacillin/Tazobactam","Cefepime"]
+    elif "all" in dx:
+        rec["chemo"] = ["Vincristine","Daunorubicin","Asparaginase" if "Asparaginase" in CHEMO else "Cytarabine","MTX","6-Mercaptopurine","Cyclophosphamide","Prednisone"]
+        rec["abx"] = ["Piperacillin/Tazobactam","Cefepime","TMP/SMX" if "TMP/SMX" in ABX_ONCO else "Levofloxacin"]
+    elif "cml" in dx:
+        rec["targeted"] = ["Imatinib","Dasatinib","Nilotinib"]
+    elif "cll" in dx:
+        rec["targeted"] = ["Rituximab"]
+        rec["chemo"] = ["Cyclophosphamide","Prednisone"]
+
+    # 림프종
+    if "dlbcl" in dx or "pmbcl" in dx:
+        rec["targeted"] += ["Rituximab"]
+        rec["chemo"] += ["Cyclophosphamide","Doxorubicin","Vincristine","Prednisone"]  # R-CHOP 구성
+    elif "mcl" in dx:
+        rec["targeted"] += ["Rituximab"]
+        rec["chemo"] += ["Cytarabine","Cyclophosphamide"]
+    elif "follicular" in dx or "fl" in dx:
+        rec["targeted"] += ["Rituximab"]
+
+    # 고형암
+    if "폐암" in dx or "lung" in dx:
+        rec["chemo"] += ["Cisplatin","Pemetrexed"]
+        rec["targeted"] += ["Osimertinib","Alectinib","Crizotinib","Larotrectinib","Entrectinib"]  # 바이오마커 필요
+    if "유방암" in dx or "breast" in dx:
+        rec["chemo"] += ["Doxorubicin","Cyclophosphamide","Paclitaxel"]
+        rec["targeted"] += ["Trastuzumab"]
+    if "대장암" in dx or "colorectal" in dx:
+        rec["chemo"] += ["Oxaliplatin","5-FU","Irinotecan","Capecitabine"]  # FOLFOX/FOLFIRI 요소
+    if "위암" in dx or "gastric" in dx:
+        rec["chemo"] += ["Cisplatin","5-FU","Capecitabine"]
+        rec["targeted"] += ["Trastuzumab"]
+    if "췌장암" in dx or "pancreatic" in dx:
+        rec["chemo"] += ["FOLFIRINOX" if "FOLFIRINOX" in CHEMO else "Oxaliplatin","Irinotecan","5-FU","Gemcitabine"]
+    if "간암" in dx or "hcc" in dx:
+        rec["targeted"] += ["Sorafenib","Lenvatinib"]
+    if "ovarian" in dx or "난소암" in dx:
+        rec["chemo"] += ["Carboplatin","Paclitaxel"]
+        rec["targeted"] += ["Bevacizumab"]
+    if "자궁경부암" in dx or "cervical" in dx:
+        rec["chemo"] += ["Cisplatin"]
+        rec["targeted"] += ["Bevacizumab"]
+    if "melanoma" in dx or "흑색종" in dx:
+        rec["targeted"] += ["Pembrolizumab","Nivolumab"]
+    if "rcc" in dx or "신장암" in dx:
+        rec["targeted"] += ["Sorafenib"]  # (예시) 다른 TKI는 생략
+    if "glioma" in dx or "뇌종양" in dx:
+        rec["chemo"] += ["Temozolomide"]
+
+    # 담도/방광/식도 등
+    if "담도암" in dx or "cholangiocarcinoma" in dx:
+        rec["chemo"] += ["Gemcitabine","Cisplatin"]
+    if "방광암" in dx or "bladder" in dx:
+        rec["chemo"] += ["Gemcitabine","Cisplatin"]
+    if "식도암" in dx or "esophageal" in dx:
+        rec["chemo"] += ["Cisplatin","5-FU"]
+    if "gist" in dx:
+        rec["targeted"] += ["Imatinib"]
+
+    # 중복 제거 & 반환
+    rec["chemo"] = list(dict.fromkeys(rec["chemo"]))
+    rec["targeted"] = list(dict.fromkeys(rec["targeted"]))
+    rec["abx"] = list(dict.fromkeys(rec["abx"]))
+    return rec
+
 # ------------------------- 메인 -------------------------
 def main():
+    # 헤더
+    st.markdown("### 제작 Hoya/GPT · 자문 Hoya/GPT")
+    st.info(
+        "본 수치는 참고용이며, 해석 결과는 개발자와 무관합니다.\n"
+        "약 변경/복용 중단 등은 반드시 주치의와 상의하세요.\n"
+        "이 앱은 개인정보를 수집하지 않으며, 어떠한 개인정보 입력도 요구하지 않습니다."
+    )
     st.markdown("## 🩸 BloodMap")
-    st.caption("모바일 최적화 · 개인정보 미수집 · 치료단계 UI 제외")
+    st.caption("모바일 최적화 · 치료단계 UI 제외")
     nick, pin, key = nickname_pin()
     st.divider()
 
@@ -331,26 +424,38 @@ def main():
         elif group=="육종":
             dx = st.selectbox("육종(진단명)", SARCOMA)
         else:
-            dx = st.selectbox("희귀암(진단명)", RARE)
+            dx = st.selectbox("희귀암(긴 목록 일부)", RARE)
 
-        st.markdown("### 2) 약물 선택")
-        # 항암제
-        st.subheader("💊 항암제 (개인 선택 가능)")
-        q1 = st.text_input("항암제 검색")
-        chemo_opts = [f"{k} ({v['alias']})" for k,v in CHEMO.items() if (not q1) or (q1.lower() in k.lower()) or (q1.lower() in v["alias"].lower())]
-        pick_chemo = st.multiselect("항암제 선택", chemo_opts)
-        # 표적/면역
-        st.subheader("🎯 표적/면역치료제")
-        q2 = st.text_input("표적치료제 검색")
-        tar_opts = [f"{k} ({v['alias']})" for k,v in TARGETED.items() if (not q2) or (q2.lower() in k.lower()) or (q2.lower() in v["alias"].lower())]
-        pick_targ = st.multiselect("표적치료제 선택", tar_opts)
-        # 항생제
-        st.subheader("🧪 항생제/항진균(암 환자에서 흔용)")
-        q3 = st.text_input("항생제 검색")
-        abx_opts = [f"{k} ({v['alias']})" for k,v in ABX_ONCO.items() if (not q3) or (q3.lower() in k.lower()) or (q3.lower() in v["alias"].lower())]
-        pick_abx = st.multiselect("항생제 선택", abx_opts)
+        # 자동 추천
+        st.markdown("### 2) 암 자동 추천 (예시)")
+        rec = auto_recs(dx)
+        if any([rec["chemo"], rec["targeted"], rec["abx"]]):
+            colr = st.columns(3)
+            with colr[0]:
+                st.markdown("**항암제 추천**")
+                for lab in _labelize(rec["chemo"], CHEMO): st.write("- " + lab)
+            with colr[1]:
+                st.markdown("**표적/면역 추천**")
+                for lab in _labelize(rec["targeted"], TARGETED): st.write("- " + lab)
+            with colr[2]:
+                st.markdown("**항생제(발열/호중구감소 시)**")
+                for lab in _labelize(rec["abx"], ABX_ONCO): st.write("- " + lab)
+            st.caption("※ 실제 치료는 환자 상태/바이오마커/가이드라인/의료진 판단에 따릅니다.")
+            report_sections.append(("암 자동 추천", [f"진단: {dx}"] +
+                                    [f"항암제: {', '.join(rec['chemo']) or '-'}",
+                                     f"표적/면역: {', '.join(rec['targeted']) or '-'}",
+                                     f"항생제: {', '.join(rec['abx']) or '-'}"]))
 
-        # 선택 요약(작용기전/부작용/특이사항)
+        # 개별 선택 (개인화)
+        st.markdown("### 3) 약물 개별 선택")
+        chemo_opts = [f"{k} ({v['alias']})" for k,v in CHEMO.items()]
+        targ_opts  = [f"{k} ({v['alias']})" for k,v in TARGETED.items()]
+        abx_opts   = [f"{k} ({v['alias']})" for k,v in ABX_ONCO.items()]
+        pick_chemo = st.multiselect("💊 항암제 선택", chemo_opts)
+        pick_targ  = st.multiselect("🎯 표적/면역치료제 선택", targ_opts)
+        pick_abx   = st.multiselect("🧪 항생제/항진균 선택", abx_opts)
+
+        # 선택 요약(기전/주의)
         def _drug_lines(picks, db):
             out=[]
             for lab in picks:
@@ -369,7 +474,7 @@ def main():
             report_sections.append(("선택 약물", [l.replace("**","") for l in picked_lines]))
 
         # 피수치 입력
-        st.markdown("### 3) 암 피수치 (숫자만)")
+        st.markdown("### 4) 암 피수치 (숫자만)")
         cols = st.columns(2)
         labs = {}
         for i,(k,label) in enumerate(LABS_ORDER):
@@ -441,7 +546,8 @@ def main():
         # 소아 가이드
         st.markdown("### 소아 질환 선택")
         disease = st.selectbox("질환", [
-            "코로나","코로나(무증상)","수족구","장염(비특이적)","편도염","열감기(상기도염)","RSV(호흡기세포융합바이러스)","아데노바이러스","독감(인플루엔자)"
+            "코로나","코로나(무증상)","수족구","장염(비특이적)","편도염","열감기(상기도염)",
+            "RSV(호흡기세포융합바이러스)","아데노바이러스","독감(인플루엔자)","로타바이러스(로타)", "마이코플라즈마(비정형 폐렴)"
         ])
 
         st.markdown("#### 🧒 기본 계측")
@@ -491,17 +597,25 @@ def main():
             with c[0]: vals["결막충혈"] = st.selectbox("결막충혈/눈물", ["없음","조금","보통","심함"])
             with c[1]: vals["목통증"] = st.selectbox("목통증", ["없음","조금","보통","심함"])
             with c[2]: vals["설사/구토"] = st.selectbox("설사/구토", ["없음","1~2회","3~4회","5회 이상"])
-        else:  # 열감기(상기도염) 또는 독감
-            if disease=="독감(인플루엔자)":
-                c = st.columns(3)
-                with c[0]: vals["근육통"] = st.selectbox("근육통", ["없음","조금","보통","심함"])
-                with c[1]: vals["오한"] = st.selectbox("오한", ["없음","조금","보통","심함"])
-                with c[2]: vals["기침"] = st.selectbox("기침", ["없음","조금","보통","심함"])
-            else:
-                c = st.columns(3)
-                with c[0]: vals["콧물"] = st.selectbox("콧물", ["없음","투명","흰색","누런색","피섞임"])
-                with c[1]: vals["기침(주간)"] = st.selectbox("기침(주간)", ["없음","조금","보통","심함"])
-                with c[2]: vals["기침(야간)"] = st.selectbox("기침(야간)", ["밤에 없음","보통","심함"])
+        elif disease=="독감(인플루엔자)":
+            c = st.columns(3)
+            with c[0]: vals["근육통"] = st.selectbox("근육통", ["없음","조금","보통","심함"])
+            with c[1]: vals["오한"] = st.selectbox("오한", ["없음","조금","보통","심함"])
+            with c[2]: vals["기침"] = st.selectbox("기침", ["없음","조금","보통","심함"])
+        elif disease=="로타바이러스(로타)":
+            c = st.columns(2)
+            with c[0]: vals["설사"] = st.selectbox("설사", ["없음","1~2회","3~4회","5~6회","7회 이상"])
+            with c[1]: vals["구토"] = st.selectbox("구토", ["없음","1~2회","3~4회","5회 이상"])
+        elif disease=="마이코플라즈마(비정형 폐렴)":
+            c = st.columns(3)
+            with c[0]: vals["마른기침"] = st.selectbox("마른기침", ["없음","조금","보통","심함"])
+            with c[1]: vals["흉통/가슴불편"] = st.selectbox("흉통/가슴불편", ["없음","조금","보통","심함"])
+            with c[2]: vals["피로/권태"] = st.selectbox("피로/권태", ["없음","조금","보통","심함"])
+        else:  # 열감기(상기도염)
+            c = st.columns(3)
+            with c[0]: vals["콧물"] = st.selectbox("콧물", ["없음","투명","흰색","누런색","피섞임"])
+            with c[1]: vals["기침(주간)"] = st.selectbox("기침(주간)", ["없음","조금","보통","심함"])
+            with c[2]: vals["기침(야간)"] = st.selectbox("기침(야간)", ["밤에 없음","보통","심함"])
 
         # 소아 약(정보성) — 덱사 등
         with st.expander("💊 소아 약(정보성) 선택 — 영어(한글)", expanded=False):
@@ -561,11 +675,12 @@ def main():
                 if "무증상" in dl: tips+=["😷 무증상 노출: 자가 관찰, 필요 시 신속항원/PCR", "가족 간 전파 주의"]
                 else: tips+=["🤒 코로나 의심: 보건소/PCR 문의, 동거가족 전파 주의"]
             if "수족구" in dl: tips+=["✋ 손발 수포·입안 통증 동반 시 수분/통증 조절, 탈수 주의"]
-            if "장염" in dl: tips+=["💩 묽은 설사·구토 → ORS 소량씩, 전해질 관리"]
+            if "장염" in dl or "로타" in dl: tips+=["💩 묽은 설사·구토 → ORS 소량씩, 전해질 관리"]
             if "편도염" in dl: tips+=["🧊 삼킴 통증·침 증가 → 부드러운 음식·해열제 반응 관찰"]
             if "rsv" in dl: tips+=["🍼 수유 감소/호흡 곤란·함몰호흡 시 즉시 진료 고려"]
             if "아데노" in dl: tips+=["👁️ 결막염 동반 가능 → 손위생·수건 분리, 증상 조절"]
             if "독감" in dl: tips+=["🤒 고열·근육통 → 48시간 내 항바이러스제 고려(의사 판단)"]
+            if "마이코" in dl: tips+=["🫁 마른기침 지속/흉통 시 진료 상담(비정형 폐렴 의심)"]
             if "상기도염" in dl: tips+=["🌡️ 3일 이상 고열 지속/악화 시 진료"]
             out += tips
             for L in out: st.write("- "+L)
@@ -586,6 +701,7 @@ def main():
             "본 수치는 참고용이며, 해석 결과는 개발자와 무관합니다.\n"
             "약 변경/복용 중단 등은 반드시 주치의와 상의하세요.\n"
             "이 앱은 개인정보를 수집하지 않으며, 어떠한 개인정보 입력도 요구하지 않습니다.\n"
+            "문의사항이나 버그 제보는 네이버까페에 제보해주시면 감사합니다.\n"
         )
         st.download_button("📥 보고서(.md) 다운로드", data=md.encode("utf-8"),
                            file_name=f"bloodmap_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
@@ -594,9 +710,14 @@ def main():
                            file_name=f"bloodmap_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
                            mime="text/plain", use_container_width=True)
 
-    st.caption("본 수치는 참고용이며, 해석 결과는 개발자와 무관합니다. "
-               "약 변경/복용 중단 등은 반드시 주치의와 상의하세요. "
-               "이 앱은 개인정보를 수집하지 않으며, 어떠한 개인정보 입력도 요구하지 않습니다.")
+    # 하단 고지
+    st.caption(
+        "본 수치는 참고용이며, 해석 결과는 개발자와 무관합니다. "
+        "약 변경/복용 중단 등은 반드시 주치의와 상의하세요. "
+        "이 앱은 개인정보를 수집하지 않으며, 어떠한 개인정보 입력도 요구하지 않습니다. "
+        "문의사항이나 버그 제보는 네이버까페에 제보해주시면 감사합니다."
+    )
 
 if __name__ == "__main__":
     main()
+
