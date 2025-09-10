@@ -662,7 +662,7 @@ if "store" not in st.session_state: st.session_state.store = load_records()
 # 사용자 식별
 st.subheader("사용자 식별")
 c1, c2 = st.columns([2,1])
-nickname = c1.text_input("별명", placeholder="예: 은서엄마", key="nickname")
+nickname = c1.text_input("별명", placeholder="예: 민수아빠", key="nickname")
 pin      = c2.text_input("PIN(4자리)", max_chars=4, placeholder="예: 1234", key="pin")
 pin_clean = "".join([c for c in (pin or "") if c.isdigit()])[:4]
 nick_key  = f"{nickname.strip()}#{pin_clean}" if nickname and pin_clean else ""
@@ -1129,3 +1129,4 @@ else:
 
 st.markdown("---")
 st.code(DISCLAIMER, language="text")
+
