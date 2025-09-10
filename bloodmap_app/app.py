@@ -286,7 +286,7 @@ def interpret_special_tests(qual: dict, quant: dict):
                 lines.append(f"🟡 {k} {v} → 경미한 이상, 추적 권장.")
             elif v == "++":
                 lines.append(f"🟠 {k} {v} → 의미 있는 이상, 원인 평가.")
-            else: v == "+++":
+            else:
                 lines.append(f"🔴 {k} {v} → 🚨 신장/대사 이상 가능, 진료 권고.")
     C3_LOW, C4_LOW = 90, 10
     if quant.get("C3") is not None:
