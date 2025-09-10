@@ -1,28 +1,32 @@
 # -*- coding: utf-8 -*-
-# BloodMap — 소아/암 통합 + 특수검사(지질·응고·보체·요검사·갑상선·당대사·패혈증·빈혈패널) 복구판
-# 면역/세포치료 제외. 소아 해열제: 1회 권장량만 표기. 별명+PIN 저장/그래프, 식이가이드 포함.
+# BloodMap — 소아/암 통합 피수치 가이드
+# ✅ 우선: 암 진단 모드 → 단계(Phase)별 항암/표적치료 선택 + 용량/경로/주기 '직접 입력'
+# ✅ 용량 블록: 단위 선택(mg/m², mg/kg, mg) + 수치 입력 + 참고 계산(BSA/체중) 토글
+# ✅ 소아 보호자 체크(증상 라디오) + 해석 그대로 유지
+# ✅ 특수검사(지질/응고/보체/갑상선/당대사…) + 자동계산(보정 Ca, LDL, Non-HDL, HOMA-IR, eGFR)
+# ✅ 피수치별 식이가이드(+ 암 모드에서 철분+비타민C 주의 문구)
+# ✅ 별명+PIN 저장/그래프(WBC/Hb/PLT/CRP/ANC)
+# ⚠️ 면역/세포 치료, 보조요법 자동추천/자동스케줄 없음(요청 반영)
 
-import os, json
-from datetime import datetime, date
+import os, json, re
+from datetime import datetime, date, timedelta
 from typing import Dict, Any, List, Optional, Tuple
+
 import streamlit as st
 import pandas as pd
 
+# ------------------ 앱 기본 ------------------
+st.set_page_config(page_title="BloodMap", layout="centered")
 APP_TITLE  = "피수치 가이드 (BloodMap)"
-PAGE_TITLE = "BloodMap"
-MADE_BY    = "제작: Hoya/GPT"
 DISCLAIMER = (
-    "본 수치는 참고용이며, 해석 결과는 개발자와 무관합니다.  "
-    "약 변경, 복용 중단 등은 반드시 주치의와 상의 후 결정하시기 바랍니다.  "
+    "본 수치는 참고용이며, 해석 결과는 개발자와 무관합니다.  \n"
+    "약 변경, 복용 중단 등은 반드시 주치의와 상의 후 결정하시기 바랍니다.  \n"
     "이 앱은 개인정보를 절대 수집하지 않으며, 어떠한 개인정보 입력도 요구하지 않습니다."
 )
-FEVER_GUIDE = "38.0~38.5℃: 해열제/경과관찰 · 38.5~39.0℃: 해열제+병원 연락 고려 · 39.0℃ 이상: 즉시 병원"
 RECORDS_PATH = "records.json"
 
-# ------------------ 기본 컬럼/라벨 ------------------
 ORDER = ["WBC","Hb","PLT","ANC","Ca","P","Na","K","Alb","Glu","TP",
          "AST","ALT","LDH","CRP","Cr","UA","TB","BUN","BNP"]
-
 KR = {
     "WBC":"백혈구","Hb":"혈색소","PLT":"혈소판(PLT)","ANC":"호중구(ANC)",
     "Ca":"칼슘","P":"인","Na":"소디움","K":"포타슘",
@@ -32,12 +36,8 @@ KR = {
     "TB":"총빌리루빈","BUN":"BUN","BNP":"BNP",
 }
 def label(abbr: str) -> str:
-    # 예: "PLT (혈소판)"
     base = KR.get(abbr, abbr)
-    # abbr 대문자만 앞에 붙이고 뒤엔 한글 병기
-    han = base
-    if "(" in base:
-        han = base.split("(")[-1].rstrip(")")
+    han = base.split("(")[-1].rstrip(")") if "(" in base else base
     return f"{abbr} ({han})"
 
 # ------------------ 저장/불러오기 ------------------
@@ -75,16 +75,14 @@ def entered(v) -> bool:
 
 def calc_corrected_ca(total_ca, albumin):
     try:
-        if total_ca is None or albumin is None:
-            return None
+        if total_ca is None or albumin is None: return None
         return round(float(total_ca) + 0.8*(4.0 - float(albumin)), 2)
     except Exception:
         return None
 
 def calc_friedewald_ldl(tc, hdl, tg):
     try:
-        if tg is None or float(tg) >= 400:
-            return None
+        if tg is None or float(tg) >= 400: return None
         return round(float(tc) - float(hdl) - float(tg)/5.0, 1)
     except Exception:
         return None
@@ -115,25 +113,21 @@ def calc_egfr(creatinine, age=60, sex="F"):
         return None
 
 def stage_egfr(egfr):
-    try:
-        e = float(egfr)
-    except Exception:
-        return None, None
-    if e >= 90:   return "G1", "정상/고정상 (≥90)"
-    if 60 <= e < 90:  return "G2", "경도 감소 (60–89)"
-    if 45 <= e < 60:  return "G3a", "중등도 감소 (45–59)"
-    if 30 <= e < 45:  return "G3b", "중등도~중증 감소 (30–44)"
-    if 15 <= e < 30:  return "G4", "중증 감소 (15–29)"
+    try: e = float(egfr)
+    except Exception: return None, None
+    if e >= 90: return "G1", "정상/고정상 (≥90)"
+    if 60 <= e < 90: return "G2", "경도 감소 (60–89)"
+    if 45 <= e < 60: return "G3a", "중등도 감소 (45–59)"
+    if 30 <= e < 45: return "G3b", "중등도~중증 감소 (30–44)"
+    if 15 <= e < 30: return "G4", "중증 감소 (15–29)"
     return "G5", "신부전 (<15)"
 
-def stage_acr(acr_mg_g):
-    try:
-        a = float(acr_mg_g)
-    except Exception:
-        return None, None
-    if a < 30: return "A1", "정상-경도 증가 (<30 mg/g)"
-    if a <= 300: return "A2", "중등도 증가 (30–300 mg/g)"
-    return "A3", "중증 증가 (>300 mg/g)"
+def mosteller_bsa(weight_kg: float, height_cm: float):
+    try: return round(((float(weight_kg) * float(height_cm)) / 3600) ** 0.5, 2)
+    except Exception: return None
+
+def _safe_slug(s: str) -> str:
+    return re.sub(r'[^A-Za-z0-9]+', '_', s)
 
 # ------------------ 기본 해석 ------------------
 def interpret_labs(v: Dict[str, Any]) -> List[str]:
@@ -241,14 +235,13 @@ def interpret_special_extended(qc: Dict[str, str], qn: Dict[str, float], base_va
         a = float(a1c)
         if a >= 6.5: out.append(f"HbA1c {a}% → 당뇨 의심")
         elif a >= 5.7: out.append(f"HbA1c {a}% → 당뇨 전단계")
-    if homa is not None and float(homa) >= 2.5:
-        out.append(f"HOMA-IR {homa} → 인슐린 저항성 의심")
+    if homa is not None and float(homa) >= 2.5: out.append(f"HOMA-IR {homa} → 인슐린 저항성 의심")
 
     # 신장/eGFR
     egfr = qn.get("eGFR") or (base_vals or {}).get("eGFR")
     if egfr is not None:
-        stage, label = stage_egfr(egfr)
-        if stage: out.append(f"eGFR {egfr} → CKD {stage} ({label})")
+        stage, label_ = stage_egfr(egfr)
+        if stage: out.append(f"eGFR {egfr} → CKD {stage} ({label_})")
 
     # 요검사
     if qc.get("알부민뇨") in {"+","++","+++"}: out.append(f"알부민뇨 {qc['알부민뇨']} → 🚨 신장 기능 이상 가능성")
@@ -282,141 +275,172 @@ PED_DISEASES = [
     "COVID-19","Rotavirus(로타)","Norovirus(노로)","수족구(HFMD)","Mycoplasma(마이코플라즈마)",
     "중이염 의심","결막염 의심","크룹(Croup)","모세기관지염(Bronchiolitis)","폐렴 의심"
 ]
-PED_SYMPTOMS = [
-    "발열","기침","콧물","코막힘","인후통",
-    "눈곱/결막충혈","구토","설사","복통","발진",
-    "쌕쌕거림/호흡곤란","빠른호흡/흉곽함몰","거친쉰목소리/개짖는기침",
-    "탈수 의심(소변↓/입마름)","음수량 감소","야간기침"
-]
+DISEASE_SYMPTOMS = {
+    "RSV": ["기침", "콧물", "쌕쌕거림", "호흡곤란"],
+    "Adenovirus(아데노)": ["열", "눈충혈", "기침", "설사"],
+    "Parainfluenza(파라인플루엔자)": ["기침", "쉰목소리", "호흡곤란"],
+    "Rotavirus(로타)": ["설사", "구토", "탈수"],
+    "수족구(HFMD)": ["물집", "입안 통증", "열"],
+    "COVID-19": ["열", "기침", "콧물", "무증상", "후각소실"],
+    "크룹(Croup)": ["쉰목소리", "개짖는 기침", "호흡곤란"],
+    "모세기관지염(Bronchiolitis)": ["쌕쌕거림", "호흡곤란", "기침"],
+    "Mycoplasma(마이코플라즈마)": ["기침", "두통", "열", "피로감"]
+}
 
-def interpret_peds_symptoms(sx: List[str], temp: Optional[float]) -> List[str]:
-    out: List[str] = []
-    if "거친쉰목소리/개짖는기침" in sx:
-        out.append("크룹 양상: 찬 공기 잠시 쐬고 진정. 스트라이더/호흡곤란 시 응급실(스테로이드/네불 가능).")
-    if "쌕쌕거림/호흡곤란" in sx or "빠른호흡/흉곽함몰" in sx:
-        out.append("하기도 폐색/모세기관지염 가능: 숨 가쁘면 즉시 진료. 코막힘 완화·수분공급.")
-    if "야간기침" in sx:
-        out.append("야간기침: 크룹/아데노/알레르기/기침천식 증후군 감별 필요.")
-    if "눈곱/결막충혈" in sx:
-        out.append("결막염 소견: 수건 공동사용 금지, 분비물 심하면 항생제 점안제 평가.")
-    if ("구토" in sx or "설사" in sx) and "탈수 의심(소변↓/입마름)" in sx:
-        out.append("구토·설사 + 탈수: ORS 소량씩 자주, 지속 시 수액 고려.")
-    if "음수량 감소" in sx:
-        out.append("수분섭취 감소: 젤리/미온수/전해질 음료 소량씩 권장.")
-    if temp is not None:
-        if temp >= 39: out.append("고열 지속 시 세균성 감염·폐렴 감별 필요.")
-        elif temp >= 38: out.append("38도 이상: 해열제 1회 권장량 사용 후 경과 관찰.")
+def render_caregiver_check(ped_dx: str) -> Dict[str, Any]:
+    # 항상 보이게(사라짐 방지)
+    preset = DISEASE_SYMPTOMS.get(ped_dx, ["기침","콧물","열"])
+    st.markdown("### 👪 보호자 체크")
+    result: Dict[str, Any] = {}
+    if "기침" in preset or "개짖는 기침" in preset:
+        result["기침"] = st.radio("기침", ["없음","조금","보통","심함"], index=0, horizontal=True, key="cg_cough")
+    if "개짖는 기침" in preset:
+        result["개짖는 기침"] = st.radio("개짖는 기침", ["없음","조금","보통","심함"], index=0, horizontal=True, key="cg_bark")
+    if "콧물" in preset:
+        result["콧물"] = st.radio("콧물", ["없음","투명","흰색","노란색","피섞임"], index=0, horizontal=True, key="cg_rn")
+    if "설사" in preset:
+        c1, _ = st.columns([2,1])
+        result["설사_횟수"] = int(c1.number_input("설사 횟수(하루)", min_value=0, max_value=30, step=1, value=0, key="cg_diarrhea"))
+        result["구토"] = st.radio("구토", ["없음","조금","보통","심함"], index=0, horizontal=True, key="cg_vomit") if "구토" in preset else result.get("구토")
+    if "열" in preset:
+        c1, c2 = st.columns([1,1])
+        result["열_범주"] = c1.radio("열(범주)", ["없음","37.5~38","38~39","39 이상"], index=0, horizontal=True, key="cg_fever_cat")
+        result["열_현재체온"] = c2.text_input("현재 체온(℃, 선택)", placeholder="예: 38.2", key="cg_temp")
+    if "두통" in preset:
+        result["두통"] = st.radio("두통", ["없음","조금","보통","많이 심함"], index=0, horizontal=True, key="cg_headache")
+    if "호흡곤란" in preset:
+        result["호흡곤란"] = st.radio("호흡곤란", ["없음","조금","보통","많이 심함"], index=0, horizontal=True, key="cg_dysp")
+    if "쌕쌕거림" in preset:
+        result["쌕쌕거림"] = st.radio("쌕쌕거림", ["없음","조금","보통","많이 심함"], index=0, horizontal=True, key="cg_wheeze")
+    if "쉰목소리" in preset:
+        result["쉰목소리"] = st.radio("쉰목소리", ["없음","조금","보통","많이 심함"], index=0, horizontal=True, key="cg_hoarse")
+    if "물집" in preset:
+        has_blister = st.checkbox("물집 있음", value=False, key="cg_blister")
+        result["물집"] = "있음" if has_blister else "없음"
+        if has_blister:
+            result["물집_부위"] = st.selectbox("물집 부위", ["손","발","전신"], index=0, key="cg_blister_loc")
+    if "탈수" in preset or "탈수증상" in preset:
+        result["탈수증상"] = st.radio("탈수증상", ["없음","있음"], index=0, horizontal=True, key="cg_dehy")
+    if "눈충혈" in preset or "눈곱" in preset:
+        result["눈곱/결막"] = st.radio("눈곱/결막충혈", ["없음","조금","보통","많이 심함"], index=0, horizontal=True, key="cg_eye")
+    if "무증상" in preset:
+        result["무증상"] = st.checkbox("무증상(증상 전혀 없음)", value=False, key="cg_asx")
+    result["보호자_메모"] = st.text_area("추가 메모(선택)", placeholder="예: 밤새 기침 심했고 해열제 20:30 투여", key="cg_note")
+    return result
+
+def summarize_ped_checks(cg: Dict[str, Any]) -> List[str]:
+    out = []
+    if not cg: return out
+    def add(name, key):
+        if key in cg and str(cg[key]).strip():
+            v = cg[key]
+            if v in ["없음", "0", 0, "", None, False]: return
+            out.append(f"{name}: {v}")
+    add("기침", "기침")
+    add("개짖는 기침", "개짖는 기침")
+    add("콧물", "콧물")
+    if "설사_횟수" in cg and int(cg["설사_횟수"])>0: out.append(f"설사: {int(cg['설사_횟수'])}회/일")
+    add("구토", "구토")
+    if cg.get("열_범주") and cg["열_범주"]!="없음":
+        tv = cg.get("열_현재체온","").strip()
+        out.append(f"열: {cg['열_범주']}" + (f" (현재 {tv}℃)" if tv else ""))
+    add("두통", "두통")
+    add("호흡곤란", "호흡곤란")
+    add("쌕쌕거림", "쌕쌕거림")
+    add("쉰목소리", "쉰목소리")
+    if cg.get("물집")=="있음": out.append("물집: 있음" + (f" ({cg.get('물집_부위')})" if cg.get("물집_부위") else ""))
+    if cg.get("탈수증상")=="있음": out.append("탈수증상: 있음")
+    add("눈곱/결막", "눈곱/결막")
+    if cg.get("무증상"): out.append("무증상")
     return out
 
-def build_ped_tips(dx: str, sx: List[str], temp: Optional[float]) -> List[str]:
-    tips = interpret_peds_symptoms(sx, temp)
-    if dx in ["RSV","모세기관지염(Bronchiolitis)"]:
-        tips.append("모세기관지염: 코흡인/가습/수분. 호흡수↑·함몰 시 즉시 병원.")
-    if dx in ["Parainfluenza(파라인플루엔자)","크룹(Croup)"]:
-        tips.append("크룹: 울음 달래고 찬 공기. 호흡곤란·청색증 시 응급실.")
-    if dx in ["Influenza(독감)"]:
-        tips.append("독감: 48시간 내 진료 시 항바이러스제 고려(연령·위험군).")
-    if dx in ["Rotavirus(로타)","Norovirus(노로)"]:
-        tips.append("위장관염: ORS 소량씩, 기름진 음식/우유 일시 제한.")
-    if dx in ["중이염 의심"]:
-        tips.append("귀통증·야간발열 반복 시 진료. 진통제는 지시대로.")
-    if dx in ["폐렴 의심"]:
-        tips.append("호흡수 상승/함몰/식욕저하 심하면 영상·혈액검사 평가.")
-    if dx in ["결막염 의심"]:
-        tips.append("결막염: 손 위생 철저, 등원은 증상/전파력 고려해 상담.")
-    if dx in ["일반 감기(상기도감염)","Adenovirus(아데노)","Mycoplasma(마이코플라즈마)","COVID-19"]:
-        tips.append("호흡기 감염 공통: 손 위생, 실내 환기, 수분/휴식.")
-    return tips
+def interpret_peds_symptoms_from_checks(dx: str, cg: Dict[str, Any]) -> List[str]:
+    tips: List[str] = []
+    if dx in ["Parainfluenza(파라인플루엔자)","크룹(Croup)"] or cg.get("개짖는 기침") in ["보통","심함","많이 심함"]:
+        tips.append("크룹 가능성: 찬 공기 잠시 쐬고 진정. 스트라이더/호흡곤란이면 즉시 응급실.")
+    if dx in ["RSV","모세기관지염(Bronchiolitis)"] or cg.get("쌕쌕거림") in ["보통","많이 심함"] or cg.get("호흡곤란") in ["보통","많이 심함"]:
+        tips.append("하기도 폐색/모세기관지염 가능: 호흡수↑·함몰·입술청색증 시 즉시 병원. 코세척/가습/수분.")
+    if cg.get("눈곱/결막") in ["보통","많이 심함"]:
+        tips.append("결막염 의심: 손 위생·수건 공동사용 금지, 심하면 항생제 점안 상담.")
+    if dx in ["Rotavirus(로타)","Norovirus(노로)"] or int(cg.get("설사_횟수") or 0) >= 6 or cg.get("탈수증상")=="있음":
+        tips.append("구토·설사/탈수: ORS 소량씩 자주, 소변량/축 처짐 체크. 지속/증악 시 진료.")
+    if cg.get("열_범주") in ["38~39","39 이상"]:
+        tips.append("고열: 해열제 1회 용량 사용 후 경과, 39℃ 이상 지속·경련·의식저하 시 응급평가.")
+    if cg.get("두통") in ["보통","많이 심함"]:
+        tips.append("두통 동반: 수분·휴식, 지속/악화 시 진료 필요.")
+    if dx == "COVID-19":
+        tips.append("COVID-19: 격리 지침 및 해열/수분, 위험군은 항바이러스제 상담.")
+    if dx == "수족구(HFMD)" or cg.get("물집")=="있음":
+        tips.append("수족구: 통증으로 수분섭취 저하 주의, 탈수 징후 모니터, 등원 지침 확인.")
+    return list(dict.fromkeys(tips))
 
-# ------------------ 피수치별 식이가이드 ------------------
+# ------------------ 식이가이드 ------------------
 def build_diet_guide(labs: Dict[str, Any], qn: Dict[str, Any], mode: str) -> List[str]:
     out: List[str] = []
     g = lambda k: labs.get(k)
-
-    # 백혈구/ANC
     if entered(g("ANC")) and g("ANC") < 500:
-        out.append("ANC < 500 → 익힌 음식만(회/덜익은 고기·달걀·생채소/새싹 금지), 과일은 껍질 제거·흐르는 물 세척, 남은 음식 2시간 넘기지 않기, 생수는 밀봉 제품.")
+        out.append("ANC < 500 → 익힌 음식만, 생채소/회/반숙 금지, 과일은 껍질 제거·세척, 남은 음식 2시간 넘기지 않기.")
     elif entered(g("ANC")) and g("ANC") < 1000:
-        out.append("ANC 500~1000 → 외식·뷔페·길거리 음식 주의, 가열 충분히, 손 위생 철저.")
-
-    # 혈소판
+        out.append("ANC 500~1000 → 외식·뷔페 주의, 가열 충분, 손 위생 철저.")
     if entered(g("PLT")) and g("PLT") < 50:
-        out.append("혈소판 < 50 → 딱딱·날카로운 음식(뼈있는 생선, 질긴 육포, 딱딱한 견과류) 조심, 빨대·강한 가글 금지, 술 금지. (진통제/항혈소판제는 의료진과 상의)")
-
-    # 간수치
+        out.append("혈소판 < 50 → 딱딱·날카로운 음식 조심, 빨대·강한 가글 금지, 음주 피하기.")
     if (entered(g("AST")) and g("AST") >= 50) or (entered(g("ALT")) and g("ALT") >= 55):
-        out.append("간수치 상승 → 술/허브보충제 중단, 튀김·기름진 음식 줄이기, 아세트아미노펜 과량 금지, 수분·균형식. 지속 시 상담.")
-
-    # 알부민
+        out.append("간수치 상승 → 술/허브보충제 중단, 튀김·기름진 음식 줄이기, 아세트아미노펜 과량 금지.")
     if entered(g("Alb")) and g("Alb") < 3.5:
-        out.append("알부민 낮음 → 단백질 보강(살코기·생선·달걀·두부/콩·유제품), 소량씩 자주. 부종/신질환 있으면 개인지침 우선.")
-
-    # 지질
+        out.append("알부민 낮음 → 단백질 보강(살코기·생선·달걀·두부/콩·유제품), 소량씩 자주.")
     TG = qn.get("TG")
     if TG is not None:
-        try:
-            t = float(TG)
-            if t >= 500:
-                out.append("TG ≥ 500 → 🟥 췌장염 위험: 초저지방 식사(총 지방 10~15% 이내), 단 음료/과자·술 즉시 중단, 정제탄수 줄이고 생선(오메가3)·채소 위주.")
-            elif t >= 200:
-                out.append("TG 200~499 → 당분·과당·술 줄이고, 튀김/가공육 제한, 통곡·채소·운동 늘리기.")
-        except:
-            pass
+        t = float(TG)
+        if t >= 500: out.append("TG ≥ 500 → 🟥 췌장염 위험: 초저지방 식사(지방 10~15%), 단 음료·술 중단.")
+        elif t >= 200: out.append("TG 200~499 → 당분·과당·술 줄이기, 튀김/가공육 제한, 운동·채소 늘리기.")
     LDL = qn.get("LDL"); NHDL = qn.get("Non-HDL-C")
     try:
         if (LDL is not None and float(LDL) >= 160) or (NHDL is not None and float(NHDL) >= 160):
-            out.append("LDL/Non-HDL 상승 → 트랜스/포화지방 줄이고, 올리브유·등푸른생선·견과류로 대체, 식이섬유(귀리·보리·채소) 충분히.")
-    except:
-        pass
-
-    # 요산
+            out.append("LDL/Non-HDL 상승 → 포화/트랜스 지방 줄이고, 생선·올리브유·견과·식이섬유↑.")
+    except: pass
     if entered(g("UA")) and g("UA") > 7.0:
-        out.append("요산 높음 → 내장류·멸치/정어리·육수/맥주·과당음료 줄이고, 물 충분히.")
-
-    # 신장/나트륨·단백질
+        out.append("요산 높음 → 내장류·멸치/정어리·육수·맥주·과당음료 줄이고, 물 충분히.")
     egfr = qn.get("eGFR")
     try:
         if egfr is not None and float(egfr) < 60:
-            out.append("eGFR < 60 → 저염(나트륨 2g/일 내외), 단백질 과다 섭취 피하기, 칼륨/인 제한은 단계별로(의료진 지침).")
-    except:
-        pass
-
-    # 빈혈
+            out.append("eGFR < 60 → 저염, 단백질 과다 피하기, 칼륨/인 제한은 단계별로(의료진 지침).")
+    except: pass
     if entered(g("Hb")) and g("Hb") < 10:
-        out.append("빈혈 → 철분 식단(살코기·간·시금치·콩)+비타민C, 식사 중 차·커피 피하기. (원인 따라 다름)")
-
-    # CRP 높음(염증)
+        out.append("빈혈 → 철분 식단(살코기·간·시금치·콩)+비타민C, 식사 중 차·커피 피하기.")
     if entered(g("CRP")) and g("CRP") >= 0.5:
-        out.append("염증 ↑ → 수분·휴식, 자극적인 튀김/가공식품 줄이고, 익힌 채소·단백질 균형.")
-
+        out.append("염증 ↑ → 수분·휴식, 자극적인 튀김/가공식품 줄이기.")
     return out
 
-# ------------------ 보고서 빌더 ------------------
+# ------------------ 보고서 ------------------
 def build_report_md(nick_pin: str, dt: date, mode: str, group: str, dx: str,
                     lab_values: Dict[str, Any], lab_notes: List[str],
-                    spec_notes: List[str], tx_catalog: Dict[str, List[str]],
-                    tx_phase: str, tx_selected: List[str],
+                    spec_notes: List[str], tx_phase: str,
+                    tx_selected: List[str], tx_dosing: Dict[str, Any],
                     food_lines: List[str],
+                    sched_unknown: bool, sched_next_visit: str,
+                    sched_list: List[dict], sched_note: str,
                     ped_dx: Optional[str]=None, ped_symptoms: Optional[List[str]]=None, ped_tips: Optional[List[str]]=None) -> str:
     L = []
     L.append(f"# {APP_TITLE}\n")
-    L.append(f"- 사용자: {nick_pin}  ")
+    L.append(f"- 사용자: {nick_pin or '저장 안 함(임시 해석)'}  ")
     L.append(f"- 검사일: {dt.isoformat()}  ")
     L.append(f"- 모드: {mode}  ")
     if mode == "암 진단 모드":
-        L.append(f"- 암 그룹/진단: {group} / {dx}  ")
+        L.append(f"- 암 그룹/진단: {group or '-'} / {dx or '-'}  ")
         if tx_phase: L.append(f"- 치료 단계: {tx_phase}  ")
-        if tx_selected: L.append(f"- 현재 치료 선택: {', '.join(tx_selected)}  ")
+        if tx_selected: L.append(f"- 선택 치료: {', '.join(tx_selected)}  ")
     if mode == "소아 일상/질환" and ped_dx:
         L.append(f"- 소아 질환 선택: {ped_dx}  ")
-        if ped_symptoms: L.append(f"- 증상: {', '.join(ped_symptoms)}  ")
+        if ped_symptoms: L.append(f"- 보호자 체크 요약: {', '.join(ped_symptoms)}  ")
     L.append("")
+
     if lab_values:
         L.append("## 입력 수치")
         for abbr in ORDER:
             if abbr in lab_values and entered(lab_values[abbr]):
                 L.append(f"- {label(abbr)}: {lab_values[abbr]}")
         L.append("")
+
     if lab_notes:
         L.append("## 해석 요약")
         for m in lab_notes: L.append(f"- {m}")
@@ -429,26 +453,46 @@ def build_report_md(nick_pin: str, dt: date, mode: str, group: str, dx: str,
         L.append("## 🍽️ 피수치별 음식/식이 가이드")
         for t in food_lines: L.append(f"- {t}")
         L.append("")
+
     if mode == "암 진단 모드":
-        L.append("## 치료 카탈로그(추천)")
-        for sec in ["항암제","표적치료제"]:
-            items = tx_catalog.get(sec, [])
-            if not items: continue
-            L.append(f"### {sec}")
-            for d in items: L.append(f"- {d}")
-        L.append("")
+        if tx_dosing:
+            L.append("## 용량/스케줄 (사용자 입력)")
+            for d, v in tx_dosing.items():
+                line = f"- {d}: {v.get('dose','')} · {v.get('route','')} · {v.get('freq','')}"
+                if v.get("notes"): line += f" · {v['notes']}"
+                L.append(line)
+            L.append("")
+        # 스케줄
+        L.append("## 항암 스케줄")
+        if sched_unknown:
+            L.append("- 상태: 미정/모름(진료팀 안내 대기)")
+            if sched_next_visit: L.append(f"- 다음 병원 방문(예정): {sched_next_visit}")
+            if sched_note: L.append(f"- 메모: {sched_note}")
+            L.append("")
+        else:
+            for s in sched_list:
+                L.append(f"### {s['name']}")
+                L.append(f"- 시작일: {s['start']} · 간격: {s['interval_days']}일 · 사이클: {s['cycles']} · Days {s['days']}")
+                preview = ", ".join([f"C{e['cycle']}-{e['day']} {e['date']}" for e in s.get('events', [])[:10]])
+                L.append(f"- 예정일(일부): {preview}{' …' if len(s.get('events', []))>10 else ''}")
+                L.append("")
+            if sched_note:
+                L.append("### 스케줄 메모")
+                L.append(f"- {sched_note}")
+                L.append("")
+
     if mode == "소아 일상/질환" and ped_tips:
         L.append("## 소아 증상/질환 해석 & 가이드")
         for t in ped_tips: L.append(f"- {t}")
         L.append("")
+
     L.append("---")
     L.append("```")
     L.append(DISCLAIMER)
     L.append("```")
     return "\n".join(L)
 
-# ------------------ 암 카탈로그(요약) & 약물 설명 ------------------
-# 👉 면역/세포치료는 제외. (요청 반영)
+# ------------------ 암 카탈로그(요약) ------------------
 HEME_DISPLAY = [
     "급성 골수성 백혈병(AML)","급성 전골수구성 백혈병(APL)","급성 림프모구성 백혈병(ALL)",
     "만성 골수성 백혈병(CML)","만성 림프구성 백혈병(CLL)",
@@ -468,26 +512,27 @@ SARCOMA_KEY = {"UPS(미분화 다형성)":"UPS","LMS(평활근)":"LMS","LPS(지�
 RARE_DISPLAY = ["GIST(지스트)","NET(신경내분비종양)","Medullary Thyroid(수질갑상선암)","Pheochromocytoma/Paraganglioma","Uveal Melanoma","Merkel Cell(메르켈세포)"]
 RARE_KEY = {"GIST(지스트)":"GIST","NET(신경내분비종양)":"NET","Medullary Thyroid(수질갑상선암)":"MTC","Pheochromocytoma/Paraganglioma":"PPGL","Uveal Melanoma":"Uveal","Merkel Cell(메르켈세포)":"Merkel"}
 
-TX: Dict[str, Dict[str, Dict[str, List[str]]]] = {
+# 치료 목록(요약) — 면역/세포치료 제외
+TX = {
     "혈액암": {
-        "AML": {"항암제": ["Cytarabine(Ara-C)","Anthracycline(Idarubicin/Daunorubicin)","CPX-351(고위험군)","Azacitidine+Venetoclax"],
-                "표적치료제": ["Midostaurin(FLT3)","Gilteritinib(FLT3, 재발/불응)","Enasidenib(IDH2)","Ivosidenib(IDH1)","Glasdegib(Hedgehog)"]},
-        "APL": {"항암제": ["ATRA(베사노이드)","ATO","Cytarabine(Ara-C, 고위험 병용)","6-MP(유지)","MTX(유지)"],
-                "표적치료제": ["ATRA+ATO (PML-RARA 표적적 접근)"]},
-        "ALL": {"항암제": ["Hyper-CVAD","Cytarabine(Ara-C, 고용량)"],
-                "표적치료제": ["Blinatumomab(CD19 BiTE)","Inotuzumab ozogamicin(CD22 ADC)","Rituximab(CD20+, 일부 B-ALL)","Nelarabine(T-ALL)"]},
-        "CML": {"항암제": [], "표적치료제": ["Imatinib(1세대)","Dasatinib","Nilotinib","Bosutinib","Ponatinib(T315I)","Asciminib(STI, allosteric)"]},
-        "CLL": {"항암제": [], "표적치료제": ["Ibrutinib","Acalabrutinib","Zanubrutinib","Venetoclax(+Obinutuzumab)","Rituximab/Obinutuzumab/Ofatumumab","Idelalisib/Duvelisib(제한적)"]},
-        "MM":  {"항암제": ["VRd(Bortezomib+Lenalidomide+Dexamethasone)","Carfilzomib","Ixazomib"],
-                "표적치료제": ["Daratumumab(Isatuximab, anti-CD38)","Elotuzumab(SLAMF7)","Belantamab mafodotin(BCMA ADC)"]},
-        "MDS": {"항암제": ["Azacitidine","Decitabine"],
-                "표적치료제": ["Luspatercept(저위험 빈혈)","Ivosidenib/Enasidenib(IDH 변이)"]},
-        "MPN": {"항암제": ["Hydroxyurea"],
-                "표적치료제": ["Ruxolitinib(JAK2)","Fedratinib(JAK2)","Ropeginterferon alfa-2b(PV)"]},
+        "AML": {"항암제":["Cytarabine(Ara-C)","Anthracycline(Idarubicin/Daunorubicin)","CPX-351(고위험군)","Azacitidine+Venetoclax"],
+                "표적치료제":["Midostaurin(FLT3)","Gilteritinib(FLT3, 재발/불응)","Enasidenib(IDH2)","Ivosidenib(IDH1)","Glasdegib(Hedgehog)"]},
+        "APL": {"항암제":["ATRA(베사노이드)","ATO","Cytarabine(Ara-C, 고위험 병용)","6-MP(유지)","MTX(유지)"],
+                "표적치료제":["ATRA+ATO (PML-RARA 표적적 접근)"]},
+        "ALL": {"항암제":["Hyper-CVAD","Cytarabine(Ara-C, 고용량)"],
+                "표적치료제":["Blinatumomab(CD19 BiTE)","Inotuzumab ozogamicin(CD22 ADC)","Rituximab(CD20+, 일부 B-ALL)","Nelarabine(T-ALL)"]},
+        "CML": {"항암제":[], "표적치료제":["Imatinib(1세대)","Dasatinib","Nilotinib","Bosutinib","Ponatinib(T315I)","Asciminib(STI, allosteric)"]},
+        "CLL": {"항암제":[], "표적치료제":["Ibrutinib","Acalabrutinib","Zanubrutinib","Venetoclax(+Obinutuzumab)","Rituximab/Obinutuzumab/Ofatumumab","Idelalisib/Duvelisib(제한적)"]},
+        "MM":  {"항암제":["VRd(Bortezomib+Lenalidomide+Dexamethasone)","Carfilzomib","Ixazomib"],
+                "표적치료제":["Daratumumab(Isatuximab)","Elotuzumab","Belantamab mafodotin"]},
+        "MDS": {"항암제":["Azacitidine","Decitabine"],
+                "표적치료제":["Luspatercept","Ivosidenib/Enasidenib(IDH)"]},
+        "MPN": {"항암제":["Hydroxyurea"],
+                "표적치료제":["Ruxolitinib(JAK2)","Fedratinib(JAK2)","Ropeginterferon alfa-2b(PV)"]},
     },
     "림프종": {
-        "DLBCL": {"항암제": ["R-CHOP","Pola-R-CHP","DA-EPOCH-R","R-ICE","R-DHAP","R-GDP","R-GemOx"], "표적치료제": ["Pola-BR","Tafasitamab+Lenalidomide","Loncastuximab"]},
-        "PMBCL": {"항암제": ["DA-EPOCH-R","R-ICE","R-DHAP"], "표적치료제": []},
+        "DLBCL": {"항암제":["R-CHOP","Pola-R-CHP","DA-EPOCH-R","R-ICE","R-DHAP","R-GDP","R-GemOx"], "표적치료제":["Pola-BR","Tafasitamab+Lenalidomide","Loncastuximab"]},
+        "PMBCL": {"항암제":["DA-EPOCH-R","R-ICE","R-DHAP"], "표적치료제":[]},
         "FL12":  {"항암제":["BR","R-CVP","R-CHOP","Obinutuzumab+BR"], "표적치료제":["Lenalidomide+Rituximab"]},
         "FL3A":  {"항암제":["R-CHOP","Pola-R-CHP","BR"], "표적치료제":[]},
         "FL3B":  {"항암제":["R-CHOP","Pola-R-CHP","DA-EPOCH-R"], "표적치료제":[]},
@@ -503,7 +548,7 @@ TX: Dict[str, Dict[str, Dict[str, List[str]]]] = {
         "LungAdeno": {"항암제":["Platinum+Pemetrexed"], "표적치료제":["EGFR(Osimertinib)","ALK(Alectinib)","ROS1(Crizotinib/Entrectinib)","BRAF V600E(Dabrafenib+Trametinib)","METex14(Tepotinib/Capmatinib)","RET(Selpercatinib/Pralsetinib)","NTRK(Larotrectinib/Entrectinib)","KRAS G12C(Sotorasib/Adagrasib)"]},
         "LungSCC": {"항암제":["Platinum+Taxane"], "표적치료제":[]},
         "SCLC":    {"항암제":["Platinum+Etoposide"], "표적치료제":[]},
-        "BreastHR":   {"항암제":[], "표적치료제":["ET(AI/Tamoxifen)+CDK4/6i(Palbociclib/Ribociclib/Abemaciclib)","Fulvestrant","Everolimus+Exemestane"]},
+        "BreastHR":   {"항암제":[], "표적치료제":["ET(AI/Tamoxifen)+CDK4/6i","Fulvestrant","Everolimus+Exemestane"]},
         "BreastHER2": {"항암제":["Taxane 병용"], "표적치료제":["Trastuzumab+Pertuzumab","T-DM1","T-DXd"]},
         "TNBC":       {"항암제":["Paclitaxel"], "표적치료제":["Sacituzumab govitecan"]},
         "Gastric":    {"항암제":["FOLFOX/XP"], "표적치료제":["Trastuzumab(HER2+)"]},
@@ -542,75 +587,90 @@ TX: Dict[str, Dict[str, Dict[str, List[str]]]] = {
     }
 }
 
-drug_info = {
-    "ATRA(베사노이드)": {"ko":"비스트레티노인","mech":"미성숙 전구세포 분화 유도","ae":"분화증후군, 간수치 상승, 피부건조/광과민"},
-    "ATO": {"ko":"무수비소","mech":"분화 유도/세포사멸","ae":"QT 연장, 전해질 이상"},
-    "6-MP": {"ko":"6-머캅토퓨린","mech":"퓨린 합성 억제","ae":"간독성, 골수억제, 오심"},
-    "MTX": {"ko":"메토트렉세이트","mech":"DHFR 억제","ae":"골수억제, 간/신독성, 구내염"},
-    "Cytarabine(Ara-C)": {"ko":"시타라빈","mech":"핵산 합성 저해","ae":"골수억제, 결막염/신경독성(고용량)"},
-    "Anthracycline(Idarubicin/Daunorubicin)": {"ko":"안트라사이클린","mech":"Topo II 억제","ae":"심독성, 골수억제"},
-    "Azacitidine": {"ko":"아자시티딘","mech":"DNA 메틸화 억제","ae":"골수억제, 오심"},
-    "Decitabine": {"ko":"데시타빈","mech":"DNA 메틸화 억제","ae":"골수억제"},
-    "Venetoclax": {"ko":"베네토클락스","mech":"BCL-2 억제","ae":"종양융해증후군, 골수억제"},
-    "Midostaurin(FLT3)": {"ko":"미도스터린","mech":"FLT3 억제","ae":"오심, QT 연장 가능"},
-    "Gilteritinib(FLT3, 재발/불응)": {"ko":"길테리티닙","mech":"FLT3 억제","ae":"간수치 상승, 피로"},
-    "Enasidenib(IDH2)": {"ko":"에나시데닙","mech":"IDH2 억제","ae":"분화증후군, 고빌리루빈혈증"},
-    "Ivosidenib(IDH1)": {"ko":"이보시데닙","mech":"IDH1 억제","ae":"분화증후군, 간독성"},
-    "Glasdegib(Hedgehog)": {"ko":"글라스데깁","mech":"Hedgehog 경로 억제","ae":"미각저하, 근육경련"},
-    "Imatinib": {"ko":"이마티닙","mech":"BCR-ABL/KIT 등 억제","ae":"부종, 피로"},
-    "Dasatinib": {"ko":"다사티닙","mech":"BCR-ABL 억제","ae":"흉막/심낭 삼출"},
-    "Nilotinib": {"ko":"닐로티닙","mech":"BCR-ABL 억제","ae":"QT 연장, 대사이상"},
-    "Bosutinib": {"ko":"보수티닙","mech":"BCR-ABL 억제","ae":"설사, 간수치 상승"},
-    "Ponatinib(T315I)": {"ko":"포나티닙","mech":"BCR-ABL(T315I) 억제","ae":"혈전/혈관 이상"},
-    "Asciminib": {"ko":"아시미닙","mech":"BCR-ABL allosteric","ae":"췌장염, 근골격통"},
-    "Ibrutinib": {"ko":"이브루티닙","mech":"BTK 억제","ae":"출혈/AFib 위험"},
-    "Acalabrutinib": {"ko":"아칼라브루티닙","mech":"BTK 억제","ae":"두통, 혈소판감소"},
-    "Zanubrutinib": {"ko":"자누브루티닙","mech":"BTK 억제","ae":"호중구감소, 출혈"},
-    "Obinutuzumab": {"ko":"오비누투주맙","mech":"anti-CD20","ae":"주입반응"},
-    "Rituximab": {"ko":"리툭시맙","mech":"anti-CD20","ae":"주입반응, HBV reactivation"},
-    "Blinatumomab(CD19 BiTE)": {"ko":"블리나투모맙","mech":"CD19×CD3 BiTE","ae":"CRS, 신경독성"},
-    "Inotuzumab ozogamicin(CD22 ADC)": {"ko":"이노투주맙 오조가마이신","mech":"CD22 ADC","ae":"간정맥폐쇄병증"},
-    "Daratumumab": {"ko":"다라투무맙","mech":"anti-CD38","ae":"주입반응"},
-    "Isatuximab": {"ko":"이사툭시맙","mech":"anti-CD38","ae":"주입반응"},
-    "Elotuzumab": {"ko":"엘로투주맙","mech":"anti-SLAMF7","ae":"피로, 감염"},
-    "Belantamab mafodotin": {"ko":"벨란타맵 마포도틴","mech":"BCMA ADC","ae":"각막독성"},
-    "EGFR(Osimertinib)": {"ko":"오시머티닙","mech":"EGFR TKI","ae":"발진, 설사"},
-    "ALK(Alectinib)": {"ko":"알렉티닙","mech":"ALK TKI","ae":"간수치 상승, 변비"},
-    "Bevacizumab": {"ko":"베바시주맙","mech":"VEGF 억제","ae":"출혈/혈전, 단백뇨"},
-    "T-DM1": {"ko":"트라스투주맙 엠탄신","mech":"HER2 ADC","ae":"혈소판감소, 간독성"},
-    "T-DXd": {"ko":"트라스투주맙 데룩스테칸","mech":"HER2 ADC","ae":"간질성폐질환 주의"},
-    "Lenvatinib": {"ko":"렌바티닙","mech":"다중 TKI","ae":"고혈압, 단백뇨"},
-    "Sorafenib": {"ko":"소라페닙","mech":"다중 TKI","ae":"손발증후군"},
-    "Regorafenib": {"ko":"레고라페닙","mech":"다중 TKI","ae":"피로, 손발증"},
-    "Cabozantinib": {"ko":"카보잔티닙","mech":"RET/MET/VEGFR TKI","ae":"손발증, 고혈압"},
-    "Axitinib": {"ko":"액시티닛","mech":"VEGFR TKI","ae":"고혈압, 단백뇨"},
-    "Erdafitinib(FGFR)": {"ko":"에르다피티닙","mech":"FGFR 억제","ae":"고인산혈증, 시야변화"},
-    "Olaparib": {"ko":"올라파립","mech":"PARP 억제","ae":"빈혈, 오심"},
-    "Niraparib": {"ko":"니라파립","mech":"PARP 억제","ae":"혈소판감소"},
-    "Selpercatinib": {"ko":"셀퍼카티닙","mech":"RET 억제","ae":"고혈압, 간수치 상승"},
-    "Pralsetinib": {"ko":"프랄세티닙","mech":"RET 억제","ae":"간수치 상승"},
-    "Sunitinib": {"ko":"수니티닙","mech":"VEGFR/PDGFR/KIT 억제","ae":"고혈압, 피로"},
-    "Vandetanib": {"ko":"반데타닙","mech":"RET/EGFR/VEGFR 억제","ae":"QT 연장"},
+# 단계(Phase)
+PHASES_BY_GROUP = {
+    "혈액암": ["유도(Induction)", "공고(Consolidation)", "유지(Maintenance)", "구제/재발(Salvage)"],
+    "림프종": ["1차(First-line)", "구제/재발(Salvage)", "유지(Maintenance)"],
+    "고형암": ["신보조(Neoadjuvant)", "보조(Adjuvant)", "1차(1L)", "2차 이상(2L+)"],
+    "육종":   ["1차(First-line)", "2차/구제(Second/Salvage)"],
+    "희귀암": ["1차(First-line)", "2차 이상(2L+)"],
+}
+PHASED_TX = {
+    "혈액암": {
+        "AML": {
+            "유도(Induction)":      {"레지멘":["7+3"],     "항암제":["Cytarabine(Ara-C)","Anthracycline(Idarubicin/Daunorubicin)"], "표적치료제":["Midostaurin(FLT3)"]},
+            "공고(Consolidation)": {"레지멘":["HiDAC"],   "항암제":["Cytarabine(Ara-C)"], "표적치료제":[]},
+            "유지(Maintenance)":   {"레지멘":[],          "항암제":[], "표적치료제":[]},
+            "구제/재발(Salvage)":  {"레지멘":["AZA+VEN"], "항암제":["Azacitidine+Venetoclax"], "표적치료제":["Gilteritinib(FLT3, 재발/불응)","Enasidenib(IDH2)","Ivosidenib(IDH1)"]},
+        },
+        "APL": {
+            "유도(Induction)":      {"레지멘":["ATRA+ATO"],      "항암제":["ATRA(베사노이드)","ATO"], "표적치료제":[]},
+            "공고(Consolidation)": {"레지멘":["ATRA±ATO"],      "항암제":["ATRA(베사노이드)","ATO"], "표적치료제":[]},
+            "유지(Maintenance)":   {"레지멘":["6-MP+MTX 유지"], "항암제":["6-MP(유지)","MTX(유지)"], "표적치료제":[]},
+        },
+        "ALL": {
+            "유도(Induction)":      {"레지멘":["Hyper-CVAD"], "항암제":["Hyper-CVAD","Cytarabine(Ara-C)"], "표적치료제":["Rituximab(CD20+, 일부)"]},
+            "공고(Consolidation)": {"레지멘":["고용량 Ara-C"], "항암제":["Cytarabine(Ara-C)"], "표적치료제":[]},
+            "유지(Maintenance)":   {"레지멘":["6-MP/MTX 유지"], "항암제":[], "표적치료제":[]},
+        },
+    },
+    "림프종": {
+        "DLBCL": {
+            "1차(First-line)":    {"레지멘":["R-CHOP","Pola-R-CHP"], "항암제":["R-CHOP","Pola-R-CHP"], "표적치료제":[]},
+            "구제/재발(Salvage)": {"레지멘":["R-ICE","R-DHAP","R-GDP"], "항암제":["R-ICE","R-DHAP","R-GDP","R-GemOx"], "표적치료제":["Tafasitamab+Lenalidomide","Loncastuximab"]},
+        },
+        "cHL": {
+            "1차(First-line)":    {"레지멘":["ABVD","BV-AVD"], "항암제":["ABVD","BV-AVD"], "표적치료제":["Brentuximab Vedotin"]},
+            "구제/재발(Salvage)": {"레지멘":["ICE","DHAP"],    "항암제":["ICE","DHAP"], "표적치료제":[]},
+        },
+    },
+    "고형암": {
+        "LungAdeno": {
+            "1차(1L)": {"레지멘":["Pem+Plat/바이오마커"], "항암제":["Platinum+Pemetrexed"], "표적치료제":["EGFR(Osimertinib)","ALK(Alectinib)","ROS1(Crizotinib/Entrectinib)","BRAF V600E(Dabrafenib+Trametinib)","METex14(Tepotinib/Capmatinib)","RET(Selpercatinib/Pralsetinib)","NTRK(Larotrectinib/Entrectinib)","KRAS G12C(Sotorasib/Adagrasib)"]},
+        },
+        "BreastHER2": {
+            "1차(1L)": {"레지멘":["Taxane + Trastuzumab+Pertuzumab"], "항암제":["Taxane 병용"], "표적치료제":["Trastuzumab+Pertuzumab"]},
+            "2차 이상(2L+)": {"레지멘":["T-DM1 / T-DXd"], "항암제":[], "표적치료제":["T-DM1","T-DXd"]},
+        },
+        "CRC": {
+            "1차(1L)": {"레지멘":["FOLFOX/FOLFIRI ± Bev"], "항암제":["FOLFOX","FOLFIRI"], "표적치료제":["Bevacizumab","Cetuximab/Panitumumab(RAS WT, 좌측)"]},
+        },
+    },
 }
 
-# ------------------ Streamlit UI ------------------
-st.set_page_config(page_title=PAGE_TITLE, layout="centered")
-st.title(APP_TITLE)
-st.caption(MADE_BY)
+def _dx_key(group: str, dx_display: str) -> str:
+    if group == "혈액암": return HEME_KEY.get(dx_display, dx_display)
+    if group == "림프종": return LYMPH_KEY.get(dx_display, dx_display)
+    if group == "고형암": return SOLID_KEY.get(dx_display, dx_display)
+    if group == "육종":   return SARCOMA_KEY.get(dx_display, dx_display)
+    if group == "희귀암": return RARE_KEY.get(dx_display, dx_display)
+    return dx_display
 
+def get_tx_by_phase(group: str, dx_display: str, phase: str):
+    dxk   = _dx_key(group, dx_display)
+    base  = (TX.get(group, {}) or {}).get(dxk, {"항암제":[], "표적치료제":[]})
+    phased = ((PHASED_TX.get(group, {}) or {}).get(dxk, {}) or {}).get(phase, {}) if phase else {}
+    chemo = phased.get("항암제") if phased.get("항암제") else base.get("항암제", [])
+    targ  = phased.get("표적치료제") if phased.get("표적치료제") else base.get("표적치료제", [])
+    regimens = phased.get("레지멘", [])
+    return chemo, targ, regimens
+
+# ------------------ 상태 ------------------
+st.title(APP_TITLE)
 if "store" not in st.session_state: st.session_state.store = load_records()
 
+# 사용자 식별
 st.subheader("사용자 식별")
 c1, c2 = st.columns([2,1])
 nickname = c1.text_input("별명", placeholder="예: 민수아빠", key="nickname")
 pin      = c2.text_input("PIN(4자리)", max_chars=4, placeholder="예: 1234", key="pin")
 pin_clean = "".join([c for c in (pin or "") if c.isdigit()])[:4]
 nick_key  = f"{nickname.strip()}#{pin_clean}" if nickname and pin_clean else ""
-
 test_date = st.date_input("검사 날짜", value=date.today(), key="test_date")
+
 mode = st.radio("진단 모드", ["소아 일상/질환", "암 진단 모드"], horizontal=True, key="mode")
 
-# ----------- 피수치 입력 -----------
+# ------------------ 피수치 입력 ------------------
 def lab_inputs(always_show: bool) -> Dict[str, Any]:
     vals: Dict[str, Any] = {}
     show = True if always_show else st.toggle("피수치 입력란 보기", value=False, key="toggle_labs")
@@ -618,15 +678,13 @@ def lab_inputs(always_show: bool) -> Dict[str, Any]:
     for abbr in ORDER:
         s = st.text_input(label(abbr), placeholder=f"{label(abbr)} 값 입력", key=f"lab_{abbr}")
         val = parse_float(s)
-        if val is not None:
-            vals[abbr] = val
+        if val is not None: vals[abbr] = val
     return vals
 
-# ----------- 특수검사 입력 (복구판: 지질·응고·보체·요검사·전해질·갑상선·당대사·패혈증·빈혈패널) -----------
+# ------------------ 특수검사 입력 ------------------
 def special_inputs() -> Tuple[Dict[str,str], Dict[str,float], List[str]]:
     qc, qn, info = {}, {}, []
     st.markdown("### 특수검사 (토글)")
-
     # 요검사
     with st.expander("요검사(정성/정량)", expanded=False):
         cqa, cqb, cqc, cqd = st.columns(4)
@@ -643,16 +701,11 @@ def special_inputs() -> Tuple[Dict[str,str], Dict[str,float], List[str]]:
             u_alb  = parse_float(st.text_input("소변 알부민 (mg/L)", key="u_alb"))
             upcr = acr = None
             if u_cr and u_prot:
-                upcr = round((u_prot*1000.0)/u_cr, 1)
-                info.append(f"UPCR(자동): {upcr} mg/g")
+                upcr = round((u_prot*1000.0)/u_cr, 1); info.append(f"UPCR(자동): {upcr} mg/g")
             if u_cr and u_alb:
-                acr = round((u_alb*100.0)/u_cr, 1)
-                stg, lab = stage_acr(acr)
-                info.append(f"ACR(자동): {acr} mg/g · {stg or ''} {lab or ''}")
-            upcr_manual = parse_float(st.text_input("Pro/Cr, urine (mg/g) — 수기 입력", key="upcr_m"))
-            if upcr_manual is not None: upcr = upcr_manual
+                acr = round((u_alb*100.0)/u_cr, 1); info.append(f"ACR(자동): {acr} mg/g")
             if upcr is not None: qn["UPCR"] = upcr
-            if acr is not None: qn["ACR"] = acr
+            if acr  is not None: qn["ACR"]  = acr
 
     # 지질
     with st.expander("지질(기본/확장)", expanded=False):
@@ -670,7 +723,7 @@ def special_inputs() -> Tuple[Dict[str,str], Dict[str,float], List[str]]:
             ldl = calc_friedewald_ldl(qn["TC"], qn["HDL"], qn["TG"])
             if ldl is not None:
                 qn["LDL"] = ldl
-                info.append(f"LDL(Friedewald, 자동): {ldl} mg/dL (TG<400에서만 계산)")
+                info.append(f"LDL(Friedewald, 자동): {ldl} mg/dL (TG<400에서만)")
 
     # 응고/보체
     with st.expander("응고/보체", expanded=False):
@@ -697,7 +750,7 @@ def special_inputs() -> Tuple[Dict[str,str], Dict[str,float], List[str]]:
             qn["Corrected Ca"] = ca_corr
             info.append(f"보정 칼슘(Alb 반영): {ca_corr} mg/dL")
 
-    # 갑상선/당대사/패혈증
+    # 갑상선·당대사·패혈증
     with st.expander("갑상선·당대사·패혈증", expanded=False):
         t1,t2,t3 = st.columns(3)
         qn["TSH"] = parse_float(t1.text_input("TSH (µIU/mL)", key="thy_tsh"))
@@ -730,35 +783,58 @@ def special_inputs() -> Tuple[Dict[str,str], Dict[str,float], List[str]]:
     return qc, qn, info
 
 # ------------------ 본문 ------------------
-st.set_page_config(page_title=PAGE_TITLE, layout="centered")
+labs: Dict[str, Any] = {}
+qc: Dict[str, Any] = {}
+qn: Dict[str, Any] = {}
+calc_info: List[str] = []
+ped_dx: Optional[str] = None
+ped_checks: Dict[str, Any] = {}
+group: str = ""
+dx: str = ""
+tx_phase: str = ""
+tx_selected: List[str] = []
+dose_plan: Dict[str, Any] = {}
 
 if mode == "소아 일상/질환":
     st.info("소아 감염/일상 중심: 항암제는 숨김 처리됩니다.")
     st.markdown("### 소아 질환 선택")
     ped_dx = st.selectbox("질환", PED_DISEASES, index=0, key="ped_dx")
-    st.markdown("### 증상 체크")
-    ped_sx = st.multiselect("해당되는 증상을 모두 선택", PED_SYMPTOMS, default=[], key="ped_sx")
-    _ = st.text_area("증상 메모(선택)", placeholder="예: 새벽에 기침 심함, 해열제 복용 시간 등", key="ped_note")
-
+    # 👪 보호자 체크 — 항상 노출(사라짐 방지)
+    ped_checks = render_caregiver_check(ped_dx)
+    # 피수치 입력(토글)
     labs = lab_inputs(always_show=False)
 
+    # 해열제 자동 계산(평균용량, 0.5 mL 반올림)
     st.markdown("### 해열제 자동 계산")
     cw, ct = st.columns(2)
     wt = parse_float(cw.text_input("체중(kg)", placeholder="예: 20.5", key="wt"))
-    tc = parse_float(ct.text_input("체온(℃)",  placeholder="예: 38.2", key="tc"))
-    if st.button("해열 가이드 계산", key="btn_fever"):
+    tc = parse_float(ct.text_input("체온(℃)", value=(ped_checks.get("열_현재체온") or ""), key="tc"))
+    c1, c2 = st.columns(2)
+    acet5 = parse_float(c1.text_input("아세트아미노펜 농도 (mg/5 mL)", value="160", key="acet5"))
+    ibu5  = parse_float(c2.text_input("이부프로펜 농도 (mg/5 mL)", value="100", key="ibu5"))
+    def mg_to_ml_half(mg, mg_per_5ml):
+        try:
+            mg_per_ml = float(mg_per_5ml) / 5.0
+            ml = float(mg) / mg_per_ml
+            return round(ml * 2) / 2  # 0.5 mL 반올림
+        except Exception:
+            return None
+    if st.button("해열 가이드 계산", key="btn_fever_halfml"):
         if not wt:
             st.warning("체중을 먼저 입력하세요.")
         else:
-            ac_min = 10*wt; ac_max = 15*wt; ib = 10*wt
-            st.write(f"아세트아미노펜: 1회 {ac_min:.0f}~{ac_max:.0f} mg")
-            st.write(f"이부프로펜: 1회 약 {ib:.0f} mg")
-            st.caption(FEVER_GUIDE)
-    ped_tips = build_ped_tips(ped_dx, ped_sx, tc)
+            acet_mg = 12.5 * wt
+            ibu_mg  = 10.0 * wt
+            acet_ml = mg_to_ml_half(acet_mg, acet5)
+            ibu_ml  = mg_to_ml_half(ibu_mg,  ibu5)
+            if acet_ml is not None: st.write(f"아세트아미노펜 시럽: **1회 {acet_ml:.1f} mL**")
+            if ibu_ml  is not None: st.write(f"이부프로펜 시럽: **1회 {ibu_ml:.1f} mL**")
+
     qc, qn, calc_info = special_inputs()
 
 else:
-    st.success("암 진단 모드: 피수치 입력란이 항상 표시됩니다.")
+    st.success("암 진단 모드: 단계별로 항암제를 고르고, 용량/스케줄은 직접 입력합니다.")
+
     c1, c2 = st.columns(2)
     group = c1.selectbox("암 그룹", ["","혈액암","림프종","고형암","육종","희귀암"], index=0, key="group")
     if group == "혈액암":
@@ -774,61 +850,142 @@ else:
     else:
         dx = ""
 
-    # 순서: 암선택 → 치료단계 → 항암제/표적치료제 선택
-    tx_phase = st.selectbox("치료 단계", ["", "유지요법", "외래 항암", "입원 항암", "완료(추적관찰)"], index=0, key="tx_phase")
-    tx_catalog = {}
-    if group:
-        # 매핑
-        if group == "혈액암": tx_catalog = TX["혈액암"].get(HEME_KEY.get(dx, dx), {"항암제":[], "표적치료제":[]})
-        elif group == "림프종": tx_catalog = TX["림프종"].get(LYMPH_KEY.get(dx, dx), {"항암제":[], "표적치료제":[]})
-        elif group == "고형암": tx_catalog = TX["고형암"].get(SOLID_KEY.get(dx, dx), {"항암제":[], "표적치료제":[]})
-        elif group == "육종":   tx_catalog = TX["육종"].get(SARCOMA_KEY.get(dx, dx), {"항암제":[], "표적치료제":[]})
-        elif group == "희귀암": tx_catalog = TX["희귀암"].get(RARE_KEY.get(dx, dx), {"항암제":[], "표적치료제":[]})
+    # 단계(Phase)
+    phase_opts = PHASES_BY_GROUP.get(group, [])
+    tx_phase = st.selectbox("치료 단계(Phase)", [""] + phase_opts, index=0, key="tx_phase")
+    step_chemo, step_targ, step_regs = (get_tx_by_phase(group, dx, tx_phase) if (group and dx) else ([],[],[]))
+    if step_regs: st.caption("• 단계별 대표 레지멘: " + ", ".join(step_regs))
 
     st.markdown("### 항암제/표적치료제 선택")
     cc1, cc2 = st.columns(2)
-    chemo_sel = cc1.multiselect("항암제 선택", tx_catalog.get("항암제", []), default=[], key="chemo_sel")
-    targ_sel  = cc2.multiselect("표적치료제 선택", tx_catalog.get("표적치료제", []), default=[], key="targ_sel")
-    tx_custom = st.text_input("직접 추가(쉼표로 구분, 예: Cyclophosphamide, Rituximab)", key="tx_custom")
-    tx_selected = list(dict.fromkeys([*chemo_sel, *targ_sel] + ([s.strip() for s in tx_custom.split(",")] if tx_custom.strip() else [])))
+    chemo_sel = cc1.multiselect("항암제 (단계필터 적용)", step_chemo, default=[], key="chemo_sel_phase")
+    targ_sel  = cc2.multiselect("표적치료제 (단계필터 적용)", step_targ,  default=[], key="targ_sel_phase")
 
-    with st.expander("치료 카탈로그(요약 설명)", expanded=False):
-        for sec in ["항암제","표적치료제"]:
-            items = tx_catalog.get(sec, [])
-            if not items: continue
-            st.markdown(f"**{sec}**")
-            for d in items:
-                info = drug_info.get(d, {})
-                ko = info.get("ko",""); mech = info.get("mech",""); ae = info.get("ae","")
-                st.markdown(f"- **{d}**{f' ({ko})' if ko else ''}")
-                if mech: st.caption(f"작용: {mech}")
-                if ae:   st.caption(f"주의: {ae}")
+    # 직접 추가(옵션)
+    custom_name = st.text_input("직접추가 약명(선택)", key="tx_custom_name")
 
+    # 최종 선택
+    tx_selected = list(dict.fromkeys([*chemo_sel, *targ_sel] + ([custom_name] if custom_name.strip() else [])))
+
+    # ===== 용량 선택·입력 (단위 선택 + 수치) =====
+    st.markdown("#### 용량 선택·입력 (자동 권장 없음)")
+    with st.expander("참고 계산(선택)", expanded=False):
+        calc_on = st.checkbox("참고 계산 보이기", value=False, key="dose_calc_on")
+        c_w, c_h, c_b = st.columns([1,1,1])
+        wt = parse_float(c_w.text_input("체중(kg)", key="dose_wt"))
+        ht = parse_float(c_h.text_input("키(cm)", key="dose_ht"))
+        bsa = mosteller_bsa(wt, ht) if (calc_on and wt and ht) else None
+        if bsa: c_b.metric("BSA(Mosteller)", f"{bsa} m²")
+    dose_plan = {}
+    for name in tx_selected:
+        tag = f"{name} [{group}/{dx}{('·'+tx_phase) if tx_phase else ''}]"
+        slug = _safe_slug(tag)
+        st.markdown(f"**{tag}**")
+        c1, c2, c3, c4 = st.columns([1.1, 1.0, 1.0, 1.2])
+        unit = c1.selectbox("단위", ["mg/m²","mg/kg","mg(고정)","기타"], key=f"unit_{slug}")
+        per  = c2.number_input("용량 수치", min_value=0.0, step=1.0, key=f"per_{slug}")
+        route= c3.selectbox("경로", ["IV","PO","SC","IM","IT","기타"], key=f"route_{slug}")
+        freq = c4.text_input("주기/스케줄 (예: q3w D1-3, 매주 D1)", key=f"freq_{slug}")
+        # 참고 계산(저장 안함)
+        if st.session_state.get("dose_calc_on") and per:
+            if unit=="mg/m²" and bsa: st.caption(f"참고: 1회 ≈ {round(per*bsa)} mg")
+            elif unit=="mg/kg" and wt: st.caption(f"참고: 1회 ≈ {round(per*wt)} mg")
+        notes = st.text_input("비고(선택)", key=f"note_{slug}")
+        dose_text = f"{per} {unit}" if unit!="기타" and per else st.text_input("직접 기재(기타)", key=f"dose_text_{slug}")
+        dose_plan[tag] = {"group": group, "dx": dx, "phase": tx_phase, "drug": name,
+                          "dose": dose_text, "route": route, "freq": freq, "notes": notes}
+    st.session_state["dose_plan"] = dose_plan
+    # ===== 용량 블록 끝 =====
+
+    # 피수치 입력(항상 표시)
     labs = lab_inputs(always_show=True)
     qc, qn, calc_info = special_inputs()
-    ped_dx = ped_sx = None
 
-# ------------------ eGFR 계산 ------------------
+# ------------------ eGFR 계산(선택) ------------------
 st.markdown("### eGFR 계산 (선택)")
 age = parse_float(st.text_input("나이(세)", key="kid_age"))
 sex = st.selectbox("성별", ["F","M"], key="kid_sex")
 egfr = None
-if entered(locals().get("labs", {}).get("Cr")) and age:
+if entered(labs.get("Cr")) and age:
     egfr = calc_egfr(labs.get("Cr"), age=age, sex=sex)
-    if egfr is not None:
-        st.info(f"eGFR(자동): {egfr} mL/min/1.73m²")
+    if egfr is not None: st.info(f"eGFR(자동): {egfr} mL/min/1.73m²")
+
+# ------------------ 항암 스케줄 ------------------
+st.markdown("### 항암 스케줄")
+sch_status = st.radio("상태", ["확정(날짜 있음)", "미정/모름"], horizontal=True, key="sch_status")
+if sch_status == "미정/모름":
+    next_visit = st.date_input("다음 병원 방문일(선택)", key="sch_next_visit_unknown")
+    free_note  = st.text_area("메모(처방전 요약/구두 안내 등)", key="sch_free_unknown")
+    st.session_state["chemo_schedule"] = []
+    st.session_state["chemo_schedule_unknown"] = True
+    st.session_state["chemo_schedule_note"] = free_note
+    st.session_state["chemo_schedule_next_visit"] = next_visit.isoformat() if next_visit else ""
+else:
+    tab_auto, tab_free = st.tabs(["자동 전개", "자유 입력 메모"])
+    def parse_day_pattern(text: str) -> list:
+        s = re.sub(r'[^0-9,\-]', '', (text or ''))
+        if not s: return []
+        out = []
+        for token in s.split(','):
+            if '-' in token:
+                a,b = token.split('-')[:2]
+                if a.isdigit() and b.isdigit():
+                    a,b = int(a), int(b)
+                    out.extend(list(range(min(a,b), max(a,b)+1)))
+            else:
+                if token.isdigit(): out.append(int(token))
+        return sorted(set([x for x in out if x>=1]))
+    def make_schedule(name: str, start_day: date, interval_days: int, n_cycles: int, day_list: list) -> list:
+        events = []
+        for c in range(1, n_cycles+1):
+            cycle_start = start_day + timedelta(days=(c-1)*interval_days)
+            for d in day_list:
+                dt = cycle_start + timedelta(days=d-1)
+                events.append({"regimen": name, "cycle": c, "day": f"D{d}", "date": dt.isoformat()})
+        return events
+    with tab_auto:
+        regimen_name = st.text_input("스케줄 이름/레지멘 (예: R-CHOP, Azacitidine)", key="sch_name")
+        start_dt     = st.date_input("시작일", value=date.today(), key="sch_start")
+        gap_label = st.selectbox("사이클 간격", ["q1w(7일)","q2w(14일)","q3w(21일)","q4w(28일)","사용자 정의"], key="sch_gap")
+        gap_days = {"q1w(7일)":7,"q2w(14일)":14,"q3w(21일)":21,"q4w(28일)":28}.get(gap_label, None)
+        if gap_label == "사용자 정의":
+            gap_days = st.number_input("사이클 간격(일)", min_value=1, max_value=120, value=21, step=1, key="sch_gap_days")
+        n_cycles = st.number_input("사이클 수", min_value=1, max_value=40, value=6, step=1, key="sch_cycles")
+        day_pat = st.selectbox("Day 패턴", ["D1","D1-3","D1,8,15","사용자 정의"], key="sch_pat")
+        custom_pat_text = st.text_input("사용자 정의 패턴(예: 1-5,8,15)", key="sch_pat_custom") if day_pat=="사용자 정의" else ""
+        day_list = {"D1":[1],"D1-3":[1,2,3],"D1,8,15":[1,8,15]}.get(day_pat, None) or parse_day_pattern(custom_pat_text)
+        if st.button("스케줄 만들기", key="btn_make_sched"):
+            if not regimen_name: st.warning("스케줄 이름을 입력하세요.")
+            elif not gap_days or not day_list: st.warning("사이클 간격/Day 패턴을 확인하세요.")
+            else:
+                evts = make_schedule(regimen_name, start_dt, int(gap_days), int(n_cycles), day_list)
+                st.success(f"{regimen_name}: {len(evts)}건 생성됨")
+                st.dataframe(pd.DataFrame(evts), use_container_width=True)
+                sched_list = st.session_state.get("chemo_schedule", [])
+                sched_list.append({"name":regimen_name,"start":start_dt.isoformat(),"interval_days":int(gap_days),"cycles":int(n_cycles),"days":day_list,"events":evts})
+                st.session_state["chemo_schedule"] = sched_list
+        # 현황
+        cur = st.session_state.get("chemo_schedule", [])
+        if cur:
+            st.markdown("#### 추가된 스케줄")
+            for i, s in enumerate(cur, 1):
+                st.write(f"**{i}. {s['name']}** · 시작 {s['start']} · {s['interval_days']}일 간격 · {s['cycles']}사이클 · Days {s['days']}")
+            if st.button("모든 스케줄 지우기", key="btn_clear_sched"):
+                st.session_state["chemo_schedule"] = []
+                st.info("스케줄을 모두 지웠습니다.")
+    with tab_free:
+        st.session_state["chemo_schedule_note"] = st.text_area("자유 입력(예: 외래 주사 후 24시간 보조제 시작, D8 CBC 체크 등)", key="sch_free")
 
 # ------------------ 해석/저장 ------------------
 st.divider()
 colA, colB, colC = st.columns([1,1,1])
-run_analyze = colA.button("🔎 해석하기 & 저장", use_container_width=True, key="btn_analyze")
-clear_user  = colB.button("🗑️ 이 사용자 기록 전체 삭제", use_container_width=True, key="btn_clear")
+run_analyze = colA.button("🔎 해석하기", use_container_width=True, key="btn_analyze_only")
+save_now    = colB.button("💾 저장하기", use_container_width=True, key="btn_save_only")
 load_last   = colC.button("↩️ 가장 최근 기록으로 폼 채우기", use_container_width=True, key="btn_fill")
+clear_user  = st.button("🗑️ 이 사용자 기록 전체 삭제", use_container_width=True, key="btn_clear")
 
 if clear_user and nick_key:
-    st.session_state.store.pop(nick_key, None)
-    save_records(st.session_state.store)
-    st.success("이 사용자 기록을 모두 삭제했습니다.")
+    st.session_state.store.pop(nick_key, None); save_records(st.session_state.store); st.success("이 사용자 기록을 모두 삭제했습니다.")
 
 if load_last and nick_key:
     user_records = st.session_state.store.get(nick_key, [])
@@ -839,73 +996,108 @@ if load_last and nick_key:
             st.session_state[f"lab_{abbr}"] = str(val)
         st.success("최근 기록을 폼에 반영했습니다. (입력란 확인)")
 
-if run_analyze:
-    if not nick_key:
-        st.warning("별명과 PIN(숫자 4자리)을 먼저 입력해주세요.")
-    else:
-        qn_for_eval = {**locals().get("qn", {}), **({"eGFR": egfr} if egfr is not None else {})}
-        lab_notes  = interpret_labs(labs)
-        spec_notes = interpret_special_extended(locals().get("qc", {}), qn_for_eval, base_vals=labs, profile="adult")
-        food_lines = build_diet_guide(labs, qn_for_eval, mode)
+def do_analysis(show_result: bool=True) -> dict:
+    qn_for_eval = dict(qn or {})
+    # eGFR 합치기
+    if 'eGFR' not in qn_for_eval:
+        if entered(labs.get("Cr")) and age:
+            e = calc_egfr(labs.get("Cr"), age=age, sex=sex)
+            if e is not None: qn_for_eval["eGFR"] = e
 
+    lab_notes  = interpret_labs(labs or {})
+    spec_notes = interpret_special_extended(qc or {}, qn_for_eval, base_vals=labs or {}, profile="adult")
+    food_lines = build_diet_guide(labs or {}, qn_for_eval, mode)
+
+    # 철분+비타민C 주의 (암 모드만)
+    if mode == "암 진단 모드":
+        warning = ("⚠️ 철분제와 비타민C를 함께 복용하면 흡수가 촉진됩니다.\n"
+                   "하지만 항암 치료 중이거나 백혈병 환자는 반드시 주치의와 상담 후 복용 여부를 결정해야 합니다.")
+        if warning not in food_lines: food_lines.append(warning)
+
+    ped_symmary_list = None; ped_tips_local = None
+    if mode == "소아 일상/질환":
+        ped_symmary_list = summarize_ped_checks(ped_checks)
+        ped_tips_local   = interpret_peds_symptoms_from_checks(ped_dx, ped_checks)
+
+    if show_result:
         if lab_notes:
-            st.subheader("해석 요약")
-            for m in lab_notes: st.write("• " + m)
+            st.subheader("해석 요약");  [st.write("• "+m) for m in lab_notes]
         if calc_info:
-            st.subheader("자동 계산")
-            for m in calc_info: st.write("• " + m)
+            st.subheader("자동 계산"); [st.write("• "+m) for m in calc_info]
         if spec_notes:
-            st.subheader("특수검사 해석")
-            for m in spec_notes: st.write("• " + m)
+            st.subheader("특수검사 해석"); [st.write("• "+m) for m in spec_notes]
         if food_lines:
-            st.subheader("🍽️ 피수치별 음식/식이 가이드")
-            for t in food_lines: st.write("• " + t)
-        if mode == "소아 일상/질환" and ped_dx:
-            st.subheader("👶 소아 증상/질환 해석")
-            for t in build_ped_tips(ped_dx, ped_sx, locals().get("tc")): st.write("• " + t)
-
-        # 보고서 저장
-        group = locals().get("group","") if mode=="암 진단 모드" else ""
-        dx    = locals().get("dx","")    if mode=="암 진단 모드" else ""
-        tx_catalog = locals().get("tx_catalog", {"항암제":[], "표적치료제":[]}) if mode=="암 진단 모드" else {}
-        tx_phase   = locals().get("tx_phase","") if mode=="암 진단 모드" else ""
-        tx_selected= locals().get("tx_selected", []) if mode=="암 진단 모드" else []
+            st.subheader("🍽️ 피수치별 음식/식이 가이드"); [st.write("• "+t) for t in food_lines]
+        if mode == "소아 일상/질환":
+            if ped_symmary_list:
+                st.subheader("👪 보호자 체크 요약"); [st.write("• "+s) for s in ped_symmary_list]
+            if ped_tips_local:
+                st.subheader("👶 소아 증상/질환 해석"); [st.write("• "+t) for t in ped_tips_local]
 
         report_md = build_report_md(
-            nick_key, test_date, mode, group, dx, labs, lab_notes, spec_notes,
-            tx_catalog, tx_phase, tx_selected, food_lines,
-            ped_dx = locals().get("ped_dx") if mode=="소아 일상/질환" else None,
-            ped_symptoms = locals().get("ped_sx") if mode=="소아 일상/질환" else None,
-            ped_tips = build_ped_tips(locals().get("ped_dx",""), locals().get("ped_sx",[]), locals().get("tc")) if mode=="소아 일상/질환" else None
+            nick_key, test_date, mode, group, dx,
+            labs or {}, lab_notes, spec_notes, tx_phase,
+            list(dose_plan.keys()), st.session_state.get("dose_plan", {}),
+            food_lines,
+            bool(st.session_state.get("chemo_schedule_unknown", False)),
+            st.session_state.get("chemo_schedule_next_visit",""),
+            st.session_state.get("chemo_schedule", []),
+            st.session_state.get("chemo_schedule_note", ""),
+            ped_dx = ped_dx if mode=="소아 일상/질환" else None,
+            ped_symptoms = ped_symmary_list if mode=="소아 일상/질환" else None,
+            ped_tips = ped_tips_local if mode=="소아 일상/질환" else None
         )
         st.download_button("📥 보고서(.md) 다운로드", data=report_md.encode("utf-8"),
-                           file_name=f"bloodmap_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
-                           mime="text/markdown")
+                           file_name=f"bloodmap_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md", mime="text/markdown")
         st.download_button("📄 보고서(.txt) 다운로드", data=report_md.encode("utf-8"),
-                           file_name=f"bloodmap_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
-                           mime="text/plain")
+                           file_name=f"bloodmap_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt", mime="text/plain")
 
+    return {"qn_for_eval": qn_for_eval}
+
+# 해석하기
+if run_analyze:
+    st.session_state["analysis_payload"] = do_analysis(show_result=True)
+    st.info("임시 해석 완료(저장은 하지 않았습니다). 별명·PIN 입력 후 [저장하기]를 누르면 기록됩니다.")
+
+# 저장하기
+if save_now:
+    if not nick_key:
+        st.warning("별명과 PIN(숫자 4자리)을 입력해야 저장할 수 있어요. 지금은 해석만 가능합니다.")
+    else:
+        _ = st.session_state.get("analysis_payload") or do_analysis(show_result=False)
         rec = {
             "ts": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "date": test_date.isoformat(),
-            "mode": mode, "group": group, "dx": dx,
-            "tx_phase": tx_phase, "tx_selected": tx_selected,
+            "mode": mode,
+            "group": group if mode=="암 진단 모드" else "",
+            "dx":    dx if mode=="암 진단 모드" else "",
+            "tx_phase": tx_phase if mode=="암 진단 모드" else "",
+            "tx_selected": list(st.session_state.get("dose_plan", {}).keys()) if mode=="암 진단 모드" else [],
+            "tx_dosing": st.session_state.get("dose_plan", {}) if mode=="암 진단 모드" else {},
             "labs": {k: labs.get(k) for k in ORDER if entered(labs.get(k))},
-            "special": {"qc": locals().get("qc", {}), "qn": qn_for_eval},
-            "pediatric": {"dx": locals().get("ped_dx") if mode=="소아 일상/질환" else "", "symptoms": locals().get("ped_sx") if mode=="소아 일상/질환" else []}
+            "special": {"qc": qc, "qn": (st.session_state.get('analysis_payload') or {}).get('qn_for_eval', {})},
+            "tx_schedule_status": st.session_state.get("sch_status","") if mode=="암 진단 모드" else "",
+            "tx_schedule_unknown": bool(st.session_state.get("chemo_schedule_unknown", False)) if mode=="암 진단 모드" else False,
+            "tx_schedule_next_visit": st.session_state.get("chemo_schedule_next_visit","") if mode=="암 진단 모드" else "",
+            "tx_schedule": st.session_state.get("chemo_schedule", []) if mode=="암 진단 모드" else [],
+            "tx_schedule_note": st.session_state.get("chemo_schedule_note","") if mode=="암 진단 모드" else "",
+            "pediatric": {
+                "dx": ped_dx if mode=="소아 일상/질환" else "",
+                "checks": ped_checks if mode=="소아 일상/질환" else {},
+            }
         }
         st.session_state.store.setdefault(nick_key, []).append(rec)
         save_records(st.session_state.store)
-        st.success("저장 완료! 아래 그래프로 추이를 확인하세요.")
+        st.success("저장 완료! 아래 그래프로 추이를 확인할 수 있어요.")
 
 # ------------------ 그래프 ------------------
 st.header("📈 추이 그래프 (별명#PIN 기준)")
 if not nick_key:
-    st.info("별명과 PIN을 입력하면 그래프를 사용할 수 있어요.")
+    st.info("별명과 PIN을 입력하면 그래프를 사용할 수 있어요. (저장 전에는 그래프가 표시되지 않습니다)")
 else:
     user_records = st.session_state.store.get(nick_key, [])
     if not user_records:
-        st.info("저장된 기록이 없습니다. '해석하기 & 저장'을 먼저 눌러주세요.")
+        st.info("저장된 기록이 없습니다. [해석하기] 후 [저장하기]를 눌러 기록을 남겨주세요.")
     else:
         rows = []
         for r in user_records:
@@ -937,4 +1129,3 @@ else:
 
 st.markdown("---")
 st.code(DISCLAIMER, language="text")
-
