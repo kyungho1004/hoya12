@@ -1,9 +1,0 @@
-
-/* Minimal mobile-friendly defaults */
-:root { --primary:#3b82f6; --danger:#ef4444; --warn:#f59e0b; --ok:#10b981; }
-.block { padding: .75rem 1rem; border-radius: .75rem; background:#0b1220; color:#e5e7eb; }
-.badge { display:inline-block; padding: .125rem .5rem; border-radius:.5rem; font-size:.85rem; }
-.badge.ok{ background: var(--ok); color:#052e22;}
-.badge.warn{ background: var(--warn); color:#2f1d01;}
-.badge.danger{ background: var(--danger); color:#2f0707;}
-    
