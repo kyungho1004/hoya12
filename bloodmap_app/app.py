@@ -1497,7 +1497,7 @@ def main():
                 for f in fs:
                     st.markdown(f)
         
-elif mode == "소아(일상/호흡기)":
+        elif mode == "소아(일상/호흡기)":
             # Pull pediatric inputs
             age_m  = st.session_state.get("ped_age")
             temp_c = st.session_state.get("ped_temp")
@@ -1565,7 +1565,7 @@ elif mode == "소아(일상/호흡기)":
             st.markdown("### 🏠 가정 관리 팁")
             for t in _peds_care_advice():
                 st.write("- " + t)
-if meds:
+        if meds:
             st.markdown("### 💊 항암제 부작용·상호작용 요약")
             for line in summarize_meds(meds):
                 st.write(line)
