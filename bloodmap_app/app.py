@@ -427,21 +427,21 @@ def main():
             dx = st.selectbox("희귀암(긴 목록 일부)", RARE)
 
         # 자동 추천
-        st.markdown("### 2) 암 자동 추천 (예시)")
+        st.markdown("### 2) 암 선택시(예시)")
         rec = auto_recs(dx)
         if any([rec["chemo"], rec["targeted"], rec["abx"]]):
             colr = st.columns(3)
             with colr[0]:
-                st.markdown("**항암제 추천**")
+                st.markdown("**항암제 예시**")
                 for lab in _labelize(rec["chemo"], CHEMO): st.write("- " + lab)
             with colr[1]:
-                st.markdown("**표적/면역 추천**")
+                st.markdown("**표적/면역 예시**")
                 for lab in _labelize(rec["targeted"], TARGETED): st.write("- " + lab)
             with colr[2]:
                 st.markdown("**항생제(발열/호중구감소 시)**")
                 for lab in _labelize(rec["abx"], ABX_ONCO): st.write("- " + lab)
             st.caption("※ 실제 치료는 환자 상태/바이오마커/가이드라인/의료진 판단에 따릅니다.")
-            report_sections.append(("암 자동 추천", [f"진단: {dx}"] +
+            report_sections.append(("암 자동 예시", [f"진단: {dx}"] +
                                     [f"항암제: {', '.join(rec['chemo']) or '-'}",
                                      f"표적/면역: {', '.join(rec['targeted']) or '-'}",
                                      f"항생제: {', '.join(rec['abx']) or '-'}"]))
