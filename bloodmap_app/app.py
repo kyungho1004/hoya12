@@ -282,10 +282,15 @@ def interpret_special_tests(q:Dict, n:Dict) -> List[str]:
         try: return float(x)
         except: return None
 
+    # 보체
     if (c3:=_flt(n.get("C3"))) is not None and c3 < 75:
         lines.append("C3 낮음 → 🟡 면역계 이상 가능성(루푸스 감별)")
     if (c4:=_flt(n.get("C4"))) is not None and c4 < 15:
         lines.append("C4 낮음 → 🟡 면역계 이상 가능성")
+    if (ch50:=_flt(n.get("CH50"))) is not None and ch50 < 23:
+        lines.append("CH50 낮음 → 🟡 보체 활성 저하 가능성")
+
+    # 지질
     if (tg:=_flt(n.get("TG"))) is not None and tg >= 200:
         lines.append("TG 200 이상 → 🟡 고지혈증 가능성")
     if (hdl:=_flt(n.get("HDL"))) is not None and hdl < 40:
@@ -294,8 +299,29 @@ def interpret_special_tests(q:Dict, n:Dict) -> List[str]:
         lines.append("LDL 160 이상 → 🟡 고지혈증 가능성")
     if (tc:=_flt(n.get("총콜레스테롤"))) is not None and tc >= 240:
         lines.append("총콜레스테롤 240 이상 → 🟡 고지혈증 가능성")
+    if (apob:=_flt(n.get("ApoB"))) is not None and apob >= 130:
+        lines.append("ApoB 130 이상 → 🟡 죽상경화 위험 증가 가능")
+    if (lpa:=_flt(n.get("Lp(a)"))) is not None and lpa >= 50:
+        lines.append("Lp(a) 50 이상 → 🟡 유전성 이상지질혈증 가능")
+    # 파생: Non-HDL = TC - HDL
+    if ('총콜레스테롤' in n) and ('HDL' in n):
+        tc_v = _flt(n.get('총콜레스테롤'))
+        hdl_v = _flt(n.get('HDL'))
+        if tc_v is not None and hdl_v is not None:
+            non_hdl = tc_v - hdl_v
+            if non_hdl >= 160:
+                lines.append(f"Non-HDL {non_hdl:.0f} 이상 → 🟡 죽상경화 위험 증가 가능")
+
+    # 심장지표
     if (bnp:=_flt(n.get("BNP"))) is not None and bnp >= 100:
         lines.append("BNP 100 이상 → 🟡 심부전 가능성(임상과 함께 해석)")
+    if (ntp:=_flt(n.get("NT-proBNP"))) is not None and ntp >= 125:
+        lines.append("NT-proBNP 상승 → 🟡 심장 부담 가능성(연령/신장기능 고려)")
+    if (tni:=_flt(n.get("TroponinI"))) is not None and tni >= 0.04:
+        lines.append("Troponin I 상승 → 🚨 심근손상 가능성(응급 평가 필요)")
+    if (ckmb:=_flt(n.get("CK-MB"))) is not None and ckmb > 5:
+        lines.append("CK-MB 상승 → 🟡 심근 손상 가능성")
+
     return lines
 
 # ------------------------- 기본 피수치 입력 & 해석 -------------------------
@@ -606,9 +632,10 @@ else:
             st.markdown("**항암제**")
             if rec["항암제"]:
                 for d in rec["항암제"]:
-                    st.markdown(f"- {d['name']}  
-  · 기전: {d['moa']}  
-  · 부작용: {d['se']}")
+                    line = "- {name}  \n  · 기전: {moa}  \n  · 부작용: {se}".format(
+                        name=d.get("name", ""), moa=d.get("moa", ""), se=d.get("se", "")
+                    )
+                    st.markdown(line)
             else:
                 st.caption("권장 항암제 정보 없음(진단별 상이)")
 
@@ -616,38 +643,43 @@ else:
             st.markdown("**표적치료제 (Biomarker)**")
             if rec["표적치료제"]:
                 for d in rec["표적치료제"]:
-                    st.markdown(f"- {d['name']}  
-  · 기전: {d['moa']}  
-  · 부작용: {d['se']}")
+                    line = "- {name}  \n  · 기전: {moa}  \n  · 부작용: {se}".format(
+                        name=d.get("name", ""), moa=d.get("moa", ""), se=d.get("se", "")
+                    )
+                    st.markdown(line)
             else:
                 st.caption("표적치료 정보 없음 또는 진단별 상이")
 
         with c3:
             st.markdown("**자주 쓰는 항생제(진단별)**")
             for d in rec["항생제"]:
-                st.markdown(f"- {d['name']}  
-  · 작용: {d['moa']}  
-  · 주의: {d['se']}")
+                line = "- {name}  \n  · 작용: {moa}  \n  · 주의: {se}".format(
+                    name=d.get("name", ""), moa=d.get("moa", ""), se=d.get("se", "")
+                )
+                st.markdown(line)
 
             # ---- 공통 목록(항생제/항진균/스테로이드) 표시 ----
             with st.expander("공통 목록 (항생제/항진균/스테로이드)", expanded=False):
                 st.markdown("**항생제 (공통)**")
                 for d in COMMON_ABX:
-                    st.markdown(f"- {d['name']}  
-  · 작용: {d['moa']}  
-  · 주의: {d['se']}")
+                    line = "- {name}  \n  · 작용: {moa}  \n  · 주의: {se}".format(
+                        name=d.get("name", ""), moa=d.get("moa", ""), se=d.get("se", "")
+                    )
+                    st.markdown(line)
 
                 st.markdown("**항진균제 (공통)**")
                 for d in COMMON_ANTIFUNGALS:
-                    st.markdown(f"- {d['name']}  
-  · 작용: {d['moa']}  
-  · 주의: {d['se']}")
+                    line = "- {name}  \n  · 작용: {moa}  \n  · 주의: {se}".format(
+                        name=d.get("name", ""), moa=d.get("moa", ""), se=d.get("se", "")
+                    )
+                    st.markdown(line)
 
                 st.markdown("**스테로이드/면역억제 (공통)**")
                 for d in COMMON_STEROIDS:
-                    st.markdown(f"- {d['name']}  
-  · 작용: {d['moa']}  
-  · 주의: {d['se']}")
+                    line = "- {name}  \n  · 작용: {moa}  \n  · 주의: {se}".format(
+                        name=d.get("name", ""), moa=d.get("moa", ""), se=d.get("se", "")
+                    )
+                    st.markdown(line)
 
                 # 복사 버튼
                 blk = []
@@ -656,8 +688,7 @@ else:
                 for d in COMMON_ANTIFUNGALS: blk.append(f"{d['name']} | 작용:{d['moa']} | 주의:{d['se']}")
                 blk.append("--- 스테로이드/면역억제 ---")
                 for d in COMMON_STEROIDS: blk.append(f"{d['name']} | 작용:{d['moa']} | 주의:{d['se']}")
-                copy_button("
-".join(blk), "📋 공통 목록 복사")
+                copy_button("\n".join(blk), "📋 공통 목록 복사")
             # ---- 공통 목록 끝 ----
 
 
@@ -705,15 +736,27 @@ else:
             ketq = st.selectbox("케톤뇨", QUAL, index=0)
             bunq = st.text_input("BUN (mg/dL) - 특수 입력란")  # 메인에도 있지만 예시로 유지
             bnpq = st.text_input("BNP (pg/mL) - 특수 입력란")
+            ntpq = st.text_input("NT-proBNP (pg/mL)")
+            tniq = st.text_input("Troponin I (ng/mL)")
+            ckmbq = st.text_input("CK-MB (ng/mL)")
         with colB:
             c3q  = st.text_input("C3 (mg/dL)")
             c4q  = st.text_input("C4 (mg/dL)")
+            ch50q = st.text_input("CH50 (U/mL)")
             tgq  = st.text_input("TG (mg/dL)")
             hdlq = st.text_input("HDL (mg/dL)")
             ldlq = st.text_input("LDL (mg/dL)")
             tcq  = st.text_input("총콜레스테롤 (mg/dL)")
+            apobq = st.text_input("ApoB (mg/dL)")
+            lpaq  = st.text_input("Lp(a) (mg/dL)")
         sp_q = {"알부민뇨":albq, "혈뇨":hemq, "요당":sugq, "케톤뇨":ketq}
-        sp_n = {"BUN":bunq, "BNP":bnpq, "C3":c3q, "C4":c4q, "TG":tgq, "HDL":hdlq, "LDL":ldlq, "총콜레스테롤":tcq}
+        sp_n = {
+            "BUN":bunq, "BNP":bnpq, "NT-proBNP":ntpq,
+            "TroponinI":tniq, "CK-MB":ckmbq,
+            "C3":c3q, "C4":c4q, "CH50":ch50q,
+            "TG":tgq, "HDL":hdlq, "LDL":ldlq, "총콜레스테롤":tcq,
+            "ApoB":apobq, "Lp(a)":lpaq
+        }
 
     # 해석 버튼
     if st.button("🧠 해석하기", use_container_width=True):
@@ -828,7 +871,9 @@ else:
 def _self_tests():
     # 1) 문자열 조인 및 개행 관련 버그 회귀 테스트
     parts = ["a", "b"]
-    assert "\n".join(parts) == "a\nb"
+    assert "
+".join(parts) == "a
+b"
 
     # 2) DISCLAIMER 삼중따옴표 정상 종료 확인
     assert isinstance(DISCLAIMER, str) and "본 수치는" in DISCLAIMER
@@ -840,7 +885,9 @@ def _self_tests():
         lab_lines=["- Hb: 빈혈 경향 🟡"],
         diet_lines=["좋은 예시: 미음"],
         anc_lines=["생야채 금지"],
-        drug_block="- 진단: **혈액암 - APL**\n  - 항암제(선택):\n    - ATRA (베사노이드) | 기전: 분화 | 부작용: 두통",
+        drug_block="- 진단: **혈액암 - APL**
+  - 항암제(선택):
+    - ATRA (베사노이드) | 기전: 분화 | 부작용: 두통",
         sp_lines=["C3 낮음"]
     )
     assert "# 테스트 리포트" in md and "## 자동 해석" in md
