@@ -527,24 +527,34 @@ def main():
 
         # 자동 예시 추천
         st.markdown("### 2) 암 선택시(예시)")
-        rec = auto_recs(dx)
-        if any([rec["chemo"], rec["targeted"], rec["abx"]]):
-            colr = st.columns(3)
-            with colr[0]:
-                st.markdown("**항암제 예시**")
-                for lab in _labelize(rec["chemo"], CHEMO): st.write("- " + lab)
-            with colr[1]:
-                st.markdown("**표적/면역 예시**")
-                for lab in _labelize(rec["targeted"], TARGETED): st.write("- " + lab)
-            with colr[2]:
-                st.markdown("**항생제(발열/호중구감소 시)**")
-                for lab in _labelize(rec["abx"], ABX_ONCO): st.write("- " + lab)
-            st.caption("※ 실제 치료는 환자 상태/바이오마커/가이드라인/의료진 판단에 따릅니다.")
-            report_sections.append(("암 자동 예시", [f"진단: {dx}",
-                                     f"항암제: {', '.join(rec['chemo']) or '-'}",
-                                     f"표적/면역: {', '.join(rec['targeted']) or '-'}",
-                                     f"항생제: {', '.join(rec['abx']) or '-'}"]))
-
+show_auto = st.toggle("자동 예시 보기", value=True)
+if show_auto:
+    rec = auto_recs(dx)
+    if any([rec["chemo"], rec["targeted"], rec["abx"]]):
+        colr = st.columns(3)
+        with colr[0]:
+            st.markdown("**항암제 예시**")
+            for lab in _labelize(rec["chemo"], CHEMO):
+                st.write("- " + lab)
+        with colr[1]:
+            st.markdown("**표적/면역 예시**")
+            for lab in _labelize(rec["targeted"], TARGETED):
+                st.write("- " + lab)
+        with colr[2]:
+            st.markdown("**항생제(발열/호중구감소 시)**")
+            for lab in _labelize(rec["abx"], ABX_ONCO):
+                st.write("- " + lab)
+        st.caption("※ 실제 치료는 환자 상태/바이오마커/가이드라인/의료진 판단에 따릅니다.")
+        dx_label = f"{group} - {dx}"  # 보고서에는 카테고리+진단명 형태로
+        report_sections.append((
+            "암 자동 예시",
+            [
+                f"진단: {dx_label}",
+                f"항암제: {', '.join(rec['chemo']) or '-'}",
+                f"표적/면역: {', '.join(rec['targeted']) or '-'}",
+                f"항생제: {', '.join(rec['abx']) or '-'}",
+            ]
+        ))
         # 개별 선택
         st.markdown("### 3) 약물 개별 선택")
         chemo_opts = [f"{k} ({v['alias']})" for k,v in CHEMO.items()]
@@ -757,59 +767,68 @@ def main():
                     st.markdown("**소아 피수치 기반 식이가이드 (예시)**")
                     for x in pdiet: st.write("- " + x)
 
-        # 🥗 소아 식이가이드(질환별 예시)
-        with st.expander("🥗 식이가이드 (예시)", expanded=True):
-            foods, avoid, tips = peds_diet_guide(disease={}, vals={})
-            # (호환성) disease/vals는 아래의 실제 구현에서 사용하므로 간단 wrapper:
-        # 실제 가이드
-        def peds_diet_guide(disease: str, vals: dict):
-            d = (disease or "").lower()
-            foods = []; avoid = []; tips  = []
-            if "로타" in d or "장염" in d or "노로" in d:
-                foods = ["쌀미음/야채죽","바나나","삶은 감자·당근","구운 식빵/크래커","연두부"]
-                avoid = ["과일 주스·탄산","튀김/매운 음식","생채소/껍질 있는 과일","유당 많은 음식(설사 악화 시)"]
-                tips  = ["소량씩 자주 ORS 보충","구토 후 10분 쉬고 한 모금씩","모유 수유 중이면 지속"]
-            elif "독감" in d:
-                foods = ["닭고기·야채죽","계란찜","연두부","사과퓨레/배숙","미지근한 국물"]
-                avoid = ["매운/자극적인 음식","튀김/기름진 음식","카페인 음료"]
-                tips  = ["고열·근육통 완화되면 빠르게 평소 식사로 회복","수분 충분히"]
-            elif "rsv" in d or "상기도염" in d or "파라" in d:
-                foods = ["미지근한 물/보리차","맑은 국/미음","연두부","계란찜","바나나/사과퓨레"]
-                avoid = ["차갑고 자극적인 간식 과다","기름진 음식","질식 위험 작은 알갱이(견과류 등)"]
-                tips  = ["작게·자주 먹이기","가습/코세척, 밤 기침 대비 베개 높이기"]
-            elif "아데노" in d:
-                foods = ["부드러운 죽","계란찜","연두부","사과퓨레","감자/당근 삶은 것"]
-                avoid = ["매운/자극","튀김","과도한 단 음료"]
-                tips  = ["결막염 동반 시 위생 철저(수건 분리)"]
-            elif "마이코" in d:
-                foods = ["닭가슴살죽","계란찜","연두부","흰살생선 죽","담백한 국"]
-                avoid = ["매운/자극","튀김/기름진 음식","카페인 음료"]
-                tips  = ["기침 심하면 자극 음식 피하고 수분 늘리기"]
-            elif "수족구" in d:
-                foods = ["차갑지 않은 부드러운 음식","바나나","요거트(자극 적음)","연두부","계란찜"]
-                avoid = ["뜨겁고 매운 음식","산성 강한 과일(오렌지/파인애플 등)","튀김"]
-                tips  = ["삼킴 통증 시 온도/질감 조절, 탈수 주의"]
-            elif "편도염" in d:
-                foods = ["부드러운 죽/미음","계란찜","연두부","따뜻한 국물","바나나"]
-                avoid = ["매운/딱딱한 음식","튀김"]
-                tips  = ["통증 조절하며 수분 충분히"]
-            elif "코로나" in d:
-                foods = ["부드러운 죽","연두부/계란찜","사과퓨레","바나나","맑은 국"]
-                avoid = ["매운/자극","튀김/기름진 음식"]
-                tips  = ["가족 간 전파 예방, 수분 충분히"]
-            else:
-                foods = ["부드러운 죽/미음","계란찜","연두부","사과퓨레","따뜻한 국물"]
-                avoid = ["매운/자극","튀김"]
-                tips  = ["3일 이상 고열 지속/악화 시 진료"]
-            return foods, avoid, tips
+      # 🥗 소아 식이가이드(질환별 예시) ---- 기존 블록 전체를 아래로 교체하세요.
 
-        foods, avoid, tips = peds_diet_guide(disease, vals)
-        st.markdown("**권장 예시**");  [st.write("- "+f) for f in foods]
-        st.markdown("**피해야 할 예시**"); [st.write("- "+a) for a in avoid]
-        if tips:
-            st.markdown("**케어 팁**");   [st.write("- "+t) for t in tips]
-        report_sections.append((f"소아 식이가이드 — {disease}",
-                                [f"권장: {', '.join(foods)}", f"회피: {', '.join(avoid)}"] + ([f"팁: {', '.join(tips)}"] if tips else [])))
+def peds_diet_guide(disease, vals):
+    d = (disease or "").lower()
+    foods, avoid, tips = [], [], []
+
+    if ("로타" in d) or ("장염" in d) or ("노로" in d):
+        foods = ["쌀미음/야채죽", "바나나", "삶은 감자·당근", "구운 식빵/크래커", "연두부"]
+        avoid = ["과일 주스·탄산", "튀김/매운 음식", "생채소/껍질 있는 과일", "유당 많은 음식(설사 악화 시)"]
+        tips  = ["소량씩 자주 ORS 보충", "구토 후 10분 쉬고 한 모금씩", "모유 수유 중이면 지속"]
+    elif "독감" in d:
+        foods = ["닭고기·야채죽", "계란찜", "연두부", "사과퓨레/배숙", "미지근한 국물"]
+        avoid = ["매운/자극적인 음식", "튀김/기름진 음식", "카페인 음료"]
+        tips  = ["고열·근육통 완화되면 빠르게 평소 식사로 회복", "수분 충분히"]
+    elif ("rsv" in d) or ("상기도염" in d) or ("파라" in d):
+        foods = ["미지근한 물/보리차", "맑은 국/미음", "연두부", "계란찜", "바나나/사과퓨레"]
+        avoid = ["차갑고 자극적인 간식 과다", "기름진 음식", "질식 위험 작은 알갱이(견과류 등)"]
+        tips  = ["작게·자주 먹이기", "가습/코세척, 밤 기침 대비 베개 높이기"]
+    elif "아데노" in d:
+        foods = ["부드러운 죽", "계란찜", "연두부", "사과퓨레", "감자/당근 삶은 것"]
+        avoid = ["매운/자극", "튀김", "과도한 단 음료"]
+        tips  = ["결막염 동반 시 위생 철저(수건 분리)"]
+    elif "마이코" in d:
+        foods = ["닭가슴살죽", "계란찜", "연두부", "흰살생선 죽", "담백한 국"]
+        avoid = ["매운/자극", "튀김/기름진 음식", "카페인 음료"]
+        tips  = ["기침 심하면 자극 음식 피하고 수분 늘리기"]
+    elif "수족구" in d:
+        foods = ["차갑지 않은 부드러운 음식", "바나나", "요거트(자극 적음)", "연두부", "계란찜"]
+        avoid = ["뜨겁고 매운 음식", "산성 강한 과일(오렌지/파인애플 등)", "튀김"]
+        tips  = ["삼킴 통증 시 온도/질감 조절, 탈수 주의"]
+    elif "편도염" in d:
+        foods = ["부드러운 죽/미음", "계란찜", "연두부", "따뜻한 국물", "바나나"]
+        avoid = ["매운/딱딱한 음식", "튀김"]
+        tips  = ["통증 조절하며 수분 충분히"]
+    elif "코로나" in d:
+        foods = ["부드러운 죽", "연두부/계란찜", "사과퓨레", "바나나", "맑은 국"]
+        avoid = ["매운/자극", "튀김/기름진 음식"]
+        tips  = ["가족 간 전파 예방, 수분 충분히"]
+    else:
+        # 기본 제안(질환 미선택/기타)
+        foods = ["부드러운 죽/미음", "계란찜", "연두부", "사과퓨레", "따뜻한 국물"]
+        avoid = ["매운/자극", "튀김"]
+        tips  = ["3일 이상 고열 지속/악화 시 진료 권고"]
+
+    return foods, avoid, tips
+
+with st.expander("🥗 식이가이드 (예시)", expanded=True):
+    # 반드시 실제 선택값을 전달
+    foods, avoid, tips = peds_diet_guide(disease, vals)
+
+    st.markdown("**권장 예시**")
+    for f in foods:
+        st.write(f"- {f}")
+
+    st.markdown("**피해야 할 예시**")
+    for a in avoid:
+        st.write(f"- {a}")
+
+    if tips:
+        st.markdown("**케어 팁**")
+        for t in tips:
+            st.write(f"- {t}")
 
         # 해석하기
         if st.button("🔎 소아 해석하기"):
