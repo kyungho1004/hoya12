@@ -231,25 +231,47 @@ QUAL = ["없음", "+", "++", "+++"]
 def special_tests_ui():
     lines = []
     with st.expander("🧪 특수검사 (토글)", expanded=False):
-        col = st.columns(2)
-        with col[0]:
+
+        # 🔹 소변 검사
+        st.markdown("### 🔹 소변 검사")
+        col1 = st.columns(2)
+        with col1[0]:
             alb = st.selectbox("알부민뇨", QUAL)
             hem = st.selectbox("혈뇨", QUAL)
+        with col1[1]:
             sug = st.selectbox("요당", QUAL)
             ket = st.selectbox("케톤뇨", QUAL)
-            bun = st.text_input("BUN (mg/dL)")
-            bnp = st.text_input("BNP (pg/mL)")
-        with col[1]:
-            c3  = st.text_input("C3 (mg/dL)")
-            c4  = st.text_input("C4 (mg/dL)")
-            tg  = st.text_input("TG (mg/dL)")
+
+        # 🔸 면역·보체 검사
+        st.markdown("### 🔸 면역 · 보체 검사")
+        col2 = st.columns(2)
+        with col2[0]:
+            c3 = st.text_input("C3 (mg/dL)")
+        with col2[1]:
+            c4 = st.text_input("C4 (mg/dL)")
+
+        # 🧬 지질 검사
+        st.markdown("### 🧬 지질 검사")
+        col3 = st.columns(2)
+        with col3[0]:
+            tg = st.text_input("TG (mg/dL)")
             hdl = st.text_input("HDL (mg/dL)")
+        with col3[1]:
             ldl = st.text_input("LDL (mg/dL)")
             tc  = st.text_input("총콜레스테롤 (mg/dL)")
+
+        # 🫀 신장/심장 기능
+        st.markdown("### 🫀 신장 / 심장 기능")
+        col4 = st.columns(2)
+        with col4[0]:
+            bun = st.text_input("BUN (mg/dL)")
+            bnp = st.text_input("BNP (pg/mL)")
+        with col4[1]:
             ckmb = st.text_input("CK-MB (ng/mL)")
             trop = st.text_input("Troponin-I (ng/mL)")
-            myo = st.text_input("Myoglobin (ng/mL)")
+            myo  = st.text_input("Myoglobin (ng/mL)")
 
+        # 🔍 해석 버튼 및 로직
         if st.button("🔎 특수검사 해석"):
             if alb!="없음": lines.append("알부민뇨 " + ("+"*QUAL.index(alb)) + " → 🟡~🔴 신장 이상 가능")
             if hem!="없음": lines.append("혈뇨 " + ("+"*QUAL.index(hem)) + " → 🟡 요로 염증/결석 등")
@@ -270,7 +292,6 @@ def special_tests_ui():
             if TC is not None:
                 lines.append("🔴 총콜≥240: 고지혈증" if TC >= 240 else ("🟡 총콜 200~239 경계" if TC >= 200 else "🟢 총콜 양호"))
 
-            # 💧 BUN & 💗 BNP
             BUN = _clean_num(bun)
             if BUN is not None:
                 lines.append("🔴 BUN≥25: 탈수/신장기능 저하 의심" if BUN >= 25 else "🟢 BUN 정상")
@@ -278,7 +299,6 @@ def special_tests_ui():
             if BNP is not None:
                 lines.append("🔴 BNP≥100: 심부전 의심" if BNP >= 100 else "🟢 BNP 정상")
 
-            # ❤️‍🩹 심근효소
             CKMB = _clean_num(ckmb)
             TROP = _clean_num(trop)
             MYO = _clean_num(myo)
