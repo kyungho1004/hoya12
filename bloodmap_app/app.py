@@ -401,7 +401,7 @@ def main():
         "약 변경/복용 중단 등은 반드시 주치의와 상의하세요.\n"
         "이 앱은 개인정보를 수집하지 않으며, 어떠한 개인정보 입력도 요구하지 않습니다."
     )
-    st.markdown("## 🩸 BloodMap")
+    st.markdown("## 🩸 피수치가이드")
     st.caption("모바일 최적화 · 치료단계 UI 제외")
     nick, pin, key = nickname_pin()
     st.divider()
