@@ -106,3 +106,60 @@ def key_from_label(label: str) -> str:
     _upsert(db, "TMP-SMX", "트리메토프림/설파메톡사졸(코트림)",
             "엽산 대사 억제 조합",
             "골수억제, 고칼륨혈증, 발진(SJS/TEN 드묾), 신기능 영향; 상호작용 주의")
+
+    # --- Targeted / Immunotherapy additions ---
+    _upsert(db, "Polatuzumab Vedotin", "폴라투주맙 베도틴(CD79b ADC)", "CD79b 표적 항체‑약물 접합체", "말초신경병증, 골수억제, 주입반응")
+    _upsert(db, "Obinutuzumab", "오비누투주맙(CD20)", "Type II CD20 단일클론항체", "주입반응, 감염, HBV 재활성화")
+    _upsert(db, "Pembrolizumab", "펨브롤리주맙(PD‑1)", "면역관문억제제(PD‑1)", "면역관련 이상반응(피부, 갑상선, 폐, 간, 대장)")
+    _upsert(db, "Nivolumab", "니볼루맙(PD‑1)", "면역관문억제제(PD‑1)", "면역관련 이상반응(피부, 갑상선, 폐, 간, 대장)")
+    _upsert(db, "Atezolizumab", "아테졸리주맙(PD‑L1)", "면역관문억제제(PD‑L1)", "면역관련 이상반응")
+    _upsert(db, "Durvalumab", "더발루맙(PD‑L1)", "면역관문억제제(PD‑L1)", "면역관련 이상반응")
+    _upsert(db, "Pertuzumab", "퍼투주맙(HER2)", "HER2 dimerization 억제", "설사, 발진, 심기능저하(드묾)")
+    _upsert(db, "T-DM1", "트라스투주맙‑엠탄신(T‑DM1)", "HER2 ADC", "혈소판감소, 간효소 상승, 피로")
+    _upsert(db, "Regorafenib", "레고라페닙", "멀티 TKI(GIST/대장암 등)", "수족증후군, 고혈압, 간독성")
+    _upsert(db, "Ripretinib", "리프레티닙", "KIT/PDGFRA 스위치포켓 억제(GIST)", "탈모, 피로, 고혈압")
+
+    _upsert(db, "Cabozantinib", "카보잔티닙", "멀티 TKI(RET/MET/VEGFR)", "고혈압, 설사, 손발증후군")
+    _upsert(db, "Vandetanib", "반데타닙", "RET/EGFR/VEGFR TKI(MTC)", "QT 연장, 설사, 발진")
+    _upsert(db, "Capmatinib", "캡마티닙(MET)", "MET 억제(NSCLC)", "말초부종, 오심, 광과민")
+    _upsert(db, "Sotorasib", "소토라십(KRAS G12C)", "KRAS G12C 억제", "설사, ALT/AST 상승")
+
+    # --- More antibiotics (FN/pathogen coverage common) ---
+    _upsert(db, "Imipenem/Cilastatin", "이미페넴/실라스타틴(카바페넴)", "광범위 카바페넴", "경련 위험(특히 신부전/중추질환), 위장관 증상")
+    _upsert(db, "Aztreonam", "아즈트레오남", "그람음성 선택 β‑lactam(녹농균 포함)", "발진, 위장관 증상; β‑lactam 알레르기 시 대안(세페엠 교차반응 낮음)")
+    _upsert(db, "Amikacin", "아미카신(아미노글리코시드)", "단백 합성 억제", "신독성/이독성 모니터 필요")
+    _upsert(db, "Linezolid", "리네졸리드", "G(+) MRSA/VRE 옥사졸리디논", "혈소판감소, 말초/시신경병증(장기), 세로토닌증후군 주의")
+    _upsert(db, "Daptomycin", "다프토마이신", "G(+) 리포펩타이드", "CPK 상승/근병증, 폐렴 치료에는 부적합(서팩턴트에 비활성)")
+    _upsert(db, "Metronidazole", "메트로니다졸", "혐기성 커버리지", "금속맛, 알코올 금기(디설피람 유사반응), 말초신경병증(장기)")
+    _upsert(db, "Amoxicillin/Clavulanate", "아목시실린/클라불란산(오구멘틴)", "경구 광범위 β‑lactam + 억제제", "설사/발진, 간효소 상승 드묾")
+
+
+
+    _upsert(db, "Chlorambucil", "클로람부실", "알킬화제(경구)", "골수억제, 발진, 간효소 상승 드묾")
+    _upsert(db, "Lenalidomide", "레날리도마이드", "면역조절제(IMiD)", "혈전증 위험, 골수억제, 발진; 임신 금기")
+
+    # --- Solid tumor targeted / immuno expansions ---
+    _upsert(db, "Cetuximab", "세툭시맙(EGFR)", "EGFR 단일클론항체(대장암/두경부암)", "주입반응, 저마그네슘혈증, 여드름양 발진, 설사")
+    _upsert(db, "Panitumumab", "파니투무맙(EGFR)", "EGFR 단일클론항체(대장암)", "저마그네슘혈증, 피부발진, 설사")
+    _upsert(db, "Ramucirumab", "라무시루맙(VEGFR2)", "VEGFR2 항체(위암/간암 등)", "고혈압, 단백뇨, 출혈/혈전, 상처치유 지연")
+    _upsert(db, "Lapatinib", "라파티닙(HER2/EGFR)", "HER2/EGFR TKI(유방암)", "설사, 발진, 간효소 상승, 드물게 심독성")
+    _upsert(db, "Tucatinib", "투카티닙(HER2)", "HER2 선택적 TKI(유방암)", "설사, 간효소 상승, 피로")
+    _upsert(db, "Trastuzumab deruxtecan", "트라스투주맙 데룩스테칸(T-DXd)", "HER2 ADC", "간질성 폐질환/폐렴 위험, 오심/구토, 골수억제")
+    _upsert(db, "Olaparib", "올라파립(PARP)", "PARP 억제제(난소/유방 등)", "빈혈/혈소판감소, 피로, 구역")
+    _upsert(db, "Niraparib", "니라파립(PARP)", "PARP 억제제(난소)", "혈소판감소, 빈혈, 고혈압, 피로")
+    _upsert(db, "Palbociclib", "팔보시클립(CDK4/6)", "CDK4/6 억제제(유방암)", "호중구감소증, 피로, 구내염")
+    _upsert(db, "Ribociclib", "리보시클립(CDK4/6)", "CDK4/6 억제제(유방암)", "호중구감소증, QT 연장, 간효소 상승")
+    _upsert(db, "Abemaciclib", "아베마시클립(CDK4/6)", "CDK4/6 억제제(유방암)", "설사, 호중구감소증, 피로")
+    _upsert(db, "Lorlatinib", "로를라티닙(ALK)", "ALK TKI(NSCLC)", "지질 상승, 인지/기분 변화, 체중증가")
+    _upsert(db, "Selpercatinib", "셀퍼카티닙(RET)", "RET TKI(NSCLC/MTC)", "고혈압, 간효소 상승, 드물게 QT 연장")
+    _upsert(db, "Pralsetinib", "프랄세티닙(RET)", "RET TKI(NSCLC)", "고혈압, 간효소 상승, 변비/설사")
+    _upsert(db, "Dabrafenib", "다브라페닙(BRAF)", "BRAF V600 억제(흑색종/폐암)", "발열, 피부발진, 관절통")
+    _upsert(db, "Trametinib", "트라메티닙(MEK)", "MEK 억제", "심기능저하/좌심실 기능 감소, 피부/설사")
+    _upsert(db, "Encorafenib", "엔코라페닙(BRAF)", "BRAF 억제", "피로, 관절통, 발진")
+    _upsert(db, "Binimetinib", "비니메티닙(MEK)", "MEK 억제", "망막/시야 이상 드묾, 설사/발진")
+    _upsert(db, "Ipilimumab", "이필리무맙(CTLA-4)", "면역관문억제제(CTLA-4)", "면역관련 이상반응(대장염/간염/피부/내분비)")
+
+    # --- Additional chemo used in solid tumors ---
+    _upsert(db, "Nab-Paclitaxel", "나브-파클리탁셀", "알부민 결합 파클리탁셀", "말초신경병증, 골수억제, 탈모")
+    _upsert(db, "Topotecan", "토포테칸", "Topo I 억제(난소/소세포폐암)", "골수억제, 피로, 오심")
+

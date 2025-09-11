@@ -93,30 +93,48 @@ if mode == "암":
 
 
     st.markdown("### 3) 개인 선택 (영어 + 한글 병기)")
+    st.markdown("### 3) 개인 선택 (영어 + 한글 병기)")
     from drug_db import picklist, key_from_label
 
-    CHEMO_KEYS = ["ATRA","Arsenic Trioxide","Idarubicin","Daunorubicin","Ara-C","MTX","6-MP",
-                  "Vincristine","Cyclophosphamide","Prednisone",
-                  "Cisplatin","Carboplatin","Oxaliplatin","5-FU","Capecitabine","Irinotecan",
-                  "Docetaxel","Paclitaxel","Gemcitabine","Pemetrexed","Temozolomide",
-                  "Imatinib","Osimertinib","Alectinib","Crizotinib","Larotrectinib","Entrectinib",
-                  "Trastuzumab","Bevacizumab","Rituximab","Brentuximab Vedotin","Bleomycin","Vinblastine",
-                  "Dacarbazine","Bendamustine","Ibrutinib","Ifosfamide","Etoposide","Dactinomycin",
-                  "Pazopanib","Trabectedin","Sunitinib","Everolimus","Octreotide","Sorafenib","Lenvatinib"]
-    ABX_KEYS   = ["Piperacillin/Tazobactam","Cefepime","Meropenem","Vancomycin","Ceftazidime","Levofloxacin","TMP-SMX"]
+    # 분리된 키셋
+    CHEMO_KEYS = [
+        "ATRA","Arsenic Trioxide","Idarubicin","Daunorubicin","Ara-C","MTX","6-MP",
+        "Vincristine","Cyclophosphamide","Prednisone",
+        "Cisplatin","Carboplatin","Oxaliplatin","5-FU","Capecitabine","Irinotecan",
+        "Docetaxel","Paclitaxel","Nab-Paclitaxel","Gemcitabine","Pemetrexed","Temozolomide",
+        "Ifosfamide","Etoposide","Dactinomycin","Trabectedin","Topotecan"
+    ]
+    TARGETED_KEYS = [
+        "Imatinib","Osimertinib","Alectinib","Crizotinib","Larotrectinib","Entrectinib","Capmatinib","Lorlatinib",
+        "Selpercatinib","Pralsetinib","Sotorasib",
+        "Trastuzumab","Pertuzumab","T-DM1","Trastuzumab deruxtecan","Lapatinib","Tucatinib",
+        "Bevacizumab","Ramucirumab","Regorafenib","Ripretinib",
+        "Cetuximab","Panitumumab",
+        "Olaparib","Niraparib",
+        "Palbociclib","Ribociclib","Abemaciclib",
+        "Everolimus","Octreotide",
+        "Pembrolizumab","Nivolumab","Atezolizumab","Durvalumab","Ipilimumab",
+        "Brentuximab Vedotin","Polatuzumab Vedotin","Obinutuzumab","Rituximab"
+    ]
+    ABX_KEYS   = ["Piperacillin/Tazobactam","Cefepime","Meropenem","Imipenem/Cilastatin","Aztreonam","Amikacin",
+                  "Vancomycin","Linezolid","Daptomycin","Ceftazidime","Levofloxacin","TMP-SMX","Metronidazole","Amoxicillin/Clavulanate"]
 
-    chemo_opts = picklist([k for k in CHEMO_KEYS if k in DRUG_DB])
-    abx_opts   = picklist([k for k in ABX_KEYS if k in DRUG_DB])
+    chemo_opts    = picklist([k for k in CHEMO_KEYS if k in DRUG_DB])
+    targeted_opts = picklist([k for k in TARGETED_KEYS if k in DRUG_DB])
+    abx_opts      = picklist([k for k in ABX_KEYS if k in DRUG_DB])
 
-    p1, p2 = st.columns(2)
+    p1, p2, p3 = st.columns(3)
     with p1:
-        user_chemo_labels = st.multiselect("항암제 선택(개인)", chemo_opts, default=[])
+        user_chemo_labels = st.multiselect("항암제(세포독성) 선택", chemo_opts, default=[])
     with p2:
-        user_abx_labels   = st.multiselect("항생제 선택(개인)", abx_opts, default=[])
+        user_targeted_labels = st.multiselect("표적/면역치료 선택", targeted_opts, default=[])
+    with p3:
+        user_abx_labels   = st.multiselect("항생제 선택", abx_opts, default=[])
 
-    user_chemo = [key_from_label(x) for x in user_chemo_labels]
-    user_abx   = [key_from_label(x) for x in user_abx_labels]
-
+    user_chemo    = [key_from_label(x) for x in user_chemo_labels]
+    user_targeted = [key_from_label(x) for x in user_targeted_labels]
+    user_abx      = [key_from_label(x) for x in user_abx_labels]
+    
     st.markdown("#### 💾 저장/그래프")
     when = st.date_input("측정일", value=date.today())
     if st.button("📈 피수치 저장/추가"):
@@ -156,6 +174,7 @@ if mode == "암":
             "mode":"암", "group":group, "dx":dx, "dx_label": dx_display(group, dx),
             "labs": labs,
             "user_chemo": user_chemo,
+            "user_targeted": user_targeted,
             "user_abx": user_abx
         }
 
@@ -215,6 +234,23 @@ if results_only_after_analyze(st):
 
 
         st.subheader("🗂️ 선택 요약")
+        s1, s2, s3 = st.columns(3)
+        with s1:
+            st.markdown("**항암제(세포독성, 개인 선택)**")
+            for k in (ctx.get("user_chemo") or []):
+                from drug_db import display_label
+                st.write("- " + display_label(k))
+        with s2:
+            st.markdown("**표적/면역(개인 선택)**")
+            for k in (ctx.get("user_targeted") or []):
+                from drug_db import display_label
+                st.write("- " + display_label(k))
+        with s3:
+            st.markdown("**항생제(개인 선택)**")
+            for k in (ctx.get("user_abx") or []):
+                from drug_db import display_label
+                st.write("- " + display_label(k))
+    
         s1, s2 = st.columns(2)
         with s1:
             st.markdown("**항암제(개인 선택)**")
@@ -227,8 +263,11 @@ if results_only_after_analyze(st):
                 from drug_db import display_label
                 st.write("- " + display_label(lbl))
 
-        st.subheader("💊 항암제 부작용")
+        st.subheader("💊 항암제(세포독성) 부작용")
         render_adverse_effects(st, ctx.get("user_chemo") or [], DRUG_DB)
+
+        st.subheader("💉 표적/면역 부작용")
+        render_adverse_effects(st, ctx.get("user_targeted") or [], DRUG_DB)
 
         st.subheader("🧫 항생제 부작용")
         render_adverse_effects(st, ctx.get("user_abx") or [], DRUG_DB)
