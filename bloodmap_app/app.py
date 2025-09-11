@@ -380,6 +380,12 @@ else:
     st.caption("증상 입력 후 더 정확해져요")
     st.info(f"예상 병명(참고): **{_pred_preview}** — {_pred_why}")
 
+if "opts" not in locals():
+    try:
+        opts = get_symptom_options(disease) or {}
+    except Exception:
+        opts = {}
+
 st.markdown("### 증상 체크")
 _base = ["콧물","기침","설사","발열"]
 _extra = [k for k in (opts.keys() if opts else []) if k not in _base]
