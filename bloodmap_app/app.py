@@ -338,42 +338,48 @@ else:
         age_m = st.number_input("나이(개월)", min_value=0, step=1)
         weight = st.number_input("체중(kg)", min_value=0.0, step=0.1)
 
-    # 증상 옵션 로딩
-    opts = get_symptom_options(disease)
-st.markdown("### 증상 체크")
-sym_order = ["콧물","기침","설사","발열"] + [k for k in opts.keys() if k not in ["콧물","기침","설사","발열"]]
-sym_sel = {}
-cols = st.columns(4)
-for i, k in enumerate(sym_order):
-    with cols[i % 4]:
-        if k == "부위":
-            sym_sel[k] = st.multiselect(k, opts[k], key=f"sym_{k}")
-        else:
-            sym_sel[k] = st.selectbox(k, opts[k], key=f"sym_{k}")
-
-st.markdown("#### 🔥 해열제 (1회 평균 용량 기준, mL)")
-from peds_dose import acetaminophen_ml, ibuprofen_ml
-apap_ml, apap_w = acetaminophen_ml(age_m, weight or None)
-ibu_ml,  ibu_w  = ibuprofen_ml(age_m, weight or None)
-dc = st.columns(2)
-with dc[0]: st.metric("아세트아미노펜 시럽 (mL)", f"{apap_ml:.1f}", help=f"계산 체중 {apap_w} kg · 160 mg/5 mL, 12.5 mg/kg")
-with dc[1]: st.metric("이부프로펜 시럽 (mL)",  f"{ibu_ml:.1f}",  help=f"계산 체중 {ibu_w} kg · 100 mg/5 mL, 7.5 mg/kg")
-
-# 미리보기: 선택된 증상으로 간단 예측(참고용)
-try:
-    _pred_preview, _pred_why = predict_peds_disease(sym_sel)
-    st.info(f"예상 병명(참고): **{_pred_preview}** — {_pred_why}")
-except Exception:
-    pass
-if st.button("🔎 해석하기", key="analyze_peds"):
-    st.session_state["analyzed"] = True
-    st.session_state["analysis_ctx"] = {
-        "mode":"소아", "disease": disease,
-        "symptoms": sym_sel,
-        "temp": temp, "age_m": age_m, "weight": weight or None,
-        "apap_ml": apap_ml, "ibu_ml": ibu_ml,
-        "vals": {}
-    }
+    # 증상 옵션 로딩 (안전 가드)
+    opts = {}
+    try:
+        opts = get_symptom_options(disease) or {}
+    except Exception:
+        opts = {}
+    st.markdown("### 증상 체크")
+    _base = ["콧물","기침","설사","발열"]
+    _extra = [k for k in (opts.keys() if opts else []) if k not in _base]
+    sym_order = _base + _extra
+    sym_sel = {}
+    cols = st.columns(4)
+    for i, k in enumerate(sym_order):
+        with cols[i % 4]:
+            if k == "부위":
+                sym_sel[k] = st.multiselect(k, opts[k], key=f"sym_{k}")
+            else:
+                sym_sel[k] = st.selectbox(k, opts[k], key=f"sym_{k}")
+    
+    st.markdown("#### 🔥 해열제 (1회 평균 용량 기준, mL)")
+    from peds_dose import acetaminophen_ml, ibuprofen_ml
+    apap_ml, apap_w = acetaminophen_ml(age_m, weight or None)
+    ibu_ml,  ibu_w  = ibuprofen_ml(age_m, weight or None)
+    dc = st.columns(2)
+    with dc[0]: st.metric("아세트아미노펜 시럽 (mL)", f"{apap_ml:.1f}", help=f"계산 체중 {apap_w} kg · 160 mg/5 mL, 12.5 mg/kg")
+    with dc[1]: st.metric("이부프로펜 시럽 (mL)",  f"{ibu_ml:.1f}",  help=f"계산 체중 {ibu_w} kg · 100 mg/5 mL, 7.5 mg/kg")
+    
+    # 미리보기: 선택된 증상으로 간단 예측(참고용)
+    try:
+        _pred_preview, _pred_why = predict_peds_disease(sym_sel)
+        st.info(f"예상 병명(참고): **{_pred_preview}** — {_pred_why}")
+    except Exception:
+        pass
+    if st.button("🔎 해석하기", key="analyze_peds"):
+        st.session_state["analyzed"] = True
+        st.session_state["analysis_ctx"] = {
+            "mode":"소아", "disease": disease,
+            "symptoms": sym_sel,
+            "temp": temp, "age_m": age_m, "weight": weight or None,
+            "apap_ml": apap_ml, "ibu_ml": ibu_ml,
+            "vals": {}
+        }
 
 # ------------------ 결과 전용 게이트 ------------------
 if results_only_after_analyze(st):
