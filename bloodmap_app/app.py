@@ -176,7 +176,7 @@ if mode == "암":
         ("WBC","WBC(백혈구)"), ("Hb","Hb(혈색소)"), ("PLT","PLT(혈소판)"), ("ANC","ANC(절대호중구,면역력)"),
         ("Ca","Ca(칼슘)"), ("Na","Na(나트륨,소디움)"), ("K","K(칼륨)"), ("Alb","Alb(알부민)"), ("Glu","Glu(혈당)"),
         ("TP","TP(총단백)"), ("AST","AST(간수치)"), ("ALT","ALT(간세포)"), ("LD","LD(유산탈수효소)"),
-        ("CRP","CRP(C-반응성단백,염증)"), ("Cr","Cr(크레아티닌,신장)"), ("BUN","BUN(요소질소)"), ("UA","UA(요산)"), ("Tbili","Tbili(총빌리루빈)")
+        ("CRP","CRP(C-반응성단백,염증)"), ("Cr","Cr(크레아티닌,신장)"), ("UA","UA(요산)"), ("Tbili","Tbili(총빌리루빈)")
     ]
     labs = {}
     for code, label in LABS_ORDER:
@@ -325,8 +325,13 @@ if results_only_after_analyze(st):
 
         st.subheader("💊 항암제(세포독성) 부작용")
         render_adverse_effects(st, ctx.get("user_chemo") or [], DRUG_DB)
-
-        # 📥 보고서 다운로드(.md/.txt)
+        st.subheader("🧫 항생제 부작용")
+        render_adverse_effects(st, ctx.get("user_abx") or [], DRUG_DB)
+# 식이가이드
+        st.subheader("🥗 피수치 기반 식이가이드 (예시)")
+        lines = lab_diet_guides(labs, heme_flag=(ctx.get("group")=="혈액암"))
+        for L in lines: st.write("- " + L)
+           # 📥 보고서 다운로드(.md/.txt)
         try:
             from ui_results import build_report_md, download_report_buttons
             labs_ctx = ctx.get("labs") if isinstance(ctx.get("labs"), dict) else {}
@@ -337,18 +342,6 @@ if results_only_after_analyze(st):
             st.caption("문의나 버그 제보는 공식카페로 해주시면 감사합니다.")
         except Exception:
             pass
-        st.subheader("🧫 항생제 부작용")
-        render_adverse_effects(st, ctx.get("user_abx") or [], DRUG_DB)
-# 식이가이드
-        st.subheader("🥗 피수치 기반 식이가이드 (예시)")
-        lines = lab_diet_guides(labs, heme_flag=(ctx.get("group")=="혈액암"))
-        for L in lines: st.write("- " + L)
-
-        # 약물 부작용 (자동 추천만 우선 표시)
-        st.subheader("💊 약물 부작용")
-        rec = auto_recs_by_dx(ctx.get("group"), ctx.get("dx"), DRUG_DB, ONCO_MAP)
-        regimen = (rec.get("chemo") or []) + (rec.get("targeted") or [])
-        render_adverse_effects(st, regimen, DRUG_DB)
 
     elif ctx.get("mode") == "소아":
         st.subheader("👶 증상 요약")
@@ -365,11 +358,3 @@ if results_only_after_analyze(st):
         # 기존 peds_diet_guide는 별도 모듈에 있었지만, 원본의 가이드가 충분하여 lab_diet는 암에 한정.
         # 필요 시 별도 모듈로 확장 가능.
 
-        st.subheader("🌡️ 해열제 1회분(평균)")
-        dcols = st.columns(2)
-        with dcols[0]:
-            st.metric("아세트아미노펜 시럽", f"{ctx.get('apap_ml')} mL")
-        with dcols[1]:
-            st.metric("이부프로펜 시럽", f"{ctx.get('ibu_ml')} mL")
-
-    st.stop()
