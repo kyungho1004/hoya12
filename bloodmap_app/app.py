@@ -370,7 +370,17 @@ else:
         opts = get_symptom_options(disease) or {}
     except Exception:
         opts = {}
-    st.markdown("### 증상 체크")
+    
+    # 🏠 일상 (미리보기): 증상 체크 상단
+    try:
+        _pred_preview, _pred_why = predict_peds_disease({})
+    except Exception:
+        _pred_preview, _pred_why = "감기/상기도감염", "초기값"
+    st.subheader("🏠 일상")
+    st.caption("증상 입력 후 더 정확해져요")
+    st.info(f"예상 병명(참고): **{_pred_preview}** — {_pred_why}")
+
+st.markdown("### 증상 체크")
     _base = ["콧물","기침","설사","발열"]
     _extra = [k for k in (opts.keys() if opts else []) if k not in _base]
     sym_order = _base + _extra
@@ -391,12 +401,6 @@ else:
     with dc[0]: st.metric("아세트아미노펜 시럽 (mL)", f"{apap_ml:.1f}", help=f"계산 체중 {apap_w} kg · 160 mg/5 mL, 12.5 mg/kg")
     with dc[1]: st.metric("이부프로펜 시럽 (mL)",  f"{ibu_ml:.1f}",  help=f"계산 체중 {ibu_w} kg · 100 mg/5 mL, 7.5 mg/kg")
     
-    # 미리보기: 선택된 증상으로 간단 예측(참고용)
-    try:
-        _pred_preview, _pred_why = predict_peds_disease(sym_sel)
-        st.info(f"예상 병명(참고): **{_pred_preview}** — {_pred_why}")
-    except Exception:
-        pass
     if st.button("🔎 해석하기", key="analyze_peds"):
         st.session_state["analyzed"] = True
         st.session_state["analysis_ctx"] = {
