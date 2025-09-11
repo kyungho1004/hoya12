@@ -390,14 +390,25 @@ st.markdown("### 증상 체크")
 _base = ["콧물","기침","설사","발열"]
 _extra = [k for k in (opts.keys() if opts else []) if k not in _base]
 sym_order = _base + _extra
+
+_fallback_choices = {
+    "콧물": ["없음","투명","흰색","누런","피섞임"],
+    "기침": ["없음","조금","보통","심함"],
+    "설사": ["없음","1~2회","3~4회","5~6회"],
+    "발열": ["없음","37~37.5 (미열)","37.5~38 (병원 내원 권장)","38.5~39 (병원/응급실)"],
+}
+
 sym_sel = {}
 cols = st.columns(4)
 for i, k in enumerate(sym_order):
     with cols[i % 4]:
+        choices = (opts.get(k) if isinstance(opts, dict) else None)
+        if not choices:
+            choices = _fallback_choices.get(k, ["없음"])
         if k == "부위":
-            sym_sel[k] = st.multiselect(k, opts[k], key=f"sym_{k}")
+            sym_sel[k] = st.multiselect(k, choices, key=f"sym_{k}")
         else:
-            sym_sel[k] = st.selectbox(k, opts[k], key=f"sym_{k}")
+            sym_sel[k] = st.selectbox(k, choices, key=f"sym_{k}")
 
 st.markdown("#### 🔥 해열제 (1회 평균 용량 기준, mL)")
 from peds_dose import acetaminophen_ml, ibuprofen_ml
