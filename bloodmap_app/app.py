@@ -70,6 +70,7 @@ def peds_daily_tips(pred_dx: str) -> list:
 
 # --- 별명+PIN 입력 유틸 ---
 def nickname_pin_local():
+    pass
 #     c1, c2 = st.columns([2,1])
 #     with c1:
 #         nick = st.text_input("별명", value=st.session_state.get("nick",""), placeholder="예: 토끼맘")
