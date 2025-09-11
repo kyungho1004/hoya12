@@ -14,34 +14,34 @@ def clean_num(s):
 
 def round_half(x):
     try: return round(float(x)*2)/2
-    except: return x
+    except: return None
 
 def temp_band(t):
-    try:
-        t = float(t)
-        if t >= 39.0: return "고열(39°+)"
-        if t >= 38.5: return "고열(38.5–39°)"
-        if t >= 38.0: return "미열(38.0–38.5°)"
-        return "정상/미열"
-    except:
-        return "-"
+    try: t = float(t)
+    except: return None
+    if t < 37: return "36~37℃"
+    if t < 38: return "37~38℃"
+    if t < 39: return "38~39℃"
+    return "≥39℃"
 
-def rr_thr_by_age_m(age_m):
-    try:
-        a = int(age_m or 0)
-        if a < 2: return 60
-        if a < 12: return 50
-        if a < 60: return 40
-        return 30
-    except:
-        return 40
+def rr_thr_by_age_m(m):
+    try: m = float(m)
+    except: return None
+    if m < 2: return 60
+    if m < 12: return 50
+    if m < 60: return 40
+    return 30
 
-def nickname_pin(nick: str, pin: str):
-    nick = (nick or "").strip()
-    pin  = (pin or "").strip()
-    if len(pin) != 4 or not pin.isdigit():
-        return ("guest", False)
-    return (f"{nick}#{pin}", True)
+# ---------- 닉네임/PIN ----------
+def nickname_pin():
+    c1,c2 = st.columns([2,1])
+    with c1: n = st.text_input("별명", placeholder="예: 홍길동")
+    with c2: p = st.text_input("PIN(4자리 숫자)", max_chars=4, placeholder="0000")
+    p2 = "".join([c for c in (p or "") if c.isdigit()])[:4]
+    if p and p2!=p: st.warning("PIN은 숫자 4자리만 허용됩니다.")
+    key = (n.strip()+"#"+p2) if (n and p2) else (n or "guest")
+    st.session_state["key"] = key
+    return n, p2, key
 
 # ---------- 스케줄 ----------
 def schedule_block():
