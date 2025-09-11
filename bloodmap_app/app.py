@@ -49,25 +49,6 @@ if mode == "암":
     if group == "혈액암":
         msg = "혈액암 환자에서 **철분제 + 비타민 C** 복용은 흡수 촉진 가능성이 있어, **반드시 주치의와 상의 후** 복용 여부를 결정하세요."
         st.warning(msg); report_sections.append(("영양/보충제 주의", [msg]))
-
-    st.markdown("### 2) 자동 예시(토글)")
-    if st.toggle("자동 예시 보기", value=True):
-        rec = auto_recs_by_dx(group, dx, DRUG_DB, ONCO_MAP)
-        c = st.columns(3)
-        with c[0]:
-            st.markdown("**항암제(예시)**")
-            from drug_db import display_label
-            for d in rec["chemo"]:
-                st.write("- " + display_label(d))
-        with c[1]:
-            st.markdown("**표적/면역(예시)**")
-            from drug_db import display_label
-            for d in rec["targeted"]:
-                st.write("- " + display_label(d))
-        with c[2]:
-            st.markdown("**항생제(참고)**")
-            for d in rec["abx"]: st.write("- " + d)
-
     # 3) 개인 선택 (암 진단별 동적 리스트)
     st.markdown("### 3) 개인 선택 (영어 + 한글 병기)")
     from drug_db import picklist, key_from_label
