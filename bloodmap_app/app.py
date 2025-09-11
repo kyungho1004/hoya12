@@ -1,6 +1,46 @@
 # -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
+
+def _peds_predict(symptoms: dict, temp: float | None) -> list[str]:
+    """
+    매우 단순한 규칙 기반 예측 (보호자 참고용).
+    입력: symptoms = {"콧물": str, "기침": str, "설사": str, "발열": str}
+    temp: 숫자 체온(℃) 또는 None
+    출력: bullet 문자열 리스트
+    """
+    s = {k: (symptoms.get(k) or "") for k in ["콧물","기침","설사","발열"]}
+    out: list[str] = []
+
+    # 고열
+    try:
+        if temp is not None and float(temp) >= 38.5:
+            out.append("🔴 고열(≥38.5℃): 탈수/호흡기 증상 악화 가능 → 해열(체중 기준) 및 병원 문의 권고")
+    except Exception:
+        pass
+
+    # 상기도 감염 패턴
+    if (s["콧물"] in {"투명","흰색"} or s["콧물"] == "없음") and s["기침"] in {"조금","보통"} and s["설사"] == "없음":
+        out.append("🟡 상기도감염/감기 의심: 수분, 비강 세척, 증상 관찰")
+
+    # 바이러스성 장염 패턴
+    if s["설사"] in {"3~4회","5~6회"} and (s["발열"].startswith("없음") or "37~37.5" in s["발열"]):
+        out.append("🟡 바이러스 장염 경향: 소량씩 자주 수분/전해질 보충, 탈수 관찰")
+
+    # 하기도/기관지 자극
+    if s["기침"] == "심함" and s["콧물"] in {"누런","흰색"}:
+        out.append("🟡 기관지 자극/하기도 침범 가능: 수분 공급, 필요 시 병원 문의")
+
+    # 편도/인후부
+    if s["기침"] in {"없음","조금"} and s["콧물"] == "없음" and ("37.5~38" in s["발열"] or "38.5~39" in s["발열"]):
+        out.append("🟡 편도/인후부 염증 경향: 해열, 수분, 통증 관찰")
+
+    # 기본 안내
+    if not out:
+        out.append("ℹ️ 특이 패턴 없음: 가벼운 감기/바이럴 증상 가능 — 수분과 휴식, 변화 시 병원 상담")
+
+    return out
+
 # --- Local Korean display (fallback; independent of onco_map import) ---
 def _is_korean(s: str) -> bool:
     return any('\uac00' <= ch <= '\ud7a3' for ch in (s or ""))
@@ -129,24 +169,6 @@ if mode == "암":
         msg = "혈액암 환자에서 **철분제 + 비타민 C** 복용은 흡수 촉진 가능성이 있어, **반드시 주치의와 상의 후** 복용 여부를 결정하세요."
         st.warning(msg); report_sections.append(("영양/보충제 주의", [msg]))
 
-    st.markdown("### 2) 자동 예시(토글)")
-    if st.toggle("자동 예시 보기", value=True, key="auto_example_main"):
-        rec = auto_recs_by_dx(group, dx, DRUG_DB, ONCO_MAP)
-        c = st.columns(3)
-        with c[0]:
-            st.markdown("**항암제(예시)**")
-            from drug_db import display_label
-            for d in rec["chemo"]:
-                st.write("- " + display_label(d))
-        with c[1]:
-            st.markdown("**표적/면역(예시)**")
-            from drug_db import display_label
-            for d in rec["targeted"]:
-                st.write("- " + display_label(d))
-        with c[2]:
-            st.markdown("**항생제(참고)**")
-            for d in rec["abx"]: st.write("- " + d)
-
     # 3) 개인 선택 (암 진단별 동적 리스트)
     st.markdown("### 3) 개인 선택 (영어 + 한글 병기)")
     from drug_db import picklist, key_from_label
@@ -194,7 +216,7 @@ if mode == "암":
     # 6) 저장/그래프
     st.markdown("#### 💾 저장/그래프")
     when = st.date_input("측정일", value=date.today())
-    if st.button("📈 피수치 저장/추가", key="save_labs"):
+    if st.button("📈 피수치 저장/추가"):
         st.session_state.setdefault("lab_hist", {}).setdefault(key, pd.DataFrame())
         df_prev = st.session_state["lab_hist"][key]
         row = {"Date": when.strftime("%Y-%m-%d")}
@@ -243,7 +265,7 @@ if mode == "암":
 else:
     ctop = st.columns(3)
     with ctop[0]:
-        disease = st.selectbox("소아 질환", ["로타","독감","RSV","아데노","마이코","수족구","편도염","코로나","중이염"], index=0)
+        disease = st.selectbox("소아 질환", ["일상", "로타","독감","RSV","아데노","마이코","수족구","편도염","코로나","중이염"], index=0)
     with ctop[1]:
         temp = st.number_input("체온(℃)", min_value=0.0, step=0.1)
     with ctop[2]:
@@ -322,7 +344,7 @@ if results_only_after_analyze(st):
                 from drug_db import display_label
                 st.write("- " + display_label(lbl))
 
-        st.subheader("💊 항암제(세포독성) 부작용")
+        st.subheader("💊 약물 부작용(요약) — 선택 항암제")
         render_adverse_effects(st, ctx.get("user_chemo") or [], DRUG_DB)
 
         st.subheader("🧫 항생제 부작용")
