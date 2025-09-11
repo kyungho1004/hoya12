@@ -5,11 +5,11 @@ import pandas as pd
 def _peds_predict(symptoms: dict, temp: float | None) -> list[str]:
     """
     매우 단순한 규칙 기반 예측 (보호자 참고용).
-    입력: symptoms = {"콧물": str, "기침": str, "설사": str, "발열": str}
+    입력: symptoms = {"콧물": str, "기침": str, "설사": str, "체온": str}
     temp: 숫자 체온(℃) 또는 None
     출력: bullet 문자열 리스트
     """
-    s = {k: (symptoms.get(k) or "") for k in ["콧물","기침","설사","발열"]}
+    s = {k: (symptoms.get(k) or "") for k in ["콧물","기침","설사","체온"]}
     out: list[str] = []
 
     # 고열
@@ -24,7 +24,7 @@ def _peds_predict(symptoms: dict, temp: float | None) -> list[str]:
         out.append("🟡 상기도감염/감기 의심: 수분, 비강 세척, 증상 관찰")
 
     # 바이러스성 장염 패턴
-    if s["설사"] in {"3~4회","5~6회"} and (s["발열"].startswith("없음") or "37~37.5" in s["발열"]):
+    if s["설사"] in {"3~4회","5~6회"} and (s.get("체온") or "".startswith("없음") or "37~37.5" in s.get("체온") or ""):
         out.append("🟡 바이러스 장염 경향: 소량씩 자주 수분/전해질 보충, 탈수 관찰")
 
     # 하기도/기관지 자극
@@ -32,7 +32,7 @@ def _peds_predict(symptoms: dict, temp: float | None) -> list[str]:
         out.append("🟡 기관지 자극/하기도 침범 가능: 수분 공급, 필요 시 병원 문의")
 
     # 편도/인후부
-    if s["기침"] in {"없음","조금"} and s["콧물"] == "없음" and ("37.5~38" in s["발열"] or "38.5~39" in s["발열"]):
+    if s["기침"] in {"없음","조금"} and s["콧물"] == "없음" and ("37.5~38" in s.get("체온") or "" or "38.5~39" in s.get("체온") or ""):
         out.append("🟡 편도/인후부 염증 경향: 해열, 수분, 통증 관찰")
 
     # 기본 안내
@@ -279,7 +279,8 @@ else:
     with c1: nasal = st.selectbox("콧물", opts["콧물"])
     with c2: cough = st.selectbox("기침", opts["기침"])
     with c3: diarrhea = st.selectbox("설사(횟수/일)", opts["설사"])
-    with c4: fever = st.selectbox("발열", opts["발열"])
+    with c4:
+        temp_cat = st.selectbox("체온", opts.get("체온", opts.get("체온", [])))
 
     st.markdown("#### 🔥 해열제 (1회 평균 용량 기준, mL)")
     from peds_dose import acetaminophen_ml, ibuprofen_ml
@@ -293,7 +294,7 @@ else:
         st.session_state["analyzed"] = True
         st.session_state["analysis_ctx"] = {
             "mode":"소아", "disease": disease,
-            "symptoms": {"콧물": nasal, "기침": cough, "설사": diarrhea, "발열": fever},
+            "symptoms": {"콧물": nasal, "기침": cough, "설사": diarrhea, "체온": temp_cat},
             "temp": temp, "age_m": age_m, "weight": weight or None,
             "apap_ml": apap_ml, "ibu_ml": ibu_ml,
             "vals": {}
