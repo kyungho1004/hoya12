@@ -198,7 +198,7 @@ if mode == "암":
         ("WBC","WBC(백혈구)"), ("Hb","Hb(혈색소)"), ("PLT","PLT(혈소판)"), ("ANC","ANC(절대호중구,면역력)"),
         ("Ca","Ca(칼슘)"), ("Na","Na(나트륨,소디움)"), ("K","K(칼륨)"), ("Alb","Alb(알부민)"), ("Glu","Glu(혈당)"),
         ("TP","TP(총단백)"), ("AST","AST(간수치)"), ("ALT","ALT(간세포)"), ("LD","LD(유산탈수효소)"),
-        ("CRP","CRP(C-반응성단백,염증)"), ("Cr","Cr(크레아티닌,신장)"), ("UA","UA(요산)"), ("Tbili","Tbili(총빌리루빈)")
+        ("CRP","CRP(C-반응성단백,염증)"), ("Cr","Cr(크레아티닌,신장)"), ("BUN","BUN(요소질소)"), ("UA","UA(요산)"), ("Tbili","Tbili(총빌리루빈)")
     ]
     labs = {}
     for code, label in LABS_ORDER:
@@ -382,4 +382,8 @@ if results_only_after_analyze(st):
         with dcols[1]:
             st.metric("이부프로펜 시럽", f"{ctx.get('ibu_ml')} mL")
 
+        st.subheader("🧭 병명/경향(간단 추정)")
+        preds = _peds_predict(ctx.get("symptoms", {}), ctx.get("temp"))
+        for p in preds:
+            st.write("- " + p)
     st.stop()
