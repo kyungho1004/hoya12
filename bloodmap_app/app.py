@@ -183,6 +183,9 @@ ONCO_MAP = build_onco_map()
 st.set_page_config(page_title="블러드맵 피수치가이드 (모듈화)", page_icon="🩸", layout="centered")
 st.title("BloodMap — 모듈화 버전")
 
+
+# --- 별명+PIN 입력 (상단) ---
+nick, pin, key = nickname_pin()
 # 공통 고지
 st.info(
     "본 수치는 참고용이며, 해석 결과는 개발자와 무관합니다.\n"
