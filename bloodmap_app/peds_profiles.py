@@ -1,13 +1,12 @@
 # -*- coding: utf-8 -*-
 """
 소아 질환별 증상 옵션 정의
-- UI와의 호환을 위해 항상 아래 4개 키를 포함합니다:
-  "콧물", "기침", "설사", "발열"
+- 기본 4개 키는 항상 포함: "콧물", "기침", "설사", "발열"
+- 질환별로 추가 키(예: "통증")를 넣을 수 있습니다. UI는 반환된 모든 키를 순회해 렌더링해야 합니다.
 """
 
 from typing import Dict, List
 
-# 기본 옵션 (모든 질환 공통 기본값)
 _DEFAULT: Dict[str, List[str]] = {
     "콧물": ["없음", "투명", "흰색", "누런", "피섞임"],
     "기침": ["없음", "조금", "보통", "심함"],
@@ -15,11 +14,10 @@ _DEFAULT: Dict[str, List[str]] = {
     "발열": ["없음", "37~37.5 (미열)", "37.5~38 (병원 내원 권장)", "38.5~39 (병원/응급실)"],
 }
 
-# 질환별 덮어쓰기(필요한 키만 지정; 나머지는 _DEFAULT 유지)
 PEDS_SYMPTOM_OPTIONS: Dict[str, Dict[str, List[str]]] = {
     "_default": _DEFAULT,
 
-    # 위장관계
+    # 위장관
     "로타": {
         "콧물": ["없음", "투명"],
         "기침": ["없음", "조금"],
@@ -41,7 +39,8 @@ PEDS_SYMPTOM_OPTIONS: Dict[str, Dict[str, List[str]]] = {
 
     # 호흡기
     "독감": {
-        "콧물": ["없음", "투명", "흰색"],
+        # 콧물 상세
+        "콧물": ["없음", "투명", "흰색", "누런", "초록", "피섞임"],
         "기침": ["없음", "보통", "심함"],
         "설사": ["없음", "1~2회"],
         "발열": ["37~37.5 (미열)", "37.5~38 (병원 내원 권장)", "38.5~39 (병원/응급실)"],
@@ -63,26 +62,33 @@ PEDS_SYMPTOM_OPTIONS: Dict[str, Dict[str, List[str]]] = {
         "기침": ["없음", "조금"],
         "설사": ["없음"],
         "발열": ["없음", "37~37.5 (미열)", "37.5~38 (병원 내원 권장)"],
+        # 통증 단계 추가
+        "통증": ["없음", "약간", "보통", "심함"],
+    },
+
+    # 수족구 (Hand-Foot-Mouth): '부위선택'은 사용하지 않음 (요청에 따라 제외)
+    "수족구": {
+        "콧물": ["없음", "투명"],
+        "기침": ["없음", "조금"],
+        "설사": ["없음", "1~2회"],
+        "발열": ["없음", "37~37.5 (미열)", "37.5~38 (병원 내원 권장)"],
+        # 부위 선택 항목 없음
     },
 }
 
 def _merge_default(disease: str) -> Dict[str, List[str]]:
-    """_DEFAULT를 기준으로 병합하여 4개 키를 항상 보장"""
     base = dict(_DEFAULT)
     override = PEDS_SYMPTOM_OPTIONS.get(disease, {})
-    base.update(override)
-    # 키 보정 (혹시 빠졌으면 기본으로 채움)
+    # include extras in override (e.g., "통증")
+    for k, v in override.items():
+        base[k] = v
+    # Ensure the 4 fundamentals are present
     for k in ("콧물", "기침", "설사", "발열"):
         if k not in base:
             base[k] = _DEFAULT[k]
     return base
 
 def get_symptom_options(disease: str) -> Dict[str, List[str]]:
-    """
-    UI가 사용: 질환 문자열을 받아 {항목: 옵션목록} 반환
-    - disease가 미지정/없는 경우 _DEFAULT를 반환
-    - 반환에는 항상 4개 키 포함
-    """
     disease = (disease or "").strip()
     if not disease:
         return dict(_DEFAULT)

@@ -194,13 +194,27 @@ if mode == "암":
     sp_lines = special_tests_ui()
     if sp_lines:
         st.markdown("#### 🧬 특수검사 해석")
-        for L in sp_lines: st.write("- "+L)
+        def _badge(text, color):
+            st.markdown(f"<span style=\"padding:2px 8px;border-radius:12px;background:{color};color:white;font-size:12px\">{text}</span>", unsafe_allow_html=True)
+        colored = []
+        for L in sp_lines:
+            if any(x in L for x in ["정상"]):
+                _badge("정상", "#6b7280"); st.write("- "+L)
+            elif any(x in L for x in ["주의","낮음"]):
+                _badge("주의", "#f59e0b"); st.write("- "+L)
+            elif any(x in L for x in ["위험","+++"]):
+                _badge("위험", "#ef4444"); st.write("- "+L)
+            else:
+                st.write("- "+L)
         report_sections.append(("특수검사 해석", sp_lines))
 
     # 6) 저장/그래프
     st.markdown("#### 💾 저장/그래프")
     when = st.date_input("측정일", value=date.today())
-    if st.button("📈 피수치 저장/추가"):
+    if st.button("📈 피수치 저장/추가", disabled=not has_key):
+        if not has_key:
+            st.warning("별명+PIN(4자리) 등록 후 저장할 수 있습니다.")
+        else:
         st.session_state.setdefault("lab_hist", {}).setdefault(key, pd.DataFrame())
         df_prev = st.session_state["lab_hist"][key]
         row = {"Date": when.strftime("%Y-%m-%d")}
@@ -236,7 +250,7 @@ if mode == "암":
     if st.button("🔎 해석하기", key="analyze_cancer"):
         st.session_state["analyzed"] = True
         st.session_state["analysis_ctx"] = {
-            "mode":"암", "group":group, "dx":dx, "dx_label": dx_display(group, dx),
+            "mode":"암", "group":group, "dx":dx, "dx_label": local_dx_display(group, dx),
             "labs": labs,
             "user_chemo": user_chemo,
             "user_targeted": (user_targeted if isinstance(user_targeted, list) else []),
@@ -259,51 +273,27 @@ else:
 
     # 증상 옵션 로딩
     opts = get_symptom_options(disease)
-    st.markdown("### 증상 체크")
-    c1,c2,c3,c4 = st.columns(4)
-    with c1: nasal = st.selectbox("콧물", opts["콧물"])
-    with c2: cough = st.selectbox("기침", opts["기침"])
-    with c3: diarrhea = st.selectbox("설사(횟수/일)", opts["설사"])
-    with c4: fever = st.selectbox("발열", opts["발열"])
+st.markdown("### 증상 체크")
+sym_order = ["콧물","기침","설사","발열"] + [k for k in opts.keys() if k not in ["콧물","기침","설사","발열"]]
+sym_sel = {}
+cols = st.columns(4)
+for i, k in enumerate(sym_order):
+    with cols[i % 4]:
+        sym_sel[k] = st.selectbox(k, opts[k], key=f"sym_{k}")
 
-    st.markdown("#### 🔥 해열제 (1회 평균 용량 기준)")
-
-
-    from peds_dose import acetaminophen_ml, ibuprofen_ml
-
-
-    apap_ml, apap_w = acetaminophen_ml(age_m, weight or None)
-
-
-    ibu_ml,  ibu_w  = ibuprofen_ml(age_m, weight or None)
-
-
-    dc = st.columns(2)
-
-
-    with dc[0]:
-
-
-        st.metric("아세트아미노펜 시럽 (mL)", f"{apap_ml:.1f}", help=f"계산 체중 {apap_w} kg · 160 mg/5 mL, 12.5 mg/kg")
-
-
-    with dc[1]:
-
-
-
-        st.metric("이부프로펜 시럽 (mL)",  f"{ibu_ml:.1f}",  help=f"계산 체중 {ibu_w} kg · 100 mg/5 mL, 7.5 mg/kg")
-
-
-
-    
-
-
+st.markdown("#### 🔥 해열제 (1회 평균 용량 기준, mL)")
+from peds_dose import acetaminophen_ml, ibuprofen_ml
+apap_ml, apap_w = acetaminophen_ml(age_m, weight or None)
+ibu_ml,  ibu_w  = ibuprofen_ml(age_m, weight or None)
+dc = st.columns(2)
+with dc[0]: st.metric("아세트아미노펜 시럽 (mL)", f"{apap_ml:.1f}", help=f"계산 체중 {apap_w} kg · 160 mg/5 mL, 12.5 mg/kg")
+with dc[1]: st.metric("이부프로펜 시럽 (mL)",  f"{ibu_ml:.1f}",  help=f"계산 체중 {ibu_w} kg · 100 mg/5 mL, 7.5 mg/kg")
 
     if st.button("🔎 해석하기", key="analyze_peds"):
         st.session_state["analyzed"] = True
         st.session_state["analysis_ctx"] = {
             "mode":"소아", "disease": disease,
-            "symptoms": {"콧물": nasal, "기침": cough, "설사": diarrhea, "발열": fever},
+            "symptoms": sym_sel,
             "temp": temp, "age_m": age_m, "weight": weight or None,
             "apap_ml": apap_ml, "ibu_ml": ibu_ml,
             "vals": {}
@@ -385,8 +375,23 @@ if results_only_after_analyze(st):
         st.subheader("🌡️ 해열제 1회분(평균)")
         dcols = st.columns(2)
         with dcols[0]:
-            st.metric("아세트아미노펜 시럽", f"{ctx.get('apap_ml')} mL")
+            st.metric("아세트아미노펜 시럽 (mL)", f"{float(ctx.get('apap_ml', 0)):.1f}")
         with dcols[1]:
-            st.metric("이부프로펜 시럽", f"{ctx.get('ibu_ml')} mL")
+            st.metric("이부프로펜 시럽 (mL)", f"{float(ctx.get('ibu_ml', 0)):.1f}")
 
-    st.stop()
+    
+    # ---- 결과 다운로드 ----
+    _ctx = st.session_state.get("analysis_ctx", {})
+    _lines = []
+    if _ctx.get("mode") == "암":
+        _lines.append(f"진단: { _ctx.get('dx_label', '') }")
+    elif _ctx.get("mode") == "소아":
+        _sy = _ctx.get("symptoms", {})
+        _lines.append("증상 요약:")
+        for k,v in _sy.items(): _lines.append(f"- {k}: {v}")
+        _lines.append(f"해열제 1회분: APAP { _ctx.get('apap_ml') } mL / IBU { _ctx.get('ibu_ml') } mL")
+    _md = "\n".join(_lines) + "\n\n---\n본 수치는 참고용이며, 해석 결과는 개발자와 무관합니다.\n약 변경, 복용 중단 등은 반드시 주치의와 상의 후 결정하시기 바랍니다.\n이 앱은 개인정보를 절대 수집하지 않으며, 어떠한 개인정보 입력도 요구하지 않습니다."
+    _txt = _md
+    st.download_button("⬇️ 결과 저장(.md)", _md, file_name="bloodmap_result.md")
+    st.download_button("⬇️ 결과 저장(.txt)", _txt, file_name="bloodmap_result.txt")
+st.stop()
