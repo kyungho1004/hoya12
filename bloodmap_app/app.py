@@ -233,6 +233,7 @@ if mode == "암":
             "mode":"암", "group":group, "dx":dx, "dx_label": dx_display(group, dx),
             "labs": labs,
             "user_chemo": user_chemo,
+            "user_targeted": user_targeted,
             "user_abx": user_abx
         }
 
@@ -324,6 +325,9 @@ if results_only_after_analyze(st):
 
         st.subheader("💊 항암제(세포독성) 부작용")
         render_adverse_effects(st, ctx.get("user_chemo") or [], DRUG_DB)
+
+        st.subheader("💉 표적/면역 부작용")
+        render_adverse_effects(st, ctx.get("user_targeted") or [], DRUG_DB)
 
         st.subheader("🧫 항생제 부작용")
         render_adverse_effects(st, ctx.get("user_abx") or [], DRUG_DB)
