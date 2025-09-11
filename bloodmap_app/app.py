@@ -376,7 +376,7 @@ else:
         _pred_preview, _pred_why = predict_peds_disease({})
     except Exception:
         _pred_preview, _pred_why = "감기/상기도감염", "초기값"
-    st.subheader("🏠 일상")
+    st.subheader("🏠 증상")
     st.caption("증상 입력 후 더 정확해져요")
     st.info(f"예상 병명(참고): **{_pred_preview}** — {_pred_why}")
 
