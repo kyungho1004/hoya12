@@ -176,7 +176,7 @@ if mode == "암":
         ("WBC","WBC(백혈구)"), ("Hb","Hb(혈색소)"), ("PLT","PLT(혈소판)"), ("ANC","ANC(절대호중구,면역력)"),
         ("Ca","Ca(칼슘)"), ("Na","Na(나트륨,소디움)"), ("K","K(칼륨)"), ("Alb","Alb(알부민)"), ("Glu","Glu(혈당)"),
         ("TP","TP(총단백)"), ("AST","AST(간수치)"), ("ALT","ALT(간세포)"), ("LD","LD(유산탈수효소)"),
-        ("CRP","CRP(C-반응성단백,염증)"), ("Cr","Cr(크레아티닌,신장)"), ("UA","UA(요산)"), ("Tbili","Tbili(총빌리루빈)")
+        ("CRP","CRP(C-반응성단백,염증)"), ("Cr","Cr(크레아티닌,신장)"), ("BUN","BUN(요소질소)"), ("UA","UA(요산)"), ("Tbili","Tbili(총빌리루빈)")
     ]
     labs = {}
     for code, label in LABS_ORDER:
@@ -257,8 +257,7 @@ else:
     with c1: nasal = st.selectbox("콧물", opts["콧물"])
     with c2: cough = st.selectbox("기침", opts["기침"])
     with c3: diarrhea = st.selectbox("설사(횟수/일)", opts["설사"])
-    with c4:
-        fever = st.selectbox("체온", (opts.get("체온") or opts.get("발열") or ["없음","37~37.5","37.5~38","38.5~39","39+"]))
+    with c4: fever = st.selectbox("발열", opts["발열"])
 
     st.markdown("#### 🔥 해열제 (1회 평균 용량 기준, mL)")
     from peds_dose import acetaminophen_ml, ibuprofen_ml
@@ -272,7 +271,7 @@ else:
         st.session_state["analyzed"] = True
         st.session_state["analysis_ctx"] = {
             "mode":"소아", "disease": disease,
-            "symptoms": {"콧물": nasal, "기침": cough, "설사": diarrhea, "체온": fever, "발열": fever},
+            "symptoms": {"콧물": nasal, "기침": cough, "설사": diarrhea, "발열": fever},
             "temp": temp, "age_m": age_m, "weight": weight or None,
             "apap_ml": apap_ml, "ibu_ml": ibu_ml,
             "vals": {}
@@ -323,25 +322,21 @@ if results_only_after_analyze(st):
                 from drug_db import display_label
                 st.write("- " + display_label(lbl))
 
-        st.subheader("💊 항암제(세포독성) 부작용")
+        st.subheader("💊 약물 부작용(요약) — 선택 항암제")
         render_adverse_effects(st, ctx.get("user_chemo") or [], DRUG_DB)
+
         st.subheader("🧫 항생제 부작용")
         render_adverse_effects(st, ctx.get("user_abx") or [], DRUG_DB)
 # 식이가이드
-        st.subheader("🥗 피수치 기반 식이가이드 (예시)")
+        st.subheader("🥗 피수치 기반 식이가이드")
         lines = lab_diet_guides(labs, heme_flag=(ctx.get("group")=="혈액암"))
         for L in lines: st.write("- " + L)
-           # 📥 보고서 다운로드(.md/.txt)
-        try:
-            from ui_results import build_report_md, download_report_buttons
-            labs_ctx = ctx.get("labs") if isinstance(ctx.get("labs"), dict) else {}
-            heme_flag = (ctx.get("group") == "혈액암")
-            diet_lines = lab_diet_guides(labs_ctx, heme_flag=heme_flag)
-            md_text = build_report_md(ctx, labs_ctx, diet_lines, ctx.get("user_chemo") or [], DRUG_DB)
-            download_report_buttons(st, md_text)
-            st.caption("문의나 버그 제보는 공식카페로 해주시면 감사합니다.")
-        except Exception:
-            pass
+
+        # 약물 부작용 (자동 추천만 우선 표시)
+        st.subheader("💊 약물 부작용")
+        rec = auto_recs_by_dx(ctx.get("group"), ctx.get("dx"), DRUG_DB, ONCO_MAP)
+        regimen = (rec.get("chemo") or []) + (rec.get("targeted") or [])
+        render_adverse_effects(st, regimen, DRUG_DB)
 
     elif ctx.get("mode") == "소아":
         st.subheader("👶 증상 요약")
@@ -352,9 +347,17 @@ if results_only_after_analyze(st):
             with sy_cols[i % 4]:
                 st.metric(key, sy[key])
 
-        st.subheader("🥗 식이가이드")
+        st.subheader("🥗 피수치 기반 식이가이드")
         from ui_results import results_only_after_analyze as _dummy  # to keep imports coherent
         from ui_results import render_adverse_effects as _dummy2
         # 기존 peds_diet_guide는 별도 모듈에 있었지만, 원본의 가이드가 충분하여 lab_diet는 암에 한정.
         # 필요 시 별도 모듈로 확장 가능.
 
+        st.subheader("🌡️ 해열제 1회분(평균)")
+        dcols = st.columns(2)
+        with dcols[0]:
+            st.metric("아세트아미노펜 시럽", f"{ctx.get('apap_ml')} mL")
+        with dcols[1]:
+            st.metric("이부프로펜 시럽", f"{ctx.get('ibu_ml')} mL")
+
+    st.stop()
