@@ -131,6 +131,8 @@ ONCO_MAP = build_onco_map()
 
 st.set_page_config(page_title="블러드맵 피수치가이드 (모듈화)", page_icon="🩸", layout="centered")
 st.title("BloodMap — 모듈화 버전")
+st.session_state.setdefault("analyzed", False)
+st.session_state.setdefault("analysis_ctx", {})
 st.markdown("""[피수치 가이드 공식카페 바로가기](https://cafe.naver.com/bloodmap)  
 **제작 Hoya/GPT · 자문 Hoya/GPT**""")# 공통 고지
 st.info(
@@ -358,7 +360,7 @@ if results_only_after_analyze(st):
         md_text = build_report_md(ctx, labs, diet_lines, ctx.get("user_chemo") or [], DRUG_DB)
         download_report_buttons(st, md_text)
         st.caption("문의나 버그 제보는 공식카페로 해주시면 감사합니다.")
-elif ctx.get("mode") == "소아":
+elif (st.session_state.get("analyzed") and (ctx or {})).get("mode") == "소아":
         st.subheader("👶 증상 요약")
         sy = ctx.get("symptoms", {})
         sy_cols = st.columns(4)
