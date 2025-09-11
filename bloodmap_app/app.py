@@ -69,22 +69,22 @@ def peds_daily_tips(pred_dx: str) -> list:
     return tips
 
 # --- 별명+PIN 입력 유틸 ---
-def nickname_pin():
-    c1, c2 = st.columns([2,1])
-    with c1:
-        nick = st.text_input("별명", value=st.session_state.get("nick",""), placeholder="예: 토끼맘")
-    with c2:
-        pin = st.text_input("PIN (4자리)", value=st.session_state.get("pin",""), max_chars=4, placeholder="예: 0427")
-    # sanitize
-    pin = "".join([ch for ch in pin if ch.isdigit()])[:4]
-    st.session_state["nick"] = nick
-    st.session_state["pin"]  = pin
-    key = f"{nick}#{pin}" if nick and pin else ""
-    if not nick or len(pin)!=4:
-        st.caption("그래프/저장은 별명+PIN(4자리) 등록 시 사용 가능해요.")
-    else:
-        st.success(f"별명+PIN 등록됨: {nick}#{pin}")
-    return nick, pin, key
+def nickname_pin_local():
+#     c1, c2 = st.columns([2,1])
+#     with c1:
+#         nick = st.text_input("별명", value=st.session_state.get("nick",""), placeholder="예: 토끼맘")
+#     with c2:
+#         pin = st.text_input("PIN (4자리)", value=st.session_state.get("pin",""), max_chars=4, placeholder="예: 0427")
+#     # sanitize
+#     pin = "".join([ch for ch in pin if ch.isdigit()])[:4]
+#     st.session_state["nick"] = nick
+#     st.session_state["pin"]  = pin
+#     key = f"{nick}#{pin}" if nick and pin else ""
+#     if not nick or len(pin)!=4:
+#         st.caption("그래프/저장은 별명+PIN(4자리) 등록 시 사용 가능해요.")
+#     else:
+#         st.success(f"별명+PIN 등록됨: {nick}#{pin}")
+#     return nick, pin, key
 
 
 # --- Safe defaults to avoid NameError in any mode ---
@@ -185,16 +185,16 @@ st.title("BloodMap — 모듈화 버전")
 
 
 # --- 별명+PIN 입력 (상단) ---
-nick, pin, key = nickname_pin(key_prefix="top_")
 # 공통 고지
 st.info(
     "본 수치는 참고용이며, 해석 결과는 개발자와 무관합니다.\n"
     "약 변경/복용 중단 등은 반드시 주치의와 상의하세요.\n"
     "이 앱은 개인정보를 수집하지 않으며, 어떠한 개인정보 입력도 요구하지 않습니다."
 )
+nick, pin, key = nickname_pin(key_prefix="top1_")
 
 # ----------- 별명+PIN -----------
-nick, pin, key = nickname_pin(key_prefix="top_")
+# (removed duplicate)  nick, pin, key = nickname_pin(key_prefix="top_")
 st.divider()
 # 그래프/저장은 별명+PIN 기반 게이트
 has_key = bool(nick and pin and len(pin) == 4)
