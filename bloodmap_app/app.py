@@ -68,6 +68,24 @@ def peds_daily_tips(pred_dx: str) -> list:
         tips += ["경구 수분보충액(ORS)", "기름진/자극 음식 피하기"]
     return tips
 
+# --- 별명+PIN 입력 유틸 ---
+def nickname_pin():
+    c1, c2 = st.columns([2,1])
+    with c1:
+        nick = st.text_input("별명", value=st.session_state.get("nick",""), placeholder="예: 토끼맘")
+    with c2:
+        pin = st.text_input("PIN (4자리)", value=st.session_state.get("pin",""), max_chars=4, placeholder="예: 0427")
+    # sanitize
+    pin = "".join([ch for ch in pin if ch.isdigit()])[:4]
+    st.session_state["nick"] = nick
+    st.session_state["pin"]  = pin
+    key = f"{nick}#{pin}" if nick and pin else ""
+    if not nick or len(pin)!=4:
+        st.caption("그래프/저장은 별명+PIN(4자리) 등록 시 사용 가능해요.")
+    else:
+        st.success(f"별명+PIN 등록됨: {nick}#{pin}")
+    return nick, pin, key
+
 
 # --- Safe defaults to avoid NameError in any mode ---
 user_chemo = []
@@ -468,6 +486,15 @@ if results_only_after_analyze(st):
     if _ctx.get("mode") == "암":
         _lines.append(f"진단: { _ctx.get('dx_label', '') }")
     elif _ctx.get("mode") == "소아":
+        # 🏠 일상가이드: 증상 + 예측 병명 + 생활 팁
+        st.subheader("🏠 일상가이드")
+        _pred, _why = predict_peds_disease(_ctx.get("symptoms", {}))
+        st.markdown(f"**예상 병명:** {_pred}  \n이유: {_why}")
+        _tips = peds_daily_tips(_pred)
+        for t in _tips:
+            st.write("- " + t)
+        report_sections.append(("일상가이드", [f"예상 병명: {_pred} (이유: {_why})"] + _tips))
+
         _sy = _ctx.get("symptoms", {})
         _lines.append("증상 요약:")
         for k,v in _sy.items():
