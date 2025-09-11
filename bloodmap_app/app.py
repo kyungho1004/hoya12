@@ -28,6 +28,8 @@ st.info(
 # ----------- 별명+PIN -----------
 nick, pin, key = nickname_pin()
 st.divider()
+# 그래프/저장은 별명+PIN 기반 게이트
+has_key = bool(nick and pin and len(pin) == 4)
 
 # ----------- 모드 선택 -----------
 mode = st.radio("모드 선택", ["암", "소아"], horizontal=True)
@@ -62,7 +64,27 @@ if mode == "암":
             st.markdown("**항생제(참고)**")
             for d in rec["abx"]: st.write("- " + d)
 
-    st.markdown("### 3) 피수치 입력 (숫자만)")
+    # 3) 개인 선택 (암 진단별 동적 리스트)
+    st.markdown("### 3) 개인 선택 (영어 + 한글 병기)")
+    from drug_db import picklist, key_from_label
+    rec_local = auto_recs_by_dx(group, dx, DRUG_DB, ONCO_MAP)
+    chemo_keys = rec_local.get("chemo", []) or rec_local.get("targeted", [])
+    abx_keys = [
+        "Piperacillin/Tazobactam","Cefepime","Meropenem","Imipenem/Cilastatin","Aztreonam","Amikacin",
+        "Vancomycin","Linezolid","Daptomycin","Ceftazidime","Levofloxacin","TMP-SMX","Metronidazole","Amoxicillin/Clavulanate"
+    ]
+    chemo_opts = picklist([k for k in chemo_keys if k in DRUG_DB])
+    abx_opts   = picklist([k for k in abx_keys if k in DRUG_DB])
+    c1, c2 = st.columns(2)
+    with c1:
+        user_chemo_labels = st.multiselect("항암제(개인)", chemo_opts, default=[])
+    with c2:
+        user_abx_labels   = st.multiselect("항생제(개인)", abx_opts, default=[])
+    user_chemo = [key_from_label(x) for x in user_chemo_labels]
+    user_abx   = [key_from_label(x) for x in user_abx_labels]
+
+    # 4) 피수치 입력
+    st.markdown("### 4) 피수치 입력 (숫자만)")
     LABS_ORDER = [
         ("WBC","WBC(백혈구)"), ("Hb","Hb(혈색소)"), ("PLT","PLT(혈소판)"), ("ANC","ANC(절대호중구,면역력)"),
         ("Ca","Ca(칼슘)"), ("Na","Na(나트륨,소디움)"), ("K","K(칼륨)"), ("Alb","Alb(알부민)"), ("Glu","Glu(혈당)"),
@@ -74,50 +96,15 @@ if mode == "암":
         v = st.text_input(label, placeholder="예: 4500")
         labs[code] = clean_num(v)
 
+    # 5) 특수검사
+    from special_tests import special_tests_ui
+    sp_lines = special_tests_ui()
+    if sp_lines:
+        st.markdown("#### 🧬 특수검사 해석")
+        for L in sp_lines: st.write("- "+L)
+        report_sections.append(("특수검사 해석", sp_lines))
 
-    st.markdown("### 3) 개인 선택 (영어 + 한글 병기)")
-from drug_db import picklist, key_from_label
-
-    # 분리된 키셋
-    CHEMO_KEYS = [
-        "ATRA","Arsenic Trioxide","Idarubicin","Daunorubicin","Ara-C","MTX","6-MP",
-        "Vincristine","Cyclophosphamide","Prednisone",
-        "Cisplatin","Carboplatin","Oxaliplatin","5-FU","Capecitabine","Irinotecan",
-        "Docetaxel","Paclitaxel","Nab-Paclitaxel","Gemcitabine","Pemetrexed","Temozolomide",
-        "Ifosfamide","Etoposide","Dactinomycin","Trabectedin","Topotecan"
-    ]
-    TARGETED_KEYS = [
-        "Imatinib","Osimertinib","Alectinib","Crizotinib","Larotrectinib","Entrectinib","Capmatinib","Lorlatinib",
-        "Selpercatinib","Pralsetinib","Sotorasib",
-        "Trastuzumab","Pertuzumab","T-DM1","Trastuzumab deruxtecan","Lapatinib","Tucatinib",
-        "Bevacizumab","Ramucirumab","Regorafenib","Ripretinib",
-        "Cetuximab","Panitumumab",
-        "Olaparib","Niraparib",
-        "Palbociclib","Ribociclib","Abemaciclib",
-        "Everolimus","Octreotide",
-        "Pembrolizumab","Nivolumab","Atezolizumab","Durvalumab","Ipilimumab",
-        "Brentuximab Vedotin","Polatuzumab Vedotin","Obinutuzumab","Rituximab"
-    ]
-    ABX_KEYS   = ["Piperacillin/Tazobactam","Cefepime","Meropenem","Imipenem/Cilastatin","Aztreonam","Amikacin",
-                  "Vancomycin","Linezolid","Daptomycin","Ceftazidime","Levofloxacin","TMP-SMX","Metronidazole","Amoxicillin/Clavulanate"]
-
-    # 암 진단에 맞는 치료 목록으로 동적 구성 (chemo 우선, 없으면 targeted 대체)
-    rec_local = auto_recs_by_dx(group, dx, DRUG_DB, ONCO_MAP)
-    CHEMO_KEYS = rec_local.get("chemo", []) or rec_local.get("targeted", [])
-    chemo_opts    = picklist([k for k in CHEMO_KEYS if k in DRUG_DB])
-    targeted_opts = picklist([k for k in TARGETED_KEYS if k in DRUG_DB])
-    abx_opts      = picklist([k for k in ABX_KEYS if k in DRUG_DB])
-
-    p1, p2, p3 = st.columns(3)
-    with p1:
-        user_chemo_labels = st.multiselect("항암제(세포독성) 선택", chemo_opts, default=[])
-    with p2:
-        user_abx_labels   = st.multiselect("항생제 선택", abx_opts, default=[])
-
-    user_chemo    = [key_from_label(x) for x in user_chemo_labels]
-    user_targeted = [key_from_label(x) for x in user_targeted_labels]
-    user_abx      = [key_from_label(x) for x in user_abx_labels]
-    
+    # 6) 저장/그래프
     st.markdown("#### 💾 저장/그래프")
     when = st.date_input("측정일", value=date.today())
     if st.button("📈 피수치 저장/추가"):
@@ -152,7 +139,7 @@ from drug_db import picklist, key_from_label
     else:
         st.info("저장된 히스토리가 없습니다. 값을 입력하고 ‘피수치 저장/추가’를 눌러 보세요.")
 
-    # 해석 버튼 → 결과만 하단에
+    # 7) 해석하기 → 결과 게이트로 전달
     if st.button("🔎 해석하기", key="analyze_cancer"):
         st.session_state["analyzed"] = True
         st.session_state["analysis_ctx"] = {
@@ -161,14 +148,6 @@ from drug_db import picklist, key_from_label
             "user_chemo": user_chemo,
             "user_abx": user_abx
         }
-
-    # 특수검사
-    from special_tests import special_tests_ui
-    sp_lines = special_tests_ui()
-    if sp_lines:
-        st.markdown("#### 🧬 특수검사 해석")
-        for L in sp_lines: st.write("- "+L)
-        report_sections.append(("특수검사 해석", sp_lines))
 
     # 스케줄
     schedule_block()
@@ -181,7 +160,8 @@ else:
     with ctop[1]:
         temp = st.number_input("체온(℃)", min_value=0.0, step=0.1)
     with ctop[2]:
-        pass
+        age_m = st.number_input("나이(개월)", min_value=0, step=1)
+        weight = st.number_input("체중(kg)", min_value=0.0, step=0.1)
 
     # 증상 옵션 로딩
     opts = get_symptom_options(disease)
