@@ -1,6 +1,12 @@
 # -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
+
+# --- Safe defaults to avoid NameError in any mode ---
+user_chemo = []
+user_targeted = []  # safe default
+user_abx = []
+
 # --- Local Korean display (fallback; independent of onco_map import) ---
 def _is_korean(s: str) -> bool:
     return any('\uac00' <= ch <= '\ud7a3' for ch in (s or ""))
@@ -233,7 +239,7 @@ if mode == "암":
             "mode":"암", "group":group, "dx":dx, "dx_label": dx_display(group, dx),
             "labs": labs,
             "user_chemo": user_chemo,
-            "user_targeted": user_targeted,
+            "user_targeted": (user_targeted if isinstance(user_targeted, list) else []),
             "user_abx": user_abx
         }
 
