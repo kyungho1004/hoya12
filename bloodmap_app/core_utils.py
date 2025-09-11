@@ -33,10 +33,10 @@ def rr_thr_by_age_m(m):
     return 30
 
 # ---------- 닉네임/PIN ----------
-def nickname_pin():
+def nickname_pin(key_prefix: str = "np_"):
     c1,c2 = st.columns([2,1])
-    with c1: n = st.text_input("별명", placeholder="예: 홍길동")
-    with c2: p = st.text_input("PIN(4자리 숫자)", max_chars=4, placeholder="0000")
+    with c1: n = st.text_input("별명", placeholder="예: 홍길동", key=key_prefix + "nick")
+    with c2: p = st.text_input("PIN (4자리 숫자)", placeholder="0000", key=key_prefix + "pin", max_chars=4)", max_chars=4, placeholder="0000")
     p2 = "".join([c for c in (p or "") if c.isdigit()])[:4]
     if p and p2!=p: st.warning("PIN은 숫자 4자리만 허용됩니다.")
     key = (n.strip()+"#"+p2) if (n and p2) else (n or "guest")

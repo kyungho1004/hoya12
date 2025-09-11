@@ -185,7 +185,7 @@ st.title("BloodMap — 모듈화 버전")
 
 
 # --- 별명+PIN 입력 (상단) ---
-nick, pin, key = nickname_pin()
+nick, pin, key = nickname_pin(key_prefix="top_")
 # 공통 고지
 st.info(
     "본 수치는 참고용이며, 해석 결과는 개발자와 무관합니다.\n"
@@ -194,7 +194,7 @@ st.info(
 )
 
 # ----------- 별명+PIN -----------
-nick, pin, key = nickname_pin()
+nick, pin, key = nickname_pin(key_prefix="top_")
 st.divider()
 # 그래프/저장은 별명+PIN 기반 게이트
 has_key = bool(nick and pin and len(pin) == 4)
