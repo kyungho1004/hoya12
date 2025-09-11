@@ -252,6 +252,13 @@ else:
 
     # 증상 옵션 로딩
     opts = get_symptom_options(disease)
+    # bridge keys between "발열" and "체온" to avoid KeyError
+    if isinstance(opts, dict):
+        if "발열" not in opts and "체온" in opts:
+            opts["발열"] = opts["체온"]
+        if "체온" not in opts and "발열" in opts:
+            opts["체온"] = opts["발열"]
+
     st.markdown("### 증상 체크")
     c1,c2,c3,c4 = st.columns(4)
     with c1: nasal = st.selectbox("콧물", opts["콧물"])
