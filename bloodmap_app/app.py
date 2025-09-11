@@ -129,24 +129,6 @@ if mode == "암":
         msg = "혈액암 환자에서 **철분제 + 비타민 C** 복용은 흡수 촉진 가능성이 있어, **반드시 주치의와 상의 후** 복용 여부를 결정하세요."
         st.warning(msg); report_sections.append(("영양/보충제 주의", [msg]))
 
-    st.markdown("### 2) 자동 예시(토글)")
-    if st.toggle("자동 예시 보기", value=True):
-        rec = auto_recs_by_dx(group, dx, DRUG_DB, ONCO_MAP)
-        c = st.columns(3)
-        with c[0]:
-            st.markdown("**항암제(예시)**")
-            from drug_db import display_label
-            for d in rec["chemo"]:
-                st.write("- " + display_label(d))
-        with c[1]:
-            st.markdown("**표적/면역(예시)**")
-            from drug_db import display_label
-            for d in rec["targeted"]:
-                st.write("- " + display_label(d))
-        with c[2]:
-            st.markdown("**항생제(참고)**")
-            for d in rec["abx"]: st.write("- " + d)
-
     # 3) 개인 선택 (암 진단별 동적 리스트)
     st.markdown("### 3) 개인 선택 (영어 + 한글 병기)")
     from drug_db import picklist, key_from_label
@@ -176,7 +158,7 @@ if mode == "암":
         ("WBC","WBC(백혈구)"), ("Hb","Hb(혈색소)"), ("PLT","PLT(혈소판)"), ("ANC","ANC(절대호중구,면역력)"),
         ("Ca","Ca(칼슘)"), ("Na","Na(나트륨,소디움)"), ("K","K(칼륨)"), ("Alb","Alb(알부민)"), ("Glu","Glu(혈당)"),
         ("TP","TP(총단백)"), ("AST","AST(간수치)"), ("ALT","ALT(간세포)"), ("LD","LD(유산탈수효소)"),
-        ("CRP","CRP(C-반응성단백,염증)"), ("Cr","Cr(크레아티닌,신장)"), ("BUN","BUN(요소질소)"), ("UA","UA(요산)"), ("Tbili","Tbili(총빌리루빈)")
+        ("CRP","CRP(C-반응성단백,염증)"), ("Cr","Cr(크레아티닌,신장)"),  ("UA","UA(요산)"), ("Tbili","Tbili(총빌리루빈)")
     ]
     labs = {}
     for code, label in LABS_ORDER:
@@ -339,25 +321,6 @@ if results_only_after_analyze(st):
             pass
         st.subheader("🧫 항생제 부작용")
         render_adverse_effects(st, ctx.get("user_abx") or [], DRUG_DB)
-# 식이가이드
-        st.subheader("🥗 피수치 기반 식이가이드 (예시)")
-        lines = lab_diet_guides(labs, heme_flag=(ctx.get("group")=="혈액암"))
-        for L in lines: st.write("- " + L)
-
-        # 약물 부작용 (자동 추천만 우선 표시)
-        st.subheader("💊 약물 부작용")
-        rec = auto_recs_by_dx(ctx.get("group"), ctx.get("dx"), DRUG_DB, ONCO_MAP)
-        regimen = (rec.get("chemo") or []) + (rec.get("targeted") or [])
-        render_adverse_effects(st, regimen, DRUG_DB)
-
-    elif ctx.get("mode") == "소아":
-        st.subheader("👶 증상 요약")
-        sy = ctx.get("symptoms", {})
-        sy_cols = st.columns(4)
-        keys = list(sy.keys())
-        for i, key in enumerate(keys):
-            with sy_cols[i % 4]:
-                st.metric(key, sy[key])
 
         st.subheader("🥗 식이가이드")
         from ui_results import results_only_after_analyze as _dummy  # to keep imports coherent
