@@ -357,7 +357,7 @@ if mode == "암":
 else:
     ctop = st.columns(3)
     with ctop[0]:
-        disease = st.selectbox("소아 질환", ["로타","독감","RSV","아데노","마이코","수족구","편도염","코로나","중이염"], index=0)
+        disease = st.selectbox("소아 질환", ["일상","로타","독감","RSV","아데노","마이코","수족구","편도염","코로나","중이염"], index=0)
     with ctop[1]:
         temp = st.number_input("체온(℃)", min_value=0.0, step=0.1)
     with ctop[2]:
@@ -376,7 +376,7 @@ else:
         _pred_preview, _pred_why = predict_peds_disease({})
     except Exception:
         _pred_preview, _pred_why = "감기/상기도감염", "초기값"
-    st.subheader("🏠 증상")
+    st.subheader("🏠 일상")
     st.caption("증상 입력 후 더 정확해져요")
     st.info(f"예상 병명(참고): **{_pred_preview}** — {_pred_why}")
 
