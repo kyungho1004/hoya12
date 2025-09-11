@@ -215,23 +215,23 @@ if mode == "암":
         if not has_key:
             st.warning("별명+PIN(4자리) 등록 후 저장할 수 있습니다.")
         else:
-        st.session_state.setdefault("lab_hist", {}).setdefault(key, pd.DataFrame())
-        df_prev = st.session_state["lab_hist"][key]
-        row = {"Date": when.strftime("%Y-%m-%d")}
-        labels = [label for _, label in LABS_ORDER]
-        for code, label in LABS_ORDER:
-            row[label] = labs.get(code)
-        newdf = pd.DataFrame([row])
-        if df_prev is None or df_prev.empty:
-            df = newdf
-        else:
-            df = pd.concat([df_prev, newdf], ignore_index=True)
-            df = df.drop_duplicates(subset=["Date"], keep="last").sort_values("Date")
-        for col in (["Date"]+labels):
-            if col not in df.columns: df[col] = pd.NA
-        df = df.reindex(columns=(["Date"]+labels))
-        st.session_state["lab_hist"][key] = df
-        st.success("저장 완료!")
+            st.session_state.setdefault("lab_hist", {}).setdefault(key, pd.DataFrame())
+            df_prev = st.session_state["lab_hist"][key]
+            row = {"Date": when.strftime("%Y-%m-%d")}
+            labels = [label for _, label in LABS_ORDER]
+            for code, label in LABS_ORDER:
+                row[label] = labs.get(code)
+            newdf = pd.DataFrame([row])
+            if df_prev is None or df_prev.empty:
+                df = newdf
+            else:
+                df = pd.concat([df_prev, newdf], ignore_index=True)
+                df = df.drop_duplicates(subset=["Date"], keep="last").sort_values("Date")
+            for col in (["Date"]+labels):
+                if col not in df.columns: df[col] = pd.NA
+            df = df.reindex(columns=(["Date"]+labels))
+            st.session_state["lab_hist"][key] = df
+            st.success("저장 완료!")
 
     dfh = st.session_state.get("lab_hist", {}).get(key)
     if not has_key:
