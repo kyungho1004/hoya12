@@ -273,14 +273,8 @@ if st.session_state.get("analyzed"):
     st.caption("본 수치는 참고용이며, 해석 결과는 개발자와 무관합니다. 약 변경/중단은 반드시 주치의와 상의하세요. 개인정보는 수집하지 않습니다.")
 
     # 공통: 피수치 요약
-    try:
-        labs_ctx = ctx.get("labs") if isinstance(ctx.get("labs"), dict) else labs
-    except Exception:
-        labs_ctx = labs
-    try:
-        results_only_after_analyze(st, labs_ctx)
-    except TypeError:
-        results_only_after_analyze(st)
+    labs_ctx = ctx.get("labs") if isinstance(ctx.get("labs"), dict) else {}
+    results_only_after_analyze(st, labs_ctx)
 
     if mode_val == "암":
         st.subheader("🧬 진단")
