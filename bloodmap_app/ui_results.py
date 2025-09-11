@@ -2,15 +2,22 @@
 # -*- coding: utf-8 -*-
 import re
 
-def results_only_after_analyze(st, labs):
+def results_only_after_analyze(st, labs=None):
     """
     간단 요약: 입력된(비어있지 않은) 수치만 2열 그리드로 보여준다.
+    labs 인자가 없으면 session_state에서 추출 시도.
+    반환값: bool (표시했으면 True)
     """
+    if labs is None:
+        try:
+            labs = (st.session_state.get("analysis_ctx") or {}).get("labs") or {}
+        except Exception:
+            labs = {}
     if not labs:
-        return
+        return False
     non_empty = {k: v for k, v in labs.items() if str(v or "").strip() != ""}
     if not non_empty:
-        return
+        return False
     st.markdown("#### 🧪 피수치 요약 (입력값만)")
     cols = st.columns(2)
     i = 0
@@ -18,6 +25,7 @@ def results_only_after_analyze(st, labs):
         with cols[i % 2]:
             st.write(f"- **{k}**: {v}")
         i += 1
+    return True
 
 def _mark_risk(ae_text):
     """
