@@ -2,7 +2,6 @@
 import re
 from typing import Any, Dict, List
 
-# === 위험 키워드 하이라이트 ===
 _SERIOUS = [
     "분화증후군", "QT", "torsade", "부정맥", "심정지", "심독성", "간부전", "췌장염",
     "신부전", "신독성", "폐독성", "간독성", "무과립구증", "패혈증", "아나필락시",
@@ -20,7 +19,6 @@ def _mark_risk(ae_text: str):
     txt = ae_text
     low = txt.lower()
     flagged = False
-    # 유연 매칭: QT 연장, QT연장 등
     rep_pairs = [
         (r'분화\s*증후군', '분화증후군'),
         (r'QT\s*연장', 'QT 연장'),
@@ -38,17 +36,11 @@ def _mark_risk(ae_text: str):
     for kw in _COMMON:
         if kw.lower() in low:
             flagged = True
-            # 한 번만 강조
             txt = re.sub(re.escape(kw), "🚨 " + kw, txt, count=1, flags=re.IGNORECASE)
 
     return (flagged, txt)
 
 def render_adverse_effects(st, regimen: List[str], DRUG_DB: Dict[str, Dict[str, Any]]) -> None:
-    """
-    선택 약물들의 부작용을 굵은 빨강톤으로 강조 표시.
-    - 위험/자주 키워드는 🚨로 태깅
-    - 전체 '주의/부작용' 라인은 진한 빨강+굵게
-    """
     if not regimen:
         return
     st.markdown("#### 💊 약물 부작용(요약)")
@@ -61,7 +53,6 @@ def render_adverse_effects(st, regimen: List[str], DRUG_DB: Dict[str, Dict[str, 
         moa = info.get("moa", "")
         ae  = info.get("ae", "")
         _, marked = _mark_risk(ae)
-
         html = f"""
 <div style="margin:12px 0 18px 0; line-height:1.55">
   <div style="font-weight:700">• {key} ({alias})</div>
@@ -71,7 +62,6 @@ def render_adverse_effects(st, regimen: List[str], DRUG_DB: Dict[str, Dict[str, 
 """.strip()
         st.markdown(html, unsafe_allow_html=True)
 
-# === 결과 요약(기존 함수 시그니처 유지) ===
 def results_only_after_analyze(st, labs: Dict[str, Any]):
     if not labs:
         return
@@ -82,7 +72,6 @@ def results_only_after_analyze(st, labs: Dict[str, Any]):
         with cols[i % 3]:
             st.metric(k, "-" if v is None else v)
 
-# === 보고서 (.md/.txt) ===
 def build_report_md(ctx, labs, diet_lines, regimen, DRUG_DB):
     lines = []
     lines.append("# BloodMap 결과 보고서")
@@ -98,20 +87,16 @@ def build_report_md(ctx, labs, diet_lines, regimen, DRUG_DB):
     elif mode == "소아":
         lines.append("**소아 모드 결과**")
         lines.append("")
-
     if labs:
         lines.append("## 피수치 요약")
         for k, v in labs.items():
             lines.append(f"- {k}: {'' if v is None else v}")
         lines.append("")
-
     if diet_lines:
         lines.append("## 식이가이드")
         for L in diet_lines:
             lines.append(f"- {L}")
         lines.append("")
-
-    # 항암제 요약
     if mode == "암" and regimen:
         lines.append("## 약물 부작용(요약) — 선택 항암제")
         for key in regimen:
@@ -123,7 +108,6 @@ def build_report_md(ctx, labs, diet_lines, regimen, DRUG_DB):
             if moa: lines.append(f"  - 기전/특징: {moa}")
             if ae:  lines.append(f"  - 주의/부작용: {ae}")
         lines.append("")
-
     lines.append("---")
     lines.append("본 수치는 참고용이며, 해석 결과는 개발자와 무관합니다.")
     lines.append("약 변경, 복용 중단 등은 반드시 주치의와 상의 후 결정하시기 바랍니다.")

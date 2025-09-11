@@ -251,7 +251,7 @@ else:
         weight = st.number_input("체중(kg)", min_value=0.0, step=0.1)
 
     # 증상 옵션 로딩
-    opts = get_symptom_options(disease)\n    # bridge: ensure both "발열" and "체온" keys exist\n    if isinstance(opts, dict):\n        if "발열" not in opts and "체온" in opts:\n            opts["발열"] = opts["체온"]\n        if "체온" not in opts and "발열" in opts:\n            opts["체온"] = opts["발열"]\n
+    opts = get_symptom_options(disease)
     st.markdown("### 증상 체크")
     c1,c2,c3,c4 = st.columns(4)
     with c1: nasal = st.selectbox("콧물", opts["콧물"])
@@ -339,26 +339,76 @@ if results_only_after_analyze(st):
         regimen = (rec.get("chemo") or []) + (rec.get("targeted") or [])
         render_adverse_effects(st, regimen, DRUG_DB)
 
-    elif ctx.get("mode") == "소아":
+    elif (st.session_state.get("analysis_ctx") or {}).get("mode") == "소아":
+
+        # 👶 증상 요약
         st.subheader("👶 증상 요약")
-        sy = ctx.get("symptoms", {})
-        sy_cols = st.columns(4)
-        keys = list(sy.keys())
-        for i, key in enumerate(keys):
-            with sy_cols[i % 4]:
-                st.metric(key, sy[key])
+        sy = ctx.get("symptoms", {}) if isinstance(ctx.get("symptoms"), dict) else {}
+        cols = st.columns(4)
+        for i, key in enumerate(["콧물", "기침", "설사", "체온"]):
+            with cols[i % 4]:
+                st.metric(key, sy.get(key, ""))
 
-        st.subheader("🥗 식이가이드")
-        from ui_results import results_only_after_analyze as _dummy  # to keep imports coherent
-        from ui_results import render_adverse_effects as _dummy2
-        # 기존 peds_diet_guide는 별도 모듈에 있었지만, 원본의 가이드가 충분하여 lab_diet는 암에 한정.
-        # 필요 시 별도 모듈로 확장 가능.
+        # 🧭 병명/경향(간단 추정)
+        st.subheader("🧭 병명/경향(간단 추정)")
+        preds = []
+        try:
+            disease_sel = ctx.get("disease", "") or ""
+        except Exception:
+            disease_sel = ""
+        if disease_sel and disease_sel != "일상":
+            try:
+                from patch_peds_toggle import peds_diet_guide
+                _foods, _avoid, _tips = peds_diet_guide(disease_sel, ctx.get("vals", {}))
+                preds.append(f"{disease_sel} 의심 (증상·문진 기반)")
+            except Exception:
+                pass
+        if not preds:
+            # 심플 예측
+            def _peds_simple_predict(symptoms: dict) -> list[str]:
+                if not isinstance(symptoms, dict):
+                    return []
+                nasal = (symptoms.get("콧물") or "")
+                cough = (symptoms.get("기침") or "")
+                diarrhea = (symptoms.get("설사") or "")
+                fevercat = (symptoms.get("체온") or symptoms.get("발열") or "")
+                out = []
+                if "있음" in diarrhea or "자주" in diarrhea:
+                    out.append("급성 위장염 가능성")
+                if "누런" in nasal or "진한" in nasal:
+                    out.append("상기도 감염/부비동염 경향")
+                elif "맑은" in nasal:
+                    out.append("바이러스성 감기 경향")
+                if "심함" in cough or "지속" in cough:
+                    out.append("하기도 자극/기관지염 경향")
+                if "39" in fevercat or "39+" in fevercat:
+                    out.append("고열 — 병원 내원 권장")
+                elif "38.5" in fevercat:
+                    out.append("중등도 발열 — 해열제 및 수분 보충")
+                if not out:
+                    out.append("특정 질환 추정 어려움 — 경과 관찰 권장")
+                return out
+            preds = _peds_simple_predict(sy)
+        for p in preds:
+            st.write("- " + p)
 
+        # 🌡️ 해열제 1회분(평균)
         st.subheader("🌡️ 해열제 1회분(평균)")
-        dcols = st.columns(2)
-        with dcols[0]:
+        cc = st.columns(2)
+        with cc[0]:
             st.metric("아세트아미노펜 시럽", f"{ctx.get('apap_ml')} mL")
-        with dcols[1]:
+        with cc[1]:
             st.metric("이부프로펜 시럽", f"{ctx.get('ibu_ml')} mL")
 
+        # 🥗 식이가이드
+        st.subheader("🥗 식이가이드")
+
+        # 📥 보고서 다운로드 (.md / .txt)
+        try:
+            from ui_results import build_report_md, download_report_buttons
+            md_text = build_report_md(ctx, {}, [], [], DRUG_DB)
+            download_report_buttons(st, md_text)
+            st.caption("문의나 버그 제보는 공식카페로 해주시면 감사합니다.")
+        except Exception:
+            pass
     st.stop()
