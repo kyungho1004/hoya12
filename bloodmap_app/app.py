@@ -92,6 +92,8 @@ ONCO_MAP = build_onco_map()
 st.set_page_config(page_title="블러드맵 피수치가이드 (모듈화)", page_icon="🩸", layout="centered")
 st.title("BloodMap — 모듈화 버전")
 
+st.markdown("[피수치 가이드 공식카페 바로가기](https://cafe.naver.com/bloodmap)")
+
 # 공통 고지
 st.info(
     "본 수치는 참고용이며, 해석 결과는 개발자와 무관합니다.\n"
@@ -241,26 +243,30 @@ if mode == "암":
 
 # ------------------ 소아 모드 ------------------
 else:
+
     ctop = st.columns(3)
     with ctop[0]:
-        disease = st.selectbox("소아 질환", ["로타","독감","RSV","아데노","마이코","수족구","편도염","코로나","중이염"], index=0)
+        disease = st.selectbox("소아 질환", ["일상","로타","독감","RSV","아데노","마이코","수족구","편도염","코로나","중이염"], index=0)
     with ctop[1]:
         temp = st.number_input("체온(℃)", min_value=0.0, step=0.1)
     with ctop[2]:
         age_m = st.number_input("나이(개월)", min_value=0, step=1)
         weight = st.number_input("체중(kg)", min_value=0.0, step=0.1)
 
-    # 증상 옵션 로딩
-    opts = get_symptom_options(disease)
+    # 증상 옵션 + 안전 브릿지(발열↔체온)
     st.markdown("### 증상 체크")
-    c1,c2,c3,c4 = st.columns(4)
-    with c1: nasal = st.selectbox("콧물", opts["콧물"])
-    with c2: cough = st.selectbox("기침", opts["기침"])
-    with c3: diarrhea = st.selectbox("설사(횟수/일)", opts["설사"])
-   # bridge: ensure both "발열" and "체온" keys exist
-  with c4:
-    fever = st.selectbox("발열", ((opts or {}).get("발열") or (opts or {}).get("체온") or ["없음","37~37.5","37.5~38","38.5~39","39+"]))
-      
+    opts = get_symptom_options(disease)
+    if not isinstance(opts, dict): opts = {}
+    if "발열" not in opts and "체온" in opts: opts["발열"] = opts["체온"]
+    if "체온" not in opts and "발열" in opts: opts["체온"] = opts["발열"]
+
+    c1, c2, c3, c4 = st.columns(4)
+    with c1: nasal = st.selectbox("콧물", (opts.get("콧물") or ["없음","맑음","누런/진한"]))
+    with c2: cough = st.selectbox("기침", (opts.get("기침") or ["없음","가끔","보통","심함"]))
+    with c3: diarrhea = st.selectbox("설사", (opts.get("설사") or ["없음","가끔","있음","자주"]))
+    with c4: fever = st.selectbox("발열", ((opts or {}).get("발열") or (opts or {}).get("체온") or ["없음","37~37.5","37.5~38","38.5~39","39+"]))
+
+    # 해열제 계산
     from peds_dose import acetaminophen_ml, ibuprofen_ml
     apap_ml, apap_w = acetaminophen_ml(age_m, weight or None)
     ibu_ml,  ibu_w  = ibuprofen_ml(age_m, weight or None)
@@ -268,16 +274,16 @@ else:
     with dc[0]: st.metric("아세트아미노펜 시럽", f"{apap_ml} mL", help=f"계산 체중 {apap_w} kg · 160 mg/5 mL, 12.5 mg/kg")
     with dc[1]: st.metric("이부프로펜 시럽", f"{ibu_ml} mL", help=f"계산 체중 {ibu_w} kg · 100 mg/5 mL, 7.5 mg/kg")
 
+    # 결과 트리거
     if st.button("🔎 해석하기", key="analyze_peds"):
         st.session_state["analyzed"] = True
         st.session_state["analysis_ctx"] = {
             "mode":"소아", "disease": disease,
-            "symptoms": {"콧물": nasal, "기침": cough, "설사": diarrhea, "발열": fever},
+            "symptoms": {"콧물": nasal, "기침": cough, "설사": diarrhea, "발열": fever, "체온": fever},
             "temp": temp, "age_m": age_m, "weight": weight or None,
             "apap_ml": apap_ml, "ibu_ml": ibu_ml,
             "vals": {}
         }
-
 # ------------------ 결과 전용 게이트 ------------------
 results_only_after_analyze(st, ((st.session_state.get("analysis_ctx") or {}).get("labs") or {}) if isinstance((st.session_state.get("analysis_ctx") or {}).get("labs"), dict) else {})
 if True:
@@ -349,6 +355,32 @@ if True:
             with sy_cols[i % 4]:
                 st.metric(key, sy[key])
 
+
+        # 🧭 병명/경향(간단 추정)
+        st.subheader("🧭 병명/경향(간단 추정)")
+        sy = ctx.get("symptoms", {}) or {}
+        disease_sel = ctx.get("disease", "") or ""
+        preds = []
+        if disease_sel and disease_sel != "일상":
+            try:
+                from patch_peds_toggle import peds_diet_guide
+                _foods, _avoid, _tips = peds_diet_guide(disease_sel, ctx.get("vals", {}))
+                preds.append(f"{disease_sel} 의심 (증상·문진 기반)")
+            except Exception:
+                pass
+        if not preds:
+            nasal = (sy.get("콧물") or "")
+            cough = (sy.get("기침") or "")
+            diarrhea = (sy.get("설사") or "")
+            fevercat = (sy.get("체온") or sy.get("발열") or "")
+            if "있음" in diarrhea or "자주" in diarrhea: preds.append("급성 위장염 가능성")
+            if "누런" in nasal or "진한" in nasal: preds.append("상기도 감염/부비동염 경향")
+            elif "맑음" in nasal or "맑은" in nasal: preds.append("바이러스성 감기 경향")
+            if "심함" in cough or "지속" in cough: preds.append("하기도 자극/기관지염 경향")
+            if "39" in fevercat or "39+" in fevercat: preds.append("고열 — 병원 내원 권장")
+            elif "38.5" in fevercat: preds.append("중등도 발열 — 해열제 및 수분 보충")
+            if not preds: preds.append("특정 질환 추정 어려움 — 경과 관찰 권장")
+        for p in preds: st.write("- " + p)
         st.subheader("🥗 식이가이드")
         from ui_results import results_only_after_analyze as _dummy  # to keep imports coherent
         from ui_results import render_adverse_effects as _dummy2
@@ -361,5 +393,14 @@ if True:
             st.metric("아세트아미노펜 시럽", f"{ctx.get('apap_ml')} mL")
         with dcols[1]:
             st.metric("이부프로펜 시럽", f"{ctx.get('ibu_ml')} mL")
+
+        # 📥 보고서 다운로드 (.md / .txt)
+        try:
+            from ui_results import build_report_md, download_report_buttons
+            md_text = build_report_md(ctx, {}, [], [], DRUG_DB)
+            download_report_buttons(st, md_text)
+            st.caption("문의나 버그 제보는 공식카페로 해주시면 감사합니다.")
+        except Exception:
+            pass
 
     st.stop()
