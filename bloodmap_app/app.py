@@ -266,15 +266,38 @@ else:
     with c3: diarrhea = st.selectbox("설사(횟수/일)", opts["설사"])
     with c4: fever = st.selectbox("발열", opts["발열"])
 
-    st.markdown("#### 🔥 해열제 (1회 평균 용량 기준, mL)")
+    st.markdown("#### 🔥 해열제 (1회 평균 용량 기준)")
+
+
     from peds_dose import acetaminophen_ml, ibuprofen_ml
+
+
     apap_ml, apap_w = acetaminophen_ml(age_m, weight or None)
+
+
     ibu_ml,  ibu_w  = ibuprofen_ml(age_m, weight or None)
+
+
     dc = st.columns(2)
-    apap_val = f"{apap_ml:.1f}"
-ibu_val  = f"{ibu_ml:.1f}"
-with dc[0]: st.metric("아세트아미노펜 시럽 (mL)", apap_val, help=f"계산 체중 {apap_w} kg · 160 mg/5 mL, 12.5 mg/kg")
-with dc[1]: st.metric("이부프로펜 시럽 (mL)",  ibu_val,  help=f"계산 체중 {ibu_w} kg · 100 mg/5 mL, 7.5 mg/kg")
+
+
+    with dc[0]:
+
+
+        st.metric("아세트아미노펜 시럽 (mL)", f"{apap_ml:.1f}", help=f"계산 체중 {apap_w} kg · 160 mg/5 mL, 12.5 mg/kg")
+
+
+    with dc[1]:
+
+
+
+        st.metric("이부프로펜 시럽 (mL)",  f"{ibu_ml:.1f}",  help=f"계산 체중 {ibu_w} kg · 100 mg/5 mL, 7.5 mg/kg")
+
+
+
+    
+
+
 
     if st.button("🔎 해석하기", key="analyze_peds"):
         st.session_state["analyzed"] = True
