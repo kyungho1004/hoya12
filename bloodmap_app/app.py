@@ -418,7 +418,7 @@ else:
         with dc[0]: st.metric("아세트아미노펜 시럽 (mL)", f"{apap_ml:.1f}", help=f"계산 체중 {apap_w} kg · 160 mg/5 mL, 12.5 mg/kg")
         with dc[1]: st.metric("이부프로펜 시럽 (mL)",  f"{ibu_ml:.1f}",  help=f"계산 체중 {ibu_w} kg · 100 mg/5 mL, 7.5 mg/kg")
         
-        if st.button("🔎 해석하기", key="analyze_peds"):
+        if st.button("🔎 해석하기", key="analyze_peds_btn"):
             st.session_state["analyzed"] = True
             st.session_state["analysis_ctx"] = {
             "mode":"소아", "disease": disease,
