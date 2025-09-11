@@ -278,7 +278,7 @@ else:
         }
 
 # ------------------ 결과 전용 게이트 ------------------
-results_only_after_analyze(st, labs_ctx)
+results_only_after_analyze(st, ((st.session_state.get("analysis_ctx") or {}).get("labs") or {}) if isinstance((st.session_state.get("analysis_ctx") or {}).get("labs"), dict) else {})
 if True:
     ctx = st.session_state.get("analysis_ctx", {})
     if ctx.get("mode") == "암":
