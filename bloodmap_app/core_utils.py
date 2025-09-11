@@ -11,7 +11,7 @@ def nickname_pin(key_prefix="np_"):
     """
     c1, c2 = st.columns([2, 1])
     with c1:
-        nick = st.text_input("별명", placeholder="예: 홍길동", key=key_prefix + "nick")
+        nick = st.text_input("별명", placeholder="예: 은서엄마", key=key_prefix + "nick")
     with c2:
         pin = st.text_input("PIN (4자리 숫자)", placeholder="0000", key=key_prefix + "pin", max_chars=4)
     # sanitize
