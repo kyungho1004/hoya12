@@ -278,8 +278,7 @@ else:
         }
 
 # ------------------ 결과 전용 게이트 ------------------
-results_only_after_analyze(st, labs_ctx)
-if True:
+if results_only_after_analyze(st):
     ctx = st.session_state.get("analysis_ctx", {})
     if ctx.get("mode") == "암":
         labs = ctx.get("labs", {})
