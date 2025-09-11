@@ -12,12 +12,14 @@ def _norm(s: str) -> str:
     return s2.upper().replace(" ", "") or s2
 
 DX_KO_LOCAL = {
+    # Hematology
     "APL": "급성 전골수구성 백혈병",
     "AML": "급성 골수성 백혈병",
     "ALL": "급성 림프구성 백혈병",
     "CML": "만성 골수성 백혈병",
     "CLL": "만성 림프구성 백혈병",
     "PCNSL": "원발성 중추신경계 림프종",
+    # Lymphoma + common synonyms
     "DLBCL": "미만성 거대 B세포 림프종",
     "B거대세포종": "미만성 거대 B세포 림프종",
     "B 거대세포종": "미만성 거대 B세포 림프종",
@@ -36,6 +38,7 @@ DX_KO_LOCAL = {
     "AITL": "혈관면역모세포성 T세포 림프종",
     "ALCL (ALK+)": "역형성 대세포 림프종 (ALK 양성)",
     "ALCL (ALK−)": "역형성 대세포 림프종 (ALK 음성)",
+    # Sarcoma
     "OSTEOSARCOMA": "골육종",
     "EWING SARCOMA": "유잉육종",
     "RHABDOMYOSARCOMA": "횡문근육종",
@@ -48,6 +51,7 @@ DX_KO_LOCAL = {
     "DFSP": "피부섬유종증성 육종(DFSP)",
     "CLEAR CELL SARCOMA": "투명세포 육종",
     "EPITHELIOID SARCOMA": "상피양 육종",
+    # Solid & Rare (keys already Korean or short)
     "폐선암": "폐선암",
     "유방암": "유방암",
     "대장암": "결장/직장 선암",
@@ -113,8 +117,13 @@ if mode == "암":
     group = st.selectbox("암 카테고리", ["혈액암","림프종","고형암","육종","희귀암"])
     dx_options = list(ONCO_MAP.get(group, {}).keys())
     dx = st.selectbox("진단(영문)", dx_options or ["직접 입력"])
+    # ▼ 강제 한글 병기 라벨 출력
+    if dx and dx != "직접 입력":
+        st.markdown(f"**진단:** {local_dx_display(group, dx)}")
     if dx == "직접 입력":
         dx = st.text_input("진단(영문/축약 직접 입력)", value="")
+        if dx:
+            st.markdown(f"**진단:** {local_dx_display(group, dx)}")
 
     if group == "혈액암":
         msg = "혈액암 환자에서 **철분제 + 비타민 C** 복용은 흡수 촉진 가능성이 있어, **반드시 주치의와 상의 후** 복용 여부를 결정하세요."
@@ -149,6 +158,8 @@ if mode == "암":
     ]
     chemo_opts = picklist([k for k in chemo_keys if k in DRUG_DB])
     abx_opts   = picklist([k for k in abx_keys if k in DRUG_DB])
+    if not abx_opts:
+        abx_opts = abx_keys  # DB 비어도 선택 가능하도록 폴백
     if not abx_opts:
         abx_opts = abx_keys  # DRUG_DB에 없더라도 키 자체로 선택 가능하게
     c1, c2 = st.columns(2)
@@ -219,7 +230,7 @@ if mode == "암":
     if st.button("🔎 해석하기", key="analyze_cancer"):
         st.session_state["analyzed"] = True
         st.session_state["analysis_ctx"] = {
-            "mode":"암", "group":group, "dx":dx, "dx_label": local_dx_display(group, dx),
+            "mode":"암", "group":group, "dx":dx, "dx_label": dx_display(group, dx),
             "labs": labs,
             "user_chemo": user_chemo,
             "user_abx": user_abx
