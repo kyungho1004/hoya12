@@ -332,12 +332,6 @@ if results_only_after_analyze(st):
         lines = lab_diet_guides(labs, heme_flag=(ctx.get("group")=="혈액암"))
         for L in lines: st.write("- " + L)
 
-        # 약물 부작용 (자동 추천만 우선 표시)
-        st.subheader("💊 약물 부작용")
-        rec = auto_recs_by_dx(ctx.get("group"), ctx.get("dx"), DRUG_DB, ONCO_MAP)
-        regimen = (rec.get("chemo") or []) + (rec.get("targeted") or [])
-        render_adverse_effects(st, regimen, DRUG_DB)
-
     elif ctx.get("mode") == "소아":
         st.subheader("👶 증상 요약")
         sy = ctx.get("symptoms", {})
