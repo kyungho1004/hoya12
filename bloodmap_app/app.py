@@ -56,10 +56,14 @@ if mode == "암":
         c = st.columns(3)
         with c[0]:
             st.markdown("**항암제(예시)**")
-            for d in rec["chemo"]: st.write("- " + d)
+            from drug_db import display_label
+            for d in rec["chemo"]:
+                st.write("- " + display_label(d))
         with c[1]:
             st.markdown("**표적/면역(예시)**")
-            for d in rec["targeted"]: st.write("- " + d)
+            from drug_db import display_label
+            for d in rec["targeted"]:
+                st.write("- " + display_label(d))
         with c[2]:
             st.markdown("**항생제(참고)**")
             for d in rec["abx"]: st.write("- " + d)
@@ -242,14 +246,7 @@ if results_only_after_analyze(st):
 
         st.subheader("🧫 항생제 부작용")
         render_adverse_effects(st, ctx.get("user_abx") or [], DRUG_DB)
-
-        st.markdown("---")
-        st.markdown("**참고: 맵 기반 추천 레지멘 요약**")
-        rec = auto_recs_by_dx(ctx.get("group"), ctx.get("dx"), DRUG_DB, ONCO_MAP)
-        regimen_auto = (rec.get("chemo") or []) + (rec.get("targeted") or [])
-        render_adverse_effects(st, regimen_auto, DRUG_DB)
-
-        # 식이가이드
+# 식이가이드
         st.subheader("🥗 피수치 기반 식이가이드 (예시)")
         lines = lab_diet_guides(labs, heme_flag=(ctx.get("group")=="혈액암"))
         for L in lines: st.write("- " + L)
