@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import streamlit as st
-from .core_utils import clean_num
+from core_utils import clean_num
 
 QUAL = ["없음", "+", "++", "+++"]
 

@@ -91,6 +91,32 @@ if mode == "암":
         v = st.text_input(label, placeholder="예: 4500")
         labs[code] = clean_num(v)
 
+
+    st.markdown("### 3) 개인 선택 (영어 + 한글 병기)")
+    from drug_db import picklist, key_from_label
+
+    CHEMO_KEYS = ["ATRA","Arsenic Trioxide","Idarubicin","Daunorubicin","Ara-C","MTX","6-MP",
+                  "Vincristine","Cyclophosphamide","Prednisone",
+                  "Cisplatin","Carboplatin","Oxaliplatin","5-FU","Capecitabine","Irinotecan",
+                  "Docetaxel","Paclitaxel","Gemcitabine","Pemetrexed","Temozolomide",
+                  "Imatinib","Osimertinib","Alectinib","Crizotinib","Larotrectinib","Entrectinib",
+                  "Trastuzumab","Bevacizumab","Rituximab","Brentuximab Vedotin","Bleomycin","Vinblastine",
+                  "Dacarbazine","Bendamustine","Ibrutinib","Ifosfamide","Etoposide","Dactinomycin",
+                  "Pazopanib","Trabectedin","Sunitinib","Everolimus","Octreotide","Sorafenib","Lenvatinib"]
+    ABX_KEYS   = ["Piperacillin/Tazobactam","Cefepime","Meropenem","Vancomycin","Ceftazidime","Levofloxacin","TMP-SMX"]
+
+    chemo_opts = picklist([k for k in CHEMO_KEYS if k in DRUG_DB])
+    abx_opts   = picklist([k for k in ABX_KEYS if k in DRUG_DB])
+
+    p1, p2 = st.columns(2)
+    with p1:
+        user_chemo_labels = st.multiselect("항암제 선택(개인)", chemo_opts, default=[])
+    with p2:
+        user_abx_labels   = st.multiselect("항생제 선택(개인)", abx_opts, default=[])
+
+    user_chemo = [key_from_label(x) for x in user_chemo_labels]
+    user_abx   = [key_from_label(x) for x in user_abx_labels]
+
     st.markdown("#### 💾 저장/그래프")
     when = st.date_input("측정일", value=date.today())
     if st.button("📈 피수치 저장/추가"):
@@ -128,7 +154,9 @@ if mode == "암":
         st.session_state["analyzed"] = True
         st.session_state["analysis_ctx"] = {
             "mode":"암", "group":group, "dx":dx, "dx_label": dx_display(group, dx),
-            "labs": labs
+            "labs": labs,
+            "user_chemo": user_chemo,
+            "user_abx": user_abx
         }
 
     # 특수검사
@@ -184,6 +212,32 @@ if results_only_after_analyze(st):
                     st.metric(k, v)
         if ctx.get("dx_label"):
             st.caption(f"진단: **{ctx['dx_label']}**")
+
+
+        st.subheader("🗂️ 선택 요약")
+        s1, s2 = st.columns(2)
+        with s1:
+            st.markdown("**항암제(개인 선택)**")
+            for lbl in (ctx.get("user_chemo") or []):
+                from drug_db import display_label
+                st.write("- " + display_label(lbl))
+        with s2:
+            st.markdown("**항생제(개인 선택)**")
+            for lbl in (ctx.get("user_abx") or []):
+                from drug_db import display_label
+                st.write("- " + display_label(lbl))
+
+        st.subheader("💊 항암제 부작용")
+        render_adverse_effects(st, ctx.get("user_chemo") or [], DRUG_DB)
+
+        st.subheader("🧫 항생제 부작용")
+        render_adverse_effects(st, ctx.get("user_abx") or [], DRUG_DB)
+
+        st.markdown("---")
+        st.markdown("**참고: 맵 기반 추천 레지멘 요약**")
+        rec = auto_recs_by_dx(ctx.get("group"), ctx.get("dx"), DRUG_DB, ONCO_MAP)
+        regimen_auto = (rec.get("chemo") or []) + (rec.get("targeted") or [])
+        render_adverse_effects(st, regimen_auto, DRUG_DB)
 
         # 식이가이드
         st.subheader("🥗 피수치 기반 식이가이드 (예시)")
