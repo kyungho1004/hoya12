@@ -131,10 +131,8 @@ ONCO_MAP = build_onco_map()
 
 st.set_page_config(page_title="블러드맵 피수치가이드 (모듈화)", page_icon="🩸", layout="centered")
 st.title("BloodMap — 모듈화 버전")
-st.markdown("[피수치 가이드 공식카페 바로가기](https://cafe.naver.com/bloodmap)  
-**제작 Hoya/GPT · 자문 Hoya/GPT**")
-
-# 공통 고지
+st.markdown("""[피수치 가이드 공식카페 바로가기](https://cafe.naver.com/bloodmap)  
+**제작 Hoya/GPT · 자문 Hoya/GPT**""")# 공통 고지
 st.info(
     "본 수치는 참고용이며, 해석 결과는 개발자와 무관합니다.\n"
     "약 변경/복용 중단 등은 반드시 주치의와 상의하세요.\n"
