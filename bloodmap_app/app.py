@@ -267,7 +267,6 @@ else:
     dc = st.columns(2)
     with dc[0]: st.metric("아세트아미노펜 시럽", f"{apap_ml} mL", help=f"계산 체중 {apap_w} kg · 160 mg/5 mL, 12.5 mg/kg")
     with dc[1]: st.metric("이부프로펜 시럽", f"{ibu_ml} mL", help=f"계산 체중 {ibu_w} kg · 100 mg/5 mL, 7.5 mg/kg")
-
         # 📥 보고서 다운로드 (.md / .txt)
         try:
             from ui_results import build_report_md, download_report_buttons
@@ -357,10 +356,12 @@ if results_only_after_analyze(st):
             with sy_cols[i % 4]:
                 st.metric(key, sy[key])
         # 🔍 병명/경향(간단 추정)
+
+        # 🔍 병명/경향(간단 추정)
         st.subheader("🧭 병명/경향(간단 추정)")
         try:
             from patch_peds_toggle import peds_diet_guide
-            disease_sel = ctx.get("disease", "")
+            disease_sel = ctx.get("disease", "") or ""
             preds = []
             if disease_sel:
                 _foods, _avoid, _tips = peds_diet_guide(disease_sel, ctx.get("vals", {}))
@@ -374,6 +375,7 @@ if results_only_after_analyze(st):
             preds = ["추정 불가 — 입력값 부족"]
         for p in preds:
             st.write("- " + p)
+
 
 
         st.subheader("🥗 식이가이드")
