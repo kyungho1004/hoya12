@@ -243,7 +243,7 @@ if mode == "암":
 else:
     ctop = st.columns(3)
     with ctop[0]:
-        disease = st.selectbox("소아 질환", ["로타","독감","RSV","아데노","마이코","수족구","편도염","코로나","중이염"], index=0)
+        disease = st.selectbox("소아 질환", ["일상", "로타","독감","RSV","아데노","마이코","수족구","편도염","코로나","중이염"], index=0)
     with ctop[1]:
         temp = st.number_input("체온(℃)", min_value=0.0, step=0.1)
     with ctop[2]:
@@ -251,20 +251,14 @@ else:
         weight = st.number_input("체중(kg)", min_value=0.0, step=0.1)
 
     # 증상 옵션 로딩
-    opts = get_symptom_options(disease)
-    # bridge keys between "발열" and "체온" to avoid KeyError
-    if isinstance(opts, dict):
-        if "발열" not in opts and "체온" in opts:
-            opts["발열"] = opts["체온"]
-        if "체온" not in opts and "발열" in opts:
-            opts["체온"] = opts["발열"]
-
+    opts = get_symptom_options(disease)\n    # bridge: ensure both "발열" and "체온" keys exist\n    if isinstance(opts, dict):\n        if "발열" not in opts and "체온" in opts:\n            opts["발열"] = opts["체온"]\n        if "체온" not in opts and "발열" in opts:\n            opts["체온"] = opts["발열"]\n
     st.markdown("### 증상 체크")
     c1,c2,c3,c4 = st.columns(4)
     with c1: nasal = st.selectbox("콧물", opts["콧물"])
     with c2: cough = st.selectbox("기침", opts["기침"])
     with c3: diarrhea = st.selectbox("설사(횟수/일)", opts["설사"])
-    with c4: fever = st.selectbox("발열", opts["발열"])
+    with c4:
+        fever = st.selectbox("발열", (opts.get("발열") or opts.get("체온") or ["없음","37~37.5","37.5~38","38.5~39","39+"]))
 
     st.markdown("#### 🔥 해열제 (1회 평균 용량 기준, mL)")
     from peds_dose import acetaminophen_ml, ibuprofen_ml
