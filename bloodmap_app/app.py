@@ -32,23 +32,6 @@ st.divider()
 # ----------- 모드 선택 -----------
 mode = st.radio("모드 선택", ["암", "소아"], horizontal=True)
 
-# ----------- 소아 해열제 카드 -----------
-st.markdown("#### 🔥 해열제 (1회 평균 용량 기준, mL)")
-col_top = st.columns(3)
-with col_top[0]:
-    age_m = st.number_input("나이(개월)", min_value=0, step=1, value=12)
-with col_top[1]:
-    weight = st.number_input("체중(kg, 선택)", min_value=0.0, step=0.1, format="%.1f")
-with col_top[2]:
-    pass
-
-apap_ml, apap_w = acetaminophen_ml(age_m, weight or None)
-ibu_ml,  ibu_w  = ibuprofen_ml(age_m, weight or None)
-dc = st.columns(2)
-with dc[0]: st.metric("아세트아미노펜 시럽", f"{apap_ml} mL", help=f"계산 체중 {apap_w} kg · 160 mg/5 mL, 12.5 mg/kg")
-with dc[1]: st.metric("이부프로펜 시럽", f"{ibu_ml} mL", help=f"계산 체중 {ibu_w} kg · 100 mg/5 mL, 7.5 mg/kg")
-
-st.divider()
 
 report_sections = []
 
@@ -93,8 +76,7 @@ if mode == "암":
 
 
     st.markdown("### 3) 개인 선택 (영어 + 한글 병기)")
-    st.markdown("### 3) 개인 선택 (영어 + 한글 병기)")
-    from drug_db import picklist, key_from_label
+from drug_db import picklist, key_from_label
 
     # 분리된 키셋
     CHEMO_KEYS = [
@@ -119,6 +101,9 @@ if mode == "암":
     ABX_KEYS   = ["Piperacillin/Tazobactam","Cefepime","Meropenem","Imipenem/Cilastatin","Aztreonam","Amikacin",
                   "Vancomycin","Linezolid","Daptomycin","Ceftazidime","Levofloxacin","TMP-SMX","Metronidazole","Amoxicillin/Clavulanate"]
 
+    # 암 진단에 맞는 치료 목록으로 동적 구성 (chemo 우선, 없으면 targeted 대체)
+    rec_local = auto_recs_by_dx(group, dx, DRUG_DB, ONCO_MAP)
+    CHEMO_KEYS = rec_local.get("chemo", []) or rec_local.get("targeted", [])
     chemo_opts    = picklist([k for k in CHEMO_KEYS if k in DRUG_DB])
     targeted_opts = picklist([k for k in TARGETED_KEYS if k in DRUG_DB])
     abx_opts      = picklist([k for k in ABX_KEYS if k in DRUG_DB])
@@ -127,8 +112,6 @@ if mode == "암":
     with p1:
         user_chemo_labels = st.multiselect("항암제(세포독성) 선택", chemo_opts, default=[])
     with p2:
-        user_targeted_labels = st.multiselect("표적/면역치료 선택", targeted_opts, default=[])
-    with p3:
         user_abx_labels   = st.multiselect("항생제 선택", abx_opts, default=[])
 
     user_chemo    = [key_from_label(x) for x in user_chemo_labels]
@@ -157,7 +140,9 @@ if mode == "암":
         st.success("저장 완료!")
 
     dfh = st.session_state.get("lab_hist", {}).get(key)
-    if isinstance(dfh, pd.DataFrame) and not dfh.empty:
+    if not has_key:
+        st.info("그래프는 별명 + PIN(4자리) 저장 시 표시됩니다.")
+    elif isinstance(dfh, pd.DataFrame) and not dfh.empty:
         st.markdown("##### 📊 추이 그래프")
         nonnull_cols = [c for c in dfh.columns if (c!="Date" and dfh[c].notna().any())]
         default_pick = [c for c in ["WBC(백혈구)","Hb(혈색소)","PLT(혈소판)","CRP(C-반응성단백,염증)","ANC(절대호중구,면역력)"] if c in nonnull_cols]
@@ -174,7 +159,6 @@ if mode == "암":
             "mode":"암", "group":group, "dx":dx, "dx_label": dx_display(group, dx),
             "labs": labs,
             "user_chemo": user_chemo,
-            "user_targeted": user_targeted,
             "user_abx": user_abx
         }
 
@@ -207,6 +191,14 @@ else:
     with c2: cough = st.selectbox("기침", opts["기침"])
     with c3: diarrhea = st.selectbox("설사(횟수/일)", opts["설사"])
     with c4: fever = st.selectbox("발열", opts["발열"])
+
+    st.markdown("#### 🔥 해열제 (1회 평균 용량 기준, mL)")
+    from peds_dose import acetaminophen_ml, ibuprofen_ml
+    apap_ml, apap_w = acetaminophen_ml(age_m, weight or None)
+    ibu_ml,  ibu_w  = ibuprofen_ml(age_m, weight or None)
+    dc = st.columns(2)
+    with dc[0]: st.metric("아세트아미노펜 시럽", f"{apap_ml} mL", help=f"계산 체중 {apap_w} kg · 160 mg/5 mL, 12.5 mg/kg")
+    with dc[1]: st.metric("이부프로펜 시럽", f"{ibu_ml} mL", help=f"계산 체중 {ibu_w} kg · 100 mg/5 mL, 7.5 mg/kg")
 
     if st.button("🔎 해석하기", key="analyze_peds"):
         st.session_state["analyzed"] = True
@@ -265,9 +257,6 @@ if results_only_after_analyze(st):
 
         st.subheader("💊 항암제(세포독성) 부작용")
         render_adverse_effects(st, ctx.get("user_chemo") or [], DRUG_DB)
-
-        st.subheader("💉 표적/면역 부작용")
-        render_adverse_effects(st, ctx.get("user_targeted") or [], DRUG_DB)
 
         st.subheader("🧫 항생제 부작용")
         render_adverse_effects(st, ctx.get("user_abx") or [], DRUG_DB)
