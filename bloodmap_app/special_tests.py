@@ -18,29 +18,32 @@ def special_tests_ui():
             sug = st.selectbox("요당", QUAL)
             ket = st.selectbox("케톤뇨", QUAL)
 
-        # 🔸 면역·보체 검사
+        # 🔸 면역 · 보체 검사
         st.markdown("### 🔸 면역 · 보체 검사")
         col2 = st.columns(2)
         with col2[0]:
             c3 = st.text_input("C3 (mg/dL)")
-        with col2[1]:
             c4 = st.text_input("C4 (mg/dL)")
+        with col2[1]:
+            crp_hs = st.text_input("hs-CRP (mg/L)")
+            ana = st.text_input("ANA (titer)")
 
-        # 🧬 지질 검사
-        st.markdown("### 🧬 지질 검사")
+        # 🧠 기타 특수
+        st.markdown("### 🧠 기타 특수")
         col3 = st.columns(2)
         with col3[0]:
             tg = st.text_input("TG (mg/dL)")
             hdl = st.text_input("HDL (mg/dL)")
-        with col3[1]:
             ldl = st.text_input("LDL (mg/dL)")
-            tc  = st.text_input("총콜레스테롤 (mg/dL)")
+        with col3[1]:
+            lpa = st.text_input("Lp(a) (mg/dL)")
+            homa = st.text_input("HOMA-IR")
+            ferr = st.text_input("Ferritin (ng/mL)")
 
-        # 🫀 신장/심장 기능
-        st.markdown("### 🫀 신장 / 심장 기능")
+        # ❤️ 심장 표지자
+        st.markdown("### ❤️ 심장 표지자")
         col4 = st.columns(2)
         with col4[0]:
-            bun = st.text_input("BUN (mg/dL)")
             bnp = st.text_input("BNP (pg/mL)")
         with col4[1]:
             ckmb = st.text_input("CK-MB (ng/mL)")
@@ -48,7 +51,7 @@ def special_tests_ui():
             myo  = st.text_input("Myoglobin (ng/mL)")
 
         # 🔍 해석 버튼 및 로직
-        if st.button("🔎 특수검사 해석"):
+        if st.button("🔎 특수검사 해석", key="btn_special_tests"):
             if alb!="없음": lines.append("알부민뇨 " + ("+"*QUAL.index(alb)) + " → 🟡~🔴 신장 이상 가능")
             if hem!="없음": lines.append("혈뇨 " + ("+"*QUAL.index(hem)) + " → 🟡 요로 염증/결석 등")
             if sug!="없음": lines.append("요당 " + ("+"*QUAL.index(sug)) + " → 🟡 고혈당/당뇨 의심")
@@ -58,35 +61,24 @@ def special_tests_ui():
             if C3 is not None: lines.append("C3 낮음 → 🟡 면역계 이상 가능" if C3 < 90 else "C3 정상/상승")
             if C4 is not None: lines.append("C4 낮음 → 🟡 면역계 이상 가능" if C4 < 10 else "C4 정상/상승")
 
-            TG = clean_num(tg); HDL = clean_num(hdl); LDL = clean_num(ldl); TC = clean_num(tc)
-            if TG is not None:
-                lines.append("🔴 TG≥200: 고중성지방혈증 가능" if TG >= 200 else ("🟡 TG 150~199 경계" if TG >= 150 else "🟢 TG 양호"))
-            if HDL is not None:
-                lines.append("🟠 HDL<40: 심혈관 위험" if HDL < 40 else "🟢 HDL 양호")
-            if LDL is not None:
-                lines.append("🔴 LDL≥160: 고LDL콜" if LDL >= 160 else ("🟡 LDL 130~159 경계" if LDL >= 130 else "🟢 LDL 양호"))
-            if TC is not None:
-                lines.append("🔴 총콜≥240: 고지혈증" if TC >= 240 else ("🟡 총콜 200~239 경계" if TC >= 200 else "🟢 총콜 양호"))
+            TG = clean_num(tg)
+            if TG is not None and TG >= 200: lines.append("TG 200 이상 → 🔴 고지혈증 가능성")
+            HDL = clean_num(hdl)
+            if HDL is not None and HDL < 40: lines.append("HDL 낮음 → 🟡 심혈관 위험")
+            LDL = clean_num(ldl)
+            if LDL is not None and LDL >= 160: lines.append("LDL 높음 → 🔴 고지혈증 가능성")
 
-            BUN = clean_num(bun)
-            if BUN is not None:
-                lines.append("🔴 BUN≥25: 탈수/신장기능 저하 의심" if BUN >= 25 else "🟢 BUN 정상")
             BNP = clean_num(bnp)
-            if BNP is not None:
-                lines.append("🔴 BNP≥100: 심부전 의심" if BNP >= 100 else "🟢 BNP 정상")
-
+            if BNP is not None and BNP > 100: lines.append("BNP 상승 → 🟡 심부전 가능성")
             CKMB = clean_num(ckmb)
-            TROP = clean_num(trop)
+            if CKMB is not None and CKMB > 5: lines.append("CK-MB 상승 → 🟡 심근 손상 의심")
+            TRO = clean_num(trop)
+            if TRO is not None and TRO > 0.05: lines.append("Troponin-I 상승 → 🔴 급성관상동맥증후군 의심")
             MYO = clean_num(myo)
+            if MYO is not None and MYO > 85: lines.append("Myoglobin 상승 → 🟡 근육 손상 가능")
 
-            if CKMB is not None:
-                lines.append("🔴 CK-MB>5: 심장 손상 가능성" if CKMB > 5 else "🟢 CK-MB 정상")
-            if TROP is not None:
-                lines.append("🔴 Troponin-I>0.04: 심근경색 의심" if TROP > 0.04 else "🟢 Troponin-I 정상")
-            if MYO is not None:
-                lines.append("🟡 Myoglobin>85: 근육/심장 손상 가능성" if MYO > 85 else "🟢 Myoglobin 정상")
+            # 출력
+            st.markdown("#### 🧾 특수검사 해석 결과")
+            for L in lines: st.write("- " + L)
 
-            if not lines:
-                lines.append("입력값이 없어 해석할 내용이 없습니다.")
-                
     return lines
