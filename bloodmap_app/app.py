@@ -380,48 +380,48 @@ else:
     st.caption("증상 입력 후 더 정확해져요")
     st.info(f"예상 병명(참고): **{_pred_preview}** — {_pred_why}")
 
-if "opts" not in locals():
-    try:
-        opts = get_symptom_options(disease) or {}
-    except Exception:
-        opts = {}
-
-st.markdown("### 증상 체크")
-_base = ["콧물","기침","설사","발열"]
-_extra = [k for k in (opts.keys() if opts else []) if k not in _base]
-sym_order = _base + _extra
-
-_fallback_choices = {
-    "콧물": ["없음","투명","흰색","누런","피섞임"],
-    "기침": ["없음","조금","보통","심함"],
-    "설사": ["없음","1~2회","3~4회","5~6회"],
-    "발열": ["없음","37~37.5 (미열)","37.5~38 (병원 내원 권장)","38.5~39 (병원/응급실)"],
-}
-
-sym_sel = {}
-cols = st.columns(4)
-for i, k in enumerate(sym_order):
-    with cols[i % 4]:
-        choices = (opts.get(k) if isinstance(opts, dict) else None)
-        if not choices:
-            choices = _fallback_choices.get(k, ["없음"])
-        if k == "부위":
-            sym_sel[k] = st.multiselect(k, choices, key=f"sym_{k}")
-        else:
-            sym_sel[k] = st.selectbox(k, choices, key=f"sym_{k}")
-
-    st.markdown("#### 🔥 해열제 (1회 평균 용량 기준, mL)")
-    from peds_dose import acetaminophen_ml, ibuprofen_ml
-    apap_ml, apap_w = acetaminophen_ml(age_m, weight or None)
-    ibu_ml,  ibu_w  = ibuprofen_ml(age_m, weight or None)
-    dc = st.columns(2)
-    with dc[0]: st.metric("아세트아미노펜 시럽 (mL)", f"{apap_ml:.1f}", help=f"계산 체중 {apap_w} kg · 160 mg/5 mL, 12.5 mg/kg")
-    with dc[1]: st.metric("이부프로펜 시럽 (mL)",  f"{ibu_ml:.1f}",  help=f"계산 체중 {ibu_w} kg · 100 mg/5 mL, 7.5 mg/kg")
+    if "opts" not in locals():
+        try:
+            opts = get_symptom_options(disease) or {}
+        except Exception:
+            opts = {}
     
-    if st.button("🔎 해석하기", key="analyze_peds"):
-        st.session_state["analyzed"] = True
-        st.session_state["analysis_ctx"] = {
-        "mode":"소아", "disease": disease,
+    st.markdown("### 증상 체크")
+    _base = ["콧물","기침","설사","발열"]
+    _extra = [k for k in (opts.keys() if opts else []) if k not in _base]
+    sym_order = _base + _extra
+    
+    _fallback_choices = {
+        "콧물": ["없음","투명","흰색","누런","피섞임"],
+        "기침": ["없음","조금","보통","심함"],
+        "설사": ["없음","1~2회","3~4회","5~6회"],
+        "발열": ["없음","37~37.5 (미열)","37.5~38 (병원 내원 권장)","38.5~39 (병원/응급실)"],
+    }
+    
+    sym_sel = {}
+    cols = st.columns(4)
+    for i, k in enumerate(sym_order):
+        with cols[i % 4]:
+            choices = (opts.get(k) if isinstance(opts, dict) else None)
+            if not choices:
+                choices = _fallback_choices.get(k, ["없음"])
+            if k == "부위":
+                sym_sel[k] = st.multiselect(k, choices, key=f"sym_{k}")
+            else:
+                sym_sel[k] = st.selectbox(k, choices, key=f"sym_{k}")
+    
+        st.markdown("#### 🔥 해열제 (1회 평균 용량 기준, mL)")
+        from peds_dose import acetaminophen_ml, ibuprofen_ml
+        apap_ml, apap_w = acetaminophen_ml(age_m, weight or None)
+        ibu_ml,  ibu_w  = ibuprofen_ml(age_m, weight or None)
+        dc = st.columns(2)
+        with dc[0]: st.metric("아세트아미노펜 시럽 (mL)", f"{apap_ml:.1f}", help=f"계산 체중 {apap_w} kg · 160 mg/5 mL, 12.5 mg/kg")
+        with dc[1]: st.metric("이부프로펜 시럽 (mL)",  f"{ibu_ml:.1f}",  help=f"계산 체중 {ibu_w} kg · 100 mg/5 mL, 7.5 mg/kg")
+        
+        if st.button("🔎 해석하기", key="analyze_peds"):
+            st.session_state["analyzed"] = True
+            st.session_state["analysis_ctx"] = {
+            "mode":"소아", "disease": disease,
         "symptoms": sym_sel,
         "temp": temp, "age_m": age_m, "weight": weight or None,
         "apap_ml": apap_ml, "ibu_ml": ibu_ml,
