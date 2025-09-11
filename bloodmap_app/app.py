@@ -75,11 +75,13 @@ if mode == "암":
     ]
     chemo_opts = picklist([k for k in chemo_keys if k in DRUG_DB])
     abx_opts   = picklist([k for k in abx_keys if k in DRUG_DB])
+    if not abx_opts:
+        abx_opts = abx_keys  # DRUG_DB에 없더라도 키 자체로 선택 가능하게
     c1, c2 = st.columns(2)
     with c1:
         user_chemo_labels = st.multiselect("항암제(개인)", chemo_opts, default=[])
     with c2:
-        user_abx_labels   = st.multiselect("항생제(개인)", abx_opts, default=[])
+        user_abx_labels   = st.multiselect("항생제(개인)", abx_opts, default=[], placeholder="복용 중인 항생제를 선택")
     user_chemo = [key_from_label(x) for x in user_chemo_labels]
     user_abx   = [key_from_label(x) for x in user_abx_labels]
 
