@@ -128,6 +128,20 @@ if mode == "암":
     if group == "혈액암":
         msg = "혈액암 환자에서 **철분제 + 비타민 C** 복용은 흡수 촉진 가능성이 있어, **반드시 주치의와 상의 후** 복용 여부를 결정하세요."
         st.warning(msg); report_sections.append(("영양/보충제 주의", [msg]))
+        c = st.columns(3)
+        with c[0]:
+            st.markdown("**항암제(예시)**")
+            from drug_db import display_label
+            for d in rec["chemo"]:
+                st.write("- " + display_label(d))
+        with c[1]:
+            st.markdown("**표적/면역(예시)**")
+            from drug_db import display_label
+            for d in rec["targeted"]:
+                st.write("- " + display_label(d))
+        with c[2]:
+            st.markdown("**항생제(참고)**")
+            for d in rec["abx"]: st.write("- " + d)
 
     # 3) 개인 선택 (암 진단별 동적 리스트)
     st.markdown("### 3) 개인 선택 (영어 + 한글 병기)")
@@ -225,7 +239,7 @@ if mode == "암":
 else:
     ctop = st.columns(3)
     with ctop[0]:
-        disease = st.selectbox("소아 질환", ["로타","독감","RSV","아데노","마이코","수족구","편도염","코로나","중이염"], index=0)
+        disease = st.selectbox("소아 질환", ["일상","로타","독감","RSV","아데노","마이코","수족구","편도염","코로나","중이염"], index=0)
     with ctop[1]:
         temp = st.number_input("체온(℃)", min_value=0.0, step=0.1)
     with ctop[2]:
@@ -239,8 +253,7 @@ else:
     with c1: nasal = st.selectbox("콧물", opts["콧물"])
     with c2: cough = st.selectbox("기침", opts["기침"])
     with c3: diarrhea = st.selectbox("설사(횟수/일)", opts["설사"])
-    with c4:
-        temp_cat = st.selectbox("체온", (opts.get("체온") or opts.get("발열") or ["없음","37~37.5","37.5~38","38.5~39","39+"]))
+    with c4: fever = st.selectbox("발열", opts["발열"])
 
     st.markdown("#### 🔥 해열제 (1회 평균 용량 기준, mL)")
     from peds_dose import acetaminophen_ml, ibuprofen_ml
@@ -254,7 +267,7 @@ else:
         st.session_state["analyzed"] = True
         st.session_state["analysis_ctx"] = {
             "mode":"소아", "disease": disease,
-            "symptoms": {"콧물": nasal, "기침": cough, "설사": diarrhea, "체온": temp_cat},
+            "symptoms": {"콧물": nasal, "기침": cough, "설사": diarrhea, "발열": fever},
             "temp": temp, "age_m": age_m, "weight": weight or None,
             "apap_ml": apap_ml, "ibu_ml": ibu_ml,
             "vals": {}
@@ -315,7 +328,8 @@ if results_only_after_analyze(st):
         lines = lab_diet_guides(labs, heme_flag=(ctx.get("group")=="혈액암"))
         for L in lines: st.write("- " + L)
 
-    elif ctx.get("mode") == "소아":
+        # 약물 부작용 (자동 추천만 우선 표시)
+elif ctx.get("mode") == "소아":
         st.subheader("👶 증상 요약")
         sy = ctx.get("symptoms", {})
         sy_cols = st.columns(4)
