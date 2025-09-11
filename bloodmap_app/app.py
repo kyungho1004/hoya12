@@ -258,13 +258,9 @@ else:
     with c2: cough = st.selectbox("기침", opts["기침"])
     with c3: diarrhea = st.selectbox("설사(횟수/일)", opts["설사"])
    # bridge: ensure both "발열" and "체온" keys exist
-    if not isinstance(opts, dict):
-    opts = {}
-    if "발열" not in opts and "체온" in opts:
-    opts["발열"] = opts["체온"]
-    if "체온" not in opts and "발열" in opts:
-    opts["체온"] = opts["발열"]
-    st.markdown("#### 🔥 해열제 (1회 평균 용량 기준, mL)")
+  with c4:
+    fever = st.selectbox("발열", ((opts or {}).get("발열") or (opts or {}).get("체온") or ["없음","37~37.5","37.5~38","38.5~39","39+"]))
+      
     from peds_dose import acetaminophen_ml, ibuprofen_ml
     apap_ml, apap_w = acetaminophen_ml(age_m, weight or None)
     ibu_ml,  ibu_w  = ibuprofen_ml(age_m, weight or None)
