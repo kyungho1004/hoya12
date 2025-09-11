@@ -89,8 +89,8 @@ from peds_dose import acetaminophen_ml, ibuprofen_ml
 ensure_onco_drug_db(DRUG_DB)
 ONCO_MAP = build_onco_map()
 
-st.set_page_config(page_title="블러드맵 피수치가이드, page_icon="🩸", layout="centered")
-st.title("BloodMap — 피수치가이드")
+st.set_page_config(page_title="블러드맵 피수치가이드 (모듈화)", page_icon="🩸", layout="centered")
+st.title("BloodMap — 모듈화 버전")
 
 st.markdown("[피수치 가이드 공식카페 바로가기](https://cafe.naver.com/bloodmap)")
 
