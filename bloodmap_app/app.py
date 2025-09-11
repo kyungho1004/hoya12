@@ -257,7 +257,8 @@ else:
     with c1: nasal = st.selectbox("콧물", opts["콧물"])
     with c2: cough = st.selectbox("기침", opts["기침"])
     with c3: diarrhea = st.selectbox("설사(횟수/일)", opts["설사"])
-    with c4: fever = st.selectbox("발열", opts["발열"])
+    with c4:
+    fever = st.selectbox("발열", (opts.get("발열") or opts.get("체온") or ["없음","37~37.5","37.5~38","38.5~39","39+"]))
 
     st.markdown("#### 🔥 해열제 (1회 평균 용량 기준, mL)")
     from peds_dose import acetaminophen_ml, ibuprofen_ml
