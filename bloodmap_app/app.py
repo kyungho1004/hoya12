@@ -410,17 +410,17 @@ for i, k in enumerate(sym_order):
         else:
             sym_sel[k] = st.selectbox(k, choices, key=f"sym_{k}")
 
-st.markdown("#### 🔥 해열제 (1회 평균 용량 기준, mL)")
-from peds_dose import acetaminophen_ml, ibuprofen_ml
-apap_ml, apap_w = acetaminophen_ml(age_m, weight or None)
-ibu_ml,  ibu_w  = ibuprofen_ml(age_m, weight or None)
-dc = st.columns(2)
-with dc[0]: st.metric("아세트아미노펜 시럽 (mL)", f"{apap_ml:.1f}", help=f"계산 체중 {apap_w} kg · 160 mg/5 mL, 12.5 mg/kg")
-with dc[1]: st.metric("이부프로펜 시럽 (mL)",  f"{ibu_ml:.1f}",  help=f"계산 체중 {ibu_w} kg · 100 mg/5 mL, 7.5 mg/kg")
-
-if st.button("🔎 해석하기", key="analyze_peds"):
-    st.session_state["analyzed"] = True
-    st.session_state["analysis_ctx"] = {
+    st.markdown("#### 🔥 해열제 (1회 평균 용량 기준, mL)")
+    from peds_dose import acetaminophen_ml, ibuprofen_ml
+    apap_ml, apap_w = acetaminophen_ml(age_m, weight or None)
+    ibu_ml,  ibu_w  = ibuprofen_ml(age_m, weight or None)
+    dc = st.columns(2)
+    with dc[0]: st.metric("아세트아미노펜 시럽 (mL)", f"{apap_ml:.1f}", help=f"계산 체중 {apap_w} kg · 160 mg/5 mL, 12.5 mg/kg")
+    with dc[1]: st.metric("이부프로펜 시럽 (mL)",  f"{ibu_ml:.1f}",  help=f"계산 체중 {ibu_w} kg · 100 mg/5 mL, 7.5 mg/kg")
+    
+    if st.button("🔎 해석하기", key="analyze_peds"):
+        st.session_state["analyzed"] = True
+        st.session_state["analysis_ctx"] = {
         "mode":"소아", "disease": disease,
         "symptoms": sym_sel,
         "temp": temp, "age_m": age_m, "weight": weight or None,
