@@ -129,8 +129,10 @@ from peds_dose import acetaminophen_ml, ibuprofen_ml
 ensure_onco_drug_db(DRUG_DB)
 ONCO_MAP = build_onco_map()
 
-st.set_page_config(page_title="블러드맵 피수치분석가이드", page_icon="🩸", layout="centered")
-st.title("BloodMap — 피수치분석가이드")
+st.set_page_config(page_title="블러드맵 피수치가이드 (모듈화)", page_icon="🩸", layout="centered")
+st.title("BloodMap — 모듈화 버전")
+st.markdown("[피수치 가이드 공식카페 바로가기](https://cafe.naver.com/bloodmap)  
+**제작 Hoya/GPT · 자문 Hoya/GPT**")
 
 # 공통 고지
 st.info(
@@ -198,7 +200,7 @@ if mode == "암":
         ("WBC","WBC(백혈구)"), ("Hb","Hb(혈색소)"), ("PLT","PLT(혈소판)"), ("ANC","ANC(절대호중구,면역력)"),
         ("Ca","Ca(칼슘)"), ("Na","Na(나트륨,소디움)"), ("K","K(칼륨)"), ("Alb","Alb(알부민)"), ("Glu","Glu(혈당)"),
         ("TP","TP(총단백)"), ("AST","AST(간수치)"), ("ALT","ALT(간세포)"), ("LD","LD(유산탈수효소)"),
-        ("CRP","CRP(C-반응성단백,염증)"), ("Cr","Cr(크레아티닌,신장)"), ("UA","UA(요산)"), ("Tbili","Tbili(총빌리루빈)")
+        ("CRP","CRP(C-반응성단백,염증)"), ("Cr","Cr(크레아티닌,신장)"), ("BUN","BUN(요소질소)"), ("UA","UA(요산)"), ("Tbili","Tbili(총빌리루빈)")
     ]
     labs = {}
     for code, label in LABS_ORDER:
@@ -350,18 +352,15 @@ if results_only_after_analyze(st):
 
         st.subheader("🧫 항생제 부작용")
         render_adverse_effects(st, ctx.get("user_abx") or [], DRUG_DB)
-# 식이가이드
-        st.subheader("🥗 피수치 기반 식이가이드 (예시)")
-        lines = lab_diet_guides(labs, heme_flag=(ctx.get("group")=="혈액암"))
-        for L in lines: st.write("- " + L)
 
-        # 약물 부작용 (자동 추천만 우선 표시)
-        st.subheader("💊 약물 부작용")
-        rec = auto_recs_by_dx(ctx.get("group"), ctx.get("dx"), DRUG_DB, ONCO_MAP)
-        regimen = (rec.get("chemo") or []) + (rec.get("targeted") or [])
-        render_adverse_effects(st, regimen, DRUG_DB)
-
-    elif ctx.get("mode") == "소아":
+    
+        # 보고서 생성 및 다운로드 버튼
+        from ui_results import build_report_md, download_report_buttons
+        diet_lines = lab_diet_guides(labs, heme_flag=(ctx.get("group")== "혈액암"))
+        md_text = build_report_md(ctx, labs, diet_lines, ctx.get("user_chemo") or [], DRUG_DB)
+        download_report_buttons(st, md_text)
+        st.caption("문의나 버그 제보는 공식카페로 해주시면 감사합니다.")
+elif ctx.get("mode") == "소아":
         st.subheader("👶 증상 요약")
         sy = ctx.get("symptoms", {})
         sy_cols = st.columns(4)
@@ -387,4 +386,10 @@ if results_only_after_analyze(st):
         preds = _peds_predict(ctx.get("symptoms", {}), ctx.get("temp"))
         for p in preds:
             st.write("- " + p)
-    st.stop()
+    
+        # 보고서 생성 및 다운로드 버튼 (소아)
+        from ui_results import build_report_md, download_report_buttons
+        md_text = build_report_md(ctx, {}, [], [], DRUG_DB)
+        download_report_buttons(st, md_text)
+        st.caption("문의나 버그 제보는 공식카페로 해주시면 감사합니다.")
+st.stop()
