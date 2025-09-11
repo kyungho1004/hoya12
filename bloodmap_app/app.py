@@ -359,12 +359,12 @@ dc = st.columns(2)
 with dc[0]: st.metric("아세트아미노펜 시럽 (mL)", f"{apap_ml:.1f}", help=f"계산 체중 {apap_w} kg · 160 mg/5 mL, 12.5 mg/kg")
 with dc[1]: st.metric("이부프로펜 시럽 (mL)",  f"{ibu_ml:.1f}",  help=f"계산 체중 {ibu_w} kg · 100 mg/5 mL, 7.5 mg/kg")
 
-    # 미리보기: 선택된 증상으로 간단 예측(참고용)
-    try:
-        _pred_preview, _pred_why = predict_peds_disease(sym_sel)
-        st.info(f"예상 병명(참고): **{_pred_preview}** — {_pred_why}")
-    except Exception:
-        pass
+# 미리보기: 선택된 증상으로 간단 예측(참고용)
+try:
+    _pred_preview, _pred_why = predict_peds_disease(sym_sel)
+    st.info(f"예상 병명(참고): **{_pred_preview}** — {_pred_why}")
+except Exception:
+    pass
 if st.button("🔎 해석하기", key="analyze_peds"):
     st.session_state["analyzed"] = True
     st.session_state["analysis_ctx"] = {
