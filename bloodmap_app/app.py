@@ -257,7 +257,8 @@ else:
     with c1: nasal = st.selectbox("콧물", opts["콧물"])
     with c2: cough = st.selectbox("기침", opts["기침"])
     with c3: diarrhea = st.selectbox("설사(횟수/일)", opts["설사"])
-    with c4: fever = st.selectbox("발열", opts["발열"])
+    with c4:
+        temp_cat = st.selectbox("체온", (opts.get("체온") or opts.get("발열") or ["없음","37~37.5","37.5~38","38.5~39","39+"]))
 
     st.markdown("#### 🔥 해열제 (1회 평균 용량 기준, mL)")
     from peds_dose import acetaminophen_ml, ibuprofen_ml
@@ -271,7 +272,7 @@ else:
         st.session_state["analyzed"] = True
         st.session_state["analysis_ctx"] = {
             "mode":"소아", "disease": disease,
-            "symptoms": {"콧물": nasal, "기침": cough, "설사": diarrhea, "발열": fever},
+            "symptoms": {"콧물": nasal, "기침": cough, "설사": diarrhea, "체온": temp_cat},
             "temp": temp, "age_m": age_m, "weight": weight or None,
             "apap_ml": apap_ml, "ibu_ml": ibu_ml,
             "vals": {}
@@ -348,23 +349,6 @@ if results_only_after_analyze(st):
                 st.metric(key, sy[key])
 
         st.subheader("🥗 식이가이드")
-        # 🔍 병명/경향 간단 추정 추가
-        st.subheader("🧭 병명/경향(간단 추정)")
-        try:
-            from patch_peds_toggle import peds_diet_guide
-            disease = ctx.get("disease", "")
-            preds = []
-            if disease:
-                foods, avoid, tips = peds_diet_guide(disease, ctx.get("vals", {}))
-                preds.append(f"{disease} 의심 (증상 기반)")
-            if not preds:
-                preds.append("특정 질환 추정 어려움 — 증상 경과 관찰 필요")
-        except Exception:
-            preds = ["추정 불가 — 입력값 부족"]
-
-        for p in preds:
-            st.write("- " + p)
-
         from ui_results import results_only_after_analyze as _dummy  # to keep imports coherent
         from ui_results import render_adverse_effects as _dummy2
         # 기존 peds_diet_guide는 별도 모듈에 있었지만, 원본의 가이드가 충분하여 lab_diet는 암에 한정.
