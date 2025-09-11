@@ -1,6 +1,76 @@
 # -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
+# --- Local Korean display (fallback; independent of onco_map import) ---
+def _is_korean(s: str) -> bool:
+    return any('\uac00' <= ch <= '\ud7a3' for ch in (s or ""))
+
+def _norm(s: str) -> str:
+    if not s:
+        return ""
+    s2 = (s or "").strip()
+    return s2.upper().replace(" ", "") or s2
+
+DX_KO_LOCAL = {
+    "APL": "급성 전골수구성 백혈병",
+    "AML": "급성 골수성 백혈병",
+    "ALL": "급성 림프구성 백혈병",
+    "CML": "만성 골수성 백혈병",
+    "CLL": "만성 림프구성 백혈병",
+    "PCNSL": "원발성 중추신경계 림프종",
+    "DLBCL": "미만성 거대 B세포 림프종",
+    "B거대세포종": "미만성 거대 B세포 림프종",
+    "B 거대세포종": "미만성 거대 B세포 림프종",
+    "B거대세포 림프종": "미만성 거대 B세포 림프종",
+    "b거대세포종": "미만성 거대 B세포 림프종",
+    "PMBCL": "원발성 종격동 B세포 림프종",
+    "HGBL": "고등급 B세포 림프종",
+    "BL": "버킷 림프종",
+    "FL": "여포성 림프종",
+    "MZL": "변연부 림프종",
+    "MALT lymphoma": "점막연관 변연부 B세포 림프종",
+    "MCL": "외투세포 림프종",
+    "cHL": "고전적 호지킨 림프종",
+    "NLPHL": "결절성 림프구우세 호지킨 림프종",
+    "PTCL-NOS": "말초 T세포 림프종 (NOS)",
+    "AITL": "혈관면역모세포성 T세포 림프종",
+    "ALCL (ALK+)": "역형성 대세포 림프종 (ALK 양성)",
+    "ALCL (ALK−)": "역형성 대세포 림프종 (ALK 음성)",
+    "OSTEOSARCOMA": "골육종",
+    "EWING SARCOMA": "유잉육종",
+    "RHABDOMYOSARCOMA": "횡문근육종",
+    "SYNOVIAL SARCOMA": "활막육종",
+    "LEIOMYOSARCOMA": "평활근육종",
+    "LIPOSARCOMA": "지방육종",
+    "UPS": "미분화 다형성 육종",
+    "ANGIOSARCOMA": "혈관육종",
+    "MPNST": "악성 말초신경초종",
+    "DFSP": "피부섬유종증성 육종(DFSP)",
+    "CLEAR CELL SARCOMA": "투명세포 육종",
+    "EPITHELIOID SARCOMA": "상피양 육종",
+    "폐선암": "폐선암",
+    "유방암": "유방암",
+    "대장암": "결장/직장 선암",
+    "위암": "위선암",
+    "간세포암": "간세포암(HCC)",
+    "췌장암": "췌장암",
+    "난소암": "난소암",
+    "자궁경부암": "자궁경부암",
+    "방광암": "방광암",
+    "식도암": "식도암",
+    "GIST": "위장관기저종양",
+    "NET": "신경내분비종양",
+    "MTC": "수질성 갑상선암",
+}
+
+def local_dx_display(group: str, dx: str) -> str:
+    dx = (dx or "").strip()
+    if _is_korean(dx):
+        return f"{group} - {dx}"
+    key = _norm(dx)
+    ko = DX_KO_LOCAL.get(key) or DX_KO_LOCAL.get(dx)
+    return f"{group} - {dx} ({ko})" if ko else f"{group} - {dx}"
+
 from datetime import date, datetime
 
 from core_utils import nickname_pin, clean_num, round_half, temp_band, rr_thr_by_age_m, schedule_block
@@ -49,6 +119,25 @@ if mode == "암":
     if group == "혈액암":
         msg = "혈액암 환자에서 **철분제 + 비타민 C** 복용은 흡수 촉진 가능성이 있어, **반드시 주치의와 상의 후** 복용 여부를 결정하세요."
         st.warning(msg); report_sections.append(("영양/보충제 주의", [msg]))
+
+    st.markdown("### 2) 자동 예시(토글)")
+    if st.toggle("자동 예시 보기", value=True):
+        rec = auto_recs_by_dx(group, dx, DRUG_DB, ONCO_MAP)
+        c = st.columns(3)
+        with c[0]:
+            st.markdown("**항암제(예시)**")
+            from drug_db import display_label
+            for d in rec["chemo"]:
+                st.write("- " + display_label(d))
+        with c[1]:
+            st.markdown("**표적/면역(예시)**")
+            from drug_db import display_label
+            for d in rec["targeted"]:
+                st.write("- " + display_label(d))
+        with c[2]:
+            st.markdown("**항생제(참고)**")
+            for d in rec["abx"]: st.write("- " + d)
+
     # 3) 개인 선택 (암 진단별 동적 리스트)
     st.markdown("### 3) 개인 선택 (영어 + 한글 병기)")
     from drug_db import picklist, key_from_label
@@ -130,7 +219,7 @@ if mode == "암":
     if st.button("🔎 해석하기", key="analyze_cancer"):
         st.session_state["analyzed"] = True
         st.session_state["analysis_ctx"] = {
-            "mode":"암", "group":group, "dx":dx, "dx_label": dx_display(group, dx),
+            "mode":"암", "group":group, "dx":dx, "dx_label": local_dx_display(group, dx),
             "labs": labs,
             "user_chemo": user_chemo,
             "user_abx": user_abx
