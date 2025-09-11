@@ -243,7 +243,7 @@ if mode == "암":
 else:
     ctop = st.columns(3)
     with ctop[0]:
-        disease = st.selectbox("소아 질환", ["로타","독감","RSV","아데노","마이코","수족구","편도염","코로나","중이염"], index=0)
+        disease = st.selectbox("소아 질환", ["일상","로타","독감","RSV","아데노","마이코","수족구","편도염","코로나","중이염"], index=0)
     with ctop[1]:
         temp = st.number_input("체온(℃)", min_value=0.0, step=0.1)
     with ctop[2]:
@@ -258,7 +258,7 @@ else:
     with c2: cough = st.selectbox("기침", opts["기침"])
     with c3: diarrhea = st.selectbox("설사(횟수/일)", opts["설사"])
     with c4:
-    fever = st.selectbox("발열", (opts.get("발열") or opts.get("체온") or ["없음","37~37.5","37.5~38","38.5~39","39+"]))
+        fever = st.selectbox("발열", (opts.get("발열") or opts.get("체온") or ["없음","37~37.5","37.5~38","38.5~39","39+"]))
 
     st.markdown("#### 🔥 해열제 (1회 평균 용량 기준, mL)")
     from peds_dose import acetaminophen_ml, ibuprofen_ml
@@ -267,6 +267,15 @@ else:
     dc = st.columns(2)
     with dc[0]: st.metric("아세트아미노펜 시럽", f"{apap_ml} mL", help=f"계산 체중 {apap_w} kg · 160 mg/5 mL, 12.5 mg/kg")
     with dc[1]: st.metric("이부프로펜 시럽", f"{ibu_ml} mL", help=f"계산 체중 {ibu_w} kg · 100 mg/5 mL, 7.5 mg/kg")
+
+        # 📥 보고서 다운로드 (.md / .txt)
+        try:
+            from ui_results import build_report_md, download_report_buttons
+            md_text = build_report_md(ctx, {}, [], [], DRUG_DB)
+            download_report_buttons(st, md_text)
+            st.caption("문의나 버그 제보는 공식카페로 해주시면 감사합니다.")
+        except Exception:
+            pass
 
     if st.button("🔎 해석하기", key="analyze_peds"):
         st.session_state["analyzed"] = True
@@ -323,13 +332,13 @@ if results_only_after_analyze(st):
                 from drug_db import display_label
                 st.write("- " + display_label(lbl))
 
-        st.subheader("💊 약물 부작용(요약) — 선택 항암제")
+        st.subheader("💊 항암제(세포독성) 부작용")
         render_adverse_effects(st, ctx.get("user_chemo") or [], DRUG_DB)
 
         st.subheader("🧫 항생제 부작용")
         render_adverse_effects(st, ctx.get("user_abx") or [], DRUG_DB)
 # 식이가이드
-        st.subheader("🥗 피수치 기반 식이가이드")
+        st.subheader("🥗 피수치 기반 식이가이드 (예시)")
         lines = lab_diet_guides(labs, heme_flag=(ctx.get("group")=="혈액암"))
         for L in lines: st.write("- " + L)
 
@@ -347,8 +356,27 @@ if results_only_after_analyze(st):
         for i, key in enumerate(keys):
             with sy_cols[i % 4]:
                 st.metric(key, sy[key])
+        # 🔍 병명/경향(간단 추정)
+        st.subheader("🧭 병명/경향(간단 추정)")
+        try:
+            from patch_peds_toggle import peds_diet_guide
+            disease_sel = ctx.get("disease", "")
+            preds = []
+            if disease_sel:
+                _foods, _avoid, _tips = peds_diet_guide(disease_sel, ctx.get("vals", {}))
+                if disease_sel == "일상":
+                    preds.append("특정 질환 추정 어려움 — 경과 관찰 및 수분 보충 권장")
+                else:
+                    preds.append(f"{disease_sel} 의심 (증상·문진 기반)")
+            if not preds:
+                preds.append("추정 불가 — 입력값 확인 필요")
+        except Exception:
+            preds = ["추정 불가 — 입력값 부족"]
+        for p in preds:
+            st.write("- " + p)
 
-        st.subheader("🥗 피수치 기반 식이가이드")
+
+        st.subheader("🥗 식이가이드")
         from ui_results import results_only_after_analyze as _dummy  # to keep imports coherent
         from ui_results import render_adverse_effects as _dummy2
         # 기존 peds_diet_guide는 별도 모듈에 있었지만, 원본의 가이드가 충분하여 lab_diet는 암에 한정.
