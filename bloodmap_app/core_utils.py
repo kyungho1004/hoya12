@@ -1,76 +1,62 @@
 # -*- coding: utf-8 -*-
-"""Common utilities for BloodMap app (UI + helpers)."""
-
-import re
 import streamlit as st
+import pandas as pd
+from datetime import date, datetime, timedelta
 
-# ---------- UI: 별명 + PIN 입력 ----------
-def nickname_pin(key_prefix="np_"):
-    """Render nickname + 4-digit PIN inputs with unique widget keys.
-    Returns (nick, pin, key) where key is "nick#pin" when valid, else "".
-    """
-    c1, c2 = st.columns([2, 1])
-    with c1:
-        nick = st.text_input("별명", placeholder="예: 은서엄마", key=key_prefix + "nick")
-    with c2:
-        pin = st.text_input("PIN (4자리 숫자)", placeholder="0000", key=key_prefix + "pin", max_chars=4)
-    # sanitize
-    pin = "".join(ch for ch in pin if ch.isdigit())[:4]
-    key = f"{nick}#{pin}" if nick and len(pin) == 4 else ""
-    return nick, pin, key
-
-# ---------- Numeric helpers ----------
-_num_pat = re.compile(r"-?\d+(?:\.\d+)?")
-
-def clean_num(x, default=None):
-    """Extract float from free text/None; return default if not found."""
-    if x is None:
-        return default
+# ---------- 숫자/포맷 유틸 ----------
+def clean_num(s):
+    if s is None: return None
     try:
+        x = str(s).strip().replace("±","").replace("+","").replace(",","")
+        if x in {"","-"}: return None
         return float(x)
-    except Exception:
-        pass
-    m = _num_pat.search(str(x))
-    return float(m.group()) if m else default
+    except: return None
 
-def round_half(x, digits=1):
-    """Round half away from zero with given digits (default 1)."""
-    from decimal import Decimal, ROUND_HALF_UP, getcontext
-    getcontext().prec = 28
-    q = Decimal(10) ** -digits
-    return float(Decimal(str(x)).quantize(q, rounding=ROUND_HALF_UP))
+def round_half(x):
+    try: return round(float(x)*2)/2
+    except: return x
 
-# ---------- Clinical helpers ----------
 def temp_band(t):
-    """Return temperature band label based on project spec."""
-    v = clean_num(t, None)
-    if v is None:
-        return "없음"
-    if v < 37.0:
-        return "없음"
-    if 37.0 <= v < 37.5:
-        return "37~37.5 (미열)"
-    if 37.5 <= v < 38.5:
-        return "37.5~38 (병원 내원 권장)"
-    return "38.5~39 (병원/응급실)"
+    try:
+        t = float(t)
+        if t >= 39.0: return "고열(39°+)"
+        if t >= 38.5: return "고열(38.5–39°)"
+        if t >= 38.0: return "미열(38.0–38.5°)"
+        return "정상/미열"
+    except:
+        return "-"
 
 def rr_thr_by_age_m(age_m):
-    """Return tachypnea threshold (breaths/min) by age in months (approx WHO)."""
     try:
         a = int(age_m or 0)
-    except Exception:
-        a = 0
-    if a < 2:
-        return 60  # <2 months
-    if a < 12:
-        return 50  # 2–12 months
-    if a < 60:
-        return 40  # 1–5 years
-    return 30      # >5 years
+        if a < 2: return 60
+        if a < 12: return 50
+        if a < 60: return 40
+        return 30
+    except:
+        return 40
 
-# ---------- Simple layout helper ----------
-def schedule_block(title, items):
-    """Render a simple bullet list under a section title."""
-    st.markdown(f"#### {title}")
-    for it in items:
-        st.write(f"- {it}")
+def nickname_pin(nick: str, pin: str):
+    nick = (nick or "").strip()
+    pin  = (pin or "").strip()
+    if len(pin) != 4 or not pin.isdigit():
+        return ("guest", False)
+    return (f"{nick}#{pin}", True)
+
+# ---------- 스케줄 ----------
+def schedule_block():
+    st.markdown("#### 📅 항암 스케줄(간단)")
+    from datetime import date, timedelta
+    c1,c2,c3 = st.columns(3)
+    with c1: start = st.date_input("시작일", value=date.today())
+    with c2: cycle = st.number_input("주기(일)", min_value=1, step=1, value=21)
+    with c3: ncyc = st.number_input("사이클 수", min_value=1, step=1, value=6)
+    if st.button("스케줄 생성/추가", key="btn_make_schedule"):
+        rows = [{"Cycle": i+1, "Date": (start + timedelta(days=i*int(cycle))).strftime("%Y-%m-%d")} for i in range(int(ncyc))]
+        df = pd.DataFrame(rows)
+        st.session_state.setdefault("schedules", {})
+        st.session_state["schedules"][st.session_state["key"]] = df
+        st.success("스케줄이 저장되었습니다.")
+    df = st.session_state.get("schedules", {}).get(st.session_state.get("key","guest"))
+    if isinstance(df, pd.DataFrame) and not df.empty:
+        st.dataframe(df, use_container_width=True, height=180)
