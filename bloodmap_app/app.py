@@ -313,7 +313,7 @@ ok_gate = results_only_after_analyze(st)
 if not ok_gate:
     st.stop()
 ctx = st.session_state.get("analysis_ctx", {})
-    if ctx.get("mode") == "암" and st.session_state.get("peds_mode") != "일상":
+if ctx.get("mode") == "암" and st.session_state.get("peds_mode") != "일상":
         labs = ctx.get("labs", {})
         st.subheader("🧪 피수치 요약")
         if labs:
