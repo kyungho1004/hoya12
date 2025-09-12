@@ -163,4 +163,60 @@ def key_from_label(label: str) -> str:
     # --- Additional chemo used in solid tumors ---
     _upsert(db, "Nab-Paclitaxel", "나브-파클리탁셀", "알부민 결합 파클리탁셀", "말초신경병증, 골수억제, 탈모")
     _upsert(db, "Topotecan", "토포테칸", "Topo I 억제(난소/소세포폐암)", "골수억제, 피로, 오심")
+    # ▼▼ ensure_onco_drug_db(...) 맨 끝부분(리턴 전)에 아래 블록을 그대로 붙여넣으세요 ▼▼
+
+    # --- 추가 보강: ONCO 맵과 일치하도록 누락 항목 등록 ---
+    _upsert(db, "Doxorubicin", "독소루비신(Adriamycin)", "Topo II 억제(안트라사이클린)", "심근독성(누적), 골수억제, 점막염, 탈모")
+    _upsert(db, "Chlorambucil", "클로람부실", "알킬화제", "골수억제, 오심/구토")
+
+    # Lymphoma / HL 확장
+    _upsert(db, "Obinutuzumab", "오비누투주맙(CD20)", "CD20 단일클론항체", "주입반응, 감염위험, HBV 재활성화")
+    _upsert(db, "Polatuzumab Vedotin", "폴라투주맙 베도틴(CD79b ADC)", "CD79b 표적 항체‑약물 접합체", "말초신경병증, 골수억제, 주입반응")
+    _upsert(db, "Pembrolizumab", "펨브롤리주맙(PD-1)", "PD-1 면역관문억제제", "면역관련 이상반응(피부/대장염/간염/내분비)")
+    _upsert(db, "Nivolumab", "니볼루맙(PD-1)", "PD-1 면역관문억제제", "면역관련 이상반응")
+
+    # NSCLC (EGFR/ALK/ROS1/MET/KRAS/NTRK)
+    _upsert(db, "Osimertinib", "오시머티닙(EGFR)", "EGFR TKI(Ex19del/L858R/T790M)", "설사, 발진, 드물게 ILD")
+    _upsert(db, "Alectinib", "알렉티닙(ALK)", "ALK TKI", "근육통, 변비, 간효소 상승")
+    _upsert(db, "Crizotinib", "크리조티닙(ALK/ROS1)", "ALK/ROS1 TKI", "시야 흐림, 위장관 증상")
+    _upsert(db, "Lorlatinib", "로를라티닙(ALK)", "ALK TKI", "지질 상승, 인지/기분 변화")
+    _upsert(db, "Entrectinib", "엔트렉티닙(ROS1/NTRK)", "ROS1/NTRK TKI", "체중 증가, 어지러움")
+    _upsert(db, "Larotrectinib", "라로트렉티닙(NTRK)", "NTRK TKI", "피로, 어지러움")
+    _upsert(db, "Capmatinib", "캡마티닙(MET)", "MET TKI", "말초부종, 간효소 상승")
+    _upsert(db, "Sotorasib", "소토라십(KRAS G12C)", "KRAS G12C 억제제", "설사, 간효소 상승")
+
+    # HCC / Urothelial
+    _upsert(db, "Atezolizumab", "아테졸리주맙(PD-L1)", "PD-L1 면역관문억제제", "면역관련 이상반응")
+    _upsert(db, "Durvalumab", "더발루맙(PD-L1)", "PD-L1 면역관문억제제", "면역관련 이상반응")
+    _upsert(db, "Lenvatinib", "렌바티닙", "VEGFR/FGFR TKI", "고혈압, 단백뇨")
+    _upsert(db, "Sorafenib", "소라페닙", "VEGFR/RAF TKI", "손발증후군, 고혈압")
+
+    # CRC / Gastric
+    _upsert(db, "Cetuximab", "세툭시맙(EGFR)", "EGFR 단일클론항체", "여드름양 발진, 저마그네슘혈증")
+    _upsert(db, "Panitumumab", "파니투무맙(EGFR)", "EGFR 단일클론항체", "피부발진, 저마그네슘혈증")
+    _upsert(db, "Ramucirumab", "라무시루맙(VEGFR2)", "VEGFR2 단일클론항체", "고혈압, 출혈위험")
+    _upsert(db, "Regorafenib", "레고라페닙", "멀티키나아제 억제제", "손발증후군, 피로, 고혈압")
+
+    # GIST / Thyroid (RET)
+    _upsert(db, "Ripretinib", "리프레티닙", "KIT/PDGFRA 억제(GIST)", "탈모, 피로, 손발증후군")
+    _upsert(db, "Vandetanib", "반데타닙(RET)", "RET/VEGFR/EGFR TKI", "QT 연장, 설사, 발진")
+    _upsert(db, "Cabozantinib", "카보잔티닙", "MET/VEGFR/RET TKI", "설사, 피로, 손발증후군")
+    _upsert(db, "Selpercatinib", "셀퍼카티닙(RET)", "RET TKI(NSCLC/MTC)", "고혈압, 간효소 상승, QT 연장 드묾")
+    _upsert(db, "Pralsetinib", "프랄세티닙(RET)", "RET TKI(NSCLC/MTC)", "고혈압, 간효소 상승, 변비/설사")
+
+    # Ovarian / Breast (HER2 & PARP)
+    _upsert(db, "Olaparib", "올라파립(PARP)", "PARP 억제제", "빈혈, 피로, 오심")
+    _upsert(db, "Niraparib", "니라파립(PARP)", "PARP 억제제", "혈소판 감소, 피로")
+    _upsert(db, "Pertuzumab", "퍼투주맙(HER2)", "HER2 dimer 억제", "설사, LVEF 감소")
+    _upsert(db, "T-DM1", "아도-트라스투주맙 엠탄신(T-DM1)", "HER2 ADC", "혈소판 감소, 간독성")
+    _upsert(db, "Trastuzumab deruxtecan", "트라스투주맙 데룩스테칸(T-DXd)", "HER2 ADC", "간질성 폐질환(ILD) 위험, 오심")
+    _upsert(db, "Tucatinib", "투카티닙(HER2)", "HER2 TKI", "설사, 간효소 상승")
+    _upsert(db, "Lapatinib", "라파티닙(HER2)", "HER2 TKI", "설사, 발진")
+
+    # Solid chemo 보강
+    _upsert(db, "Nab-Paclitaxel", "나브-파클리탁셀", "알부민 결합 파클리탁셀", "말초신경병증, 골수억제, 탈모")
+    _upsert(db, "Topotecan", "토포테칸", "Topo I 억제(난소/소세포폐암)", "골수억제, 피로, 오심")
+
+    # ▲▲ 여기까지 붙여넣고 저장 후, 앱을 재시작하세요 ▲▲
+
 
