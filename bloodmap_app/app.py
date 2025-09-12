@@ -105,6 +105,20 @@ def _export_report(ctx: dict, lines_blocks=None):
                 body.append(f"\n## {title2}\n" + "\n".join(f"- {L}" for L in lines))
     md = title + "\n".join(body) + footer
     txt = md.replace("# ","").replace("## ","")
+    
+# 약물 요약(암 모드 전용) — 영문+한글 병기
+if ctx.get("mode") == "암":
+    from drug_db import display_label
+    _med_lines = []
+    _chemo = [display_label(k) for k in (ctx.get("user_chemo") or []) if k]
+    _targ  = [display_label(k) for k in (ctx.get("user_targeted") or []) if k]
+    _abx   = [display_label(k) for k in (ctx.get("user_abx") or []) if k]
+    if _chemo: _med_lines.append(("\\U0001F9EA 항암제(개인)", [f"- {x}" for x in _chemo]))
+    if _targ:  _med_lines.append(("\\U0001F489 표적/면역(개인)", [f"- {x}" for x in _targ]))
+    if _abx:   _med_lines.append(("\\U0001F9EB 항생제(개인)", [f"- {x}" for x in _abx]))
+    for title2, items in _med_lines:
+        body.append(f"\\n## {title2}\\n" + "\\n".join(items))
+
     return md, txt
 
 # ---------------- 모드 선택 ----------------
@@ -132,11 +146,12 @@ if mode == "암":
     rec_local = auto_recs_by_dx(group, dx, DRUG_DB, ONCO_MAP)  # 옵션 생성용
     chemo_opts    = picklist(rec_local.get("chemo", []))
     targeted_opts = picklist(rec_local.get("targeted", []))
-    abx_opts      = picklist([
+    abx_defaults = [
         "Piperacillin/Tazobactam","Cefepime","Meropenem","Imipenem/Cilastatin","Aztreonam",
         "Amikacin","Vancomycin","Linezolid","Daptomycin","Ceftazidime","Levofloxacin","TMP-SMX",
         "Metronidazole","Amoxicillin/Clavulanate"
-    ])
+    ]
+    abx_opts      = picklist(rec_local.get("abx") or abx_defaults)
     c1,c2,c3 = st.columns(3)
     with c1: user_chemo_labels = st.multiselect("항암제(개인)", chemo_opts, default=[])
     with c2: user_targeted_labels = st.multiselect("표적/면역(개인)", targeted_opts, default=[])
