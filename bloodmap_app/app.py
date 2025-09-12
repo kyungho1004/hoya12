@@ -258,7 +258,7 @@ else:
     with c2: cough = st.selectbox("기침", opts["기침"])
     with c3: diarrhea = st.selectbox("설사(횟수/일)", opts["설사"])
    # bridge: ensure both "발열" and "체온" keys exist
-  with c4:
+    with c4:
     fever = st.selectbox("발열", ((opts or {}).get("발열") or (opts or {}).get("체온") or ["없음","37~37.5","37.5~38","38.5~39","39+"]))
       
     from peds_dose import acetaminophen_ml, ibuprofen_ml
