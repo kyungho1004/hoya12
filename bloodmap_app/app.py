@@ -121,7 +121,6 @@ st.title("BloodMap — 모듈화 버전")
 
 # ---- Top-level mode selector ----
 st.markdown('### 모드 선택')
-mode = st.radio("모드 선택", ["암", "소아", "일상"], horizontal=True)
 if mode == '일상':
     st.session_state['peds_mode'] = '일상'
 
