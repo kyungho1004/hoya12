@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """
 특수검사 UI/해석 모듈 (카테고리 토글 + 즐겨찾기)
+- 소변검사: 요침사 RBC/WBC 추가
+- 혈액(적혈구 지수/망상): MCV, MCH, MCHC, RDW, Retic(%) 추가
 """
 from __future__ import annotations
 from typing import List, Optional
@@ -27,6 +29,7 @@ def _fav_key(name: str) -> str: return f"fav_{name}"
 
 SECTIONS = [
     ("소변검사", "urine"),
+    ("혈액(적혈구 지수/망상)", "rbcindex"),   # ✅ 신규 섹션
     ("보체 (C3/C4/CH50)", "complement"),
     ("지질검사 (TC/TG/HDL/LDL)", "lipid"),
     ("심부전 지표 (BNP / NT-proBNP)", "heartfail"),
@@ -67,18 +70,57 @@ def special_tests_ui() -> List[str]:
                     if isfav: favs.remove(sec_id)
                     else:
                         if sec_id not in favs: favs.append(sec_id)
-            if not on: continue
+            if not on: 
+                continue
 
+            # ---------------- 소변검사 ----------------
             if sec_id == "urine":
                 cA,cB,cC,cD = st.columns(4)
                 with cA: alb = st.selectbox("알부민뇨", ["없음","+","++","+++"], index=0)
                 with cB: hem = st.selectbox("혈뇨(잠혈)", ["없음","+","++","+++"], index=0)
                 with cC: glu = st.selectbox("요당", ["없음","+","++","+++"], index=0)
                 with cD: nit = st.selectbox("아질산염", ["없음","+","++","+++"], index=0)
+
+                # ✅ 요침사(현미경) 추가
+                u1,u2 = st.columns(2)
+                with u1: rbc_hpf = _num(st.text_input("요침사 RBC (/HPF)", placeholder="예: 0~2 정상"))
+                with u2: wbc_hpf = _num(st.text_input("요침사 WBC (/HPF)", placeholder="예: 0~5 정상"))
+
+                # 정성 해석
                 if alb!="없음": _emit(lines, "warn" if alb in ["+","++"] else "risk", f"알부민뇨 {alb} → 신장 질환/단백뇨 평가 필요")
-                if hem!="없음": _emit(lines, "warn" if hem in ["+","++"] else "risk", f"혈뇨 {hem} → 요로계 출혈/결석/염증 가능성")
+                if hem!="없음": _emit(lines, "warn" if hem in ["+","++"] else "risk", f"혈뇨(잠혈) {hem} → 요로계 출혈/결석/염증 가능성")
                 if glu!="없음": _emit(lines, "warn", f"요당 {glu} → 당뇨/신세뇨관 이상 가능, 혈당 확인")
                 if nit!="없음": _emit(lines, "warn", f"아질산염 {nit} → 세균성 요로감염 가능")
+
+                # 현미경 해석
+                if rbc_hpf is not None:
+                    if rbc_hpf >= 10: _emit(lines, "risk", f"요침사 RBC {int(rbc_hpf)}/HPF → 현저 혈뇨, 요석/사구체/종양 감별")
+                    elif rbc_hpf >= 3: _emit(lines, "warn", f"요침사 RBC {int(rbc_hpf)}/HPF → 혈뇨, 재검/원인 평가 권장")
+                if wbc_hpf is not None:
+                    if wbc_hpf >= 10: _emit(lines, "risk", f"요침사 WBC {int(wbc_hpf)}/HPF → 뚜렷한 염증/UTI 의심")
+                    elif wbc_hpf >= 5: _emit(lines, "warn", f"요침사 WBC {int(wbc_hpf)}/HPF → 염증 소견, 증상 동반 시 UTI 고려")
+
+            # ---------------- 적혈구 지수/망상 ----------------
+            elif sec_id == "rbcindex":
+                r1,r2,r3,r4,r5 = st.columns(5)
+                with r1: mcv  = _num(st.text_input("MCV (fL)", placeholder="예: 90"))
+                with r2: mch  = _num(st.text_input("MCH (pg)", placeholder="예: 30"))
+                with r3: mchc = _num(st.text_input("MCHC (g/dL)", placeholder="예: 33"))
+                with r4: rdw  = _num(st.text_input("RDW (%)", placeholder="예: 12.5"))
+                with r5: retp = _num(st.text_input("망상적혈구 Retic (%)", placeholder="예: 1.0"))
+
+                # 해석
+                if mcv is not None:
+                    if mcv < 80: _emit(lines, "warn", f"MCV {mcv} fL → 소구성 빈혈(철결핍/만성질환/지중해빈혈 등) 고려")
+                    elif mcv > 100: _emit(lines, "warn", f"MCV {mcv} fL → 대구성 빈혈(B12/엽산 결핍, 간질환, 약물) 고려")
+                if mchc is not None:
+                    if mchc < 32: _emit(lines, "warn", f"MCHC {mchc} g/dL ↓ → 저색소 경향(철결핍 등)")
+                    elif mchc > 36: _emit(lines, "warn", f"MCHC {mchc} g/dL ↑ → 구형적혈구증 등 드묾")
+                if rdw is not None and rdw >= 15:
+                    _emit(lines, "warn", f"RDW {rdw}% ↑ → 적혈구 크기 분산 증가(철결핍/혼합성 빈혈 가능)")
+                if retp is not None:
+                    if retp > 2: _emit(lines, "warn", f"Retic {retp}% ↑ → 용혈/출혈 후 회복 국면 가능(망상↑)")
+                    elif retp < 0.5: _emit(lines, "warn", f"Retic {retp}% ↓ → 저생산성 빈혈(골수억제/영양결핍 등) 고려")
 
             elif sec_id == "complement":
                 d1,d2,d3 = st.columns(3)
