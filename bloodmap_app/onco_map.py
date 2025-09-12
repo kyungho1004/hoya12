@@ -1,9 +1,8 @@
-
 # -*- coding: utf-8 -*-
 from typing import Dict, List, Any
 
 # -----------------------------
-# Helpers
+# Korean label helpers
 # -----------------------------
 def _is_korean(s: str) -> bool:
     return any('\uac00' <= ch <= '\ud7a3' for ch in (s or ""))
@@ -13,11 +12,10 @@ def _norm(s: str) -> str:
         return ""
     s2 = (s or "").strip()
     code = s2.upper().replace(" ", "")
+    # normalize common codes
     CODE_ALIASES = {
         "DLBCL": "DLBCL", "PMBCL": "PMBCL", "HGBL": "HGBL", "BL": "BL",
-        "APL": "APL", "AML": "AML", "ALL": "ALL", "CML": "CML", "CLL": "CLL", "PCNSL": "PCNSL",
-        "FL": "FL", "MZL": "MZL", "MCL": "MCL", "CHL": "cHL", "NLPHL": "NLPHL",
-        "PTCL-NOS":"PTCL-NOS", "AITL":"AITL"
+        "APL": "APL", "AML": "AML", "ALL": "ALL", "CML": "CML", "CLL": "CLL", "PCNSL": "PCNSL"
     }
     return CODE_ALIASES.get(code, s2)
 
@@ -30,7 +28,8 @@ DX_KO: Dict[str, str] = {
     "CML": "만성 골수성 백혈병",
     "CLL": "만성 림프구성 백혈병",
     "PCNSL": "원발성 중추신경계 림프종",
-    # Lymphoma
+
+    # Lymphoma (with common Korean synonyms)
     "DLBCL": "미만성 거대 B세포 림프종",
     "B거대세포종": "미만성 거대 B세포 림프종",
     "B 거대세포종": "미만성 거대 B세포 림프종",
@@ -48,7 +47,8 @@ DX_KO: Dict[str, str] = {
     "PTCL-NOS": "말초 T세포 림프종 (NOS)",
     "AITL": "혈관면역모세포성 T세포 림프종",
     "ALCL (ALK+)": "역형성 대세포 림프종 (ALK 양성)",
-    "ALCL (ALK-)": "역형성 대세포 림프종 (ALK 음성)",
+    "ALCL (ALK−)": "역형성 대세포 림프종 (ALK 음성)",
+
     # Sarcoma
     "Osteosarcoma": "골육종",
     "Ewing sarcoma": "유잉육종",
@@ -62,6 +62,7 @@ DX_KO: Dict[str, str] = {
     "DFSP": "피부섬유종증성 육종(DFSP)",
     "Clear cell sarcoma": "투명세포 육종",
     "Epithelioid sarcoma": "상피양 육종",
+
     # Solid & Rare
     "폐선암": "폐선암",
     "유방암": "유방암",
@@ -77,6 +78,21 @@ DX_KO: Dict[str, str] = {
     "NET": "신경내분비종양",
     "MTC": "수질성 갑상선암",
 }
+# -----------------------------
+# Canonical drug key mapping
+# -----------------------------
+KEY_ALIAS = {
+    "Ara-C": "Cytarabine",
+    "ATO": "Arsenic Trioxide",
+    "ATRA": "ATRA",
+    "6-MP": "6-MP",
+    "5-FU": "5-FU",
+    "T-DM1": "T-DM1",
+    "ALCL (ALK−)": "ALCL (ALK-)"
+}
+def _canon(key: str) -> str:
+    return KEY_ALIAS.get(key, key)
+
 
 def dx_display(group: str, dx: str) -> str:
     dx = (dx or "").strip()
@@ -89,42 +105,24 @@ def dx_display(group: str, dx: str) -> str:
     return f"{group} - {dx}"
 
 # -----------------------------
-# Canonical drug key mapping (avoid DB mismatch)
-# -----------------------------
-KEY_ALIAS = {
-    # Abbreviations -> canonical keys used in DRUG_DB
-    "Ara-C": "Cytarabine",
-    "ATRA": "ATRA",                  # registered in DRUG_DB
-    "ATO": "Arsenic Trioxide",
-    "6-MP": "6-MP",
-    "MTX": "MTX",
-    "5-FU": "5-FU",
-    "T-DM1": "T-DM1",
-    "ALCL (ALK−)": "ALCL (ALK-)",    # normalize minus sign
-}
-
-def _canon(key: str) -> str:
-    return KEY_ALIAS.get(key, key)
-
-# -----------------------------
-# Treatment map (uses canonical keys)
+# Treatment map
 # -----------------------------
 def build_onco_map() -> Dict[str, Dict[str, Dict[str, List[str]]]]:
     return {
         "혈액암": {
             "APL": {"chemo": ["ATRA", "Arsenic Trioxide", "Idarubicin", "MTX", "6-MP", "Cytarabine"], "targeted": [], "abx": []},
-            "AML": {"chemo": ["Cytarabine","Daunorubicin","Idarubicin"], "targeted": [], "abx": [], "maintenance": ["6-MP","MTX"]},
-            "ALL": {"chemo": ["Vincristine","Cytarabine","MTX","6-MP","Cyclophosphamide","Prednisone"], "targeted": [], "abx": []},
+            "AML": {"chemo": ["Cytarabine","Daunorubicin","Idarubicin"], "targeted": [], "abx": []},
+            "ALL": {"chemo": ["Vincristine","Ara-C","MTX","6-MP","Cyclophosphamide","Prednisone"], "targeted": [], "abx": []},
             "CML": {"chemo": [], "targeted": ["Imatinib"], "abx": []},
             "CLL": {"chemo": ["Cyclophosphamide","Prednisone","Chlorambucil"], "targeted": ["Rituximab"], "abx": []},
-            "PCNSL": {"chemo": ["MTX","Cytarabine"], "targeted": ["Rituximab"], "abx": []},
+            "PCNSL": {"chemo": ["MTX","Ara-C"], "targeted": ["Rituximab"], "abx": []},
         },
         "림프종": {
             "DLBCL": {"chemo": ["Cyclophosphamide","Doxorubicin","Vincristine","Prednisone"], "targeted": ["Rituximab","Polatuzumab Vedotin"], "abx": []},
             "B거대세포종": {"chemo": ["Cyclophosphamide","Doxorubicin","Vincristine","Prednisone"], "targeted": ["Rituximab"], "abx": []},
             "PMBCL": {"chemo": ["Cyclophosphamide","Doxorubicin","Vincristine","Prednisone"], "targeted": ["Rituximab","Pembrolizumab"], "abx": []},
             "HGBL": {"chemo": ["Etoposide","Doxorubicin","Cyclophosphamide","Vincristine","Prednisone"], "targeted": ["Rituximab"], "abx": []},
-            "BL": {"chemo": ["Cyclophosphamide","Doxorubicin","Vincristine","MTX","Cytarabine"], "targeted": ["Rituximab"], "abx": []},
+            "BL": {"chemo": ["Cyclophosphamide","Doxorubicin","Vincristine","MTX","Ara-C"], "targeted": ["Rituximab"], "abx": []},
             "FL": {"chemo": ["Cyclophosphamide","Doxorubicin","Vincristine","Prednisone","Bendamustine"], "targeted": ["Rituximab","Obinutuzumab"], "abx": []},
             "MZL": {"chemo": ["Bendamustine","Chlorambucil"], "targeted": ["Rituximab"], "abx": []},
             "MALT lymphoma": {"chemo": ["Chlorambucil"], "targeted": ["Rituximab"], "abx": []},
@@ -134,7 +132,7 @@ def build_onco_map() -> Dict[str, Dict[str, Dict[str, List[str]]]]:
             "PTCL-NOS": {"chemo": ["Cyclophosphamide","Doxorubicin","Vincristine","Prednisone"], "targeted": [], "abx": []},
             "AITL": {"chemo": ["Cyclophosphamide","Doxorubicin","Vincristine","Prednisone"], "targeted": [], "abx": []},
             "ALCL (ALK+)": {"chemo": ["Cyclophosphamide","Doxorubicin","Vincristine","Prednisone"], "targeted": ["Brentuximab Vedotin"], "abx": []},
-            "ALCL (ALK-)": {"chemo": ["Cyclophosphamide","Doxorubicin","Vincristine","Prednisone"], "targeted": ["Brentuximab Vedotin"], "abx": []},
+            "ALCL (ALK−)": {"chemo": ["Cyclophosphamide","Doxorubicin","Vincristine","Prednisone"], "targeted": ["Brentuximab Vedotin"], "abx": []},
         },
         "고형암": {
             "폐선암": {"chemo": ["Cisplatin","Pemetrexed"], "targeted": ["Osimertinib","Alectinib","Crizotinib","Larotrectinib","Entrectinib","Capmatinib","Sotorasib","Lorlatinib"], "abx": []},
@@ -182,9 +180,49 @@ def auto_recs_by_dx(group: str, dx: str, DRUG_DB: Dict[str, Dict[str, Any]] = No
     for k in out.keys():
         picks = [ _canon(p) for p in dmap.get(k, []) ]
         if DRUG_DB:
-            # keep those present in DB; if none survived, fall back to raw picks
-            filtered = [p for p in picks if (p in DRUG_DB or p.lower() in DRUG_DB)]
+            # include if key exists OR lower() exists OR alias exists
+            filtered = []
+            for p in picks:
+                if p in DRUG_DB or p.lower() in DRUG_DB:
+                    filtered.append(p)
+                    continue
+                # alias check
+                for kk, vv in DRUG_DB.items():
+                    if isinstance(vv, dict) and vv.get("alias") == p:
+                        filtered.append(kk)
+                        break
             out[k] = filtered or picks
         else:
             out[k] = picks
     return out
+
+
+# === AML 유지항암(6-MP/MTX) 보강: build_onco_map 래핑 ===
+try:
+    __orig_build_onco_map = build_onco_map
+except NameError:
+    __orig_build_onco_map = None
+
+def build_onco_map():
+    M = __orig_build_onco_map() if __orig_build_onco_map else {}
+    try:
+        heme = M.get("혈액암", {})
+        aml = heme.get("AML", {})
+        # maintenance ensure
+        maint = list(aml.get("maintenance") or [])
+        for x in ["6-MP", "MTX"]:
+            if x not in maint:
+                maint.append(x)
+        aml["maintenance"] = maint
+        # chemo에도 fallback로 추가(중복 방지)
+        chemo = list(aml.get("chemo") or [])
+        for x in ["6-MP", "MTX"]:
+            if x not in chemo:
+                chemo.append(x)
+        aml["chemo"] = chemo
+        heme["AML"] = aml
+        M["혈액암"] = heme
+    except Exception:
+        pass
+    return M
+
