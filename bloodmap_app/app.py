@@ -85,7 +85,7 @@ def _export_report(ctx: dict, lines_blocks=None):
     if ctx.get("mode") in ["소아","일상"]:
         body.append(f"- 대상: {ctx.get('who','소아')}")
         if ctx.get("symptoms"):
-            body.append("- 증상: " + ", ".join(f"{k}:{v}" for k,v in ctx["symptoms"].items()))
+            body.append("- 증상: " + ", ".join(f"{k}:{v}" for k,v in ctx['symptoms'].items()))
         if ctx.get("temp") is not None:
             body.append(f"- 체온: {ctx.get('temp')} ℃")
         if ctx.get("days_since_onset") is not None:
@@ -103,22 +103,22 @@ def _export_report(ctx: dict, lines_blocks=None):
         for title2, lines in lines_blocks:
             if lines:
                 body.append(f"\n## {title2}\n" + "\n".join(f"- {L}" for L in lines))
-    md = title + "\n".join(body) + footer
-    txt = md.replace("# ","").replace("## ","")
-    
+
 # 약물 요약(암 모드 전용) — 영문+한글 병기
 if ctx.get("mode") == "암":
     from drug_db import display_label
-    _med_lines = []
-    _chemo = [display_label(k) for k in (ctx.get("user_chemo") or []) if k]
-    _targ  = [display_label(k) for k in (ctx.get("user_targeted") or []) if k]
-    _abx   = [display_label(k) for k in (ctx.get("user_abx") or []) if k]
-    if _chemo: _med_lines.append(("\\U0001F9EA 항암제(개인)", [f"- {x}" for x in _chemo]))
-    if _targ:  _med_lines.append(("\\U0001F489 표적/면역(개인)", [f"- {x}" for x in _targ]))
-    if _abx:   _med_lines.append(("\\U0001F9EB 항생제(개인)", [f"- {x}" for x in _abx]))
-    for title2, items in _med_lines:
-        body.append(f"\\n## {title2}\\n" + "\\n".join(items))
+    _chemo = [display_label(x) for x in (ctx.get("user_chemo") or []) if x]
+    _targ  = [display_label(x) for x in (ctx.get("user_targeted") or []) if x]
+    _abx   = [display_label(x) for x in (ctx.get("user_abx") or []) if x]
+    if _chemo:
+        body.append("\\n## 🧪 항암제(개인)\\n" + "\\n".join(f"- {x}" for x in _chemo))
+    if _targ:
+        body.append("\\n## 💉 표적/면역(개인)\\n" + "\\n".join(f"- {x}" for x in _targ))
+    if _abx:
+        body.append("\\n## 🧫 항생제(개인)\\n" + "\\n".join(f"- {x}" for x in _abx))
 
+    md = title + "\n".join(body) + footer
+    txt = md.replace("# ","").replace("## ","")
     return md, txt
 
 # ---------------- 모드 선택 ----------------
