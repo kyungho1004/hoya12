@@ -119,6 +119,13 @@ ONCO_MAP = build_onco_map()
 st.set_page_config(page_title="블러드맵 피수치가이드 (모듈화)", page_icon="🩸", layout="centered")
 st.title("BloodMap — 모듈화 버전")
 
+# ---- Top-level mode selector ----
+st.markdown('### 모드 선택')
+top_mode = st.radio('암 / 소아 / 일상', ['암','소아','일상'], horizontal=True, key='mode_top')
+if top_mode == '일상':
+    st.session_state['peds_mode'] = '일상'
+
+
 # 공통 고지
 st.info(
     "본 수치는 참고용이며, 해석 결과는 개발자와 무관합니다.\n"
@@ -205,7 +212,7 @@ if mode == "암":
         ("WBC","WBC(백혈구)"), ("Hb","Hb(혈색소)"), ("PLT","PLT(혈소판)"), ("ANC","ANC(절대호중구,면역력)"),
         ("Ca","Ca(칼슘)"), ("Na","Na(나트륨,소디움)"), ("K","K(칼륨)"), ("Alb","Alb(알부민)"), ("Glu","Glu(혈당)"),
         ("TP","TP(총단백)"), ("AST","AST(간수치)"), ("ALT","ALT(간세포)"), ("LD","LD(유산탈수효소)"),
-        ("CRP","CRP(C-반응성단백,염증)"), ("Cr","Cr(크레아티닌,신장)"), ("BUN","BUN(요소질소)"), ("UA","UA(요산)"), ("Tbili","Tbili(총빌리루빈)")
+        ("CRP","CRP(C-반응성단백,염증)"), ("Cr","Cr(크레아티닌,신장)"), ("UA","UA(요산)"), ("Tbili","Tbili(총빌리루빈)")
     ]
     labs = {}
     for code, label in LABS_ORDER:
@@ -270,7 +277,13 @@ if mode == "암":
 
 # ------------------ 소아 모드 ------------------
 else:
-    ctop = st.columns(3)
+    
+    # 소아 모드 선택 (일상/질환) — 기본값은 '일상'
+    if 'peds_mode' not in st.session_state:
+        st.session_state['peds_mode'] = '일상'
+    st.markdown('### 0) 소아 모드')
+    st.radio('일상 / 질환', ['일상','질환'], horizontal=True, key='peds_mode')
+ctop = st.columns(3)
     with ctop[0]:
         disease = st.selectbox("소아 질환", ["로타","독감","RSV","아데노","마이코","수족구","편도염","코로나","중이염"], index=0)
     with ctop[1]:
@@ -301,7 +314,7 @@ else:
     if st.button("🔎 해석하기", key="analyze_peds"):
         st.session_state["analyzed"] = True
         st.session_state["analysis_ctx"] = {
-            "mode":"소아", "disease": disease,
+            "mode":"소아", "peds_mode": st.session_state.get("peds_mode"), "disease": disease,
             "symptoms": {"콧물": nasal, "기침": cough, "설사": diarrhea, "발열": fever},
             "temp": temp, "age_m": age_m, "weight": weight or None,
             "apap_ml": apap_ml, "ibu_ml": ibu_ml,
@@ -420,3 +433,12 @@ def render_graphs(st, nick_pin_key: str):
         cols = [c for c in ['WBC','Hb','혈소판','CRP','ANC'] if c in df.columns]
         if cols:
             st.line_chart(df.set_index('date')[cols])
+
+# ---- Merge heme/lymphoma Korean labels ----
+try:
+    from dx_ko_map import DX_KO_SARCOMA, DX_KO_HEME
+    DX_KO_LOCAL = dict(globals().get("DX_KO_LOCAL", {}))
+    DX_KO_LOCAL.update(DX_KO_SARCOMA)
+    DX_KO_LOCAL.update(DX_KO_HEME)
+except Exception as _e:
+    pass

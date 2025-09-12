@@ -35,3 +35,28 @@ DX_KO_SARCOMA = {
     "Infantile fibrosarcoma": "영아 섬유육종",
     "Extraskeletal osteosarcoma": "골격외 골육종",
 }
+
+
+DX_KO_HEME = {
+    "AML": "급성 골수성 백혈병",
+    "Acute myeloid leukemia": "급성 골수성 백혈병",
+    "APL": "급성 전골수구성 백혈병",
+    "Acute promyelocytic leukemia": "급성 전골수구성 백혈병",
+    "ALL": "급성 림프모구성 백혈병",
+    "Acute lymphoblastic leukemia": "급성 림프모구성 백혈병",
+    "CML": "만성 골수성 백혈병",
+    "Chronic myeloid leukemia": "만성 골수성 백혈병",
+    "CLL": "만성 림프구성 백혈병",
+    "Chronic lymphocytic leukemia": "만성 림프구성 백혈병",
+
+    "DLBCL": "미만성 거대 B세포 림프종",
+    "Diffuse large B-cell lymphoma": "미만성 거대 B세포 림프종",
+    "Hodgkin lymphoma": "호지킨 림프종",
+    "Follicular lymphoma": "여포성 림프종",
+    "MALT lymphoma": "MALT 림프종",
+    "Mantle cell lymphoma": "외투세포 림프종",
+    "Burkitt lymphoma": "버킷 림프종",
+    "T-cell lymphoma": "T세포 림프종",
+    "NK/T-cell lymphoma": "NK/T세포 림프종",
+    "Primary CNS lymphoma": "원발성 중추신경계 림프종",
+}
