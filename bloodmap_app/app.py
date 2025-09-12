@@ -371,7 +371,7 @@ if ctx.get("mode") == "암" and st.session_state.get("peds_mode") != "일상":
         regimen = (rec.get("chemo") or []) + (rec.get("targeted") or [])
         render_adverse_effects(st, regimen, DRUG_DB)
 
-    elif ctx.get("mode") == "소아":
+elif ctx.get("mode") == "소아":
         st.subheader("👶 증상 요약")
         sy = ctx.get("symptoms", {})
         sy_cols = st.columns(4)
@@ -393,4 +393,30 @@ if ctx.get("mode") == "암" and st.session_state.get("peds_mode") != "일상":
         with dcols[1]:
             st.metric("이부프로펜 시럽", f"{ctx.get('ibu_ml')} mL")
 
-    st.stop()
+try:
+    from ui_results import render_exports
+    render_exports(st, ctx)
+except Exception:
+    pass
+
+st.stop()
+# ---- Footer notices ----
+try:
+    from config import DISCLAIMER_TEXT, NO_CELL_THERAPY_NOTICE
+    st.markdown('---')
+    st.caption(NO_CELL_THERAPY_NOTICE)
+    st.caption(DISCLAIMER_TEXT)
+except Exception:
+    pass
+
+
+def render_graphs(st, nick_pin_key: str):
+    import pandas as pd
+    hist = st.session_state.get('history', {}).get(nick_pin_key, [])
+    if not hist:
+        return
+    df = pd.DataFrame(hist)
+    if 'date' in df.columns:
+        cols = [c for c in ['WBC','Hb','혈소판','CRP','ANC'] if c in df.columns]
+        if cols:
+            st.line_chart(df.set_index('date')[cols])
