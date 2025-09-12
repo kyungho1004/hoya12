@@ -154,11 +154,11 @@ if mode == "암":
     # B세포 림프종: 연령별 탭 표시
     render_bcell_age_tabs(group, dx)
     if dx and dx != "직접 입력":
-        st.markdown(f"**진단:** {local_dx_display(group, dx)}")
+        st.markdown(f"**진단:** {local_dx_display(dx)}")
     if dx == "직접 입력":
         dx = st.text_input("진단(영문/축약 직접 입력)", value="")
         if dx:
-            st.markdown(f"**진단:** {local_dx_display(group, dx)}")
+            st.markdown(f"**진단:** {local_dx_display(dx)}")
 
     if group == "혈액암":
         msg = "혈액암 환자에서 **철분제 + 비타민 C** 복용은 흡수 촉진 가능성이 있어, **반드시 주치의와 상의 후** 복용 여부를 결정하세요."
