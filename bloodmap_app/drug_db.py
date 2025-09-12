@@ -66,7 +66,7 @@ ALIAS_FALLBACK = {
     "Octreotide": "옥트레오타이드",
     "Vandetanib": "반데타닙",
     "Cabozantinib": "카보잔티닙",
-    "Selpercatinib": "셀퍼카티닙",
+    "Selpercatinib": "셀퍼카티닛",
     "Pralsetinib": "프랄세티닙",
     # Antibiotics
     "Piperacillin/Tazobactam": "피페라실린/타조박탐",
@@ -85,7 +85,18 @@ ALIAS_FALLBACK = {
     "Amoxicillin/Clavulanate": "아목시실린/클라불란산",
 }
 
-def display_label(key: str, db=None) -> str:
+def _has_hangul(s: str) -> bool:
+    return any('\uac00' <= ch <= '\ud7a3' for ch in (s or ""))
+
+def _has_latin(s: str) -> bool:
+    return any(('A' <= ch <= 'Z') or ('a' <= ch <= 'z') for ch in (s or ""))
+
+def display_label(key: str, db=None, force_en_ko: bool=True) -> str:
+    """
+    Always show 'English (Korean)' if possible.
+    - Use DB alias first; if missing, use ALIAS_FALLBACK.
+    - If only Korean (alias) was previously returned, force prepend English key.
+    """
     ref = None
     try:
         ref = db if isinstance(db, dict) else DRUG_DB
@@ -96,25 +107,39 @@ def display_label(key: str, db=None) -> str:
         alias = ref[key].get("alias")
     if not alias:
         alias = ALIAS_FALLBACK.get(key)
-    if alias and alias != key:
+
+    if force_en_ko and alias:
+        return f"{key} ({alias})"
+
+    # Fallbacks
+    if alias and alias != key and _has_hangul(alias):
         return f"{key} ({alias})"
     return str(key)
 
 def picklist(keys, db=None):
     ref = db if isinstance(db, dict) else DRUG_DB if 'DRUG_DB' in globals() else {}
-    return [display_label(k, ref) for k in (keys or [])]
+    return [display_label(k, ref, True) for k in (keys or [])]
 
 def key_from_label(label: str, db=None) -> str:
+    """
+    Recover English key from label.
+    - If format is 'Key (Alias)', return 'Key'.
+    - Else try exact key, then alias->key reverse lookup (DB first, then fallback).
+    """
     if not label:
         return ""
     pos = label.find(" (")
     if pos > 0:
         return label[:pos]
     ref = db if isinstance(db, dict) else DRUG_DB if 'DRUG_DB' in globals() else {}
-    if label in ref:
+    if label in (ref or {}):
         return label
+    # reverse alias lookup
     for k, v in (ref or {}).items():
         if isinstance(v, dict) and v.get("alias") == label:
+            return k
+    for k, v in ALIAS_FALLBACK.items():
+        if v == label:
             return k
     return label
 
