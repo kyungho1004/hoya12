@@ -5,6 +5,7 @@
 # - 진단명 직접 선택 시: 선택 진단 식이가이드 + 해열제 용량만 노출
 # - 요검사(HPF) 평균 파싱 + 해석 / 보체(C3/C4/CH50) 해석
 # - MD/TXT 보고서 저장, 선택 요약 중복 제거, 보체 위젯 key 충돌 해결
+# - ✅ 결과 게이트 호환 래퍼(_gate_results) 추가 → ui_results 함수 시그니처 차이(TypeError) 대응
 
 import re
 from datetime import date
@@ -587,8 +588,21 @@ def _build_report_txt(md: str) -> str:
     txt = md.replace("**", "").replace("# ", "").replace("## ", "").replace("---", "-")
     return txt
 
-# -------------------- 결과 게이트 --------------------
-if results_only_after_analyze(st):
+# -------------------- 결과 게이트 (호환 래퍼) --------------------
+# 배포 환경마다 ui_results.results_only_after_analyze 시그니처가 다를 수 있어 호환 래퍼 사용
+
+def _gate_results():
+    try:
+        return results_only_after_analyze(st)
+    except TypeError:
+        try:
+            return results_only_after_analyze()
+        except Exception:
+            # 최후의 수단: 세션 상태 플래그 직접 확인
+            return bool(st.session_state.get("analyzed"))
+
+# -------------------- 결과 표시 --------------------
+if _gate_results():
     ctx = st.session_state.get("analysis_ctx", {})
 
     if ctx.get("mode") == "암":
