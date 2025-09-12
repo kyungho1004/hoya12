@@ -394,3 +394,23 @@ elif ctx.get("mode") == "소아":
         st.metric("이부프로펜 시럽", f"{ctx.get('ibu_ml')} mL")
 
 st.stop()
+
+# ==== Auto-injected (bilingual + pediatric extras) ====
+try:
+    from dx_ko_map import DX_KO_SARCOMA
+    _g = globals()
+    # 앱 전역에 존재하는 진단 한글 병기 맵과 병합
+    if "DX_KO_LOCAL" in _g and isinstance(_g["DX_KO_LOCAL"], dict):
+        _g["DX_KO_LOCAL"].update(DX_KO_SARCOMA)
+    else:
+        _g["DX_KO_LOCAL"] = dict(DX_KO_SARCOMA)
+except Exception as _e:
+    pass
+
+try:
+    from patch_peds_toggle import render_peds_extras
+    render_peds_extras(st)
+except Exception as _e:
+    # 안전하게 무시 (다른 화면에서도 앱이 죽지 않도록)
+    pass
+# ==== /Auto-injected ====
