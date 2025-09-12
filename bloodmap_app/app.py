@@ -143,7 +143,7 @@ if mode == "암":
     st.markdown("### 1) 암 선택")
     group = st.selectbox("암 카테고리", ["혈액암","림프종","고형암","육종","희귀암"])
     dx_options = list(ONCO_MAP.get(group, {}).keys())
-    dx = st.selectbox("진단(영문)", dx_options or ["직접 입력"])
+    dx = st.selectbox("진단(영문+한글)", dx_options or ["직접 입력"], format_func=lambda d: d if _is_korean(d) else (f"{d} · {DX_KO_LOCAL.get(_norm(d), DX_KO_LOCAL.get(d, ""))}" if (DX_KO_LOCAL.get(_norm(d)) or DX_KO_LOCAL.get(d)) else d))
     # ▼ 강제 한글 병기 라벨 출력
     # B세포 림프종: 연령별 탭 표시
     render_bcell_age_tabs(group, dx)
@@ -309,87 +309,88 @@ else:
         }
 
 # ------------------ 결과 전용 게이트 ------------------
-results_only_after_analyze(st, ((st.session_state.get("analysis_ctx") or {}).get("labs") or {}) if isinstance((st.session_state.get("analysis_ctx") or {}).get("labs"), dict) else {})
-if True:
-    ctx = st.session_state.get("analysis_ctx", {})
-    if ctx.get("mode") == "암":
-        labs = ctx.get("labs", {})
-        st.subheader("🧪 피수치 요약")
-        if labs:
-            rcols = st.columns(len(labs))
-            for i, (k, v) in enumerate(labs.items()):
-                with rcols[i]:
-                    st.metric(k, v)
-        if ctx.get("dx_label"):
-            st.caption(f"진단: **{ctx['dx_label']}**")
-
-
-        st.subheader("🗂️ 선택 요약")
-        s1, s2, s3 = st.columns(3)
-        with s1:
-            st.markdown("**항암제(세포독성, 개인 선택)**")
-            for k in (ctx.get("user_chemo") or []):
-                from drug_db import display_label
-                st.write("- " + display_label(k))
-        with s2:
-            st.markdown("**표적/면역(개인 선택)**")
-            for k in (ctx.get("user_targeted") or []):
-                from drug_db import display_label
-                st.write("- " + display_label(k))
-        with s3:
-            st.markdown("**항생제(개인 선택)**")
-            for k in (ctx.get("user_abx") or []):
-                from drug_db import display_label
-                st.write("- " + display_label(k))
-    
-        s1, s2 = st.columns(2)
-        with s1:
-            st.markdown("**항암제(개인 선택)**")
-            for lbl in (ctx.get("user_chemo") or []):
-                from drug_db import display_label
-                st.write("- " + display_label(lbl))
-        with s2:
-            st.markdown("**항생제(개인 선택)**")
-            for lbl in (ctx.get("user_abx") or []):
-                from drug_db import display_label
-                st.write("- " + display_label(lbl))
-
-        st.subheader("💊 항암제(세포독성) 부작용")
-        render_adverse_effects(st, ctx.get("user_chemo") or [], DRUG_DB)
-
-        st.subheader("🧫 항생제 부작용")
-        render_adverse_effects(st, ctx.get("user_abx") or [], DRUG_DB)
-# 식이가이드
-        st.subheader("🥗 피수치 기반 식이가이드 (예시)")
-        lines = lab_diet_guides(labs, heme_flag=(ctx.get("group")=="혈액암"))
-        for L in lines: st.write("- " + L)
-
-        # 약물 부작용 (자동 추천만 우선 표시)
-        st.subheader("💊 약물 부작용")
-        rec = auto_recs_by_dx(ctx.get("group"), ctx.get("dx"), DRUG_DB, ONCO_MAP)
-        regimen = (rec.get("chemo") or []) + (rec.get("targeted") or [])
-        render_adverse_effects(st, regimen, DRUG_DB)
-
-    elif ctx.get("mode") == "소아":
-        st.subheader("👶 증상 요약")
-        sy = ctx.get("symptoms", {})
-        sy_cols = st.columns(4)
-        keys = list(sy.keys())
-        for i, key in enumerate(keys):
-            with sy_cols[i % 4]:
-                st.metric(key, sy[key])
-
-        st.subheader("🥗 식이가이드")
-        from ui_results import results_only_after_analyze as _dummy  # to keep imports coherent
-        from ui_results import render_adverse_effects as _dummy2
-        # 기존 peds_diet_guide는 별도 모듈에 있었지만, 원본의 가이드가 충분하여 lab_diet는 암에 한정.
-        # 필요 시 별도 모듈로 확장 가능.
-
-        st.subheader("🌡️ 해열제 1회분(평균)")
-        dcols = st.columns(2)
-        with dcols[0]:
-            st.metric("아세트아미노펜 시럽", f"{ctx.get('apap_ml')} mL")
-        with dcols[1]:
-            st.metric("이부프로펜 시럽", f"{ctx.get('ibu_ml')} mL")
-
+ok_gate = results_only_after_analyze(st)
+if not ok_gate:
     st.stop()
+ctx = st.session_state.get("analysis_ctx", {})
+if ctx.get("mode") == "암":
+    labs = ctx.get("labs", {})
+    st.subheader("🧪 피수치 요약")
+    if labs:
+        rcols = st.columns(len(labs))
+        for i, (k, v) in enumerate(labs.items()):
+            with rcols[i]:
+                st.metric(k, v)
+    if ctx.get("dx_label"):
+        st.caption(f"진단: **{ctx['dx_label']}**")
+
+
+    st.subheader("🗂️ 선택 요약")
+    s1, s2, s3 = st.columns(3)
+    with s1:
+        st.markdown("**항암제(세포독성, 개인 선택)**")
+        for k in (ctx.get("user_chemo") or []):
+            from drug_db import display_label
+            st.write("- " + display_label(k))
+    with s2:
+        st.markdown("**표적/면역(개인 선택)**")
+        for k in (ctx.get("user_targeted") or []):
+            from drug_db import display_label
+            st.write("- " + display_label(k))
+    with s3:
+        st.markdown("**항생제(개인 선택)**")
+        for k in (ctx.get("user_abx") or []):
+            from drug_db import display_label
+            st.write("- " + display_label(k))
+
+    s1, s2 = st.columns(2)
+    with s1:
+        st.markdown("**항암제(개인 선택)**")
+        for lbl in (ctx.get("user_chemo") or []):
+            from drug_db import display_label
+            st.write("- " + display_label(lbl))
+    with s2:
+        st.markdown("**항생제(개인 선택)**")
+        for lbl in (ctx.get("user_abx") or []):
+            from drug_db import display_label
+            st.write("- " + display_label(lbl))
+
+    st.subheader("💊 항암제(세포독성) 부작용")
+    render_adverse_effects(st, ctx.get("user_chemo") or [], DRUG_DB)
+
+    st.subheader("🧫 항생제 부작용")
+    render_adverse_effects(st, ctx.get("user_abx") or [], DRUG_DB)
+# 식이가이드
+    st.subheader("🥗 피수치 기반 식이가이드 (예시)")
+    lines = lab_diet_guides(labs, heme_flag=(ctx.get("group")=="혈액암"))
+    for L in lines: st.write("- " + L)
+
+    # 약물 부작용 (자동 추천만 우선 표시)
+    st.subheader("💊 약물 부작용")
+    rec = auto_recs_by_dx(ctx.get("group"), ctx.get("dx"), DRUG_DB, ONCO_MAP)
+    regimen = (rec.get("chemo") or []) + (rec.get("targeted") or [])
+    render_adverse_effects(st, regimen, DRUG_DB)
+
+elif ctx.get("mode") == "소아":
+    st.subheader("👶 증상 요약")
+    sy = ctx.get("symptoms", {})
+    sy_cols = st.columns(4)
+    keys = list(sy.keys())
+    for i, key in enumerate(keys):
+        with sy_cols[i % 4]:
+            st.metric(key, sy[key])
+
+    st.subheader("🥗 식이가이드")
+    from ui_results import results_only_after_analyze as _dummy  # to keep imports coherent
+    from ui_results import render_adverse_effects as _dummy2
+    # 기존 peds_diet_guide는 별도 모듈에 있었지만, 원본의 가이드가 충분하여 lab_diet는 암에 한정.
+    # 필요 시 별도 모듈로 확장 가능.
+
+    st.subheader("🌡️ 해열제 1회분(평균)")
+    dcols = st.columns(2)
+    with dcols[0]:
+        st.metric("아세트아미노펜 시럽", f"{ctx.get('apap_ml')} mL")
+    with dcols[1]:
+        st.metric("이부프로펜 시럽", f"{ctx.get('ibu_ml')} mL")
+
+st.stop()
