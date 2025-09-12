@@ -108,7 +108,7 @@ from core_utils import nickname_pin, clean_num, round_half, temp_band, rr_thr_by
 from drug_db import DRUG_DB, ensure_onco_drug_db
 from onco_map import build_onco_map, auto_recs_by_dx, dx_display
 from ui_results import results_only_after_analyze, render_adverse_effects
-from lab_diet import lab_diet_guides
+from lab_diet import lab_diet_guides, peds_diet_guides
 from peds_profiles import get_symptom_options
 from peds_dose import acetaminophen_ml, ibuprofen_ml
 
@@ -381,10 +381,8 @@ elif ctx.get("mode") == "소아":
             st.metric(key, sy[key])
 
     st.subheader("🥗 식이가이드")
-    from ui_results import results_only_after_analyze as _dummy  # to keep imports coherent
-    from ui_results import render_adverse_effects as _dummy2
-    # 기존 peds_diet_guide는 별도 모듈에 있었지만, 원본의 가이드가 충분하여 lab_diet는 암에 한정.
-    # 필요 시 별도 모듈로 확장 가능.
+    lines = peds_diet_guides(ctx.get("symptoms") or {}, ctx.get("temp"), ctx.get("age_m"))
+    for L in lines: st.write("- " + L)
 
     st.subheader("🌡️ 해열제 1회분(평균)")
     dcols = st.columns(2)

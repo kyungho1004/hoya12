@@ -55,3 +55,51 @@ def lab_diet_guides(labs: Dict, heme_flag: bool = False) -> List[str]:
             caution="딱딱/자극 음식·술 피하고, 양치 시 부드러운 칫솔 사용")
 
     return L
+
+
+def peds_diet_guides(symptoms: dict, temp_c: float | None, age_months: int | None) -> list[str]:
+    """
+    소아 증상 기반 간단 식이가이드(일상/질환 모드 공용)
+    - 증상 키 예시: {"콧물": "...", "기침": "...", "설사": "...", "발열": "...", "구토": "있음/없음"}
+    - temp_c는 선택값(없으면 규칙 중 발열 항목만 증상 텍스트로 판단)
+    반환: 권장/주의 문구 리스트
+    """
+    s = symptoms or {}
+    out: list[str] = []
+
+    def add(line: str): 
+        if line and line not in out:
+            out.append(line)
+
+    fever_txt = (s.get("발열") or "").strip()
+    cough_txt = (s.get("기침") or "").strip()
+    rhin_txt  = (s.get("콧물") or "").strip()
+    diarr_txt = (s.get("설사") or "").strip()
+    vomi_txt  = (s.get("구토") or "없음").strip()
+
+    # 공통 수분 보충
+    if temp_c and temp_c >= 38.5 or (fever_txt.startswith("38.5") or fever_txt.startswith("39")):
+        add("고열 시 수분보충: 미지근한 물/전해질 음료를 소량씩 자주")
+        add("속이 불편하면 자극적/기름진 음식 피하고, 흰죽·국수·바나나 등 담백한 식단 권장")
+
+    # 기침/콧물
+    if cough_txt != "없음" or rhin_txt != "없음":
+        add("따뜻한 국물(미역국/닭곰탕/맑은 된장국)과 충분한 수분 섭취")
+        if age_months is not None and age_months < 12:
+            add("생꿀 금지(만 1세 미만 보툴리눔 위험) — 배숙 등은 설탕/배만 사용")
+        else:
+            add("꿀차/배숙 등 따뜻한 음료 가능(과다 당분은 피하기)")
+
+    # 구토/설사
+    if vomi_txt == "있음" or "설사" in diarr_txt or diarr_txt in ["물설사","피 섞임"]:
+        add("구토·설사 시: 수분·전해질 보충(ORS), 소량씩 자주")
+        add("BRAT 식단 응용: 흰죽/바나나/사과퓨레/식빵/감자·고구마 삶은 것")
+        add("우유·튀김·매운 음식은 증상 호전될 때까지 일시 제한")
+        if diarr_txt == "피 섞임":
+            add("혈변 동반 시 병원 상담 권장")
+
+    # 일상 위생/안전 (보호자 공통 가이드)
+    add("모든 음식은 충분히 익혀 제공하고, 조리 후 2시간이 지나면 폐기")
+    add("과일·채소는 흐르는 물에 깨끗이 세척해 껍질째 제공 시 잘 씻기")
+
+    return out
