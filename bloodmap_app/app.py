@@ -1,6 +1,33 @@
 # -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
+
+# --- B세포 림프종: 소아/성인 탭 보기 ---
+def render_bcell_age_tabs(curr_group: str, curr_dx: str):
+    try:
+        g = (curr_group or "").strip()
+        d = (curr_dx or "").strip()
+    except Exception:
+        return
+    if g != "림프종":
+        return
+    if not any(k in d for k in ["B거대세포","B세포","B-cell","DLBCL","B CELL","B-CELL"]):
+        return
+    st.markdown("### B세포 림프종 — 연령별 보기")
+    tab1, tab2 = st.tabs(["소아용", "성인용"])
+    with tab1:
+        st.markdown("**소아 B세포 림프종 (LMB 스타일)**")
+        st.write("• Rituximab(리툭시맙, CD20+) 고려")
+        st.write("• COP → COPADM(HD-MTX/Anthracycline 포함) 블록")
+        st.write("• CYM / CYVE(시타라빈 포함)")
+        st.write("• HD-MTX, Cytarabine(시타라빈)")
+        st.caption("LMB/B-NHL 프로토콜(FAB/LMB, ANHL 등) — 위험도에 따라 블록/용량 조정")
+    with tab2:
+        st.markdown("**성인 B세포 림프종 (DLBCL 등)**")
+        st.write("• R-CHOP 기본 / Pola-R-CHP(폴라투주맙) 옵션")
+        st.write("• DA-EPOCH-R (고위험/더블히트)")
+        st.write("• 구제요법: R-ICE, R-DHAP 등")
+        st.caption("병기/분자위험/IPI 고려하여 선택")
 # --- Local Korean display (fallback; independent of onco_map import) ---
 def _is_korean(s: str) -> bool:
     return any('\uac00' <= ch <= '\ud7a3' for ch in (s or ""))
@@ -118,6 +145,8 @@ if mode == "암":
     dx_options = list(ONCO_MAP.get(group, {}).keys())
     dx = st.selectbox("진단(영문)", dx_options or ["직접 입력"])
     # ▼ 강제 한글 병기 라벨 출력
+    # B세포 림프종: 연령별 탭 표시
+    render_bcell_age_tabs(group, dx)
     if dx and dx != "직접 입력":
         st.markdown(f"**진단:** {local_dx_display(group, dx)}")
     if dx == "직접 입력":
@@ -257,9 +286,10 @@ else:
     with c1: nasal = st.selectbox("콧물", opts["콧물"])
     with c2: cough = st.selectbox("기침", opts["기침"])
     with c3: diarrhea = st.selectbox("설사(횟수/일)", opts["설사"])
-   # bridge: ensure both "발열" and "체온" keys exist
-  with c4:
-    fever = st.selectbox("발열", ((opts or {}).get("발열") or (opts or {}).get("체온") or ["없음","37~37.5","37.5~38","38.5~39","39+"]))
+    with c4:
+        fever_opts = (opts.get("발열") if isinstance(opts, dict) else None) or ["없음","37~37.5","37.5~38","38.5~39","39+"]
+        fever = st.selectbox("발열", fever_opts)
+
       
     from peds_dose import acetaminophen_ml, ibuprofen_ml
     apap_ml, apap_w = acetaminophen_ml(age_m, weight or None)
