@@ -121,8 +121,8 @@ st.title("BloodMap — 모듈화 버전")
 
 # ---- Top-level mode selector ----
 st.markdown('### 모드 선택')
-top_mode = st.radio('암 / 소아 / 일상', ['암','소아','일상'], horizontal=True, key='mode_top')
-if top_mode == '일상':
+mode = st.radio("모드 선택", ["암", "소아", "일상"], horizontal=True)
+if mode == '일상':
     st.session_state['peds_mode'] = '일상'
 
 
@@ -140,7 +140,7 @@ st.divider()
 has_key = bool(nick and pin and len(pin) == 4)
 
 # ----------- 모드 선택 -----------
-mode = st.radio("모드 선택", ["암", "소아"], horizontal=True)
+mode = st.radio("모드 선택", ["암", "소아", "일상"], horizontal=True)
 
 
 report_sections = []
@@ -150,7 +150,7 @@ if mode == "암":
     st.markdown("### 1) 암 선택")
     group = st.selectbox("암 카테고리", ["혈액암","림프종","고형암","육종","희귀암"])
     dx_options = list(ONCO_MAP.get(group, {}).keys())
-    dx = st.selectbox("진단(영문)", dx_options or ["직접 입력"])
+    dx = st.selectbox("진단(영문+한글)", dx_options or ["직접 입력"], format_func=local_dx_display)
     # ▼ 강제 한글 병기 라벨 출력
     # B세포 림프종: 연령별 탭 표시
     render_bcell_age_tabs(group, dx)
@@ -275,6 +275,41 @@ if mode == "암":
     # 스케줄
     schedule_block()
 
+elif mode == "일상":
+    st.markdown("### 1) 증상/일수 입력")
+    # 기본값: 소아 일상 모드
+    st.session_state["peds_mode"] = "일상"
+    colA, colB = st.columns([1,1])
+    with colA:
+        days = st.number_input("지속 일수", min_value=0, max_value=30, value=int(st.session_state.get("peds_days",0)), step=1, key="peds_days")
+        fever = st.selectbox("발열", ["없음","미열(37.5~38.4)","고열(≥38.5)"], index=0, key="peds_fever")
+        cough = st.selectbox("기침", ["없음","마른기침","가래기침","쌕쌕거림"], index=0, key="peds_cough")
+    with colB:
+        rhin  = st.selectbox("콧물", ["없음","투명","노랑(초록)"], index=0, key="peds_rhin")
+        vomi  = st.selectbox("구토", ["없음","있음"], index=0, key="peds_vomi")
+        diarr = st.selectbox("설사", ["없음","물설사","피 섞임"], index=0, key="peds_diarr")
+    # 간단 예상 진단
+    try:
+        from patch_peds_toggle import _predict_peds_dx
+    except Exception:
+        def _predict_peds_dx(mode, days, fever, cough, rhin, vomi, diarr):
+            hi_fever = (fever == "고열(≥38.5)")
+            feverish = (fever != "없음")
+            greenish = (rhin == "노랑(초록)")
+            watery = (diarr == "물설사")
+            blood_stool = (diarr == "피 섞임")
+            wheeze = (cough == "쌕쌕거림")
+            dry_cough = (cough == "마른기침")
+            if watery and (vomi == "있음"): return "로타/노로 바이러스 가능성"
+            if blood_stool: return "장염(세균 가능성)"
+            if hi_fever and dry_cough: return "인플루엔자(독감) 의심"
+            if wheeze or (feverish and rhin == "투명" and days <= 7): return "RSV/바이러스성 상기도염 가능성"
+            if greenish and days >= 3: return "부비동염(세균성) 가능성"
+            if feverish or rhin != "없음" or cough != "없음": return "감기(바이러스성 상기도감염) 가능성"
+            return "정상 범위(경과 관찰)"
+    dx_guess = _predict_peds_dx("일상", days, fever, cough, rhin, vomi, diarr)
+    st.success(f"예상 병명: {dx_guess}")
+    st.caption("※ 참고용입니다. 최종 진단은 의료진의 판단에 따릅니다.")
 # ------------------ 소아 모드 ------------------
 else:
     
@@ -369,7 +404,7 @@ if ctx.get("mode") == "암" and st.session_state.get("peds_mode") != "일상":
                 st.write("- " + display_label(lbl))
 
         st.subheader("💊 항암제(세포독성) 부작용")
-        render_adverse_effects(st, ctx.get("user_chemo") or [], DRUG_DB)
+        render_adverse_effects(st, ctx.get("user_chemo", emphasis=True, kind="chemo") or [], DRUG_DB)
 
         st.subheader("🧫 항생제 부작용")
         render_adverse_effects(st, ctx.get("user_abx") or [], DRUG_DB)

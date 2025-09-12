@@ -9,21 +9,27 @@ def results_only_after_analyze(st) -> bool:
         return True
     return False
 
-def render_adverse_effects(st, regimen: List[str], DRUG_DB: Dict[str, Dict[str, Any]]) -> None:
+def render_adverse_effects(st, regimen: List[str], DRUG_DB: Dict[str, Dict[str, Any]], emphasis: bool=False, kind: str='') -> None:
     if not regimen:
         return
     st.markdown("#### 💊 약물 부작용(요약)")
+    def _line(txt: str):
+        if emphasis:
+            st.markdown(f"<div style='background:#fff3f3;border-left:6px solid #e53935;padding:8px 12px;border-radius:8px;margin:6px 0;'>🚨 {txt}</div>", unsafe_allow_html=True)
+        else:
+            st.write("- " + txt)
+
     for key in regimen:
         info = (DRUG_DB or {}).get(key) or (DRUG_DB or {}).get(key.lower()) or (DRUG_DB or {}).get((key or "").strip())
         if not info:
-            st.write(f"- {key}: 데이터 없음")
+            _line(f"{key}: 데이터 없음")
             continue
         alias = info.get("alias", key)
         moa = info.get("moa", "")
         ae  = info.get("ae", "")
-        st.write(f"- **{key} ({alias})**")
+        _line(f"**{key} ({alias})**")
         if moa: st.caption(f"  · 기전/특징: {moa}")
-        if ae:  st.caption(f"  · 주의/부작용: {ae}")
+        if ae:  (st.markdown(f"<div style='margin-left:10px'>{'**주의/부작용:** ' + ae if emphasis else '· 주의/부작용: ' + ae}</div>", unsafe_allow_html=True))
 
 
 def render_exports(st, ctx: Dict[str, Any]):
