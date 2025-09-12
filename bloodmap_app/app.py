@@ -205,7 +205,7 @@ elif mode == "일상":
         c1,c2,c3,c4,c5 = st.columns(5)
         with c1: nasal = st.selectbox("콧물", opts["콧물"])
         with c2: cough = st.selectbox("기침", opts["기침"])
-        with c3: diarrhea = st.selectbox("설사(횟수)", opts["설사"])
+        with c3: diarrhea = st.selectbox("설사(횟수/일)", opts["설사"])
         with c4: symptom_days = st.number_input("**증상일수**(일)", min_value=0, step=1, value=0)
         with c5: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1, value=0.0)
         age_m = st.number_input("나이(개월)", min_value=0, step=1)
