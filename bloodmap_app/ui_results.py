@@ -21,18 +21,22 @@ AE_RULES: List[Tuple[str, List[str]]] = [
     ]),
 ]
 
-def _classify_ae(text: str) -> List[str]:
-    if not text: return []
-    lines = []
+SEV_ORDER = ["🚨 위중", "🟧 주의", "🟡 흔함/경미"]
+
+def _scan_hits(text: str) -> Dict[str, List[str]]:
+    hits: Dict[str, List[str]] = {k: [] for k, _ in AE_RULES}
+    if not text:
+        return hits
     for tag, kws in AE_RULES:
         for kw in kws:
             if re.search(kw, text, flags=re.I):
-                lines.append(tag + " · " + kw)
-                break
-    return lines
+                if kw not in hits[tag]:
+                    hits[tag].append(kw)
+    return hits
 
 def _get_entry(db: Dict, key: str) -> Dict:
-    if not key: return {}
+    if not key:
+        return {}
     return db.get(key) or db.get(key.strip("'\"")) or {}
 
 def collect_top_ae_alerts(drug_keys: Iterable[str], db: Dict | None = None) -> List[str]:
@@ -43,10 +47,10 @@ def collect_top_ae_alerts(drug_keys: Iterable[str], db: Dict | None = None) -> L
     for k in (drug_keys or []):
         e = _get_entry(ref, k)
         name = e.get("alias") or k
-        tags = _classify_ae(e.get("ae",""))
-        for t in tags:
-            if t.startswith("🚨"):
-                alerts.append(f"🚨 {name}: {t.replace('🚨 위중 · ','')}")
+        ae   = e.get("ae","")
+        hits = _scan_hits(ae).get("🚨 위중", [])
+        if hits:
+            alerts.append(f"🚨 {name}: " + ", ".join(hits))
     # 중복 제거, 상위 8개까지만
     seen = set(); out = []
     for a in alerts:
@@ -54,7 +58,17 @@ def collect_top_ae_alerts(drug_keys: Iterable[str], db: Dict | None = None) -> L
             out.append(a); seen.add(a)
     return out[:8]
 
+def _emit_box(st, severity: str, header: str, body: str):
+    msg = f"{header}\n\n{body}" if header else body
+    if severity == "🚨 위중":
+        st.error(msg)
+    elif severity == "🟧 주의":
+        st.warning(msg)
+    else:
+        st.info(msg)
+
 def render_adverse_effects(st, drug_keys: List[str], db: Dict):
+    """약물별 부작용을 '색상 박스 안에 본문까지' 넣어서 보여줍니다."""
     if not drug_keys:
         st.caption("선택된 약물이 없습니다.")
         return
@@ -66,22 +80,32 @@ def render_adverse_effects(st, drug_keys: List[str], db: Dict):
         name = e.get("alias") or k
         moa  = e.get("moa") or ""
         ae   = e.get("ae") or ""
-        tags = _classify_ae(ae)
-        # 헤더
+
+        # 헤더 (약명/기전)
         st.markdown(f"**{name}**")
-        if moa: st.caption(moa)
-        # 강조 배지
-        if tags:
-            for t in tags:
-                if t.startswith("🚨"):
-                    st.error(t.replace("🚨 위중 · ","🚨 "))
-                elif t.startswith("🟧"):
-                    st.warning(t.replace("🟧 주의 · ","🟧 "))
-                else:
-                    st.info(t.replace("🟡 흔함/경미 · ","🟡 "))
-        # 원문 부작용
-        if ae:
-            st.write("· " + ae)
+        if moa:
+            st.caption(moa)
+
+        # 하이라이트 스캔
+        hits = _scan_hits(ae)
+        # 최상위 심각도 선택
+        top_sev = next((s for s in SEV_ORDER if hits.get(s)), None)
+
+        if top_sev:
+            # 박스 헤더: "🚨 분화증후군 • 🟡 두통" 형태로 전 심각도 요약
+            chips = []
+            for sev in SEV_ORDER:
+                kws = hits.get(sev) or []
+                if not kws:
+                    continue
+                icon = sev.split()[0]  # 이모지
+                chips.append(icon + " " + " · ".join(kws))
+            header = " / ".join(chips)
+            _emit_box(st, top_sev, header, ae)   # ✅ 본문을 박스 안에 넣음
+        else:
+            # 키워드 매치가 없으면 일반 정보 박스로 통째로 출력
+            st.info(ae or "부작용 정보가 등록되어 있지 않습니다.")
+
         st.divider()
 
 def results_only_after_analyze(st) -> bool:
