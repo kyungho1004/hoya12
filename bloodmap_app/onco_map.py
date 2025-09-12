@@ -95,7 +95,7 @@ def dx_display(group: str, dx: str) -> str:
 def build_onco_map() -> Dict[str, Dict[str, Dict[str, List[str]]]]:
     return {
         "혈액암": {
-            "APL": {"chemo": ["ATRA","Arsenic Trioxide","Ara-C","Idarubicin","MTX","6-MP"], "targeted": [], "abx": []},
+            "APL": {"chemo": ["ATRA", "Arsenic Trioxide", "Idarubicin", "MTX", "6-MP", "Cytarabine"], "targeted": [], "abx": []},
             "AML": {"chemo": ["Ara-C","Daunorubicin","Idarubicin"], "targeted": [], "abx": []},
             "ALL": {"chemo": ["Vincristine","Ara-C","MTX","6-MP","Cyclophosphamide","Prednisone"], "targeted": [], "abx": []},
             "CML": {"chemo": [], "targeted": ["Imatinib"], "abx": []},
