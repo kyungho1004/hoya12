@@ -124,7 +124,7 @@ def render_cancer_example_toggle(
     - group: 암 카테고리(예: '혈액암', '고형암', '림프종', '육종', '희귀암')
     """
     st.markdown("### 2) 암 선택시(예시)")
-    show_auto = st.toggle("자동 예시 보기", value=True, key="auto_example_patch")
+    show_auto = st.toggle("자동 예시 보기", value=True)
     if not show_auto:
         return
 
