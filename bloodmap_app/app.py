@@ -94,14 +94,13 @@ DX_KO_LOCAL = {
     "MTC": "수질성 갑상선암",
 }
 
-def local_dx_display(opt) -> str:
-    v = (str(opt) or '').strip()
-    if _is_korean(v):
-        return v
-    key = _norm(v)
-    ko = DX_KO_LOCAL.get(key) or DX_KO_LOCAL.get(v)
-    return f"{v} · {ko}" if ko else v
-
+def local_dx_display(group: str, dx: str) -> str:
+    dx = (dx or "").strip()
+    if _is_korean(dx):
+        return f"{group} - {dx}"
+    key = _norm(dx)
+    ko = DX_KO_LOCAL.get(key) or DX_KO_LOCAL.get(dx)
+    return f"{group} - {dx} ({ko})" if ko else f"{group} - {dx}"
 
 from datetime import date, datetime
 
@@ -119,13 +118,6 @@ ONCO_MAP = build_onco_map()
 
 st.set_page_config(page_title="블러드맵 피수치가이드 (모듈화)", page_icon="🩸", layout="centered")
 st.title("BloodMap — 모듈화 버전")
-mode = st.radio("모드 선택", ["암", "소아", "일상"], horizontal=True)
-
-# ---- Top-level mode selector ----
-st.markdown('### 모드 선택')
-if mode == '일상':
-    st.session_state['peds_mode'] = '일상'
-
 
 # 공통 고지
 st.info(
@@ -141,6 +133,7 @@ st.divider()
 has_key = bool(nick and pin and len(pin) == 4)
 
 # ----------- 모드 선택 -----------
+mode = st.radio("모드 선택", ["암", "소아"], horizontal=True)
 
 
 report_sections = []
@@ -155,11 +148,11 @@ if mode == "암":
     # B세포 림프종: 연령별 탭 표시
     render_bcell_age_tabs(group, dx)
     if dx and dx != "직접 입력":
-        st.markdown(f"**진단:** {local_dx_display(dx)}")
+        st.markdown(f"**진단:** {local_dx_display(group, dx)}")
     if dx == "직접 입력":
         dx = st.text_input("진단(영문/축약 직접 입력)", value="")
         if dx:
-            st.markdown(f"**진단:** {local_dx_display(dx)}")
+            st.markdown(f"**진단:** {local_dx_display(group, dx)}")
 
     if group == "혈액암":
         msg = "혈액암 환자에서 **철분제 + 비타민 C** 복용은 흡수 촉진 가능성이 있어, **반드시 주치의와 상의 후** 복용 여부를 결정하세요."
@@ -212,7 +205,7 @@ if mode == "암":
         ("WBC","WBC(백혈구)"), ("Hb","Hb(혈색소)"), ("PLT","PLT(혈소판)"), ("ANC","ANC(절대호중구,면역력)"),
         ("Ca","Ca(칼슘)"), ("Na","Na(나트륨,소디움)"), ("K","K(칼륨)"), ("Alb","Alb(알부민)"), ("Glu","Glu(혈당)"),
         ("TP","TP(총단백)"), ("AST","AST(간수치)"), ("ALT","ALT(간세포)"), ("LD","LD(유산탈수효소)"),
-        ("CRP","CRP(C-반응성단백,염증)"), ("Cr","Cr(크레아티닌,신장)"), ("UA","UA(요산)"), ("Tbili","Tbili(총빌리루빈)")
+        ("CRP","CRP(C-반응성단백,염증)"), ("Cr","Cr(크레아티닌,신장)"), ("BUN","BUN(요소질소)"), ("UA","UA(요산)"), ("Tbili","Tbili(총빌리루빈)")
     ]
     labs = {}
     for code, label in LABS_ORDER:
@@ -275,49 +268,8 @@ if mode == "암":
     # 스케줄
     schedule_block()
 
-elif mode == "일상":
-    st.markdown("### 1) 증상/일수 입력")
-    # 기본값: 소아 일상 모드
-    st.session_state["peds_mode"] = "일상"
-    colA, colB = st.columns([1,1])
-    with colA:
-        days = st.number_input("지속 일수", min_value=0, max_value=30, value=int(st.session_state.get("peds_days",0)), step=1, key="peds_days")
-        fever = st.selectbox("발열", ["없음","미열(37.5~38.4)","고열(≥38.5)"], index=0, key="peds_fever")
-        cough = st.selectbox("기침", ["없음","마른기침","가래기침","쌕쌕거림"], index=0, key="peds_cough")
-    with colB:
-        rhin  = st.selectbox("콧물", ["없음","투명","노랑(초록)"], index=0, key="peds_rhin")
-        vomi  = st.selectbox("구토", ["없음","있음"], index=0, key="peds_vomi")
-        diarr = st.selectbox("설사", ["없음","물설사","피 섞임"], index=0, key="peds_diarr")
-    # 간단 예상 진단
-    try:
-        from patch_peds_toggle import _predict_peds_dx
-    except Exception:
-        def _predict_peds_dx(mode, days, fever, cough, rhin, vomi, diarr):
-            hi_fever = (fever == "고열(≥38.5)")
-            feverish = (fever != "없음")
-            greenish = (rhin == "노랑(초록)")
-            watery = (diarr == "물설사")
-            blood_stool = (diarr == "피 섞임")
-            wheeze = (cough == "쌕쌕거림")
-            dry_cough = (cough == "마른기침")
-            if watery and (vomi == "있음"): return "로타/노로 바이러스 가능성"
-            if blood_stool: return "장염(세균 가능성)"
-            if hi_fever and dry_cough: return "인플루엔자(독감) 의심"
-            if wheeze or (feverish and rhin == "투명" and days <= 7): return "RSV/바이러스성 상기도염 가능성"
-            if greenish and days >= 3: return "부비동염(세균성) 가능성"
-            if feverish or rhin != "없음" or cough != "없음": return "감기(바이러스성 상기도감염) 가능성"
-            return "정상 범위(경과 관찰)"
-    dx_guess = _predict_peds_dx("일상", days, fever, cough, rhin, vomi, diarr)
-    st.success(f"예상 병명: {dx_guess}")
-    st.caption("※ 참고용입니다. 최종 진단은 의료진의 판단에 따릅니다.")
 # ------------------ 소아 모드 ------------------
 else:
-    
-    # 소아 모드 선택 (일상/질환) — 기본값은 '일상'
-    if 'peds_mode' not in st.session_state:
-        st.session_state['peds_mode'] = '일상'
-    st.markdown('### 0) 소아 모드')
-    st.radio('일상 / 질환', ['일상','질환'], horizontal=True, key='peds_mode')
     ctop = st.columns(3)
     with ctop[0]:
         disease = st.selectbox("소아 질환", ["로타","독감","RSV","아데노","마이코","수족구","편도염","코로나","중이염"], index=0)
@@ -349,7 +301,7 @@ else:
     if st.button("🔎 해석하기", key="analyze_peds"):
         st.session_state["analyzed"] = True
         st.session_state["analysis_ctx"] = {
-            "mode":"소아", "peds_mode": st.session_state.get("peds_mode"), "disease": disease,
+            "mode":"소아", "disease": disease,
             "symptoms": {"콧물": nasal, "기침": cough, "설사": diarrhea, "발열": fever},
             "temp": temp, "age_m": age_m, "weight": weight or None,
             "apap_ml": apap_ml, "ibu_ml": ibu_ml,
@@ -360,120 +312,86 @@ else:
 ok_gate = results_only_after_analyze(st)
 if not ok_gate:
     st.stop()
+
 ctx = st.session_state.get("analysis_ctx", {})
-if ctx.get("mode") == "암" and st.session_state.get("peds_mode") != "일상":
-        labs = ctx.get("labs", {})
-        st.subheader("🧪 피수치 요약")
-        if labs:
-            rcols = st.columns(len(labs))
-            for i, (k, v) in enumerate(labs.items()):
-                with rcols[i]:
-                    st.metric(k, v)
-        if ctx.get("dx_label"):
-            st.caption(f"진단: **{ctx['dx_label']}**")
+if ctx.get("mode") == "암":
+    labs = ctx.get("labs", {})
+    st.subheader("🧪 피수치 요약")
+    if labs:
+        rcols = st.columns(len(labs))
+        for i, (k, v) in enumerate(labs.items()):
+            with rcols[i]:
+                st.metric(k, v)
+    if ctx.get("dx_label"):
+        st.caption(f"진단: **{ctx['dx_label']}**")
 
 
-        st.subheader("🗂️ 선택 요약")
-        s1, s2, s3 = st.columns(3)
-        with s1:
-            st.markdown("**항암제(세포독성, 개인 선택)**")
-            for k in (ctx.get("user_chemo") or []):
-                from drug_db import display_label
-                st.write("- " + display_label(k))
-        with s2:
-            st.markdown("**표적/면역(개인 선택)**")
-            for k in (ctx.get("user_targeted") or []):
-                from drug_db import display_label
-                st.write("- " + display_label(k))
-        with s3:
-            st.markdown("**항생제(개인 선택)**")
-            for k in (ctx.get("user_abx") or []):
-                from drug_db import display_label
-                st.write("- " + display_label(k))
-    
-        s1, s2 = st.columns(2)
-        with s1:
-            st.markdown("**항암제(개인 선택)**")
-            for lbl in (ctx.get("user_chemo") or []):
-                from drug_db import display_label
-                st.write("- " + display_label(lbl))
-        with s2:
-            st.markdown("**항생제(개인 선택)**")
-            for lbl in (ctx.get("user_abx") or []):
-                from drug_db import display_label
-                st.write("- " + display_label(lbl))
+    st.subheader("🗂️ 선택 요약")
+    s1, s2, s3 = st.columns(3)
+    with s1:
+        st.markdown("**항암제(세포독성, 개인 선택)**")
+        for k in (ctx.get("user_chemo") or []):
+            from drug_db import display_label
+            st.write("- " + display_label(k))
+    with s2:
+        st.markdown("**표적/면역(개인 선택)**")
+        for k in (ctx.get("user_targeted") or []):
+            from drug_db import display_label
+            st.write("- " + display_label(k))
+    with s3:
+        st.markdown("**항생제(개인 선택)**")
+        for k in (ctx.get("user_abx") or []):
+            from drug_db import display_label
+            st.write("- " + display_label(k))
 
-        st.subheader("💊 항암제(세포독성) 부작용")
-        render_adverse_effects(st, ctx.get("user_chemo", emphasis=True, kind="chemo") or [], DRUG_DB)
+    s1, s2 = st.columns(2)
+    with s1:
+        st.markdown("**항암제(개인 선택)**")
+        for lbl in (ctx.get("user_chemo") or []):
+            from drug_db import display_label
+            st.write("- " + display_label(lbl))
+    with s2:
+        st.markdown("**항생제(개인 선택)**")
+        for lbl in (ctx.get("user_abx") or []):
+            from drug_db import display_label
+            st.write("- " + display_label(lbl))
 
-        st.subheader("🧫 항생제 부작용")
-        render_adverse_effects(st, ctx.get("user_abx") or [], DRUG_DB)
+    st.subheader("💊 항암제(세포독성) 부작용")
+    render_adverse_effects(st, ctx.get("user_chemo") or [], DRUG_DB)
+
+    st.subheader("🧫 항생제 부작용")
+    render_adverse_effects(st, ctx.get("user_abx") or [], DRUG_DB)
 # 식이가이드
-        st.subheader("🥗 피수치 기반 식이가이드 (예시)")
-        lines = lab_diet_guides(labs, heme_flag=(ctx.get("group")=="혈액암"))
-        for L in lines: st.write("- " + L)
+    st.subheader("🥗 피수치 기반 식이가이드 (예시)")
+    lines = lab_diet_guides(labs, heme_flag=(ctx.get("group")=="혈액암"))
+    for L in lines: st.write("- " + L)
 
-        # 약물 부작용 (자동 추천만 우선 표시)
-        st.subheader("💊 약물 부작용")
-        rec = auto_recs_by_dx(ctx.get("group"), ctx.get("dx"), DRUG_DB, ONCO_MAP)
-        regimen = (rec.get("chemo") or []) + (rec.get("targeted") or [])
-        render_adverse_effects(st, regimen, DRUG_DB)
+    # 약물 부작용 (자동 추천만 우선 표시)
+    st.subheader("💊 약물 부작용")
+    rec = auto_recs_by_dx(ctx.get("group"), ctx.get("dx"), DRUG_DB, ONCO_MAP)
+    regimen = (rec.get("chemo") or []) + (rec.get("targeted") or [])
+    render_adverse_effects(st, regimen, DRUG_DB)
 
 elif ctx.get("mode") == "소아":
-        st.subheader("👶 증상 요약")
-        sy = ctx.get("symptoms", {})
-        sy_cols = st.columns(4)
-        keys = list(sy.keys())
-        for i, key in enumerate(keys):
-            with sy_cols[i % 4]:
-                st.metric(key, sy[key])
+    st.subheader("👶 증상 요약")
+    sy = ctx.get("symptoms", {})
+    sy_cols = st.columns(4)
+    keys = list(sy.keys())
+    for i, key in enumerate(keys):
+        with sy_cols[i % 4]:
+            st.metric(key, sy[key])
 
-        st.subheader("🥗 식이가이드")
-        from ui_results import results_only_after_analyze as _dummy  # to keep imports coherent
-        from ui_results import render_adverse_effects as _dummy2
-        # 기존 peds_diet_guide는 별도 모듈에 있었지만, 원본의 가이드가 충분하여 lab_diet는 암에 한정.
-        # 필요 시 별도 모듈로 확장 가능.
+    st.subheader("🥗 식이가이드")
+    from ui_results import results_only_after_analyze as _dummy  # to keep imports coherent
+    from ui_results import render_adverse_effects as _dummy2
+    # 기존 peds_diet_guide는 별도 모듈에 있었지만, 원본의 가이드가 충분하여 lab_diet는 암에 한정.
+    # 필요 시 별도 모듈로 확장 가능.
 
-        st.subheader("🌡️ 해열제 1회분(평균)")
-        dcols = st.columns(2)
-        with dcols[0]:
-            st.metric("아세트아미노펜 시럽", f"{ctx.get('apap_ml')} mL")
-        with dcols[1]:
-            st.metric("이부프로펜 시럽", f"{ctx.get('ibu_ml')} mL")
-
-try:
-    from ui_results import render_exports
-    render_exports(st, ctx)
-except Exception:
-    pass
+    st.subheader("🌡️ 해열제 1회분(평균)")
+    dcols = st.columns(2)
+    with dcols[0]:
+        st.metric("아세트아미노펜 시럽", f"{ctx.get('apap_ml')} mL")
+    with dcols[1]:
+        st.metric("이부프로펜 시럽", f"{ctx.get('ibu_ml')} mL")
 
 st.stop()
-# ---- Footer notices ----
-try:
-    from config import DISCLAIMER_TEXT, NO_CELL_THERAPY_NOTICE
-    st.markdown('---')
-    st.caption(NO_CELL_THERAPY_NOTICE)
-    st.caption(DISCLAIMER_TEXT)
-except Exception:
-    pass
-
-
-def render_graphs(st, nick_pin_key: str):
-    import pandas as pd
-    hist = st.session_state.get('history', {}).get(nick_pin_key, [])
-    if not hist:
-        return
-    df = pd.DataFrame(hist)
-    if 'date' in df.columns:
-        cols = [c for c in ['WBC','Hb','혈소판','CRP','ANC'] if c in df.columns]
-        if cols:
-            st.line_chart(df.set_index('date')[cols])
-
-# ---- Merge heme/lymphoma Korean labels ----
-try:
-    from dx_ko_map import DX_KO_SARCOMA, DX_KO_HEME
-    DX_KO_LOCAL = dict(globals().get("DX_KO_LOCAL", {}))
-    DX_KO_LOCAL.update(DX_KO_SARCOMA)
-    DX_KO_LOCAL.update(DX_KO_HEME)
-except Exception as _e:
-    pass
