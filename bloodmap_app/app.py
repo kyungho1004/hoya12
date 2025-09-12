@@ -283,7 +283,7 @@ else:
         st.session_state['peds_mode'] = '일상'
     st.markdown('### 0) 소아 모드')
     st.radio('일상 / 질환', ['일상','질환'], horizontal=True, key='peds_mode')
-ctop = st.columns(3)
+    ctop = st.columns(3)
     with ctop[0]:
         disease = st.selectbox("소아 질환", ["로타","독감","RSV","아데노","마이코","수족구","편도염","코로나","중이염"], index=0)
     with ctop[1]:

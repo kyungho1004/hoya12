@@ -136,6 +136,57 @@ def special_tests_ui():
             if PP2 is not None:
                 if PP2 > 140: lines.append(_badge(f"식후 2시간 {PP2} >140 → 내당능 저하/고혈당", "yellow"))
                 else: lines.append(_badge(f"식후 2시간 {PP2} 목표 범위", "green"))
+        # ===== 6) 근육/근손상 지표 (CK / 미오글로빈) =====
+        if st.toggle("근육/근손상 (CK / 미오글로빈)", key="spec_muscle_toggle"):
+            m1, m2 = st.columns(2)
+            with m1: ck_txt = st.text_input("CK (U/L)", key="spec_ck")
+            with m2: myo_txt = st.text_input("미오글로빈 (ng/mL)", key="spec_myo")
+            CK = clean_num(ck_txt); MYO = clean_num(myo_txt)
+            if CK is not None:
+                if CK >= 1000: lines.append(_badge(f"CK {CK} ≥1000 → 횡문근융해 의심, 응급 평가 권고", "red"))
+                elif CK >= 200: lines.append(_badge(f"CK {CK} 200~999 → 상승: 근손상/격한운동/근염 등", "yellow"))
+                else: lines.append(_badge(f"CK {CK} 정상범위", "green"))
+            if MYO is not None:
+                if MYO >= 85: lines.append(_badge(f"미오글로빈 {MYO} ≥85 → 근손상 가능", "yellow"))
+                else: lines.append(_badge(f"미오글로빈 {MYO} 정상범위", "green"))
+
+        # ===== 7) 소변 비율 (UPCR: 요 단백/크레아티닌) =====
+        if st.toggle("소변 비율 (UPCR: 단백/크레아티닌)", key="spec_upcr_toggle"):
+            u1, u2, u3 = st.columns(3)
+            with u1: u_pro_txt = st.text_input("요 단백 (mg/dL)", key="spec_upcr_pro")
+            with u2: u_cr_txt  = st.text_input("요 크레아티닌 (mg/dL)", key="spec_upcr_cr")
+            # 연령 구분
+            age_group = st.selectbox("연령 구분", ["성인","소아 ≥24개월","소아 6~24개월","소아 <6개월"], index=0,
+                                     help="가능하면 아이 월령(age_m)을 세션에 넣으면 자동 선택될 수 있습니다.")
+            UPRO = clean_num(u_pro_txt); UCR = clean_num(u_cr_txt)
+            ratio = None
+            if (UPRO is not None) and (UCR not in (None, 0)):
+                ratio = UPRO / UCR
+                if age_group == "성인":
+                    norm, neph = 0.2, 3.5
+                elif age_group == "소아 ≥24개월":
+                    norm, neph = 0.2, 2.0
+                elif age_group == "소아 6~24개월":
+                    norm, neph = 0.5, 2.0
+                else:
+                    norm, neph = 0.8, 2.0
+                if ratio < norm:
+                    lines.append(_badge(f"UPCR {ratio:.2f} → 정상( < {norm} )", "green"))
+                elif ratio < neph:
+                    lines.append(_badge(f"UPCR {ratio:.2f} → 단백뇨( {norm} ~ {neph} )", "yellow"))
+                else:
+                    lines.append(_badge(f"UPCR {ratio:.2f} → 신증후군 범위( ≥ {neph} )", "red"))
+            else:
+                lines.append("UPCR 계산을 위해 요 단백과 요 크레아티닌을 입력하세요.")
+
+        # ===== 8) 신장/대사 지표 (BUN) =====
+        if st.toggle("신장/대사 지표 (BUN)", key="spec_kidney_toggle"):
+            bun_txt = st.text_input("BUN (요소질소, mg/dL)", key="spec_bun_txt")
+            BUN = clean_num(bun_txt)
+            if BUN is not None:
+                if BUN > 23: lines.append(_badge(f"BUN {BUN} >23 → 상승: 탈수/신장기능 저하 등 감별", "yellow"))
+                else: lines.append(_badge(f"BUN {BUN} 정상범위", "green"))
+    
 
     # 결과가 없으면 안내
     if not lines:
