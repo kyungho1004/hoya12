@@ -173,3 +173,34 @@ def auto_recs_by_dx(group: str, dx: str, DRUG_DB: Dict[str, Dict[str, Any]] = No
         else:
             out[k] = list(picks)
     return out
+
+
+# === AML 유지항암(6-MP/MTX) 보강: build_onco_map 래핑 ===
+try:
+    __orig_build_onco_map = build_onco_map
+except NameError:
+    __orig_build_onco_map = None
+
+def build_onco_map():
+    M = __orig_build_onco_map() if __orig_build_onco_map else {}
+    try:
+        heme = M.get("혈액암", {})
+        aml = heme.get("AML", {})
+        # maintenance ensure
+        maint = list(aml.get("maintenance") or [])
+        for x in ["6-MP", "MTX"]:
+            if x not in maint:
+                maint.append(x)
+        aml["maintenance"] = maint
+        # chemo에도 fallback로 추가(중복 방지)
+        chemo = list(aml.get("chemo") or [])
+        for x in ["6-MP", "MTX"]:
+            if x not in chemo:
+                chemo.append(x)
+        aml["chemo"] = chemo
+        heme["AML"] = aml
+        M["혈액암"] = heme
+    except Exception:
+        pass
+    return M
+

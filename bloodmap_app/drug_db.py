@@ -276,3 +276,16 @@ def ensure_onco_drug_db(db):
     _upsert(db, "Vandetanib", "Vandetanib", "항암/표적치료(자동등록)", "부작용 정보 필요")
     _upsert(db, "Vinblastine", "Vinblastine", "항암/표적치료(자동등록)", "부작용 정보 필요")
     _upsert(db, "Vincristine", "Vincristine", "항암/표적치료(자동등록)", "부작용 정보 필요")
+
+# === SYNONYMS for maintenance/alias ===
+try:
+    __prev2 = ensure_onco_drug_db
+except NameError:
+    __prev2 = None
+
+def ensure_onco_drug_db(db):
+    if __prev2 is not None:
+        __prev2(db)
+    _upsert(db, "Ara-C", "시타라빈(Ara-C)", "피리미딘 유사체(항대사제)", "골수억제, 발열, 점막염, 드물게 신경독성")
+    _upsert(db, "Methotrexate", "메토트렉세이트(MTX)", "DHFR 억제(항대사제)", "골수억제, 점막염, 간독성, 신장독성(고용량)")
+    _upsert(db, "Mercaptopurine", "6-머캅토퓨린(6-MP)", "퓨린 유사체(항대사제)", "골수억제, 간독성(상호작용 주의)")

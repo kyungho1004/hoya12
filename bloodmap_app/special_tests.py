@@ -4,89 +4,140 @@ from core_utils import clean_num
 
 QUAL = ["없음", "+", "++", "+++"]
 
+def _parse_avg(text: str):
+    """쉼표/공백 구분 숫자들을 평균으로 환산 (빈칸/잘못된 값은 무시)."""
+    if text is None:
+        return None
+    s = str(text).replace(";", ",").replace("/", ",").replace(" ", ",")
+    vals = []
+    for tok in s.split(","):
+        tok = tok.strip()
+        if not tok:
+            continue
+        try:
+            vals.append(float(tok))
+        except Exception:
+            pass
+    if not vals:
+        return None
+    return sum(vals) / len(vals)
+
+def _badge(text, color="blue"):
+    colors = {"green":"🟢","yellow":"🟡","red":"🔴","blue":"🔹"}
+    return f"{colors.get(color,'🔹')} {text}"
+
 def special_tests_ui():
+    """특수검사: 카테고리 토글형 입력 + 해석 라인 반환"""
     lines = []
     with st.expander("🧪 특수검사 (토글)", expanded=False):
+        # ===== 1) 소변검사 =====
+        if st.toggle("소변검사", key="spec_u_toggle"):
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                alb = st.selectbox("알부민뇨", QUAL, index=0, key="spec_u_alb")
+            with col2:
+                heme_q = st.selectbox("잠혈(질적)", QUAL, index=0, key="spec_u_hemeq")
+            with col3:
+                gly = st.selectbox("요당", QUAL, index=0, key="spec_u_gly")
+            with col4:
+                nit = st.selectbox("아질산염", ["없음","+"], index=0, key="spec_u_nit")
+            # RBC/WBC 평균 입력(쉼표로 여러 번 입력 시 평균)
+            r1, r2 = st.columns(2)
+            with r1:
+                rbc_txt = st.text_input("소변 RBC(/HPF) - 복수 입력 가능", key="spec_u_rbc_txt", placeholder="예) 0, 2, 5")
+            with r2:
+                wbc_txt = st.text_input("소변 WBC(/HPF) - 복수 입력 가능", key="spec_u_wbc_txt", placeholder="예) 0, 5, 12")
+            rbc = _parse_avg(rbc_txt)
+            wbc = _parse_avg(wbc_txt)
+            # 해석
+            if alb != "없음":
+                msg = {"+" : "미세단백뇨 가능",
+                       "++": "단백뇨 — 신장질환 의심",
+                       "+++":"단백뇨 고도 — 신증후군/사구체질환 평가 필요"}[alb]
+                lines.append(_badge(f"알부민뇨 {alb} → {msg}", "red" if alb=="+++" else "yellow"))
+            if heme_q != "없음":
+                lines.append(_badge(f"소변 잠혈 {heme_q} → 혈뇨 가능", "yellow"))
+            if gly != "없음":
+                lines.append(_badge(f"요당 {gly} → 고혈당/당뇨 평가 필요", "yellow"))
+            if nit == "+":
+                lines.append(_badge("아질산염 양성 → 세균성 UTI 의심", "yellow"))
+            if rbc is not None:
+                if rbc > 25: lines.append(_badge(f"RBC 평균 {rbc:.1f}/HPF → 현저한 혈뇨", "red"))
+                elif rbc >= 3: lines.append(_badge(f"RBC 평균 {rbc:.1f}/HPF → 현미경적 혈뇨", "yellow"))
+                else: lines.append(_badge(f"RBC 평균 {rbc:.1f}/HPF 정상범위", "green"))
+            if wbc is not None:
+                if wbc > 50: lines.append(_badge(f"WBC 평균 {wbc:.1f}/HPF → 뇨로감염 의심", "red"))
+                elif wbc >= 10: lines.append(_badge(f"WBC 평균 {wbc:.1f}/HPF → 무증상/경도 염증 가능", "yellow"))
+                else: lines.append(_badge(f"WBC 평균 {wbc:.1f}/HPF 정상범위", "green"))
 
-        # 🔹 소변 검사
-        st.markdown("### 🔹 소변 검사")
-        col1 = st.columns(2)
-        with col1[0]:
-            alb = st.selectbox("알부민뇨", QUAL)
-            hem = st.selectbox("혈뇨", QUAL)
-        with col1[1]:
-            sug = st.selectbox("요당", QUAL)
-            ket = st.selectbox("케톤뇨", QUAL)
-
-        # 🔸 면역·보체 검사
-        st.markdown("### 🔸 면역 · 보체 검사")
-        col2 = st.columns(2)
-        with col2[0]:
-            c3 = st.text_input("C3 (mg/dL)")
-        with col2[1]:
-            c4 = st.text_input("C4 (mg/dL)")
-
-        # 🧬 지질 검사
-        st.markdown("### 🧬 지질 검사")
-        col3 = st.columns(2)
-        with col3[0]:
-            tg = st.text_input("TG (mg/dL)")
-            hdl = st.text_input("HDL (mg/dL)")
-        with col3[1]:
-            ldl = st.text_input("LDL (mg/dL)")
-            tc  = st.text_input("총콜레스테롤 (mg/dL)")
-
-        # 🫀 신장/심장 기능
-        st.markdown("### 🫀 신장 / 심장 기능")
-        col4 = st.columns(2)
-        with col4[0]:
-            bun = st.text_input("BUN (mg/dL)")
-            bnp = st.text_input("BNP (pg/mL)")
-        with col4[1]:
-            ckmb = st.text_input("CK-MB (ng/mL)")
-            trop = st.text_input("Troponin-I (ng/mL)")
-            myo  = st.text_input("Myoglobin (ng/mL)")
-
-        # 🔍 해석 버튼 및 로직
-        if st.button("🔎 특수검사 해석", key="btn_special_tests"):
-            if alb!="없음": lines.append("알부민뇨 " + ("+"*QUAL.index(alb)) + " → 🟡~🔴 신장 이상 가능")
-            if hem!="없음": lines.append("혈뇨 " + ("+"*QUAL.index(hem)) + " → 🟡 요로 염증/결석 등")
-            if sug!="없음": lines.append("요당 " + ("+"*QUAL.index(sug)) + " → 🟡 고혈당/당뇨 의심")
-            if ket!="없음": lines.append("케톤뇨 " + ("+"*QUAL.index(ket)) + " → 🟡 탈수/케톤증 가능")
-
+        # ===== 2) 보체(C3/C4) =====
+        if st.toggle("보체 (C3/C4)", key="spec_c_toggle"):
+            c1, c2 = st.columns(2)
+            with c1:
+                c3 = st.text_input("C3 (mg/dL)", key="spec_c3")
+            with c2:
+                c4 = st.text_input("C4 (mg/dL)", key="spec_c4")
             C3 = clean_num(c3); C4 = clean_num(c4)
-            if C3 is not None: lines.append("C3 낮음 → 🟡 면역계 이상 가능" if C3 < 90 else "C3 정상/상승")
-            if C4 is not None: lines.append("C4 낮음 → 🟡 면역계 이상 가능" if C4 < 10 else "C4 정상/상승")
+            if C3 is not None:
+                if C3 < 90: lines.append(_badge(f"C3 {C3} ↓ → 보체 소모(자가면역/감염) 고려", "yellow"))
+                elif C3 > 180: lines.append(_badge(f"C3 {C3} ↑ → 급성염증/비특이적 상승", "yellow"))
+                else: lines.append(_badge(f"C3 {C3} 정상범위", "green"))
+            if C4 is not None:
+                if C4 < 10: lines.append(_badge(f"C4 {C4} ↓ → 루푸스/보체소모증 가능", "yellow"))
+                elif C4 > 40: lines.append(_badge(f"C4 {C4} ↑ → 염증/비특이적 상승", "yellow"))
+                else: lines.append(_badge(f"C4 {C4} 정상범위", "green"))
 
-            TG = clean_num(tg); HDL = clean_num(hdl); LDL = clean_num(ldl); TC = clean_num(tc)
+        # ===== 3) 지질검사 =====
+        if st.toggle("지질검사 (TG/HDL/LDL)", key="spec_lip_toggle"):
+            l1, l2, l3 = st.columns(3)
+            with l1: tg = st.text_input("TG (mg/dL)", key="spec_tg")
+            with l2: hdl = st.text_input("HDL (mg/dL)", key="spec_hdl")
+            with l3: ldl = st.text_input("LDL (mg/dL)", key="spec_ldl")
+            TG = clean_num(tg); HDL = clean_num(hdl); LDL = clean_num(ldl)
             if TG is not None:
-                lines.append("🔴 TG≥200: 고중성지방혈증 가능" if TG >= 200 else ("🟡 TG 150~199 경계" if TG >= 150 else "🟢 TG 양호"))
+                if TG >= 200: lines.append(_badge(f"TG {TG} ≥200 → 고중성지방혈증", "red"))
+                elif TG >= 150: lines.append(_badge(f"TG {TG} 150~199 → 경계/주의", "yellow"))
+                else: lines.append(_badge(f"TG {TG} 정상범위", "green"))
             if HDL is not None:
-                lines.append("🟠 HDL<40: 심혈관 위험" if HDL < 40 else "🟢 HDL 양호")
+                if HDL < 40: lines.append(_badge(f"HDL {HDL} <40 → 낮음", "yellow"))
+                else: lines.append(_badge(f"HDL {HDL} 양호", "green"))
             if LDL is not None:
-                lines.append("🔴 LDL≥160: 고LDL콜" if LDL >= 160 else ("🟡 LDL 130~159 경계" if LDL >= 130 else "🟢 LDL 양호"))
-            if TC is not None:
-                lines.append("🔴 총콜≥240: 고지혈증" if TC >= 240 else ("🟡 총콜 200~239 경계" if TC >= 200 else "🟢 총콜 양호"))
+                if LDL >= 160: lines.append(_badge(f"LDL {LDL} ≥160 → 높음", "red"))
+                elif LDL >= 130: lines.append(_badge(f"LDL {LDL} 130~159 → 경계", "yellow"))
+                else: lines.append(_badge(f"LDL {LDL} 양호", "green"))
 
-            BUN = clean_num(bun)
-            if BUN is not None:
-                lines.append("🔴 BUN≥25: 탈수/신장기능 저하 의심" if BUN >= 25 else "🟢 BUN 정상")
-            BNP = clean_num(bnp)
+        # ===== 4) 심부전 지표 =====
+        if st.toggle("심부전 지표 (BNP / NT-proBNP)", key="spec_hf_toggle"):
+            h1, h2 = st.columns(2)
+            with h1: bnp = st.text_input("BNP (pg/mL)", key="spec_bnp")
+            with h2: ntp = st.text_input("NT-proBNP (pg/mL)", key="spec_ntp")
+            BNP = clean_num(bnp); NTP = clean_num(ntp)
             if BNP is not None:
-                lines.append("🔴 BNP≥100: 심부전 의심" if BNP >= 100 else "🟢 BNP 정상")
+                if BNP > 100: lines.append(_badge(f"BNP {BNP} >100 → 심부전/심장 스트레스 가능", "yellow" if BNP<=400 else "red"))
+                else: lines.append(_badge(f"BNP {BNP} 정상범위", "green"))
+            if NTP is not None:
+                if NTP > 125: lines.append(_badge(f"NT-proBNP {NTP} >125 → 상승", "yellow" if NTP<=900 else "red"))
+                else: lines.append(_badge(f"NT-proBNP {NTP} 정상범위", "green"))
 
-            CKMB = clean_num(ckmb)
-            TROP = clean_num(trop)
-            MYO = clean_num(myo)
+        # ===== 5) 당 검사 =====
+        if st.toggle("당 검사 (식전/식후 1시간/2시간)", key="spec_glu_toggle"):
+            g1, g2, g3 = st.columns(3)
+            with g1: fpg = st.text_input("식전(FPG)", key="spec_fpg")
+            with g2: pp1 = st.text_input("식후 1시간", key="spec_pp1")
+            with g3: pp2 = st.text_input("식후 2시간", key="spec_pp2")
+            FPG = clean_num(fpg); PP1 = clean_num(pp1); PP2 = clean_num(pp2)
+            if FPG is not None:
+                if FPG >= 126: lines.append(_badge(f"식전 {FPG} ≥126 → 당뇨 기준", "red"))
+                elif FPG >= 100: lines.append(_badge(f"식전 {FPG} 100~125 → 공복혈당장애", "yellow"))
+                else: lines.append(_badge(f"식전 {FPG} 정상범위", "green"))
+            if PP1 is not None:
+                if PP1 > 180: lines.append(_badge(f"식후 1시간 {PP1} >180 → 고혈당", "yellow"))
+                else: lines.append(_badge(f"식후 1시간 {PP1} 목표 범위", "green"))
+            if PP2 is not None:
+                if PP2 > 140: lines.append(_badge(f"식후 2시간 {PP2} >140 → 내당능 저하/고혈당", "yellow"))
+                else: lines.append(_badge(f"식후 2시간 {PP2} 목표 범위", "green"))
 
-            if CKMB is not None:
-                lines.append("🔴 CK-MB>5: 심장 손상 가능성" if CKMB > 5 else "🟢 CK-MB 정상")
-            if TROP is not None:
-                lines.append("🔴 Troponin-I>0.04: 심근경색 의심" if TROP > 0.04 else "🟢 Troponin-I 정상")
-            if MYO is not None:
-                lines.append("🟡 Myoglobin>85: 근육/심장 손상 가능성" if MYO > 85 else "🟢 Myoglobin 정상")
-
-            if not lines:
-                lines.append("입력값이 없어 해석할 내용이 없습니다.")
-                
+    # 결과가 없으면 안내
+    if not lines:
+        lines.append("입력값이 없어 해석할 내용이 없습니다.")
     return lines
