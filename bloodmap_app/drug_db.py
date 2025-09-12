@@ -289,3 +289,20 @@ def ensure_onco_drug_db(db):
     _upsert(db, "Ara-C", "시타라빈(Ara-C)", "피리미딘 유사체(항대사제)", "골수억제, 발열, 점막염, 드물게 신경독성")
     _upsert(db, "Methotrexate", "메토트렉세이트(MTX)", "DHFR 억제(항대사제)", "골수억제, 점막염, 간독성, 신장독성(고용량)")
     _upsert(db, "Mercaptopurine", "6-머캅토퓨린(6-MP)", "퓨린 유사체(항대사제)", "골수억제, 간독성(상호작용 주의)")
+
+# --- UI Helper: display_label ---
+def display_label(key: str, db: dict = None) -> str:
+    """약물 키를 사람이 읽기 쉬운 라벨(한글 병기 alias)로 변환.
+    - db가 주어지면 그 dict를, 아니면 모듈 전역 DRUG_DB 사용
+    - 키는 따옴표/공백을 제거하여 조회 시도
+    """
+    try:
+        ref = db if isinstance(db, dict) else DRUG_DB
+    except NameError:
+        ref = db or {}
+    k = key if isinstance(key, str) else str(key)
+    norm = k.strip().strip("'\"")
+    entry = ref.get(norm) or ref.get(k)
+    if isinstance(entry, dict):
+        return entry.get("alias") or norm
+    return norm
