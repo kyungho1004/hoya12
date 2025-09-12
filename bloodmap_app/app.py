@@ -17,7 +17,6 @@ ONCO_MAP = build_onco_map()
 st.set_page_config(page_title="BloodMap — 피수치가이드", page_icon="🩸", layout="centered")
 st.title("BloodMap — 피수치가이드")
 
-# 강력 고지 + 즐겨찾기 + 체온계 권장
 st.info(
     "이 앱은 의료행위가 아니며, **참고용**입니다. 진단·치료를 **대체하지 않습니다**.\n"
     "약 변경/복용 중단 등은 반드시 주치의와 상의하세요.\n"
@@ -30,8 +29,6 @@ st.markdown("문의/버그 제보는 **[피수치 가이드 공식카페](https:
 nick, pin, key = nickname_pin()
 st.divider()
 has_key = bool(nick and pin and len(pin) == 4)
-
-mode = st.radio("모드 선택", ["암", "일상", "소아"], horizontal=True)
 
 def _fever_bucket_from_temp(temp: float) -> str:
     if temp is None or temp < 37.0: return "없음"
@@ -76,29 +73,31 @@ def _export_report(ctx: dict, lines_blocks: list[tuple[str,list[str]]]|None=None
     if ctx.get("mode") in ["소아","일상"]:
         body.append(f"- 대상: {ctx.get('who','소아')}")
         if ctx.get("symptoms"):
-            body.append("- 증상: " + ", ".join(f"{k}:{v}" for k,v in ctx["symptoms"].items()))
+            body.append("- 증상: " + ", ".join(f\"{k}:{v}\" for k,v in ctx["symptoms"].items()))
         if ctx.get("temp") is not None:
-            body.append(f"- 체온: {ctx.get('temp')} ℃")
+            body.append(f\"- 체온: {ctx.get('temp')} ℃\")
         if ctx.get("days_since_onset") is not None:
-            body.append(f"- 경과일수: {ctx.get('days_since_onset')}일")
+            body.append(f\"- 경과일수: {ctx.get('days_since_onset')}일\")
     if ctx.get("preds"):
-        preds_text = "; ".join(f"{p['label']}({p['score']})" for p in ctx["preds"])
+        preds_text = "; ".join(f\"{p['label']}({p['score']})\" for p in ctx["preds"])
         body.append(f"- 자동 추정: {preds_text}")
     if ctx.get("triage"):
         body.append(f"- 트리아지: {ctx['triage']}")
     if ctx.get("labs"):
-        labs_t = "; ".join(f"{k}:{v}" for k,v in ctx["labs"].items() if v is not None)
+        labs_t = "; ".join(f\"{k}:{v}\" for k,v in ctx["labs"].items() if v is not None)
         if labs_t:
             body.append(f"- 주요 수치: {labs_t}")
     if lines_blocks:
         for title2, lines in lines_blocks:
             if lines:
-                body.append(f"\n## {title2}\n" + "\n".join(f"- {L}" for L in lines))
-    md = title + "\n".join(body) + footer
-    txt = md.replace("# ","").replace("## ","")
+                body.append(f\"\\n## {title2}\\n\" + \"\\n\".join(f\"- {L}\" for L in lines))
+    md = title + \"\\n\".join(body) + footer
+    txt = md.replace(\"# \",\"\").replace(\"## \",\"\")
     return md, txt
 
-# -------------- 암 모드 --------------
+mode = st.radio("모드 선택", ["암", "일상", "소아"], horizontal=True)
+
+# ------------------ 암 모드 ------------------
 if mode == "암":
     st.markdown("### 1) 암 선택")
     group = st.selectbox("암 카테고리", ["혈액암","림프종","고형암","육종","희귀암"])
@@ -111,17 +110,12 @@ if mode == "암":
     dx = st.selectbox("진단(영문+한글)", dx_options or ["직접 입력"], format_func=_dx_fmt)
     if dx == "직접 입력":
         dx = st.text_input("진단(영문/축약 직접 입력)", value="")
-    if dx: st.caption(_dx_fmt(dx))
+    if dx:
+        st.caption(_dx_fmt(dx))
 
-    st.markdown("### 2) 자동 예시(토글)")
-    if st.toggle("자동 예시 보기", value=True):
-        rec = auto_recs_by_dx(group, dx, DRUG_DB, ONCO_MAP)
-        c = st.columns(3)
-        with c[0]: st.markdown("**항암제(예시)**"); [st.write("- " + display_label(d)) for d in rec["chemo"]]
-        with c[1]: st.markdown("**표적/면역(예시)**"); [st.write("- " + display_label(d)) for d in rec["targeted"]]
-        with c[2]: st.markdown("**항생제(참고)**");    [st.write("- " + display_label(d)) for d in rec["abx"]]
+    # 🔥 자동 예시(토글) 블록 **완전 제거** — 보기 혼란 방지를 위해
 
-    st.markdown("### 3) 개인 선택")
+    st.markdown("### 2) 개인 선택")
     from drug_db import picklist, key_from_label
     rec_local = auto_recs_by_dx(group, dx, DRUG_DB, ONCO_MAP)
     chemo_opts    = picklist(rec_local.get("chemo", []))
@@ -137,7 +131,7 @@ if mode == "암":
     user_targeted = [key_from_label(x) for x in user_targeted_labels]
     user_abx      = [key_from_label(x) for x in user_abx_labels]
 
-    st.markdown("### 4) 피수치 입력 (숫자만)")
+    st.markdown("### 3) 피수치 입력 (숫자만)")
     LABS_ORDER = [
         ("WBC","WBC(백혈구)"), ("Hb","Hb(혈색소)"), ("PLT","PLT(혈소판)"), ("ANC","ANC(호중구)"),
         ("Ca","Ca(칼슘)"), ("Na","Na(소디움)"), ("K","K(칼륨)"),
@@ -150,7 +144,8 @@ if mode == "암":
     from special_tests import special_tests_ui
     sp_lines = special_tests_ui()
     lines_blocks = []
-    if sp_lines: lines_blocks.append(("특수검사 해석", sp_lines))
+    if sp_lines:
+        lines_blocks.append(("특수검사 해석", sp_lines))
 
     st.markdown("#### 💾 저장/그래프")
     when = st.date_input("측정일", value=date.today())
@@ -192,7 +187,7 @@ if mode == "암":
         }
     schedule_block()
 
-# -------------- 일상 모드 --------------
+# ------------------ 일상 모드 ------------------
 elif mode == "일상":
     st.markdown("### 1) 대상 선택")
     who = st.radio("대상", ["소아","성인"], horizontal=True)
@@ -247,6 +242,7 @@ elif mode == "일상":
         with c3: diarrhea = st.selectbox("설사(횟수/일)", opts["설사"])
         with c4: symptom_days = st.number_input("**증상일수**(일)", min_value=0, step=1, value=0)
         with c5: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1, value=0.0)
+
         comorb = st.multiselect("주의 대상", ["임신 가능성","간질환 병력","신질환 병력","위장관 궤양/출혈력","항응고제 복용","고령(65+)"])
 
         fever_cat = _fever_bucket_from_temp(temp)
@@ -269,7 +265,7 @@ elif mode == "일상":
                 "days_since_onset": days_since_onset
             }
 
-# -------------- 소아 모드(질환 선택) --------------
+# ------------------ 소아 모드 ------------------
 else:
     ctop = st.columns(4)
     with ctop[0]: disease = st.selectbox("소아 질환", ["로타","독감","RSV","아데노","마이코","수족구","편도염","코로나","중이염"], index=0)
@@ -303,7 +299,7 @@ else:
             "apap_ml": apap_ml, "ibu_ml": ibu_ml, "vals": {}
         }
 
-# -------------- 결과 게이트 --------------
+# ------------------ 결과 게이트 ------------------
 if results_only_after_analyze(st):
     ctx = st.session_state.get("analysis_ctx", {})
     m = ctx.get("mode")
@@ -321,10 +317,20 @@ if results_only_after_analyze(st):
         if alerts: st.error("\\n".join(alerts))
 
         st.subheader("🗂️ 선택 요약")
-        s1,s2,s3 = st.columns(3)
-        with s1: st.markdown("**항암제(개인)**"); [st.write("- " + display_label(k)) for k in (ctx.get("user_chemo") or [])]
-        with s2: st.markdown("**표적/면역(개인)**"); [st.write("- " + display_label(k)) for k in (ctx.get("user_targeted") or [])]
-        with s3: st.markdown("**항생제(개인)**"); [st.write("- " + display_label(k)) for k in (ctx.get("user_abx") or [])]
+        def _render_selected(title, keys):
+            keys = keys or []
+            if not keys:
+                return 0
+            st.markdown(f"**{title}**")
+            for k in keys:
+                st.write("- " + display_label(k))
+            return len(keys)
+        shown = 0
+        shown += _render_selected("항암제(개인)", ctx.get("user_chemo"))
+        shown += _render_selected("표적/면역(개인)", ctx.get("user_targeted"))
+        shown += _render_selected("항생제(개인)", ctx.get("user_abx"))
+        if shown == 0:
+            st.caption("선택한 약물이 없습니다.")
 
         st.subheader("💊 항암제(세포독성) 부작용")
         render_adverse_effects(st, ctx.get("user_chemo") or [], DRUG_DB)
