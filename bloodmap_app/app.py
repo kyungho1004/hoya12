@@ -118,6 +118,7 @@ ONCO_MAP = build_onco_map()
 
 st.set_page_config(page_title="블러드맵 피수치가이드 (모듈화)", page_icon="🩸", layout="centered")
 st.title("BloodMap — 모듈화 버전")
+mode = st.radio("모드 선택", ["암", "소아", "일상"], horizontal=True)
 
 # ---- Top-level mode selector ----
 st.markdown('### 모드 선택')
@@ -139,7 +140,6 @@ st.divider()
 has_key = bool(nick and pin and len(pin) == 4)
 
 # ----------- 모드 선택 -----------
-mode = st.radio("모드 선택", ["암", "소아", "일상"], horizontal=True)
 
 
 report_sections = []
