@@ -1,7 +1,7 @@
 
-# ---------- Fallback Korean aliases (for display only) ----------
+# ---------- Fallback Korean aliases (display only; DB alias 우선) ----------
 ALIAS_FALLBACK = {
-    # Core heme/chemo
+    # Chemo
     "Cytarabine": "시타라빈(Ara-C)",
     "Daunorubicin": "다우노루비신",
     "Idarubicin": "이다루비신",
@@ -35,7 +35,7 @@ ALIAS_FALLBACK = {
     "Capecitabine": "카페시타빈",
     "5-FU": "5-플루오로우라실",
     "Nab-Paclitaxel": "나노입자 파클리탁셀",
-    # Targeted / immunotherapy
+    # Targeted / IO
     "Rituximab": "리툭시맙",
     "Obinutuzumab": "오비누투주맙",
     "Polatuzumab Vedotin": "폴라투주맙 베도틴",
@@ -68,7 +68,7 @@ ALIAS_FALLBACK = {
     "Cabozantinib": "카보잔티닙",
     "Selpercatinib": "셀퍼카티닙",
     "Pralsetinib": "프랄세티닙",
-    # Antibiotics (abx)
+    # Antibiotics
     "Piperacillin/Tazobactam": "피페라실린/타조박탐",
     "Cefepime": "세페핌",
     "Meropenem": "메로페넴",
@@ -84,6 +84,39 @@ ALIAS_FALLBACK = {
     "Metronidazole": "메트로니다졸",
     "Amoxicillin/Clavulanate": "아목시실린/클라불란산",
 }
+
+def display_label(key: str, db=None) -> str:
+    ref = None
+    try:
+        ref = db if isinstance(db, dict) else DRUG_DB
+    except Exception:
+        ref = None
+    alias = None
+    if ref and key in ref and isinstance(ref[key], dict):
+        alias = ref[key].get("alias")
+    if not alias:
+        alias = ALIAS_FALLBACK.get(key)
+    if alias and alias != key:
+        return f"{key} ({alias})"
+    return str(key)
+
+def picklist(keys, db=None):
+    ref = db if isinstance(db, dict) else DRUG_DB if 'DRUG_DB' in globals() else {}
+    return [display_label(k, ref) for k in (keys or [])]
+
+def key_from_label(label: str, db=None) -> str:
+    if not label:
+        return ""
+    pos = label.find(" (")
+    if pos > 0:
+        return label[:pos]
+    ref = db if isinstance(db, dict) else DRUG_DB if 'DRUG_DB' in globals() else {}
+    if label in ref:
+        return label
+    for k, v in (ref or {}).items():
+        if isinstance(v, dict) and v.get("alias") == label:
+            return k
+    return label
 
 # -*- coding: utf-8 -*-
 from typing import Dict, Any
