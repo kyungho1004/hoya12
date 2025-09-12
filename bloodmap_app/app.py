@@ -94,13 +94,14 @@ DX_KO_LOCAL = {
     "MTC": "수질성 갑상선암",
 }
 
-def local_dx_display(group: str, dx: str) -> str:
-    dx = (dx or "").strip()
-    if _is_korean(dx):
-        return f"{group} - {dx}"
-    key = _norm(dx)
-    ko = DX_KO_LOCAL.get(key) or DX_KO_LOCAL.get(dx)
-    return f"{group} - {dx} ({ko})" if ko else f"{group} - {dx}"
+def local_dx_display(opt) -> str:
+    v = (str(opt) or '').strip()
+    if _is_korean(v):
+        return v
+    key = _norm(v)
+    ko = DX_KO_LOCAL.get(key) or DX_KO_LOCAL.get(v)
+    return f"{v} · {ko}" if ko else v
+
 
 from datetime import date, datetime
 
