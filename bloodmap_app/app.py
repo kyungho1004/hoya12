@@ -370,9 +370,11 @@ elif mode == "일상":
         preds = predict_from_symptoms(symptoms, temp, age_m)
         st.markdown("#### 🤖 증상 기반 자동 추정")
         for p in preds:
-            short = peds_short_caption(p.get("label",""))
+            short = short_caption(p.get("label",""))
             tail = f" — {short}" if short else ""
             st.write(f"- **{p['label']}**{tail} · 신뢰도 {p['score']}점")
+            if short:
+                st.caption(f"↳ {short}")
         triage = triage_advise(temp, age_m, diarrhea)
         st.info(triage)
 
@@ -408,9 +410,11 @@ elif mode == "일상":
         preds = predict_from_symptoms(symptoms, temp, comorb)
         st.markdown("#### 🤖 증상 기반 자동 추정")
         for p in preds:
-            short = peds_short_caption(p.get("label",""))
+            short = short_caption(p.get("label",""))
             tail = f" — {short}" if short else ""
             st.write(f"- **{p['label']}**{tail} · 신뢰도 {p['score']}점")
+            if short:
+                st.caption(f"↳ {short}")
         triage = triage_advise(temp, comorb)
         st.info(triage)
 
@@ -531,9 +535,11 @@ if results_only_after_analyze(st):
         if preds:
             st.subheader("🤖 증상 기반 자동 추정")
             for p in preds:
-                short = p.get("short") or ""
+                short = p.get("short") or short_caption(p.get("label",""))
                 tail = f" — {short}" if short else ""
                 st.write(f"- **{p['label']}**{tail} · 신뢰도 {p['score']}점")
+                if short:
+                    st.caption(f"↳ {short}")
         if ctx.get("triage"): st.info(ctx["triage"])
 
         if ctx.get("who") == "소아":
