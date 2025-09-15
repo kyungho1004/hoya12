@@ -1,6 +1,9 @@
+
 # -*- coding: utf-8 -*-
 """
 특수검사 UI/해석 모듈 (카테고리 토글 + 즐겨찾기)
+- ✅ 소변검사에 RBC/HPF, WBC/HPF, Leukocyte esterase, UPCR(Protein/Cr), ACR(Albumin/Cr) 추가
+- ✅ 혈구지수/망상(MCV/MCH/RDW/Retic) 섹션 추가
 """
 from __future__ import annotations
 from typing import List, Optional
@@ -11,7 +14,9 @@ def _num(x):
         if x is None: return None
         if isinstance(x, (int,float)): return float(x)
         s = str(x).replace(",", "").strip()
-        return float(s) if s else None
+        # 허용: "1+" 같은 표기 → 숫자만 추출
+        s2 = "".join(ch for ch in s if (ch.isdigit() or ch=='.' or ch=='-'))
+        return float(s2) if s2 else None
     except Exception:
         return None
 
@@ -27,6 +32,7 @@ def _fav_key(name: str) -> str: return f"fav_{name}"
 
 SECTIONS = [
     ("소변검사", "urine"),
+    ("혈구지수/망상 (MCV/MCH/RDW/Retic)", "rbcidx"),
     ("보체 (C3/C4/CH50)", "complement"),
     ("지질검사 (TC/TG/HDL/LDL)", "lipid"),
     ("심부전 지표 (BNP / NT-proBNP)", "heartfail"),
@@ -69,16 +75,89 @@ def special_tests_ui() -> List[str]:
                         if sec_id not in favs: favs.append(sec_id)
             if not on: continue
 
+            # --- 소변검사 ---
             if sec_id == "urine":
-                cA,cB,cC,cD = st.columns(4)
-                with cA: alb = st.selectbox("알부민뇨", ["없음","+","++","+++"], index=0)
-                with cB: hem = st.selectbox("혈뇨(잠혈)", ["없음","+","++","+++"], index=0)
-                with cC: glu = st.selectbox("요당", ["없음","+","++","+++"], index=0)
-                with cD: nit = st.selectbox("아질산염", ["없음","+","++","+++"], index=0)
-                if alb!="없음": _emit(lines, "warn" if alb in ["+","++"] else "risk", f"알부민뇨 {alb} → 신장 질환/단백뇨 평가 필요")
-                if hem!="없음": _emit(lines, "warn" if hem in ["+","++"] else "risk", f"혈뇨 {hem} → 요로계 출혈/결석/염증 가능성")
-                if glu!="없음": _emit(lines, "warn", f"요당 {glu} → 당뇨/신세뇨관 이상 가능, 혈당 확인")
+                st.markdown("**요시험지/현미경**")
+                row1 = st.columns(6)
+                with row1[0]: alb = st.selectbox("알부민뇨", ["없음","+","++","+++"], index=0)
+                with row1[1]: hem = st.selectbox("혈뇨(잠혈)", ["없음","+","++","+++"], index=0)
+                with row1[2]: glu = st.selectbox("요당", ["없음","+","++","+++"], index=0)
+                with row1[3]: nit = st.selectbox("아질산염", ["없음","+","++","+++"], index=0)
+                with row1[4]: leu = st.selectbox("Leukocyte esterase", ["없음","+","++","+++"], index=0)
+                with row1[5]: sg  = st.text_input("요비중 Specific gravity", placeholder="예: 1.015")
+
+                row2 = st.columns(4)
+                with row2[0]: rbc = _num(st.text_input("RBC (/HPF)", placeholder="예: 0~2 정상, 3↑ 비정상"))
+                with row2[1]: wbc = _num(st.text_input("WBC (/HPF)", placeholder="예: 0~4 정상, 5↑ 비정상"))
+                with row2[2]: upcr = _num(st.text_input("단백/Cr (UPCR, mg/gCr)", placeholder="예: 120"))
+                with row2[3]: acr = _num(st.text_input("알부민/Cr (ACR, mg/gCr)", placeholder="예: 25"))
+
+                # 비현실적 고값 안전장치 (단위/입력 오류 가능)
+                if upcr is not None and upcr > 10000:
+                    _emit(lines, "risk", f"UPCR {upcr} mg/gCr → 값이 비현실적으로 높습니다. 단위/입력 오류 가능. 검사실 또는 의료진에게 문의하세요.")
+                if acr is not None and acr > 10000:
+                    _emit(lines, "risk", f"ACR {acr} mg/gCr → 값이 비현실적으로 높습니다. 단위/입력 오류 가능. 검사실 또는 의료진에게 문의하세요.")
+
+
+                # 시험지/정성
+                if alb!="없음": _emit(lines, "warn" if alb in ["+","++"] else "risk", f"알부민뇨 {alb} → 단백뇨 평가 필요")
+                if hem!="없음": _emit(lines, "warn" if hem in ["+","++"] else "risk", f"혈뇨(잠혈) {hem} → 요로계 출혈/염증 가능")
+                if glu!="없음": _emit(lines, "warn", f"요당 {glu} → 당뇨/세뇨관 이상 가능, 혈당 확인")
                 if nit!="없음": _emit(lines, "warn", f"아질산염 {nit} → 세균성 요로감염 가능")
+                if leu!="없음": _emit(lines, "warn" if leu in ["+","++"] else "risk", f"Leukocyte esterase {leu} → 백혈구뇨/요로감염 가능")
+
+                # 현미경 수치
+                if rbc is not None:
+                    if rbc >= 25: _emit(lines, "risk", f"RBC {rbc}/HPF (다량) → 결석/종양/사구체 질환 등 평가 필요")
+                    elif rbc >= 3: _emit(lines, "warn", f"RBC {rbc}/HPF (현미경적 혈뇨)")
+                if wbc is not None:
+                    if wbc >= 20: _emit(lines, "risk", f"WBC {wbc}/HPF (다량) → 급성 요로감염/신우신염 의심")
+                    elif wbc >= 5: _emit(lines, "warn", f"WBC {wbc}/HPF (백혈구뇨)")
+
+                # 단백뇨 정량 (UPCR/ACR)
+                if upcr is not None:
+                    if upcr >= 3500: _emit(lines, "risk", f"UPCR {upcr} mg/gCr ≥ 3500 → 신증후군 범위 단백뇨 가능")
+                    elif upcr >= 500: _emit(lines, "warn", f"UPCR {upcr} mg/gCr 500~3499 → 유의한 단백뇨")
+                    elif upcr >= 150: _emit(lines, "warn", f"UPCR {upcr} mg/gCr 150~499 → 경미~중등 단백뇨")
+                if acr is not None:
+                    if acr >= 300: _emit(lines, "risk", f"ACR {acr} mg/gCr ≥ 300 → 알부민뇨 A3(중증)")
+                    elif acr >= 30: _emit(lines, "warn", f"ACR {acr} mg/gCr 30~299 → 알부민뇨 A2(중등)")
+                    elif acr < 30: _emit(lines, "ok", f"ACR {acr} mg/gCr < 30 → A1 범주")
+
+                # 패턴 종합
+                uti_flag = ((wbc is not None and wbc >= 5) or leu!="없음" or nit!="없음")
+                if uti_flag:
+                    _emit(lines, "warn", "요로감염 의심 패턴 → 요배양/항생제 필요성 상담")
+
+            # --- 혈구지수/망상 ---
+            elif sec_id == "rbcidx":
+                g1, g2, g3, g4 = st.columns(4)
+                with g1: mcv  = _num(st.text_input("MCV (fL)",  placeholder="예: 75"))
+                with g2: mch  = _num(st.text_input("MCH (pg)",  placeholder="예: 26"))
+                with g3: rdw  = _num(st.text_input("RDW (%)",   placeholder="예: 13.5"))
+                with g4: ret  = _num(st.text_input("Retic (%)", placeholder="예: 1.0"))
+                # MCV
+                if mcv is not None:
+                    if mcv < 80: _emit(lines, "warn", f"MCV {mcv} < 80 → 소구성 빈혈(철결핍/지중해빈혈 등) 감별")
+                    elif mcv > 100: _emit(lines, "warn", f"MCV {mcv} > 100 → 대구성 빈혈(B12/엽산/간질환/골수이상) 감별")
+                    else: _emit(lines, "ok", f"MCV {mcv} 정상범위(80~100)")
+                # RDW
+                if rdw is not None:
+                    if rdw > 14.5: _emit(lines, "warn", f"RDW {rdw}% ↑ → 적혈구 크기 불균일(철결핍/혼합결핍) 의심")
+                # 조합 규칙
+                if mcv is not None and rdw is not None:
+                    if mcv < 80 and rdw > 14.5:
+                        _emit(lines, "warn", "소구성 + RDW 증가 → **철결핍** 가능성 높음")
+                    if mcv < 80 and (rdw <= 14.5):
+                        _emit(lines, "warn", "소구성 + RDW 정상 → **지중해 빈혈 보인자** 감별")
+                    if mcv > 100 and (ret is not None and ret < 0.5):
+                        _emit(lines, "warn", "대구성 + 망상 저하 → **B12/엽산 결핍** 등 생성 저하형")
+                # Retic
+                if ret is not None:
+                    if ret >= 2.0:
+                        _emit(lines, "warn", f"Retic {ret}% ↑ → 용혈/실혈 회복기 등 생산 증가 소견")
+                    elif ret < 0.5:
+                        _emit(lines, "warn", f"Retic {ret}% ↓ → 조혈 저하(골수억제/영양결핍) 의심")
 
             elif sec_id == "complement":
                 d1,d2,d3 = st.columns(3)
