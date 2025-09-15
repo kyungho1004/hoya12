@@ -1,0 +1,10 @@
+# === app.py에 추가할 코드 (타이틀(st.title) 호출 직후 권장) ===
+from config import MADE_BY  # 이미 있다면 중복 import 제거
+try:
+    from config import APP_URL  # 선택: config에 APP_URL 추가한 경우
+except Exception:
+    APP_URL = "https://bloodmap.streamlit.app/"
+
+from branding import render_deploy_banner
+render_deploy_banner(APP_URL, MADE_BY)
+# === 여기까지 ===
