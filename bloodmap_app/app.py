@@ -25,6 +25,7 @@ try:
     from config import APP_URL
 except Exception:
 st.link_button("🔗 공식 배포: bloodmap.streamlit.app", APP_URL)
+st.markdown("---")
 
 render_deploy_banner(APP_URL, MADE_BY)
 st.info(
