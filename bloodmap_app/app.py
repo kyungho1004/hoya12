@@ -12,6 +12,8 @@ from lab_diet import lab_diet_guides
 from peds_profiles import get_symptom_options
 from peds_dose import acetaminophen_ml, ibuprofen_ml
 from pdf_export import export_md_to_pdf
+from branding import render_deploy_banner
+from config import MADE_BY
 
 # ---------------- 초기화 ----------------
 ensure_onco_drug_db(DRUG_DB)
@@ -19,7 +21,12 @@ ONCO_MAP = build_onco_map()
 
 st.set_page_config(page_title="BloodMap — 피수치가이드", page_icon="🩸", layout="centered")
 st.title("BloodMap — 피수치가이드")
+try:
+    from config import APP_URL
+except Exception:
+    APP_URL = "https://bloodmap.streamlit.app/"
 
+render_deploy_banner(APP_URL, MADE_BY)
 st.info(
     "이 앱은 의료행위가 아니며, **참고용**입니다. 진단·치료를 **대체하지 않습니다**.\n"
     "약 변경/복용 중단 등은 반드시 주치의와 상의하세요.\n"
