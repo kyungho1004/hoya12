@@ -24,10 +24,14 @@ st.title("BloodMap — 피수치가이드")
 try:
     from config import APP_URL
 except Exception:
-st.link_button("🔗 공식 배포: bloodmap.streamlit.app", APP_URL)
-st.markdown("---")
+    APP_URL = "https://bloodmap.streamlit.app/"
 
-render_deploy_banner(APP_URL, MADE_BY)
+try:
+    render_deploy_banner(APP_URL, MADE_BY)
+except Exception:
+    host = APP_URL.split("//", 1)[-1]
+    st.markdown(f"[🔗 공식 배포: **{host}**]({APP_URL})")
+st.markdown("---")
 st.info(
     "이 앱은 의료행위가 아니며, **참고용**입니다. 진단·치료를 **대체하지 않습니다**.\n"
     "약 변경/복용 중단 등은 반드시 주치의와 상의하세요.\n"
