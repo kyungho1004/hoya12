@@ -11,7 +11,7 @@ from drug_db import DRUG_DB, ensure_onco_drug_db, display_label
 from onco_map import build_onco_map, auto_recs_by_dx, dx_display
 from ui_results import results_only_after_analyze, render_adverse_effects, collect_top_ae_alerts
 from lab_diet import lab_diet_guides
-from peds_profiles import get_symptom_options
+from peds_profiles import get_symptom_options, peds_short_caption
 from peds_dose import acetaminophen_ml, ibuprofen_ml
 from pdf_export import export_md_to_pdf
 
@@ -385,7 +385,7 @@ elif mode == "일상":
             st.session_state["analysis_ctx"] = {
                 "mode":"일상","who":"소아","symptoms":symptoms,
                 "temp":temp,"age_m":age_m,"weight":weight or None,
-                "apap_ml":apap_ml,"ibu_ml":ibu_ml,"preds":[{**p, "short": peds_short_caption(p.get("label",""))} for p in preds],"triage":triage,
+                "apap_ml":apap_ml,"ibu_ml":ibu_ml,"preds":[{**p, "short": short_caption(p.get("label",""))} for p in preds],"triage":triage,
                 "days_since_onset": days_since_onset, "diet_lines": diet_lines
             }
 
@@ -424,7 +424,7 @@ elif mode == "일상":
             st.session_state["analyzed"] = True
             st.session_state["analysis_ctx"] = {
                 "mode":"일상","who":"성인","symptoms":symptoms,
-                "temp":temp,"comorb":comorb,"preds":[{**p, "short": peds_short_caption(p.get("label",""))} for p in preds],"triage":triage,
+                "temp":temp,"comorb":comorb,"preds":[{**p, "short": short_caption(p.get("label",""))} for p in preds],"triage":triage,
                 "days_since_onset": days_since_onset, "diet_lines": diet_lines
             }
 
@@ -432,8 +432,9 @@ elif mode == "일상":
 else:
     ctop = st.columns(4)
     with ctop[0]: disease = st.selectbox("소아 질환", ["로타","독감","RSV","아데노","마이코","수족구","편도염","코로나","중이염"], index=0)
+    st.caption(peds_short_caption(disease))
     if disease:
-        st.caption(peds_short_caption(disease))
+        st.caption(short_caption(disease))
     with ctop[1]: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1)
     with ctop[2]: age_m = st.number_input("나이(개월)", min_value=0, step=1)
     with ctop[3]: weight = st.number_input("체중(kg)", min_value=0.0, step=0.1)
@@ -471,7 +472,7 @@ else:
             "temp": temp, "age_m": age_m, "weight": weight or None,
             "apap_ml": apap_ml, "ibu_ml": ibu_ml, "vals": {},
             "diet_lines": _peds_diet_fallback(symptoms, disease=disease),
-            "peds_short": peds_short_caption(disease)
+            "peds_short": short_caption(disease)
         }
 
 # ---------------- 결과 게이트 ----------------
