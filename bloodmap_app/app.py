@@ -45,17 +45,20 @@ def _peds_diet_fallback(sym: dict, disease: str|None=None) -> list[str]:
     temp = float((sym or {}).get("체온") or 0)
     days = int((sym or {}).get("증상일수") or 0)
     diarrhea = (sym or {}).get("설사") or ""
+    vomit = (sym or {}).get("구토") or ""
     nasal = (sym or {}).get("콧물") or ""
     cough = (sym or {}).get("기침") or ""
+    vomit = (sym or {}).get("구토") or ""
 
     # ORS 상세
-    if diarrhea in ["3~4회","4~6회","5~6회","7회 이상"]:
+    if diarrhea in ["3~4회","4~6회","5~6회","7회 이상"] or vomit in ["3~4회","4~6회","5~6회","7회 이상","7회 이상"]:
         tips.append("ORS(경구수액) 사용: 수시로 조금씩, 설사/구토 1회마다 체중당 **10 mL/kg** 추가")
         tips.append("초기 4~6시간은 물·과일주스·스포츠음료 대신 **ORS** 위주")
         tips.append("전해질 잃은 경우 **싱겁고 부드러운 연식(죽/미음/바나나/사과퓨레/토스트)** 권장")
         tips.append("기름진 음식/매운 음식/카페인/탄산음료는 일시 제한")
     else:
         tips.append("수분을 자주 소량씩 제공(맑은 물/미온수). 구토 시 30분 휴식 후 재개")
+        tips.append("구토가 있으면 **5분마다 5~10 mL**씩 제공, 멎으면 양을 서서히 늘리기")
 
     if disease in ["로타","노로","장염"]:
         tips.append("유제품은 설사 멎을 때까지 일시 제한(개인차 고려)")
@@ -77,11 +80,13 @@ def _adult_diet_fallback(sym: dict) -> list[str]:
     tips: list[str] = []
     temp = float((sym or {}).get("체온") or 0)
     diarrhea = (sym or {}).get("설사") or ""
+    vomit = (sym or {}).get("구토") or ""
     nasal = (sym or {}).get("콧물") or ""
     cough = (sym or {}).get("기침") or ""
+    vomit = (sym or {}).get("구토") or ""
 
     # ORS 상세
-    if diarrhea in ["4~6회","7회 이상"]:
+    if diarrhea in ["4~6회","7회 이상"] or vomit in ["3~4회","4~6회","7회 이상"]:
         tips.append("설사 다회: **ORS(경구수액)** 수시 복용, 설사/구토 1회마다 **체중당 10 mL/kg** 추가")
         tips.append("초기 4~6시간은 물/커피/주스 대신 ORS 권장")
         tips.append("연식(BRAT: 바나나·쌀죽·사과퓨레·토스트) 위주, 기름진/매운 음식·알코올 회피")
@@ -99,6 +104,7 @@ def _adult_diet_fallback(sym: dict) -> list[str]:
         tips.append("탁한 콧물: 수분섭취/세척, 악화 지속 시 상의")
 
     tips.append("구토가 있으면 30분 휴식 후 **맑은 수분**부터 재개")
+    tips.append("한 번에 많이 마시지 말고 **5분마다 5~10 mL**씩")
     return tips
 
 def _safe_label(k):
@@ -283,7 +289,7 @@ elif mode == "일상":
         with c1: nasal = st.selectbox("콧물", opts["콧물"])
         with c2: cough = st.selectbox("기침", opts["기침"])
         with c3: diarrhea = st.selectbox("설사(횟수/일)", opts["설사"])
-        with c4: symptom_days = st.number_input("**증상일수**(일)", min_value=0, step=1, value=0)
+        with c4: vomit = st.selectbox("구토(횟수/일)", ["없음","1~2회","3~4회","4~6회","7회 이상"])
         with c5: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1, value=0.0)
         with c6: eye = st.selectbox("눈꼽", eye_opts)
 
@@ -304,7 +310,7 @@ elif mode == "일상":
         st.warning("이 용량 정보는 **참고용**입니다. 반드시 **주치의와 상담**하십시오.")
 
         fever_cat = _fever_bucket_from_temp(temp)
-        symptoms = {"콧물":nasal,"기침":cough,"설사":diarrhea,"증상일수":symptom_days,"체온":temp,"발열":fever_cat,"눈꼽":eye}
+        symptoms = {"콧물":nasal,"기침":cough,"설사":diarrhea,"구토":vomit,"증상일수":days_since_onset,"체온":temp,"발열":fever_cat,"눈꼽":eye}
         preds = predict_from_symptoms(symptoms, temp, age_m)
         st.markdown("#### 🤖 증상 기반 자동 추정")
         for p in preds: st.write(f"- **{p['label']}** · 신뢰도 {p['score']}점")
@@ -332,14 +338,14 @@ elif mode == "일상":
         with c1: nasal = st.selectbox("콧물", opts["콧물"])
         with c2: cough = st.selectbox("기침", opts["기침"])
         with c3: diarrhea = st.selectbox("설사(횟수/일)", opts["설사"])
-        with c4: symptom_days = st.number_input("**증상일수**(일)", min_value=0, step=1, value=0)
+        with c4: vomit = st.selectbox("구토(횟수/일)", ["없음","1~2회","3~4회","4~6회","7회 이상"])
         with c5: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1, value=0.0)
         with c6: eye = st.selectbox("눈꼽", eye_opts)
 
         comorb = st.multiselect("주의 대상", ["임신 가능성","간질환 병력","신질환 병력","위장관 궤양/출혈력","항응고제 복용","고령(65+)"])
 
         fever_cat = _fever_bucket_from_temp(temp)
-        symptoms = {"콧물":nasal,"기침":cough,"설사":diarrhea,"증상일수":symptom_days,"체온":temp,"발열":fever_cat,"눈꼽":eye}
+        symptoms = {"콧물":nasal,"기침":cough,"설사":diarrhea,"구토":vomit,"증상일수":days_since_onset,"체온":temp,"발열":fever_cat,"눈꼽":eye}
 
         preds = predict_from_symptoms(symptoms, temp, comorb)
         st.markdown("#### 🤖 증상 기반 자동 추정")
@@ -388,7 +394,7 @@ else:
     st.warning("이 용량 정보는 **참고용**입니다. 반드시 **주치의와 상담**하십시오.")
 
     fever_cat = _fever_bucket_from_temp(temp)
-    symptoms = {"콧물":nasal,"기침":cough,"설사":diarrhea,"증상일수":symptom_days,"체온":temp,"발열":fever_cat,"눈꼽":eye}
+    symptoms = {"콧물":nasal,"기침":cough,"설사":diarrhea,"구토":vomit,"증상일수":days_since_onset,"체온":temp,"발열":fever_cat,"눈꼽":eye}
 
     if st.button("🔎 해석하기", key="analyze_peds"):
         st.session_state["analyzed"] = True
