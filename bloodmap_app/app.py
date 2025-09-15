@@ -288,8 +288,8 @@ elif mode == "일상":
         c1,c2,c3,c4,c5,c6 = st.columns(6)
         with c1: nasal = st.selectbox("콧물", opts["콧물"])
         with c2: cough = st.selectbox("기침", opts["기침"])
-        with c3: diarrhea = st.selectbox("설사(횟수/일)", opts["설사"])
-        with c4: vomit = st.selectbox("구토(횟수/일)", ["없음","1~2회","3~4회","4~6회","7회 이상"])
+        with c3: diarrhea = st.selectbox("설사(횟수)", opts["설사"])
+        with c4: vomit = st.selectbox("구토(횟수)", ["없음","1~2회","3~4회","4~6회","7회 이상"])
         with c5: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1, value=0.0)
         with c6: eye = st.selectbox("눈꼽", eye_opts)
 
@@ -337,8 +337,8 @@ elif mode == "일상":
         c1,c2,c3,c4,c5,c6 = st.columns(6)
         with c1: nasal = st.selectbox("콧물", opts["콧물"])
         with c2: cough = st.selectbox("기침", opts["기침"])
-        with c3: diarrhea = st.selectbox("설사(횟수/일)", opts["설사"])
-        with c4: vomit = st.selectbox("구토(횟수/일)", ["없음","1~2회","3~4회","4~6회","7회 이상"])
+        with c3: diarrhea = st.selectbox("설사(횟수)", opts["설사"])
+        with c4: vomit = st.selectbox("구토(횟수)", ["없음","1~2회","3~4회","4~6회","7회 이상"])
         with c5: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1, value=0.0)
         with c6: eye = st.selectbox("눈꼽", eye_opts)
 
@@ -378,7 +378,7 @@ else:
     c1,c2,c3,c4,c5 = st.columns(5)
     with c1: nasal = st.selectbox("콧물", opts.get("콧물", ["없음","투명","흰색","누런","피섞임"]))
     with c2: cough = st.selectbox("기침", opts.get("기침", ["없음","조금","보통","심함"]))
-    with c3: diarrhea = st.selectbox("설사(횟수/일)", opts.get("설사", ["없음","1~2회","3~4회","5~6회"]))
+    with c3: diarrhea = st.selectbox("설사(횟수)", opts.get("설사", ["없음","1~2회","3~4회","5~6회"]))
     with c4: eye = st.selectbox("눈꼽", eye_opts)
     with c5: symptom_days = st.number_input("**증상일수**(일)", min_value=0, step=1, value=0)
 
