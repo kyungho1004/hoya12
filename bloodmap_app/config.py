@@ -4,6 +4,7 @@ APP_TITLE  = "피수치 가이드 (BloodMap)"
 PAGE_TITLE = "BloodMap"
 MADE_BY    = "제작: Hoya/GPT  |  자문: Hoya/GPT"
 CAFE_LINK_MD = "[🔗 피수치 가이드 공식카페](https://cafe.naver.com/bloodmap)"
+APP_URL = "https://bloodmap.streamlit.app/"
 FOOTER_CAFE  = "ⓒ BloodMap | caregiver-first UX"
 DISCLAIMER = (
     "본 수치는 참고용이며, 해석 결과는 개발자와 무관합니다.  "
