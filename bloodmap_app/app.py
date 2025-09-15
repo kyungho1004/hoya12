@@ -220,12 +220,12 @@ if mode == "암":
     st.markdown("### 3) 피수치 입력 (숫자만)")
     LABS_ORDER = [
         ("WBC","WBC,백혈구"), ("Hb","Hb,혈색소"), ("PLT","PLT,혈소판"), ("ANC","ANC,호중구"),
-        ("Ca","Ca,칼슘"), ("Na","Na,소디움"), ("K","K,칼륨"),
-        ("Alb","Alb,알부민"), ("Glu","Glu,혈당"), ("TP","TP,총단백"),
-        ("AST","AST"), ("ALT","ALT"), ("LDH","LDH"),
-        ("CRP","CRP"), ("Cr","Cr,크레아티닌"), ("UA","UA,요산"), ("TB","TB,총빌리루빈"), ("BUN","BUN")
+        ("Ca","Ca,칼슘"), ("Na","Na,나트륨"), ("K","K,칼륨"),
+        ("Alb","Alb,알부민(간단백)"), ("Glu","Glu,혈당"), ("TP","TP,총단백"),
+        ("AST","AST,간수치"), ("ALT","ALT,간세포"), ("LDH","LDH,젓산탈수효소"),
+        ("CRP","CRP,염증"), ("Cr","Cr,크레아티닌"), ("UA","UA,요산"), ("TB","TB,총빌리루빈"), ("BUN","BUN")
     ]
-    labs = {code: clean_num(st.text_input(label, placeholder="예: 4500")) for code, label in LABS_ORDER}
+    labs = {code: clean_num(st.text_input(label, placeholder="예: 100")) for code, label in LABS_ORDER}
 
     # 특수검사
     from special_tests import special_tests_ui
