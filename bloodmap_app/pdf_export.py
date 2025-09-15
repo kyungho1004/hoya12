@@ -5,11 +5,11 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, ListFlowable, ListItem, PageBreak
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, ListFlowable, ListItem
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_LEFT
 
-FONT_CANDIDATES = [
+FONT_MAP = [
     ("/mnt/data/NanumBarunGothic.otf", "KOR"),
     ("/mnt/data/NanumBarunGothicBold.otf", "KOR-Bold"),
     ("/mnt/data/NanumBarunGothicLight.otf", "KOR-Light"),
@@ -18,43 +18,42 @@ FONT_CANDIDATES = [
 ]
 
 def _register_fonts():
-    ok = False
-    for path, name in FONT_CANDIDATES:
+    regular = None
+    bold = None
+    for path, name in FONT_MAP:
         if os.path.exists(path):
             try:
                 pdfmetrics.registerFont(TTFont(name, path))
-                ok = True
+                if name == "KOR" or regular is None:
+                    regular = name
+                if "Bold" in name and bold is None:
+                    bold = name
             except Exception:
                 pass
-    # Fallback aliasing
-    if not pdfmetrics.getFont("KOR"):
-        from reportlab.pdfbase.cidfonts import UnicodeCIDFont
-        pdfmetrics.registerFont(UnicodeCIDFont("HeiseiMin-W3"))
-        pdfmetrics.registerFont(UnicodeCIDFont("HeiseiKakuGo-W5"))
-        pdfmetrics.registerFont(UnicodeCIDFont("STSong-Light"))
-        # create aliases
-        pdfmetrics.registerFont(TTFont("Helvetica", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"))
-        return ("Helvetica", "Helvetica-Bold")
-    # pick bold
-    bold = "KOR-Bold" if "KOR-Bold" in pdfmetrics._fonts else "KOR"
-    return ("KOR", bold)
+    if not regular:
+        try:
+            from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+            regular = "HeiseiKakuGo-W5"
+            pdfmetrics.registerFont(UnicodeCIDFont(regular))
+            bold = regular
+        except Exception:
+            regular = "Helvetica"
+            bold = "Helvetica"
+    return regular, bold
 
-BASE_STYLES = None
-
+_styles = None
 def _get_styles():
-    global BASE_STYLES
-    if BASE_STYLES: return BASE_STYLES
+    global _styles
+    if _styles: return _styles
     base, bold = _register_fonts()
     ss = getSampleStyleSheet()
     ss.add(ParagraphStyle(name="KOR-Body", fontName=base, fontSize=11, leading=15, alignment=TA_LEFT))
     ss.add(ParagraphStyle(name="KOR-H1", fontName=bold, fontSize=16, leading=20, spaceBefore=6, spaceAfter=6))
     ss.add(ParagraphStyle(name="KOR-H2", fontName=bold, fontSize=13, leading=18, spaceBefore=4, spaceAfter=4))
-    ss.add(ParagraphStyle(name="KOR-Bullet", fontName=base, fontSize=11, leading=15, leftIndent=10))
-    BASE_STYLES = ss
+    _styles = ss
     return ss
 
 def export_md_to_pdf(md_text: str) -> bytes:
-    """Very small markdown-ish to PDF renderer (supports #, ##, -, plain)."""
     ss = _get_styles()
     story = []
     bullets = []
@@ -68,10 +67,10 @@ def export_md_to_pdf(md_text: str) -> bytes:
             bullets = []
 
     for raw in (md_text or "").splitlines():
-        line = raw.strip()
-        if not line:
+        line = raw.rstrip()
+        if not line.strip():
             flush_bullets()
-            story.append(Spacer(1, 4))
+            story.append(Spacer(1, 6))
             continue
         if line.startswith("## "):
             flush_bullets()
@@ -84,12 +83,10 @@ def export_md_to_pdf(md_text: str) -> bytes:
         if line.startswith("- "):
             bullets.append(line[2:].strip())
             continue
-        # fallback plain
         flush_bullets()
         story.append(Paragraph(line, ss["KOR-Body"]))
 
     flush_bullets()
-
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=18*mm, rightMargin=18*mm, topMargin=18*mm, bottomMargin=18*mm)
     doc.build(story)
