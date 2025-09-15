@@ -9,6 +9,7 @@ from drug_db import DRUG_DB, ensure_onco_drug_db, display_label
 from onco_map import build_onco_map, auto_recs_by_dx, dx_display
 from ui_results import results_only_after_analyze, render_adverse_effects, collect_top_ae_alerts
 from lab_diet import lab_diet_guides
+from pdf_export import export_md_to_pdf
 from peds_profiles import get_symptom_options
 from peds_dose import acetaminophen_ml, ibuprofen_ml
 
@@ -219,13 +220,13 @@ if mode == "암":
 
     st.markdown("### 3) 피수치 입력 (숫자만)")
     LABS_ORDER = [
-        ("WBC","WBC,백혈구"), ("Hb","Hb,혈색소"), ("PLT","PLT,혈소판"), ("ANC","ANC,면연력"),
-        ("Ca","Ca,칼슘"), ("Na","Na,나트륨"), ("K","K,칼륨"),
-        ("Alb","Alb,알부민(간단백)"), ("Glu","Glu,혈당"), ("TP","TP,총단백"),
-        ("AST","AST,간수치"), ("ALT","ALT,간세포"), ("LDH","LDH,젓산탈수효소"),
-        ("CRP","CRP,염증"), ("Cr","Cr,크레아티닌"), ("UA","UA,요산"), ("TB","TB,총빌리루빈"), ("BUN","BUN")
+        ("WBC","WBC,백혈구"), ("Hb","Hb,혈색소"), ("PLT","PLT,혈소판"), ("ANC","ANC,호중구"),
+        ("Ca","Ca,칼슘"), ("Na","Na,소디움"), ("K","K,칼륨"),
+        ("Alb","Alb,알부민"), ("Glu","Glu,혈당"), ("TP","TP,총단백"),
+        ("AST","AST"), ("ALT","ALT"), ("LDH","LDH"),
+        ("CRP","CRP"), ("Cr","Cr,크레아티닌"), ("UA","UA,요산"), ("TB","TB,총빌리루빈"), ("BUN","BUN")
     ]
-    labs = {code: clean_num(st.text_input(label, placeholder="예: 100")) for code, label in LABS_ORDER}
+    labs = {code: clean_num(st.text_input(label, placeholder="예: 4500")) for code, label in LABS_ORDER}
 
     # 특수검사
     from special_tests import special_tests_ui
@@ -288,8 +289,8 @@ elif mode == "일상":
         c1,c2,c3,c4,c5,c6 = st.columns(6)
         with c1: nasal = st.selectbox("콧물", opts["콧물"])
         with c2: cough = st.selectbox("기침", opts["기침"])
-        with c3: diarrhea = st.selectbox("설사(횟수)", opts["설사"])
-        with c4: vomit = st.selectbox("구토(횟수)", ["없음","1~2회","3~4회","4~6회","7회 이상"])
+        with c3: diarrhea = st.selectbox("설사(횟수/일)", opts["설사"])
+        with c4: vomit = st.selectbox("구토(횟수/일)", ["없음","1~2회","3~4회","4~6회","7회 이상"])
         with c5: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1, value=0.0)
         with c6: eye = st.selectbox("눈꼽", eye_opts)
 
@@ -297,8 +298,8 @@ elif mode == "일상":
         weight = st.number_input("체중(kg)", min_value=0.0, step=0.1)
 
         # ✅ 평균 1회 용량 + 투약 간격(최소/최대 표기 제거)
-        apap_ml = acetaminophen_ml(weight)
-        ibu_ml  = ibuprofen_ml(weight)
+        apap_ml, _ = acetaminophen_ml(age_m, weight or None)
+        ibu_ml,  _ = ibuprofen_ml(age_m, weight or None)
         d1,d2 = st.columns(2)
         with d1:
             st.metric("아세트아미노펜 시럽 (평균 1회분)", f"{apap_ml} ml")
@@ -337,8 +338,8 @@ elif mode == "일상":
         c1,c2,c3,c4,c5,c6 = st.columns(6)
         with c1: nasal = st.selectbox("콧물", opts["콧물"])
         with c2: cough = st.selectbox("기침", opts["기침"])
-        with c3: diarrhea = st.selectbox("설사(횟수)", opts["설사"])
-        with c4: vomit = st.selectbox("구토(횟수)", ["없음","1~2회","3~4회","4~6회","7회 이상"])
+        with c3: diarrhea = st.selectbox("설사(횟수/일)", opts["설사"])
+        with c4: vomit = st.selectbox("구토(횟수/일)", ["없음","1~2회","3~4회","4~6회","7회 이상"])
         with c5: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1, value=0.0)
         with c6: eye = st.selectbox("눈꼽", eye_opts)
 
@@ -375,15 +376,16 @@ else:
     opts = get_symptom_options(disease)
     eye_opts = opts.get("눈꼽", ["없음","맑음","노랑-농성","가려움 동반","한쪽","양쪽"])
     st.markdown("### 증상 체크")
-    c1,c2,c3,c4,c5 = st.columns(5)
+    c1,c2,c3,c4,c5,c6 = st.columns(6)
     with c1: nasal = st.selectbox("콧물", opts.get("콧물", ["없음","투명","흰색","누런","피섞임"]))
     with c2: cough = st.selectbox("기침", opts.get("기침", ["없음","조금","보통","심함"]))
-    with c3: diarrhea = st.selectbox("설사(횟수)", opts.get("설사", ["없음","1~2회","3~4회","5~6회"]))
-    with c4: eye = st.selectbox("눈꼽", eye_opts)
-    with c5: symptom_days = st.number_input("**증상일수**(일)", min_value=0, step=1, value=0)
+    with c3: diarrhea = st.selectbox("설사(횟수/일)", opts.get("설사", ["없음","1~2회","3~4회","5~6회"]))
+    with c4: vomit = st.selectbox("구토(횟수/일)", ["없음","1~2회","3~4회","4~6회","7회 이상"])
+    with c5: eye = st.selectbox("눈꼽", eye_opts)
+    with c6: symptom_days = st.number_input("**증상일수**(일)", min_value=0, step=1, value=0)
 
-    apap_ml = acetaminophen_ml(weight)
-    ibu_ml  = ibuprofen_ml(weight)
+    apap_ml, _ = acetaminophen_ml(age_m, weight or None)
+    ibu_ml,  _ = ibuprofen_ml(age_m, weight or None)
     dc = st.columns(2)
     with dc[0]:
         st.metric("아세트아미노펜 시럽 (평균 1회분)", f"{apap_ml} ml")
@@ -455,6 +457,11 @@ if results_only_after_analyze(st):
         md, txt = _export_report(ctx, lines_blocks)
         st.download_button("⬇️ Markdown (.md)", data=md, file_name="BloodMap_Report.md")
         st.download_button("⬇️ 텍스트 (.txt)", data=txt, file_name="BloodMap_Report.txt")
+        try:
+            pdf_bytes = export_md_to_pdf(md)
+            st.download_button("⬇️ PDF (.pdf)", data=pdf_bytes, file_name="BloodMap_Report.pdf", mime="application/pdf")
+        except Exception as e:
+            st.caption(f"PDF 변환 중 오류: {e}")
 
     elif m == "일상":
         st.subheader("👪 증상 요약")
@@ -492,6 +499,11 @@ if results_only_after_analyze(st):
         md, txt = _export_report(ctx, None)
         st.download_button("⬇️ Markdown (.md)", data=md, file_name="BloodMap_Report.md")
         st.download_button("⬇️ 텍스트 (.txt)", data=txt, file_name="BloodMap_Report.txt")
+        try:
+            pdf_bytes = export_md_to_pdf(md)
+            st.download_button("⬇️ PDF (.pdf)", data=pdf_bytes, file_name="BloodMap_Report.pdf", mime="application/pdf")
+        except Exception as e:
+            st.caption(f"PDF 변환 중 오류: {e}")
 
     else:  # 소아(질환)
         st.subheader("👶 증상 요약")
@@ -520,6 +532,11 @@ if results_only_after_analyze(st):
         md, txt = _export_report(ctx, None)
         st.download_button("⬇️ Markdown (.md)", data=md, file_name="BloodMap_Report.md")
         st.download_button("⬇️ 텍스트 (.txt)", data=txt, file_name="BloodMap_Report.txt")
+        try:
+            pdf_bytes = export_md_to_pdf(md)
+            st.download_button("⬇️ PDF (.pdf)", data=pdf_bytes, file_name="BloodMap_Report.pdf", mime="application/pdf")
+        except Exception as e:
+            st.caption(f"PDF 변환 중 오류: {e}")
 
     st.caption("본 도구는 참고용입니다. 의료진의 진단/치료를 대체하지 않습니다.")
     st.caption("문의/버그 제보: [피수치 가이드 공식카페](https://cafe.naver.com/bloodmap)")
