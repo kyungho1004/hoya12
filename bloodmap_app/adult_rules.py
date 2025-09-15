@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 from typing import Dict, List
 
@@ -6,7 +7,8 @@ def get_adult_options():
         "콧물": ["없음","투명","흰색","노랑(초록)","누런","피 섞임"],
         "기침": ["없음","가끔","자주","심함"],
         "설사": ["없음","1~3회","4~6회","7회 이상"],
-        "발열": ["없음","37.5~38","38~38.5","38.5~39","39+"]
+        "발열": ["없음","37.5~38","38~38.5","38.5~39","39+"],
+        "눈꼽": ["없음","맑음","노랑-농성","가려움 동반","한쪽","양쪽"],
     }
 
 def _score(ok: bool, w: float) -> float:
@@ -16,7 +18,11 @@ def predict_from_symptoms(sym: Dict[str,str], temp_c: float, comorb: List[str]) 
     nasal = (sym.get("콧물") or "").strip()
     cough = (sym.get("기침") or "").strip()
     diarrhea = (sym.get("설사") or "").strip()
-    fever = (sym.get("발열") or "").strip()
+    eye = (sym.get("눈꼽") or "").strip()
+
+    very_high = (temp_c or 0) >= 39.0
+    high = (temp_c or 0) >= 38.5
+    mild = 37.5 <= (temp_c or 0) < 38.5
 
     cand = {
         "감기/상기도바이러스": 0.0,
@@ -24,13 +30,13 @@ def predict_from_symptoms(sym: Dict[str,str], temp_c: float, comorb: List[str]) 
         "코로나 가능": 0.0,
         "장염(바이러스) 의심": 0.0,
         "세균성 편도/부비동염 가능": 0.0,
+        "세균성 결막염 가능": 0.0,
+        "아데노바이러스 결막염 가능": 0.0,
+        "알레르기성 결막염 가능": 0.0,
     }
-    reasons = {k: [] for k in cand}
+    reasons: Dict[str, List[str]] = {k: [] for k in cand}
 
-    high = temp_c >= 38.5
-    very_high = temp_c >= 39.0
-    mild = 37.5 <= temp_c < 38.5
-
+    # 기존 규칙
     s = 0.0
     s += _score(nasal in ["투명","흰색","노랑(초록)"], 20)
     s += _score(cough in ["가끔","자주"], 20)
@@ -63,9 +69,34 @@ def predict_from_symptoms(sym: Dict[str,str], temp_c: float, comorb: List[str]) 
     if s: reasons["세균성 편도/부비동염 가능"].append("탁한/혈성 콧물 + 발열")
     cand["세균성 편도/부비동염 가능"] += s
 
-    items = []
-    for k, v in cand.items():
-        items.append({"label": k, "score": round(max(0.0, min(100.0, v)), 1), "reasons": reasons[k]})
+    # 신규: 결막염 관련 가중치
+    # 세균성: 농성 + (한쪽 시작) 가점, 양쪽 보조 / 맑음 감점
+    s = 0.0
+    s += _score(eye == "노랑-농성", 35)
+    s += _score(eye == "한쪽", 10)
+    s += _score(eye == "양쪽", 5)
+    s -= _score(eye == "맑음", 10)
+    if s: reasons["세균성 결막염 가능"].append("농성 눈꼽 ± 한쪽 시작")
+    cand["세균성 결막염 가능"] += max(0.0, s)
+
+    # 아데노바이러스 결막염: 고열 + 상기도 동반 + 양측성 경향, 농성은 감점
+    s = 0.0
+    s += _score(high, 15)
+    s += _score(nasal not in ["없음",""], 10)
+    s += _score(eye == "양쪽", 15)
+    s -= _score(eye == "노랑-농성", 10)
+    if s: reasons["아데노바이러스 결막염 가능"].append("발열 + 상기도 + 양측")
+    cand["아데노바이러스 결막염 가능"] += max(0.0, s)
+
+    # 알레르기성 결막염: 맑은 분비물 + 가려움 + 투명 콧물
+    s = 0.0
+    s += _score(eye == "맑음", 15)
+    s += _score(eye == "가려움 동반", 20)
+    s += _score(nasal in ["투명"], 10)
+    if s: reasons["알레르기성 결막염 가능"].append("맑은 눈물/가려움 + 투명 콧물")
+    cand["알레르기성 결막염 가능"] += s
+
+    items = [{"label": k, "score": round(max(0.0, min(100.0, v)), 1)} for k, v in cand.items()]
     items.sort(key=lambda x: x["score"], reverse=True)
     return items[:3]
 
