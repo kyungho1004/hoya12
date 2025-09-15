@@ -9,18 +9,15 @@ from drug_db import DRUG_DB, ensure_onco_drug_db, display_label
 from onco_map import build_onco_map, auto_recs_by_dx, dx_display
 from ui_results import results_only_after_analyze, render_adverse_effects, collect_top_ae_alerts
 from lab_diet import lab_diet_guides
-from peds_profiles import get_symptom_options, peds_short_caption
+from peds_profiles import get_symptom_options
 from peds_dose import acetaminophen_ml, ibuprofen_ml
 from pdf_export import export_md_to_pdf
 
 def short_caption(label: str) -> str:
-    """
-    공통 '짧은 해석' 헬퍼:
-    - peds_profiles.peds_short_caption() 우선
-    - 없으면 일부 라벨에 기본 문구 제공
-    """
+    """공통 '짧은 해석' 헬퍼"""
     try:
-        s = peds_short_caption(label or "")
+        from peds_profiles import peds_short_caption as _peds_short_caption
+        s = _peds_short_caption(label or "")
         if s:
             return s
     except Exception:
