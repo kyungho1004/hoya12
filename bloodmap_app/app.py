@@ -61,6 +61,38 @@ def _peds_diet_fallback(sym: dict, disease: str|None=None) -> list[str]:
             tips.append("따뜻한 수분·연식(죽/수프)으로 목 통증 완화")
     return tips
 
+
+def _adult_diet_fallback(sym: dict) -> list[str]:
+    tips: list[str] = []
+    temp = (sym or {}).get("체온", 0) or 0
+    diarrhea = (sym or {}).get("설사", "")
+    nasal = (sym or {}).get("콧물", "")
+    cough = (sym or {}).get("기침", "")
+
+    # 수분/식이
+    if diarrhea in ["4~6회","7회 이상"]:
+        tips.append("설사 다회 → ORS(경구수액) 자주, 튀김/매운 음식·카페인·알코올 피하기")
+        tips.append("미음/죽·바나나·사과퓨레·토스트(BRAT) 위주로 일시 조절")
+    elif diarrhea in ["1~3회"]:
+        tips.append("설사 소량 → 수분 보충, 자극적 음식 줄이기")
+
+    # 발열 관리
+    if temp >= 38.5:
+        tips.append("체온 38.5℃ 이상 → 얇게 입고 미온수 닦기, 해열제(증상 시)")
+
+    # 상기도 증상
+    if cough in ["가끔","자주","심함"]:
+        tips.append("기침 동반 → 따뜻한 수분·꿀차(소아 제외)로 인후 완화")
+    if nasal in ["투명","흰색"]:
+        tips.append("맑은 콧물 → 실내 가습/세척, 자극물(담배연기) 피하기")
+    elif nasal in ["누런","노랑(초록)"]:
+        tips.append("탁한 콧물 → 수분섭취·비강 세척, 악화 시 의학적 상담")
+
+    # 일반
+    tips.append("식사는 소량씩 자주, 구토 시 30분 쉬었다가 맑은 수분부터 재개")
+    return tips
+
+
 def _safe_label(k):
     try:
         return display_label(k)
@@ -298,7 +330,7 @@ elif mode == "일상":
         st.info(triage)
 
         # 보고서용 식이가이드
-        diet_lines = lab_diet_guides({}, heme_flag=False)
+        diet_lines = _adult_diet_fallback(symptoms)
 
         if st.button("🔎 해석하기", key="analyze_daily_adult"):
             st.session_state["analyzed"] = True
