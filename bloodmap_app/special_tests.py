@@ -93,9 +93,9 @@ def special_tests_ui() -> List[str]:
                 with row2[3]: acr = _num(st.text_input("알부민/Cr (ACR, mg/gCr)", placeholder="예: 25"))
 
                 # 비현실적 고값 안전장치 (단위/입력 오류 가능)
-                if upcr is not None and upcr > 10000:
+                if upcr is not None and upcr > 9999:
                     _emit(lines, "risk", f"UPCR {upcr} mg/gCr → 값이 비현실적으로 높습니다. 단위/입력 오류 가능. 검사실 또는 의료진에게 문의하세요.")
-                if acr is not None and acr > 10000:
+                if acr is not None and acr > 9999:
                     _emit(lines, "risk", f"ACR {acr} mg/gCr → 값이 비현실적으로 높습니다. 단위/입력 오류 가능. 검사실 또는 의료진에게 문의하세요.")
 
 
