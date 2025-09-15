@@ -1,8 +1,6 @@
 
 # -*- coding: utf-8 -*-
 import streamlit as st
-from report_sections import sec_diet, sec_safety
-from safety_flags import flag_anomalies
 import pandas as pd
 from datetime import date
 
@@ -14,6 +12,28 @@ from lab_diet import lab_diet_guides
 from peds_profiles import get_symptom_options, peds_short_caption
 from peds_dose import acetaminophen_ml, ibuprofen_ml
 from pdf_export import export_md_to_pdf
+
+def short_caption(label: str) -> str:
+    """
+    공통 '짧은 해석' 헬퍼:
+    - peds_profiles.peds_short_caption() 우선
+    - 없으면 일부 라벨에 기본 문구 제공
+    """
+    try:
+        s = peds_short_caption(label or "")
+        if s:
+            return s
+    except Exception:
+        pass
+    defaults = {
+        "로타바이러스 장염": "영유아 위장관염 — 물설사·구토, 탈수 주의",
+        "노로바이러스 장염": "급성 구토/설사 급발현 — 겨울철 유행, 탈수 주의",
+        "바이럴 장염(비특이)": "대개 바이러스성 — 수분·전해질 보충과 휴식",
+        "RSV": "모세기관지염 — 끈적가래로 쌕쌕/호흡곤란 가능",
+        "아데노바이러스 결막염 가능": "고열+양측 결막염 — 전염성, 위생 철저",
+        "세균성 결막염 가능": "농성 눈꼽·한쪽 시작 — 항생제 점안 상담",
+    }
+    return defaults.get((label or "").strip(), "")
 
 # ---------------- 초기화 ----------------
 ensure_onco_drug_db(DRUG_DB)
@@ -144,7 +164,7 @@ def _export_report(ctx: dict, lines_blocks=None):
         if ctx.get("days_since_onset") is not None:
             body.append(f"- 경과일수: {ctx.get('days_since_onset')}일")
     if ctx.get("preds"):
-        preds_text = "; ".join(f"{p['label']} — {p.get('short', '')}".strip() + f" ({p['score']})" for p in ctx["preds"])
+        preds_text = "; ".join(f"{p['label']}({p['score']})" for p in ctx["preds"])
         body.append(f"- 자동 추정: {preds_text}")
     if ctx.get("triage"):
         body.append(f"- 트리아지: {ctx['triage']}")
@@ -153,10 +173,6 @@ def _export_report(ctx: dict, lines_blocks=None):
         if labs_t:
             body.append(f"- 주요 수치: {labs_t}")
 
-    # ℹ️ 소아(질환) 짧은 해석 섹션
-    if ctx.get("mode") == "소아" and ctx.get("peds_short"):
-        body.append("\n## ℹ️ 짧은 해석\n- " + str(ctx["peds_short"]))
-
     if lines_blocks:
         for title2, lines in lines_blocks:
             if lines:
@@ -164,82 +180,20 @@ def _export_report(ctx: dict, lines_blocks=None):
 
     if ctx.get("diet_lines"):
         diet = [str(x) for x in ctx["diet_lines"] if x]
-        body.append("\n## 🍽️ 식이가이드\n" + ("\n".join(f"- {L}" for L in diet) if diet else "- (입력값 기준 맞춤 식이가이드는 없습니다)"))
+        if diet:
+            body.append("\n## 🍽️ 식이가이드\n" + "\n".join(f"- {L}" for L in diet))
 
     if ctx.get("mode") == "암":
         summary = _one_line_selection(ctx)
         if summary:
             body.append("\n## 🗂️ 선택 요약\n- " + summary)
 
-    
-    # 🚦 안전 플래그
-    try:
-        alerts = flag_anomalies(ctx.get("labs"), {"temp": ctx.get("temp")})
-    except Exception:
-        alerts = []
-    if alerts is not None:
-        body.append("\n## 🚦 안전 플래그\n" + ("\n".join(f"- {a}" for a in alerts) if alerts else "- (특이 경고 없음)"))
-
     md = title + "\n".join(body) + footer
     txt = md.replace("# ","").replace("## ","")
     return md, txt
 
-
-
-def _badge_line(ctx: dict) -> str:
-    """선택 약물을 한 줄 '배지 느낌'으로 요약합니다."""
-    def _chips(keys):
-        names = [display_label(k) for k in _filter_known(keys)]
-        return " ".join(f"`{n}`" for n in names) if names else ""
-    parts = []
-    a = _chips(ctx.get("user_chemo"))
-    if a: parts.append(f"**항암제** {a}")
-    b = _chips(ctx.get("user_targeted"))
-    if b: parts.append(f"**표적/면역** {b}")
-    c = _chips(ctx.get("user_abx"))
-    if c: parts.append(f"**항생제** {c}")
-    line = " · ".join(parts)
-    return line if line else "선택된 약물이 없습니다."
-
-def _export_buttons(md_text: str, txt_text: str, filename_base: str = "bloodmap_report"):
-    """.md / .txt / .pdf 3종 다운로드 버튼 묶음"""
-    today = date.today().strftime("%Y%m%d")
-    base = f"{filename_base}_{today}"
-
-    # MD
-    st.download_button(
-        "⬇️ Markdown (.md)",
-        data=md_text,
-        file_name=f"{base}.md",
-        mime="text/markdown",
-        key=f"dl_md_{today}"
-    )
-
-    # TXT
-    st.download_button(
-        "⬇️ 텍스트 (.txt)",
-        data=txt_text,
-        file_name=f"{base}.txt",
-        mime="text/plain",
-        key=f"dl_txt_{today}"
-    )
-
-    # PDF
-    try:
-        pdf_bytes = export_md_to_pdf(md_text or "")
-        st.download_button(
-            "⬇️ PDF (.pdf)",
-            data=pdf_bytes,
-            file_name=f"{base}.pdf",
-            mime="application/pdf",
-            key=f"dl_pdf_{today}"
-        )
-    except Exception as e:
-        st.warning(f"PDF 변환에 실패했습니다: {e}")
-
 # ---------------- 모드 선택 ----------------
 mode = st.radio("모드 선택", ["암", "일상", "소아"], horizontal=True)
-st.caption("혼돈 방지 및 범위 밖 안내: 저희는 세포·면역 치료(CAR‑T, TCR‑T, NK, HSCT 등)는 표기하지 않습니다.")
 
 # ---------------- 암 모드 ----------------
 if mode == "암":
@@ -369,12 +323,7 @@ elif mode == "일상":
         symptoms = {"콧물":nasal,"기침":cough,"설사":diarrhea,"구토":vomit,"증상일수":days_since_onset,"체온":temp,"발열":fever_cat,"눈꼽":eye}
         preds = predict_from_symptoms(symptoms, temp, age_m)
         st.markdown("#### 🤖 증상 기반 자동 추정")
-        for p in preds:
-            short = short_caption(p.get("label",""))
-            tail = f" — {short}" if short else ""
-            st.write(f"- **{p['label']}**{tail} · 신뢰도 {p['score']}점")
-            if short:
-                st.caption(f"↳ {short}")
+        for p in preds: st.write(f"- **{p['label']}** · 신뢰도 {p['score']}점")
         triage = triage_advise(temp, age_m, diarrhea)
         st.info(triage)
 
@@ -385,7 +334,7 @@ elif mode == "일상":
             st.session_state["analysis_ctx"] = {
                 "mode":"일상","who":"소아","symptoms":symptoms,
                 "temp":temp,"age_m":age_m,"weight":weight or None,
-                "apap_ml":apap_ml,"ibu_ml":ibu_ml,"preds":[{**p, "short": short_caption(p.get("label",""))} for p in preds],"triage":triage,
+                "apap_ml":apap_ml,"ibu_ml":ibu_ml,"preds":preds,"triage":triage,
                 "days_since_onset": days_since_onset, "diet_lines": diet_lines
             }
 
@@ -409,12 +358,7 @@ elif mode == "일상":
 
         preds = predict_from_symptoms(symptoms, temp, comorb)
         st.markdown("#### 🤖 증상 기반 자동 추정")
-        for p in preds:
-            short = short_caption(p.get("label",""))
-            tail = f" — {short}" if short else ""
-            st.write(f"- **{p['label']}**{tail} · 신뢰도 {p['score']}점")
-            if short:
-                st.caption(f"↳ {short}")
+        for p in preds: st.write(f"- **{p['label']}** · 신뢰도 {p['score']}점")
         triage = triage_advise(temp, comorb)
         st.info(triage)
 
@@ -424,7 +368,7 @@ elif mode == "일상":
             st.session_state["analyzed"] = True
             st.session_state["analysis_ctx"] = {
                 "mode":"일상","who":"성인","symptoms":symptoms,
-                "temp":temp,"comorb":comorb,"preds":[{**p, "short": short_caption(p.get("label",""))} for p in preds],"triage":triage,
+                "temp":temp,"comorb":comorb,"preds":preds,"triage":triage,
                 "days_since_onset": days_since_onset, "diet_lines": diet_lines
             }
 
@@ -432,9 +376,6 @@ elif mode == "일상":
 else:
     ctop = st.columns(4)
     with ctop[0]: disease = st.selectbox("소아 질환", ["로타","독감","RSV","아데노","마이코","수족구","편도염","코로나","중이염"], index=0)
-    st.caption(peds_short_caption(disease))
-    if disease:
-        st.caption(short_caption(disease))
     with ctop[1]: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1)
     with ctop[2]: age_m = st.number_input("나이(개월)", min_value=0, step=1)
     with ctop[3]: weight = st.number_input("체중(kg)", min_value=0.0, step=0.1)
@@ -471,8 +412,7 @@ else:
             "symptoms": symptoms,
             "temp": temp, "age_m": age_m, "weight": weight or None,
             "apap_ml": apap_ml, "ibu_ml": ibu_ml, "vals": {},
-            "diet_lines": _peds_diet_fallback(symptoms, disease=disease),
-            "peds_short": short_caption(disease)
+            "diet_lines": _peds_diet_fallback(symptoms, disease=disease)
         }
 
 # ---------------- 결과 게이트 ----------------
@@ -493,7 +433,7 @@ if results_only_after_analyze(st):
         if alerts: st.error("\n".join(alerts))
 
         st.subheader("🗂️ 선택 요약")
-        st.markdown(_badge_line(ctx))
+        st.write(_one_line_selection(ctx))
 
         # 순서: 피수치 → 특수검사 → 식이가이드 → 부작용
         lines_blocks = ctx.get("lines_blocks") or []
@@ -519,7 +459,13 @@ if results_only_after_analyze(st):
 
         st.subheader("📝 보고서 저장")
         md, txt = _export_report(ctx, lines_blocks)
-        _export_buttons(md, txt)
+        st.download_button("⬇️ Markdown (.md)", data=md, file_name="BloodMap_Report.md")
+        st.download_button("⬇️ 텍스트 (.txt)", data=txt, file_name="BloodMap_Report.txt")
+        try:
+            pdf_bytes = export_md_to_pdf(md)
+            st.download_button("⬇️ PDF (.pdf)", data=pdf_bytes, file_name="BloodMap_Report.pdf", mime="application/pdf")
+        except Exception as e:
+            st.caption(f"PDF 변환 중 오류: {e}")
 
     elif m == "일상":
         st.subheader("👪 증상 요약")
@@ -535,12 +481,7 @@ if results_only_after_analyze(st):
         preds = ctx.get("preds") or []
         if preds:
             st.subheader("🤖 증상 기반 자동 추정")
-            for p in preds:
-                short = p.get("short") or short_caption(p.get("label",""))
-                tail = f" — {short}" if short else ""
-                st.write(f"- **{p['label']}**{tail} · 신뢰도 {p['score']}점")
-                if short:
-                    st.caption(f"↳ {short}")
+            for p in preds: st.write(f"- **{p['label']}** · 신뢰도 {p['score']}점")
         if ctx.get("triage"): st.info(ctx["triage"])
 
         if ctx.get("who") == "소아":
@@ -560,7 +501,13 @@ if results_only_after_analyze(st):
 
         st.subheader("📝 보고서 저장")
         md, txt = _export_report(ctx, None)
-        _export_buttons(md, txt)
+        st.download_button("⬇️ Markdown (.md)", data=md, file_name="BloodMap_Report.md")
+        st.download_button("⬇️ 텍스트 (.txt)", data=txt, file_name="BloodMap_Report.txt")
+        try:
+            pdf_bytes = export_md_to_pdf(md)
+            st.download_button("⬇️ PDF (.pdf)", data=pdf_bytes, file_name="BloodMap_Report.pdf", mime="application/pdf")
+        except Exception as e:
+            st.caption(f"PDF 변환 중 오류: {e}")
 
     else:  # 소아(질환)
         st.subheader("👶 증상 요약")
@@ -587,7 +534,13 @@ if results_only_after_analyze(st):
 
         st.subheader("📝 보고서 저장")
         md, txt = _export_report(ctx, None)
-        _export_buttons(md, txt)
+        st.download_button("⬇️ Markdown (.md)", data=md, file_name="BloodMap_Report.md")
+        st.download_button("⬇️ 텍스트 (.txt)", data=txt, file_name="BloodMap_Report.txt")
+        try:
+            pdf_bytes = export_md_to_pdf(md)
+            st.download_button("⬇️ PDF (.pdf)", data=pdf_bytes, file_name="BloodMap_Report.pdf", mime="application/pdf")
+        except Exception as e:
+            st.caption(f"PDF 변환 중 오류: {e}")
 
     st.caption("본 도구는 참고용입니다. 의료진의 진단/치료를 대체하지 않습니다.")
     st.caption("문의/버그 제보: [피수치 가이드 공식카페](https://cafe.naver.com/bloodmap)")
