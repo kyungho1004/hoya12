@@ -24,7 +24,7 @@ st.title("BloodMap — 피수치가이드")
 try:
     from config import APP_URL
 except Exception:
-    APP_URL = "https://bloodmap.streamlit.app/"
+st.link_button("🔗 공식 배포: bloodmap.streamlit.app", APP_URL)
 
 render_deploy_banner(APP_URL, MADE_BY)
 st.info(
