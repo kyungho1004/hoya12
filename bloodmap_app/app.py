@@ -1,47 +1,3 @@
-# --- short_caption utility (standalone; no external deps) ---
-def short_caption(name: str) -> str:
-    t = str(name or "").strip()
-    MAP = {
-        # 소아(질환) 드롭다운
-        "로타": "영유아 설사·구토 우세 — ORS 우선, 탈수 주의.",
-        "독감": "갑작스런 고열·전신통 — 초기 항바이러스 고려(의료진).",
-        "RSV": "콧물/기침·천명 — 가습/수분, 영아 무호흡 주의.",
-        "아데노": "고열 + 인후염/결막염 가능 — 수분·대증, 전염 주의.",
-        "마이코": "마른기침 지속 — 흉부사진 고려, 필요 시 마크롤리드.",
-        "수족구": "손·발·입 수포/통증 — 진통·수분, 탈수 주의.",
-        "편도염": "인후통·고열 — 세균 의심 시 항생제 상담.",
-        "코로나": "발열/기침·무증상 가능 — 격리 수칙·대증.",
-        "중이염": "귀통증·발열 — 소아는 진료 상담, 필요 시 항생제.",
-
-        # ‘일상’ 모드 자동추정 라벨(소아/성인 규칙 공통)
-        "바이럴 장염(비특이)": "설사 다회 — ORS, 소량씩 자주, 기름진 음식 피함.",
-        "로타바이러스 장염": "영유아 설사·구토 — ORS, 탈수/경련 주의.",
-        "노로바이러스 장염": "구토 우세 — ORS, 손위생 철저.",
-        "감기/상기도바이러스": "콧물·기침 중심 — 수분·휴식·가습.",
-        "독감(인플루엔자) 의심": "고열·전신통 — 검사/치료 상담.",
-        "아데노/편도염 가능": "고열·인후통 — 대증치료, 필요 시 검사.",
-        "중이염 가능(동반 의심)": "탁한 콧물 + 발열 — 귀통증 확인·진료 상담.",
-        "세균성 결막염 가능": "농성 눈꼽 — 손위생, 점안제 상담.",
-        "아데노바이러스 결막염 가능": "양측 결막염·발열 — 전염 주의·대증.",
-        "알레르기성 결막염 가능": "가려움·맑은 분비 — 항히스타민 점안 고려.",
-        "코로나 가능": "검사/격리 수칙 확인.",
-        "세균성 편도/부비동염 가능": "탁한 콧물 + 발열 — 항생제 상담.",
-        "장염(바이러스) 의심": "설사 다회 — ORS 우선, 탈수 주의.",
-    }
-    if t in MAP:
-        return MAP[t]
-    # 라벨 변형/유사군 일반화 (안전한 기본값)
-    if "장염" in t:
-        return "설사·구토 — ORS 우선, 탈수 주의."
-    if "독감" in t:
-        return "고열·전신통 — 검사/치료 상담."
-    if "코로나" in t:
-        return "검사/격리 수칙·대증요법."
-    if "결막염" in t:
-        return "눈 위생·전염 주의, 필요 시 점안제."
-    return f"{t} — 요약 준비 중."
-
-
 
 # -*- coding: utf-8 -*-
 import streamlit as st
@@ -56,6 +12,29 @@ from lab_diet import lab_diet_guides
 from peds_profiles import get_symptom_options
 from peds_dose import acetaminophen_ml, ibuprofen_ml
 from pdf_export import export_md_to_pdf
+
+def short_caption(label: str) -> str:
+    """
+    peds_profiles.peds_short_caption()가 있으면 우선 사용,
+    없으면 기본 문구로 보조하는 안전 헬퍼.
+    """
+    try:
+        from peds_profiles import peds_short_caption as _peds_short_caption  # type: ignore
+        s = _peds_short_caption(label or "")
+        if s:
+            return s
+    except Exception:
+        pass
+    defaults = {
+        "로타바이러스 장염": "영유아 위장관염 — 물설사·구토, 탈수 주의",
+        "노로바이러스 장염": "급성 구토/설사 급발현 — 겨울철 유행, 탈수 주의",
+        "바이럴 장염(비특이)": "대개 바이러스성 — 수분·전해질 보충과 휴식",
+        "RSV": "모세기관지염 — 끈적가래로 쌕쌕/호흡곤란 가능",
+        "아데노바이러스 결막염 가능": "고열+양측 결막염 — 전염성, 위생 철저",
+        "세균성 결막염 가능": "농성 눈꼽·한쪽 시작 — 항생제 점안 상담",
+    }
+    return defaults.get((label or "").strip(), "")
+
 
 # ---------------- 초기화 ----------------
 ensure_onco_drug_db(DRUG_DB)
@@ -345,7 +324,11 @@ elif mode == "일상":
         symptoms = {"콧물":nasal,"기침":cough,"설사":diarrhea,"구토":vomit,"증상일수":days_since_onset,"체온":temp,"발열":fever_cat,"눈꼽":eye}
         preds = predict_from_symptoms(symptoms, temp, age_m)
         st.markdown("#### 🤖 증상 기반 자동 추정")
-        for p in preds: st.write(f"- **{p['label']}** · 신뢰도 {p['score']}점")
+        for p in preds:
+            cap = short_caption(p.get("label",""))
+            tail = f" — {cap}" if cap else ""
+            st.write(f"- **{p['label']}**{tail} · 신뢰도 {p['score']}점")
+            if cap: st.caption(f"↳ {cap}")
         triage = triage_advise(temp, age_m, diarrhea)
         st.info(triage)
 
@@ -380,7 +363,11 @@ elif mode == "일상":
 
         preds = predict_from_symptoms(symptoms, temp, comorb)
         st.markdown("#### 🤖 증상 기반 자동 추정")
-        for p in preds: st.write(f"- **{p['label']}** · 신뢰도 {p['score']}점")
+        for p in preds:
+            cap = short_caption(p.get("label",""))
+            tail = f" — {cap}" if cap else ""
+            st.write(f"- **{p['label']}**{tail} · 신뢰도 {p['score']}점")
+            if cap: st.caption(f"↳ {cap}")
         triage = triage_advise(temp, comorb)
         st.info(triage)
 
@@ -398,6 +385,7 @@ elif mode == "일상":
 else:
     ctop = st.columns(4)
     with ctop[0]: disease = st.selectbox("소아 질환", ["로타","독감","RSV","아데노","마이코","수족구","편도염","코로나","중이염"], index=0)
+    st.caption(short_caption(disease))
     with ctop[1]: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1)
     with ctop[2]: age_m = st.number_input("나이(개월)", min_value=0, step=1)
     with ctop[3]: weight = st.number_input("체중(kg)", min_value=0.0, step=0.1)
@@ -503,7 +491,12 @@ if results_only_after_analyze(st):
         preds = ctx.get("preds") or []
         if preds:
             st.subheader("🤖 증상 기반 자동 추정")
-            for p in preds: st.write(f"- **{p['label']}** · 신뢰도 {p['score']}점")
+            for p in preds:
+                cap = short_caption(p.get("label",""))
+                tail = f" — {cap}" if cap else ""
+                st.write(f"- **{p['label']}**{tail} · 신뢰도 {p['score']}점")
+                if cap:
+                    st.caption(f"↳ {cap}")
         if ctx.get("triage"): st.info(ctx["triage"])
 
         if ctx.get("who") == "소아":
