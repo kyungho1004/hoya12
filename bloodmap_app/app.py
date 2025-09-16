@@ -1,3 +1,7 @@
+try:
+    from onco_table import ui_onco_table_card
+except Exception:
+    pass
 
 # -*- coding: utf-8 -*-
 import streamlit as st
@@ -12,6 +16,62 @@ from lab_diet import lab_diet_guides
 from peds_profiles import get_symptom_options
 from peds_dose import acetaminophen_ml, ibuprofen_ml
 from pdf_export import export_md_to_pdf
+
+# === Mode helpers (robust cancer detection) ===
+import re as _re
+def _is_cancer_mode():
+    import streamlit as st
+    ctx = st.session_state.get("analysis_ctx", {})
+    vals = []
+    for k in ("mode","group","profile","patient_type","flow","view"):
+        vals.append(str(st.session_state.get(k, "") or ""))
+        vals.append(str(ctx.get(k, "") or ""))
+    txt = " " + " ".join(vals).lower() + " "
+    tokens = [" 암 ", "암환자", "암-환자", "종양", "항암", "백혈병", "림프종",
+              "cancer", "onco", "oncology", "hem-onc", "heme-onc"]
+    # explicit overrides (optional)
+    if bool(st.session_state.get("__force_cancer")) or bool(st.session_state.get("__suppress_bundle")):
+        return True
+    return any(t in txt for t in tokens)
+
+
+# === Cancer-first guard (hides Bundle everywhere for cancer) ===
+try:
+    import streamlit as st
+    _ctx = st.session_state.get("analysis_ctx", {})
+    mode_fields = " ".join(str(st.session_state.get(k,"")) for k in ("mode","group","profile","patient_type"))
+    ctx_fields  = " ".join(str(_ctx.get(k,"")) for k in ("mode","group","profile"))
+    combined = (mode_fields + " " + ctx_fields)
+    cl = combined.lower()
+    is_cancer = _is_cancer_mode()
+    if is_cancer:
+        st.markdown("## 📊 암환자 피수치 그래프")
+        try:
+            from onco_charts import ui_onco_trends_card
+            ui_onco_trends_card("onco")
+        except Exception as e:
+            st.info(f"암 그래프 로딩 중: {e}")
+        st.session_state["__suppress_bundle"] = True
+    else:
+        st.session_state["__suppress_bundle"] = False
+except Exception as _guard_err:
+    pass
+
+
+
+# === Bundle V1 imports (idempotent) ===
+try:
+    from bundle_addons import (
+        ui_sidebar_settings, toneize_line, toneize_lines,
+        ui_antipyretic_card, ui_symptom_diary_card,
+        render_interactions_box, md_block_antipy_schedule, md_block_diary,
+    )
+    from interactions import compute_interactions
+    from onco_charts import ui_onco_trends_card
+except Exception as _imp_err:
+    pass
+
+
 
 
 # 세션 플래그(중복 방지)
@@ -244,23 +304,7 @@ def _export_report(ctx: dict, lines_blocks=None):
     return md, txt
 
 # ---------------- 모드 선택 ----------------
-# ---------------- 모드 선택 ----------------
-# 토글 기반 모드 선택: 암 환자 모드 ON이면 '암', OFF이면 '일상/소아' 토글로 전환
-_toggle = getattr(st, "toggle", None)
-is_cancer = (_toggle("암환자 모드", value=True, key="mode_cancer") if _toggle
-             else st.checkbox("암환자 모드", value=True, key="mode_cancer"))
-if is_cancer:
-    mode = "암"
-    # 암 모드일 때는 소아/일상 토글은 비활성화(보여주되 입력은 무시)
-    if _toggle:
-        st.toggle("소아 모드", value=True, key="mode_peds", disabled=True)
-    else:
-        st.checkbox("소아 모드", value=True, key="mode_peds", disabled=True)
-else:
-    is_peds = (_toggle("소아 모드", value=True, key="mode_peds") if _toggle
-               else st.checkbox("소아 모드", value=True, key="mode_peds"))
-    mode = "소아" if is_peds else "일상"
-st.session_state["mode"] = mode
+mode = st.radio("모드 선택", ["암", "일상", "소아"], horizontal=True)
 
 # ---------------- 암 모드 ----------------
 if mode == "암":
@@ -650,4 +694,96 @@ if results_only_after_analyze(st):
 
     st.caption("본 도구는 참고용입니다. 의료진의 진단/치료를 대체하지 않습니다.")
     st.caption("문의/버그 제보: [피수치 가이드 공식카페](https://cafe.naver.com/bloodmap)")
+
+
+# === Injected: Bundle header & cards (rendered pre-stop) ===
+try:
+    import streamlit as st
+    _is_cancer = globals().get("_is_cancer_mode", lambda: False)()
+    _is_peds   = globals().get("_is_peds_mode",   lambda: False)()
+    if not _is_cancer:
+       if not _is_cancer_mode():
+        if not _is_cancer_mode():
+                    st.markdown("## 🧩 Bundle V1 — 투약·안전 / 기록·저장 / 보고서·문구")
+        if _is_peds:
+            ready = bool(st.session_state.get("analyzed") or st.session_state.get("results_ready") or st.session_state.get("analysis_done"))
+            if ready:
+                _age_m = int(st.session_state.get("age_m") or st.session_state.get("age_months") or 12)
+                _wt = float(st.session_state.get("weight") or st.session_state.get("wt") or 20.0)
+                _temp = float(st.session_state.get("temp") or 37.8)
+                _key = "peds_gated_pre_stop"
+                st.markdown("### 🕒 해열제 24시간 시간표")
+                sched_today = ui_antipyretic_card(_age_m, _wt, _temp, key=_key)
+                st.markdown("### 기록·저장")
+                st.markdown("#### 📈 증상 일지(미니 차트)")
+                diary_df = ui_symptom_diary_card(_key)
+                st.session_state.setdefault("bundle_cache", {})
+                st.session_state["bundle_cache"]["sched_today"] = sched_today
+                st.session_state["bundle_cache"]["diary_df"] = diary_df
+        else:
+            _age_m = int(st.session_state.get("age_m") or st.session_state.get("age_months") or 12)
+            _wt = float(st.session_state.get("weight") or st.session_state.get("wt") or 60.0)
+            _temp = float(st.session_state.get("temp") or 36.8)
+            _key = "adult_pre_stop"
+            st.markdown("### 투약·안전")
+            sched_today = ui_antipyretic_card(_age_m, _wt, _temp, key=_key)
+            st.markdown("### 기록·저장")
+            diary_df = ui_symptom_diary_card(_key)
+            st.markdown("### 보고서·문구")
+            st.caption("보고서 저장 시, 선택된 섹션은 자동 포함됩니다(시간표/일지/QR).")
+            st.session_state.setdefault("bundle_cache", {})
+            st.session_state["bundle_cache"]["sched_today"] = sched_today
+            st.session_state["bundle_cache"]["diary_df"] = diary_df
+except Exception as _inj_err:
+    import streamlit as st
+    st.info(f"번들 섹션 주입 중: {_inj_err}")
+
+
     st.stop()
+
+# === Bundle V1 (non-cancer): header always; cards per mode ===
+try:
+    import streamlit as st
+    if not bool(st.session_state.get("__suppress_bundle")):
+        _ctx = st.session_state.get("analysis_ctx", {})
+        combined = " ".join([
+            str(st.session_state.get("mode","")), str(st.session_state.get("group","")),
+            str(_ctx.get("mode","")), str(_ctx.get("group",""))
+        ])
+        is_peds = ("소아" in combined)
+
+        if is_peds:
+            # Pediatric: show cards only after analysis
+            analyzed = bool(st.session_state.get("analyzed"))
+            st.caption("소아 모드 — ‘해석하기’ 후 아래 카드가 표시됩니다.")
+            if analyzed:
+                _age_m = int(st.session_state.get("age_m") or st.session_state.get("age_months") or 12)
+                _wt = float(st.session_state.get("weight") or st.session_state.get("wt") or 20.0)
+                _temp = float(st.session_state.get("temp") or 37.8)
+                _key = "peds_auto"
+                st.markdown("### 🕒 해열제 24시간 시간표")
+                sched_today = ui_antipyretic_card(_age_m, _wt, _temp, key=_key)
+                st.markdown("### 기록·저장")
+                st.markdown("#### 📈 증상 일지(미니 차트)")
+                diary_df = ui_symptom_diary_card(_key)
+                st.session_state.setdefault("bundle_cache", {})
+                st.session_state["bundle_cache"]["sched_today"] = sched_today
+                st.session_state["bundle_cache"]["diary_df"] = diary_df
+        else:
+            # Adult: render all cards immediately
+            _age_m = int(st.session_state.get("age_m") or st.session_state.get("age_months") or 12)
+            _wt = float(st.session_state.get("weight") or st.session_state.get("wt") or 60.0)
+            _temp = float(st.session_state.get("temp") or 36.8)
+            _key = "adult_auto"
+            st.markdown("### 투약·안전")
+            sched_today = ui_antipyretic_card(_age_m, _wt, _temp, key=_key)
+            st.markdown("### 기록·저장")
+            diary_df = ui_symptom_diary_card(_key)
+            st.markdown("### 보고서·문구")
+            st.caption("보고서 저장 시, 선택된 섹션은 자동 포함됩니다(시간표/일지/QR).")
+            st.session_state.setdefault("bundle_cache", {})
+            st.session_state["bundle_cache"]["sched_today"] = sched_today
+            st.session_state["bundle_cache"]["diary_df"] = diary_df
+except Exception as _bundle_err2:
+    import streamlit as st
+    st.info(f"Bundle V1 렌더 중: {_bundle_err2}")
