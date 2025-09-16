@@ -65,6 +65,15 @@ except Exception as _guard_err:
 # === Injected: Only hide for cancer; show for everyone else ===
 try:
     import streamlit as st
+    # Safe local import (works even if working dir != module dir)
+    try:
+        from bundle_addons import ui_antipyretic_card, ui_symptom_diary_card
+    except Exception:  # fallback path fix
+        import sys, os, importlib
+        sys.path.insert(0, os.path.dirname(__file__) or ".")
+        _mod = importlib.import_module("bundle_addons")
+        ui_antipyretic_card = getattr(_mod, "ui_antipyretic_card")
+        ui_symptom_diary_card = getattr(_mod, "ui_symptom_diary_card")
     is_cancer = globals().get("_is_cancer_mode", lambda: False)()
     if not is_cancer:
         st.markdown("## 🧩 Bundle V1 — 투약·안전 / 기록·저장 / 보고서·문구")
