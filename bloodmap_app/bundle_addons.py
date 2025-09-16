@@ -63,6 +63,21 @@ def _parse_time_opt(label: str, key: str) -> Optional[_dt]:
     today = date.today()
     return _dt.combine(today, t)
 
+def _choose_time(label_prefix: str, key: str) -> Optional[_dt]:
+    """
+    Radio: '지금 기준' or '직접 선택'
+    Returns datetime or None
+    """
+    mode = st.radio(f"{label_prefix} 기준", ["지금", "직접 선택"], index=0, horizontal=True, key=f"{key}_mode")
+    if mode == "지금":
+        return None  # None means "use now at button click"
+    else:
+        t: Optional[time] = st.time_input(f"{label_prefix} 시각(선택)", value=_dt.now().time().replace(second=0, microsecond=0), key=f"{key}_time")
+        if t is None:
+            return None
+        today = date.today()
+        return _dt.combine(today, t)
+
 def _ceil_to_next(dt: _dt, minutes: int) -> _dt:
     mod = (dt.minute % minutes)
     base = dt.replace(second=0, microsecond=0)
@@ -101,27 +116,32 @@ def ui_antipyretic_card(age_m: int, weight_kg: Optional[float], temp_c: float, k
     with c3: st.metric("현재 체온", f"{temp_c or 0:.1f} ℃")
 
     now = _dt.now()
-    c4,c5 = st.columns(2)
+    c4, c5 = st.columns(2)
     with c4:
-        last_apap = _parse_time_opt("마지막 아세트아미노펜 복용시각 (선택)", key=f"{key}_t_apap")
-        apap_now = st.checkbox("아세트아미노펜 이미 먹었어요", value=False, key=f"{key}_apap_now")
-        if apap_now: last_apap = now
+        apap_base = _choose_time("아세트아미노펜 시작", key=f"{key}_apap")
+        apap_now = st.checkbox("아세트아미노펜 이미 먹었어요(지금으로 설정)", value=False, key=f"{key}_apap_now")
+        if apap_now:
+            apap_base = now
     with c5:
-        last_ibu = _parse_time_opt("마지막 이부프로펜 복용시각 (선택)", key=f"{key}_t_ibu")
-        ibu_now = st.checkbox("이부프로펜 이미 먹었어요", value=False, key=f"{key}_ibu_now")
-        if ibu_now: last_ibu = now
+        ibu_base = _choose_time("이부프로펜 시작", key=f"{key}_ibu")
+        ibu_now = st.checkbox("이부프로펜 이미 먹었어요(지금으로 설정)", value=False, key=f"{key}_ibu_now")
+        if ibu_now:
+            ibu_base = now
 
-    # STATE: always render from session so '초기화' hides the table immediately
+    # STATE
     stash = st.session_state.setdefault("antipy_sched", {})
     current = stash.get(key, [])
 
     btns = st.columns(4)
     if btns[0].button("스케줄 생성/복사", key=f"{key}_make"):
-        sched = _gen_schedule(now, apap_ml, ibu_ml, last_apap, last_ibu)
+        # Use user choice: None means "use now at button click"
+        start_apap = apap_base or now
+        start_ibu  = ibu_base  or now
+        sched = _gen_schedule(now, apap_ml, ibu_ml, start_apap, start_ibu)
         stash[key] = sched
         current = sched
         lines = [f"{_fmt_time(t)} {name} {vol}ml" for (name, t, vol) in current]
-        st.code("\n".join(lines), language="")
+        st.code("\\n".join(lines), language="")
         st.success("스케줄 생성 완료")
     if btns[1].button("스케줄 저장", key=f"{key}_save"):
         if not current:
@@ -138,64 +158,16 @@ def ui_antipyretic_card(age_m: int, weight_kg: Optional[float], temp_c: float, k
         current = []
         st.info("모든 스케줄을 비웠습니다.")
 
-    # RENDER from state only
+    # RENDER (state only)
     if current:
         st.caption("오늘 남은 스케줄")
         table = [{"시간": _fmt_time(t), "약": name, "용량(ml)": vol} for (name, t, vol) in current if t.date()==date.today()]
         import pandas as pd
-        df = pd.DataFrame(table).set_index("시간")
-        st.dataframe(df, use_container_width=True, height=200)
-    else:
-        st.caption("현재 저장된 스케줄이 없습니다.")
-
-    return current
-
-
-def ui_symptom_diary_card(key: str) -> pd.DataFrame:
-    st.markdown("#### 📈 증상 일지(미니 차트)")
-    st.session_state.setdefault("diary", {})
-    df_prev = st.session_state["diary"].get(key, pd.DataFrame(columns=["Date","Temp","Diarrhea","Vomit"]))
-
-    c1,c2,c3,c4 = st.columns(4)
-    with c1: when = st.date_input("날짜", value=date.today(), key=f"{key}_d_when")
-    with c2: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1, key=f"{key}_d_temp")
-    with c3: diar = st.number_input("설사(회/일)", min_value=0, step=1, key=f"{key}_d_diar")
-    with c4: vomi = st.number_input("구토(회/일)", min_value=0, step=1, key=f"{key}_d_vomi")
-
-    cbtn1, cbtn2, cbtn3 = st.columns(3)
-    if cbtn1.button("오늘 기록 추가", key=f"{key}_d_add"):
-        row = {"Date": when.strftime("%Y-%m-%d"), "Temp": temp, "Diarrhea": int(diar), "Vomit": int(vomi)}
-        df = pd.concat([df_prev, pd.DataFrame([row])], ignore_index=True).drop_duplicates(subset=["Date"], keep="last").sort_values("Date")
-        st.session_state["diary"][key] = df
-        st.success("추가/업데이트 완료")
-    elif cbtn2.button("JSON 내보내기", key=f"{key}_d_export"):
-        jj = df_prev.to_json(orient="records", force_ascii=False)
-        blob = {
-            "owner": key,
-            "owner_hash": _hash_key(key),
-            "data": jj
-        }
-        st.download_button("⬇️ diary.json", data=json.dumps(blob, ensure_ascii=False, indent=2), file_name=f"diary_{_hash_key(key)}.json")
-    elif cbtn3.button("JSON 가져오기", key=f"{key}_d_import"):
-        up = st.file_uploader("diary.json 업로드", type=["json"], key=f"{key}_d_upl")
-        if up is not None:
-            try:
-                payload = json.loads(up.getvalue().decode("utf-8"))
-                jj = payload.get("data") or "[]"
-                df = pd.read_json(jj)
-                st.session_state["diary"][key] = df
-                st.success("불러오기 완료")
-            except Exception as e:
-                st.error(f"가져오기 실패: {e}")
-
-    df = st.session_state["diary"].get(key, pd.DataFrame(columns=["Date","Temp","Diarrhea","Vomit"]))
-    if not df.empty:
-        st.line_chart(df.set_index("Date")[ ["Temp"] ], use_container_width=True)
-        st.bar_chart(df.set_index("Date")[ ["Diarrhea","Vomit"] ], use_container_width=True)
+        df = pd.DataFrame(table)
         st.dataframe(df, use_container_width=True, height=220)
     else:
-        st.caption("아직 기록이 없습니다.")
-    return df
+        st.caption("현재 저장된 스케줄이 없습니다.")
+    return current
 
 # --- Interactions box (암 모드) ---
 from interactions import compute_interactions
