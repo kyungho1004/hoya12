@@ -356,6 +356,9 @@ elif mode == "일상":
 
         fever_cat = _fever_bucket_from_temp(temp)
         # 입력 누락 대비 기본값 보정
+        if "days_since_onset" not in locals(): days_since_onset = 0
+        if "temp" not in locals(): temp = 0.0
+        if "fever_cat" not in locals(): fever_cat = "정상"
         if 'nasal' not in locals(): nasal = '없음'
         if 'cough' not in locals(): cough = '없음'
         if 'diarrhea' not in locals(): diarrhea = '없음'
