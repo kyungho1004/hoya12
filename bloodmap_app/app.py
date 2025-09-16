@@ -699,7 +699,8 @@ try:
     import streamlit as st
     is_cancer = globals().get("_is_cancer_mode", lambda: False)()
     if not is_cancer:
-        st.markdown("## 🧩 Bundle V1 — 투약·안전 / 기록·저장 / 보고서·문구")
+        if not _is_cancer_mode():
+            st.markdown("## 🧩 Bundle V1 — 투약·안전 / 기록·저장 / 보고서·문구")
 except Exception as _inj_err:
     import streamlit as st
     st.info(f"번들 헤더 렌더 중: {_inj_err}")
