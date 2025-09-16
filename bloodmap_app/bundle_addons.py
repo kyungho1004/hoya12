@@ -91,12 +91,12 @@ def _gen_schedule(now: _dt, apap_ml: Optional[float], ibu_ml: Optional[float],
     out: List[Tuple[str, _dt, float]] = []
     horizon = now + timedelta(hours=hours)
     if apap_ml and apap_ml > 0:
-        t = _ceil_to_next((last_apap or now), apap_int_h*60)
+        t = (last_apap or now) + timedelta(hours=apap_int_h)
         while t <= horizon:
             out.append(("아세트아미노펜", t, float(apap_ml)))
             t += timedelta(hours=apap_int_h)
     if ibu_ml and ibu_ml > 0:
-        t = _ceil_to_next((last_ibu or now), ibu_int_h*60)
+        t = (last_ibu or now) + timedelta(hours=ibu_int_h)
         while t <= horizon:
             out.append(("이부프로펜", t, float(ibu_ml)))
             t += timedelta(hours=ibu_int_h)
