@@ -649,22 +649,39 @@ if results_only_after_analyze(st):
     st.caption("문의/버그 제보: [피수치 가이드 공식카페](https://cafe.naver.com/bloodmap)")
     st.stop()
 
-# === Bundle V1 section (auto-appended; safe if variables missing) ===
+# === Bundle V1 section (manual trigger) ===
 try:
-    ui_sidebar_settings()
     import streamlit as st
     st.markdown("## 🧩 Bundle V1 — 투약·안전 / 기록·저장 / 보고서·문구")
-    # 안전 기본값 (원 앱 변수 없을 때 대체)
-    _age_m = int(st.session_state.get("age_m") or st.session_state.get("age_months") or 12)
-    _wt = float(st.session_state.get("weight") or st.session_state.get("wt") or 20.0)
-    _temp = float(st.session_state.get("temp") or 37.8)
-    _key = "bundleV1"
-    sched_today = ui_antipyretic_card(_age_m, _wt, _temp, key=_key)
-    diary_df = ui_symptom_diary_card(_key)
-    st.session_state.setdefault("bundle_cache", {})
-    st.session_state["bundle_cache"]["sched_today"] = sched_today
-    st.session_state["bundle_cache"]["diary_df"] = diary_df
-    st.caption("※ 기존 보고서에 포함시키려면: md_block_antipy_schedule/diary 사용")
+    with st.expander("옵션 기능 열기", expanded=False):
+        sel = st.multiselect("필요한 패키지를 선택하세요", ["투약·안전","기록·저장","보고서·문구"], default=[])
+        run = st.button("선택 적용", key="bundle_v1_apply")
+    if run:
+        st.session_state["bundle_v1_active"] = sel
+    active = st.session_state.get("bundle_v1_active", [])
+    if active:
+        # 안전 기본값 (원 앱 변수 없을 때 대체)
+        _age_m = int(st.session_state.get("age_m") or st.session_state.get("age_months") or 12)
+        _wt = float(st.session_state.get("weight") or st.session_state.get("wt") or 20.0)
+        _temp = float(st.session_state.get("temp") or 37.8)
+        _key = "bundleV1"
+
+        if "투약·안전" in active:
+            st.markdown("### 투약·안전")
+            sched_today = ui_antipyretic_card(_age_m, _wt, _temp, key=_key)
+            st.session_state.setdefault("bundle_cache", {})
+            st.session_state["bundle_cache"]["sched_today"] = sched_today
+
+        if "기록·저장" in active:
+            st.markdown("### 기록·저장")
+            diary_df = ui_symptom_diary_card(_key)
+            st.session_state.setdefault("bundle_cache", {})
+            st.session_state["bundle_cache"]["diary_df"] = diary_df
+
+        if "보고서·문구" in active:
+            st.markdown("### 보고서·문구")
+            st.caption("보고서 저장 시, 선택한 섹션은 자동으로 포함됩니다(시간표/일지/QR).")
+
 except Exception as _bundle_err:
     import streamlit as st
     st.info(f"Bundle V1 섹션 로딩 중: {_bundle_err}")
