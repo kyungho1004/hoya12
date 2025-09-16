@@ -654,7 +654,7 @@ if results_only_after_analyze(st):
     st.caption("문의/버그 제보: [피수치 가이드 공식카페](https://cafe.naver.com/bloodmap)")
     st.stop()
 
-# === Bundle V1 section (visible for non-cancer: Adult + Pediatric) ===
+# === Bundle V1 — Auto render for Adult & Pediatric (non-cancer) ===
 try:
     import streamlit as st
     _ctx = st.session_state.get("analysis_ctx", {})
@@ -663,40 +663,47 @@ try:
     ctx_mode = str(_ctx.get("mode",""))
     ctx_group = str(_ctx.get("group",""))
     is_cancer = ("암" in (mode_str + ctx_mode + group_str + ctx_group)) or ("cancer" in (mode_str+ctx_mode).lower())
+    is_peds = ("소아" in (mode_str + ctx_mode + group_str + ctx_group))
 
     if not is_cancer:
         st.markdown("## 🧩 Bundle V1 — 투약·안전 / 기록·저장 / 보고서·문구")
-        with st.expander("옵션 기능 열기", expanded=True):
-            sel = st.multiselect("필요한 패키지를 선택하세요", ["투약·안전","기록·저장","보고서·문구"], default=[])
-            run = st.button("선택 적용", key="bundle_v1_apply")
-        if run:
-            st.session_state["bundle_v1_active"] = sel
-        active = st.session_state.get("bundle_v1_active", [])
-        if active:
+
+        # Adult (non-cancer, non-peds): auto-render all 3 sections
+        if not is_peds:
             _age_m = int(st.session_state.get("age_m") or st.session_state.get("age_months") or 12)
-            _wt = float(st.session_state.get("weight") or st.session_state.get("wt") or 20.0)
-            _temp = float(st.session_state.get("temp") or 37.8)
-            _key = "bundleV1"
+            _wt = float(st.session_state.get("weight") or st.session_state.get("wt") or 60.0)
+            _temp = float(st.session_state.get("temp") or 36.8)
+            _key = "adult_auto"
+            st.markdown("### 투약·안전")
+            sched_today = ui_antipyretic_card(_age_m, _wt, _temp, key=_key)
+            st.markdown("### 기록·저장")
+            diary_df = ui_symptom_diary_card(_key)
+            st.markdown("### 보고서·문구")
+            st.caption("보고서 저장 시, 선택된 섹션은 자동 포함됩니다(시간표/일지/QR).")
+            st.session_state.setdefault("bundle_cache", {})
+            st.session_state["bundle_cache"]["sched_today"] = sched_today
+            st.session_state["bundle_cache"]["diary_df"] = diary_df
 
-            if "투약·안전" in active:
-                st.markdown("### 투약·안전")
+        # Pediatric (non-cancer): gated by '해석하기'
+        else:
+            analyzed = bool(st.session_state.get("analyzed"))
+            st.caption("소아 모드 — ‘해석하기’ 후 아래 카드가 표시됩니다.")
+            if analyzed:
+                _age_m = int(st.session_state.get("age_m") or st.session_state.get("age_months") or 12)
+                _wt = float(st.session_state.get("weight") or st.session_state.get("wt") or 20.0)
+                _temp = float(st.session_state.get("temp") or 37.8)
+                _key = "peds_auto"
+                st.markdown("### 🕒 해열제 24시간 시간표")
                 sched_today = ui_antipyretic_card(_age_m, _wt, _temp, key=_key)
-                st.session_state.setdefault("bundle_cache", {})
-                st.session_state["bundle_cache"]["sched_today"] = sched_today
-
-            if "기록·저장" in active:
                 st.markdown("### 기록·저장")
+                st.markdown("#### 📈 증상 일지(미니 차트)")
                 diary_df = ui_symptom_diary_card(_key)
                 st.session_state.setdefault("bundle_cache", {})
+                st.session_state["bundle_cache"]["sched_today"] = sched_today
                 st.session_state["bundle_cache"]["diary_df"] = diary_df
-
-            if "보고서·문구" in active:
-                st.markdown("### 보고서·문구")
-                st.caption("보고서 저장 시, 선택한 섹션은 자동 포함됩니다(시간표/일지/QR).")
-
-except Exception as _bundle_err:
+except Exception as _bundle_auto_err:
     import streamlit as st
-    st.info(f"Bundle V1 섹션 로딩 중: {_bundle_err}")
+    st.info(f"Bundle V1 자동 렌더 중: {_bundle_auto_err}")
 
 # === Pediatric post-analysis gated cards ===
 try:
