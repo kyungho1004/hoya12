@@ -380,7 +380,16 @@ elif mode == "일상":
         if 'diarrhea' not in locals(): diarrhea = '없음'
         if 'vomit' not in locals(): vomit = '없음'
         if 'eye' not in locals(): eye = '없음'
-        symptoms = build_peds_symptoms(nasal, cough, diarrhea, vomit, days_since_onset, temp, fever_cat, eye)
+        symptoms = build_peds_symptoms(
+            nasal=locals().get('nasal'),
+            cough=locals().get('cough'),
+            diarrhea=locals().get('diarrhea'),
+            vomit=locals().get('vomit'),
+            days_since_onset=locals().get('days_since_onset'),
+            temp=locals().get('temp'),
+            fever_cat=locals().get('fever_cat'),
+            eye=locals().get('eye'),
+        )
         preds = predict_from_symptoms(symptoms, temp, age_m)
         st.markdown("#### 🤖 증상 기반 자동 추정")
         render_predictions(preds, show_copy=True)
@@ -415,7 +424,16 @@ elif mode == "일상":
         comorb = st.multiselect("주의 대상", ["임신 가능성","간질환 병력","신질환 병력","위장관 궤양/출혈력","항응고제 복용","고령(65+)"])
 
         fever_cat = _fever_bucket_from_temp(temp)
-        symptoms = build_peds_symptoms(nasal, cough, diarrhea, vomit, days_since_onset, temp, fever_cat, eye)
+        symptoms = build_peds_symptoms(
+            nasal=locals().get('nasal'),
+            cough=locals().get('cough'),
+            diarrhea=locals().get('diarrhea'),
+            vomit=locals().get('vomit'),
+            days_since_onset=locals().get('days_since_onset'),
+            temp=locals().get('temp'),
+            fever_cat=locals().get('fever_cat'),
+            eye=locals().get('eye'),
+        )
 
         preds = predict_from_symptoms(symptoms, temp, comorb)
         st.markdown("#### 🤖 증상 기반 자동 추정")
@@ -466,7 +484,16 @@ else:
     st.warning("이 용량 정보는 **참고용**입니다. 반드시 **주치의와 상담**하십시오.")
 
     fever_cat = _fever_bucket_from_temp(temp)
-    symptoms = build_peds_symptoms(nasal, cough, diarrhea, vomit, days_since_onset, temp, fever_cat, eye)
+    symptoms = build_peds_symptoms(
+            nasal=locals().get('nasal'),
+            cough=locals().get('cough'),
+            diarrhea=locals().get('diarrhea'),
+            vomit=locals().get('vomit'),
+            days_since_onset=locals().get('days_since_onset'),
+            temp=locals().get('temp'),
+            fever_cat=locals().get('fever_cat'),
+            eye=locals().get('eye'),
+        )
 
     if st.button("🔎 해석하기", key="analyze_peds"):
         st.session_state["analyzed"] = True
