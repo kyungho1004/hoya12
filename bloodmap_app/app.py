@@ -12,7 +12,19 @@ from lab_diet import lab_diet_guides
 from peds_profiles import get_symptom_options
 from peds_dose import acetaminophen_ml, ibuprofen_ml
 from pdf_export import export_md_to_pdf
-from bloodmap_patch_allinone import render_bloodmap_patch
+
+# === Bundle V1 imports (idempotent) ===
+try:
+    from bundle_addons import (
+        ui_sidebar_settings, toneize_line, toneize_lines,
+        ui_antipyretic_card, ui_symptom_diary_card,
+        render_interactions_box, md_block_antipy_schedule, md_block_diary,
+    )
+    from interactions import compute_interactions
+except Exception as _imp_err:
+    pass
+
+
 
 
 # 세션 플래그(중복 방지)
@@ -636,3 +648,23 @@ if results_only_after_analyze(st):
     st.caption("본 도구는 참고용입니다. 의료진의 진단/치료를 대체하지 않습니다.")
     st.caption("문의/버그 제보: [피수치 가이드 공식카페](https://cafe.naver.com/bloodmap)")
     st.stop()
+
+# === Bundle V1 section (auto-appended; safe if variables missing) ===
+try:
+    ui_sidebar_settings()
+    import streamlit as st
+    st.markdown("## 🧩 Bundle V1 — 투약·안전 / 기록·저장 / 보고서·문구")
+    # 안전 기본값 (원 앱 변수 없을 때 대체)
+    _age_m = int(st.session_state.get("age_m") or st.session_state.get("age_months") or 12)
+    _wt = float(st.session_state.get("weight") or st.session_state.get("wt") or 20.0)
+    _temp = float(st.session_state.get("temp") or 37.8)
+    _key = "bundleV1"
+    sched_today = ui_antipyretic_card(_age_m, _wt, _temp, key=_key)
+    diary_df = ui_symptom_diary_card(_key)
+    st.session_state.setdefault("bundle_cache", {})
+    st.session_state["bundle_cache"]["sched_today"] = sched_today
+    st.session_state["bundle_cache"]["diary_df"] = diary_df
+    st.caption("※ 기존 보고서에 포함시키려면: md_block_antipy_schedule/diary 사용")
+except Exception as _bundle_err:
+    import streamlit as st
+    st.info(f"Bundle V1 섹션 로딩 중: {_bundle_err}")

@@ -1,7 +1,6 @@
 
 # -*- coding: utf-8 -*-
 APP_TITLE  = "피수치 가이드 (BloodMap)"
-APP_URL = "https://bloodmap.streamlit.app/"
 PAGE_TITLE = "BloodMap"
 MADE_BY    = "제작: Hoya/GPT  |  자문: Hoya/GPT"
 CAFE_LINK_MD = "[🔗 피수치 가이드 공식카페](https://cafe.naver.com/bloodmap)"
