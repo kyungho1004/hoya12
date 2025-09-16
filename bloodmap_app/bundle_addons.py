@@ -1,22 +1,5 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
-
-# === Helper: detect cancer mode from session ===
-def _is_cancer_from_session():
-    try:
-        import streamlit as st
-    except Exception:
-        return False
-    _ctx = st.session_state.get("analysis_ctx", {})
-    vals = []
-    for k in ("mode","group","profile","patient_type","flow","view"):
-        vals.append(str(st.session_state.get(k, "") or ""))
-        vals.append(str(_ctx.get(k, "") or ""))
-    txt = " ".join(vals).lower()
-    # exact-like tokens (simple contains is ok here because tokens are space/sep joined)
-    tokens = [" 암 ", "암환자", "암-환자", "종양", "항암", "cancer", "onco", "oncology", "hem-onc", "heme-onc"]
-    return any(t in (" " + txt + " ") for t in tokens)
-
 from typing import List, Dict, Tuple, Optional
 import json, hashlib
 from datetime import datetime, timedelta, date, time
@@ -228,11 +211,10 @@ def md_block_diary(df: pd.DataFrame) -> List[str]:
         pass
     return lines
 
+
+# --- Fallback: ui_symptom_diary_card (minimal) ---
 def ui_symptom_diary_card(key: str):
     import streamlit as st, pandas as pd
-    if _is_cancer_from_session():
-        st.caption("암 환자 모드: 기록·저장은 숨김")
-        return pd.DataFrame()
     st.markdown("#### 📈 증상 일지(미니 차트)")
     df = st.session_state.get("symptom_diary_df")
     if df is None:
