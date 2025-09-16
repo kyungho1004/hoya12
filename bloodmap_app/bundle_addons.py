@@ -111,38 +111,45 @@ def ui_antipyretic_card(age_m: int, weight_kg: Optional[float], temp_c: float, k
         ibu_now = st.checkbox("이부프로펜 이미 먹었어요", value=False, key=f"{key}_ibu_now")
         if ibu_now: last_ibu = now
 
-    # Guards
-    guard_msgs: List[str] = []
-    if (age_m or 0) < 6 and ibu_ml and ibu_ml > 0:
-        guard_msgs.append("⚠️ 생후 6개월 미만 이부프로펜은 **의사 지시가 없는 한 권장되지 않습니다**.")
-    if weight_kg and weight_kg <= 0:
-        guard_msgs.append("⚠️ 체중을 입력하면 더 정확한 용량 계산이 가능합니다.")
-    if guard_msgs:
-        st.warning("\n".join(guard_msgs))
+    # STATE: always render from session so '초기화' hides the table immediately
+    stash = st.session_state.setdefault("antipy_sched", {})
+    current = stash.get(key, [])
 
-    sched = _gen_schedule(now, apap_ml, ibu_ml, last_apap, last_ibu)
-    if sched:
-        st.caption("오늘 남은 스케줄")
-        table = [{"시간": _fmt_time(t), "약": name, "용량(ml)": vol} for (name, t, vol) in sched if t.date()==date.today()]
-        st.table(pd.DataFrame(table))
-    btns = st.columns(3)
-    if btns[0].button("스케줄 생성/복사", key=f"{key}_copy_sched"):
-        lines = [f"{_fmt_time(t)} {name} {vol}ml" for (name, t, vol) in sched]
+    btns = st.columns(4)
+    if btns[0].button("스케줄 생성/복사", key=f"{key}_make"):
+        sched = _gen_schedule(now, apap_ml, ibu_ml, last_apap, last_ibu)
+        stash[key] = sched
+        current = sched
+        lines = [f"{_fmt_time(t)} {name} {vol}ml" for (name, t, vol) in current]
         st.code("\n".join(lines), language="")
-    if btns[1].button("스케줄 저장", key=f"{key}_save_sched"):
-        st.session_state.setdefault("antipy_sched", {})
-        st.session_state["antipy_sched"][key] = sched
-        st.success("스케줄 저장 완료")
-    if btns[2].button("초기화", key=f"{key}_clear_sched"):
-        st.session_state.setdefault("antipy_sched", {})
-        st.session_state["antipy_sched"].pop(key, None)
+        st.success("스케줄 생성 완료")
+    if btns[1].button("스케줄 저장", key=f"{key}_save"):
+        if not current:
+            st.info("먼저 스케줄을 생성하세요.")
+        else:
+            stash[key] = current
+            st.success("스케줄 저장 완료")
+    if btns[2].button("초기화", key=f"{key}_clear"):
+        stash.pop(key, None)
+        current = []
         st.info("스케줄을 비웠습니다.")
-    return sched
+    if btns[3].button("모든 스케줄 초기화", key=f"{key}_clear_all"):
+        st.session_state["antipy_sched"] = {}
+        current = []
+        st.info("모든 스케줄을 비웠습니다.")
 
-# --- Symptom diary ---
+    # RENDER from state only
+    if current:
+        st.caption("오늘 남은 스케줄")
+        table = [{"시간": _fmt_time(t), "약": name, "용량(ml)": vol} for (name, t, vol) in current if t.date()==date.today()]
+        import pandas as pd
+        df = pd.DataFrame(table).set_index("시간")
+        st.dataframe(df, use_container_width=True, height=200)
+    else:
+        st.caption("현재 저장된 스케줄이 없습니다.")
 
-def _hash_key(key: str) -> str:
-    return hashlib.sha256(key.encode("utf-8")).hexdigest()[:12]
+    return current
+
 
 def ui_symptom_diary_card(key: str) -> pd.DataFrame:
     st.markdown("#### 📈 증상 일지(미니 차트)")
