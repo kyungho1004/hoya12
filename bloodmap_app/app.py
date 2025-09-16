@@ -704,8 +704,8 @@ if results_only_after_analyze(st):
 # === Injected: Bundle header & cards (rendered pre-stop) ===
 try:
     import streamlit as st
-    _is_cancer = _is_cancer_mode()
-    _is_peds   = _is_peds_mode()
+    _is_cancer = globals().get("_is_cancer_mode", lambda: False)()
+    _is_peds   = globals().get("_is_peds_mode",   lambda: False)()
     if not _is_cancer:
         st.markdown("## 🧩 Bundle V1 — 투약·안전 / 기록·저장 / 보고서·문구")
         if _is_peds:
