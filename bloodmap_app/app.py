@@ -696,50 +696,18 @@ if results_only_after_analyze(st):
     st.caption("문의/버그 제보: [피수치 가이드 공식카페](https://cafe.naver.com/bloodmap)")
 
 
-# === Injected: Bundle header & cards (rendered pre-stop) ===
+
+# === Injected: Bundle header (header-only; hide for cancer) ===
 try:
     import streamlit as st
-    _is_cancer = globals().get("_is_cancer_mode", lambda: False)()
-    _is_peds   = globals().get("_is_peds_mode",   lambda: False)()
-    if not _is_cancer:
-       if not _is_cancer_mode():
+    is_cancer = globals().get("_is_cancer_mode", lambda: False)()
+    if not is_cancer:
         if not _is_cancer_mode():
-                    st.markdown("## 🧩 Bundle V1 — 투약·안전 / 기록·저장 / 보고서·문구")
-        if _is_peds:
-            ready = bool(st.session_state.get("analyzed") or st.session_state.get("results_ready") or st.session_state.get("analysis_done"))
-            if ready:
-                _age_m = int(st.session_state.get("age_m") or st.session_state.get("age_months") or 12)
-                _wt = float(st.session_state.get("weight") or st.session_state.get("wt") or 20.0)
-                _temp = float(st.session_state.get("temp") or 37.8)
-                _key = "peds_gated_pre_stop"
-                st.markdown("### 🕒 해열제 24시간 시간표")
-                sched_today = ui_antipyretic_card(_age_m, _wt, _temp, key=_key)
-                st.markdown("### 기록·저장")
-                st.markdown("#### 📈 증상 일지(미니 차트)")
-                diary_df = ui_symptom_diary_card(_key)
-                st.session_state.setdefault("bundle_cache", {})
-                st.session_state["bundle_cache"]["sched_today"] = sched_today
-                st.session_state["bundle_cache"]["diary_df"] = diary_df
-        else:
-            _age_m = int(st.session_state.get("age_m") or st.session_state.get("age_months") or 12)
-            _wt = float(st.session_state.get("weight") or st.session_state.get("wt") or 60.0)
-            _temp = float(st.session_state.get("temp") or 36.8)
-            _key = "adult_pre_stop"
-            st.markdown("### 투약·안전")
-            sched_today = ui_antipyretic_card(_age_m, _wt, _temp, key=_key)
-            st.markdown("### 기록·저장")
-            diary_df = ui_symptom_diary_card(_key)
-            st.markdown("### 보고서·문구")
-            st.caption("보고서 저장 시, 선택된 섹션은 자동 포함됩니다(시간표/일지/QR).")
-            st.session_state.setdefault("bundle_cache", {})
-            st.session_state["bundle_cache"]["sched_today"] = sched_today
-            st.session_state["bundle_cache"]["diary_df"] = diary_df
+            if not _is_cancer_mode():
+                            st.markdown("## 🧩 Bundle V1 — 투약·안전 / 기록·저장 / 보고서·문구")
 except Exception as _inj_err:
     import streamlit as st
-    st.info(f"번들 섹션 주입 중: {_inj_err}")
-
-
-    st.stop()
+    st.info(f"번들 헤더 렌더 중: {_inj_err}")
 
 # === Bundle V1 (non-cancer): header always; cards per mode ===
 try:
