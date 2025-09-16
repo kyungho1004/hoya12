@@ -17,6 +17,29 @@ from peds_profiles import get_symptom_options
 from peds_dose import acetaminophen_ml, ibuprofen_ml
 from pdf_export import export_md_to_pdf
 
+# === Mode helpers (robust cancer detection) ===
+import re as _re
+def _tokens_from_fields(vals):
+    txt = " ".join(str(v or "") for v in vals)
+    return [t for t in _re.split(r"[\\s,|/\\\\]+", txt) if t]
+
+def _is_cancer_mode():
+    import streamlit as st
+    _ctx = st.session_state.get("analysis_ctx", {})
+    vals = []
+    for k in ("mode","group","profile","patient_type","flow","view"):
+        vals.append(st.session_state.get(k))
+        vals.append(_ctx.get(k))
+    toks = _tokens_from_fields(vals)
+    toks_lower = [t.lower() for t in toks]
+    toks_set = set(toks)
+    KOR = {"암","암환자","암-환자","암모드","소아암","성인암","종양","항암","백혈병","림프종","육종","종양내과"}
+    if KOR & toks_set: return True
+    ENG = {"onco","oncology","cancer","hem-onc","heme-onc","hem_onc","hemato-oncology"}
+    if any(t in ENG for t in toks_lower): return True
+    return False
+
+
 # === Cancer-first guard (hides Bundle everywhere for cancer) ===
 try:
     import streamlit as st
@@ -25,7 +48,7 @@ try:
     ctx_fields  = " ".join(str(_ctx.get(k,"")) for k in ("mode","group","profile"))
     combined = (mode_fields + " " + ctx_fields)
     cl = combined.lower()
-    is_cancer = ("암" in combined) or any(w in cl for w in ["cancer","onco","oncology"])
+    is_cancer = _is_cancer_mode()
     if is_cancer:
         st.markdown("## 📊 암환자 피수치 그래프")
         try:
