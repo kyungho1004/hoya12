@@ -12,6 +12,7 @@ from lab_diet import lab_diet_guides
 from peds_profiles import get_symptom_options
 from peds_dose import acetaminophen_ml, ibuprofen_ml
 from pdf_export import export_md_to_pdf
+from bloodmap_patch_allinone import render_bloodmap_patch
 
 
 # 세션 플래그(중복 방지)
