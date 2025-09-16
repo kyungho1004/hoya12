@@ -13,6 +13,57 @@ from peds_profiles import get_symptom_options
 from peds_dose import acetaminophen_ml, ibuprofen_ml
 from pdf_export import export_md_to_pdf
 
+
+# 세션 플래그(중복 방지)
+if "summary_line_shown" not in st.session_state:
+    st.session_state["summary_line_shown"] = False
+
+def short_caption(label: str) -> str:
+    """
+    peds_profiles.peds_short_caption()가 있으면 우선 사용,
+    없으면 기본 문구로 보조하는 안전 헬퍼.
+    """
+    try:
+        from peds_profiles import peds_short_caption as _peds_short_caption  # type: ignore
+        s = _peds_short_caption(label or "")
+        if s:
+            return s
+    except Exception:
+        pass
+    defaults = {
+        "로타바이러스 장염": "영유아 위장관염 — 물설사·구토, 탈수 주의",
+        "노로바이러스 장염": "급성 구토/설사 급발현 — 겨울철 유행, 탈수 주의",
+        "바이럴 장염(비특이)": "대개 바이러스성 — 수분·전해질 보충과 휴식",
+        "감기/상기도바이러스": "콧물·기침 중심 — 수분·가습·휴식",
+        "독감(인플루엔자) 의심": "고열+근육통 — 48시간 내 항바이러스제 상담",
+        "코로나 가능": "고열·기침·권태 — 신속항원검사/격리 고려",
+        "세균성 편도/부비동염 가능": "고열+농성 콧물/안면통 — 항생제 필요 여부 진료로 결정",
+        "장염(바이러스) 의심": "물설사·복통 — 수분·전해질 보충",
+        "세균성 결막염 가능": "농성 눈꼽·한쪽 시작 — 항생제 점안 상담",
+        "아데노바이러스 결막염 가능": "고열+양측 결막염 — 전염성, 위생 철저",
+        "알레르기성 결막염 가능": "맑은 눈물·가려움 — 냉찜질·항히스타민 점안",
+        "급성기관지염 가능": "기침 중심 — 대개 바이러스성, 경과관찰",
+        "폐렴 의심": "호흡곤란/흉통·고열 — 흉부 X-ray/항생제 평가",
+        "RSV": "모세기관지염 — 끈적가래로 쌕쌕/호흡곤란 가능",
+    }
+    return defaults.get((label or "").strip(), "")
+
+def render_predictions(preds, show_copy=True):
+    """예측 리스트 렌더링(짧은 해석 + N/100 점수 + 중복 없는 한 줄 요약)."""
+    if not preds:
+        return
+    for p in preds:
+        label = p.get("label", "")
+        score = int(max(0, min(100, int(p.get("score", 0)))))
+        cap = short_caption(label)
+        tail = f" — {cap}" if cap else ""
+        st.write(f"- **{label}**{tail} · 신뢰도 {score}/100")
+        if cap:
+            st.caption(f"↳ {cap}")
+    if show_copy and not st.session_state.get("summary_line_shown"):
+        st.caption("🧾 한 줄 요약 복사")
+        st.code(" | ".join(summary_items), language="")
+        st.session_state["summary_line_shown"] = True
 def short_caption(label: str) -> str:
     """
     peds_profiles.peds_short_caption()가 있으면 우선 사용,
@@ -329,47 +380,11 @@ elif mode == "일상":
         st.warning("이 용량 정보는 **참고용**입니다. 반드시 **주치의와 상담**하십시오.")
 
         fever_cat = _fever_bucket_from_temp(temp)
-        symptoms = {"콧물":nasal,"기침":cough,"설사":diarrhea,"구토":vomit,"증상일수":days_since_onset,"체온":temp,"발열":fever_cat,"눈꼽":eye}
+        symptoms = {"콧물": nasal, "기침": cough, "설사": diarrhea, "구토": vomit, "증상일수": days_since_onset, "체온": temp, "발열": fever_cat, "눈꼽": eye}
         preds = predict_from_symptoms(symptoms, temp, age_m)
         st.markdown("#### 🤖 증상 기반 자동 추정")
-        summary_items = []
-        for p in preds:
-            cap = short_caption(p.get("label",""))
-            tail = f" — {cap}" if cap else ""
-            st.write(f"- **{p['label']}**{tail} · 신뢰도 {p['score']}점")
-            try:
-                _sv = int(max(0, min(100, int(p.get('score',0)))))
-                st.progress(_sv/100.0)
-            except Exception:
-                pass
-            if cap:
-                st.caption(f"↳ {cap}")
-            summary_items.append(f"{p['label']}({int(p.get('score',0))})")
-        if summary_items:
-            st.caption("🧾 한 줄 요약 복사")
-            st.code(" | ".join(summary_items), language="")
+        render_predictions(preds, show_copy=True)
 
-        for p in preds:
-            cap = short_caption(p.get("label",""))
-            tail = f" — {cap}" if cap else ""
-            st.write(f"- **{p['label']}**{tail} · 신뢰도 {p['score']}점")
-            try:
-                _sv = int(max(0, min(100, int(p.get('score',0)))))
-                st.progress(_sv/100.0)
-            except Exception:
-                pass
-            if cap:
-                st.caption(f"↳ {cap}")
-            summary_items.append(f"{p['label']}({int(p.get('score',0))})")
-        if summary_items:
-            st.caption("🧾 한 줄 요약 복사")
-            st.code(" | ".join(summary_items), language="")
-
-        for p in preds:
-            cap = short_caption(p.get("label",""))
-            tail = f" — {cap}" if cap else ""
-            st.write(f"- **{p['label']}**{tail} · 신뢰도 {p['score']}점")
-            if cap: st.caption(f"↳ {cap}")
         triage = triage_advise(temp, age_m, diarrhea)
         st.info(triage)
 
@@ -400,15 +415,12 @@ elif mode == "일상":
         comorb = st.multiselect("주의 대상", ["임신 가능성","간질환 병력","신질환 병력","위장관 궤양/출혈력","항응고제 복용","고령(65+)"])
 
         fever_cat = _fever_bucket_from_temp(temp)
-        symptoms = {"콧물":nasal,"기침":cough,"설사":diarrhea,"구토":vomit,"증상일수":days_since_onset,"체온":temp,"발열":fever_cat,"눈꼽":eye}
+        symptoms = {"콧물": nasal, "기침": cough, "설사": diarrhea, "구토": vomit, "증상일수": days_since_onset, "체온": temp, "발열": fever_cat, "눈꼽": eye}
 
         preds = predict_from_symptoms(symptoms, temp, comorb)
         st.markdown("#### 🤖 증상 기반 자동 추정")
-        for p in preds:
-            cap = short_caption(p.get("label",""))
-            tail = f" — {cap}" if cap else ""
-            st.write(f"- **{p['label']}**{tail} · 신뢰도 {p['score']}점")
-            if cap: st.caption(f"↳ {cap}")
+        render_predictions(preds, show_copy=True)
+
         triage = triage_advise(temp, comorb)
         st.info(triage)
 
@@ -454,7 +466,7 @@ else:
     st.warning("이 용량 정보는 **참고용**입니다. 반드시 **주치의와 상담**하십시오.")
 
     fever_cat = _fever_bucket_from_temp(temp)
-    symptoms = {"콧물":nasal,"기침":cough,"설사":diarrhea,"구토":vomit,"증상일수":symptom_days,"체온":temp,"발열":fever_cat,"눈꼽":eye}
+    symptoms = {"콧물": nasal, "기침": cough, "설사": diarrhea, "구토": vomit, "증상일수": days_since_onset, "체온": temp, "발열": fever_cat, "눈꼽": eye}
 
     if st.button("🔎 해석하기", key="analyze_peds"):
         st.session_state["analyzed"] = True
@@ -532,30 +544,8 @@ if results_only_after_analyze(st):
         preds = ctx.get("preds") or []
         if preds:
             st.subheader("🤖 증상 기반 자동 추정")
-            summary_items = []
-            for p in preds:
-                cap = short_caption(p.get("label",""))
-                tail = f" — {cap}" if cap else ""
-                st.write(f"- **{p['label']}**{tail} · 신뢰도 {p['score']}점")
-                try:
-                    _sv = int(max(0, min(100, int(p.get('score',0)))))
-                    st.progress(_sv/100.0)
-                except Exception:
-                    pass
-                if cap:
-                    st.caption(f"↳ {cap}")
-                summary_items.append(f"{p['label']}({int(p.get('score',0))})")
-            if summary_items:
-                st.caption("🧾 한 줄 요약 복사")
-                st.code(" | ".join(summary_items), language="")
+            render_predictions(preds, show_copy=True)
 
-            for p in preds:
-                cap = short_caption(p.get("label",""))
-                tail = f" — {cap}" if cap else ""
-                st.write(f"- **{p['label']}**{tail} · 신뢰도 {p['score']}점")
-                if cap:
-                    st.caption(f"↳ {cap}")
-        if ctx.get("triage"): st.info(ctx["triage"])
 
         if ctx.get("who") == "소아":
             st.subheader("🌡️ 해열제 1회분(평균)")
