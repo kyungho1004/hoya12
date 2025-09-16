@@ -69,6 +69,22 @@ def render_predictions(preds, show_copy=True):
         st.session_state["summary_line_shown"] = True
 
 
+def build_peds_symptoms(nasal=None, cough=None, diarrhea=None, vomit=None,
+                        days_since_onset=None, temp=None, fever_cat=None, eye=None):
+    """소아 증상 dict를 안전하게 생성(누락 변수 기본값 보정)."""
+    if nasal is None: nasal = "없음"
+    if cough is None: cough = "없음"
+    if diarrhea is None: diarrhea = "없음"
+    if vomit is None: vomit = "없음"
+    if days_since_onset is None: days_since_onset = 0
+    if temp is None: temp = 0.0
+    if fever_cat is None: fever_cat = "정상"
+    if eye is None: eye = "없음"
+    return {
+        "콧물": nasal, "기침": cough, "설사": diarrhea, "구토": vomit,
+        "증상일수": days_since_onset, "체온": temp, "발열": fever_cat, "눈꼽": eye
+    }
+
 
 # ---------------- 초기화 ----------------
 ensure_onco_drug_db(DRUG_DB)
@@ -364,7 +380,7 @@ elif mode == "일상":
         if 'diarrhea' not in locals(): diarrhea = '없음'
         if 'vomit' not in locals(): vomit = '없음'
         if 'eye' not in locals(): eye = '없음'
-        symptoms = {"콧물": nasal, "기침": cough, "설사": diarrhea, "구토": vomit, "증상일수": days_since_onset, "체온": temp, "발열": fever_cat, "눈꼽": eye}
+        symptoms = build_peds_symptoms(nasal, cough, diarrhea, vomit, days_since_onset, temp, fever_cat, eye)
         preds = predict_from_symptoms(symptoms, temp, age_m)
         st.markdown("#### 🤖 증상 기반 자동 추정")
         render_predictions(preds, show_copy=True)
@@ -399,7 +415,7 @@ elif mode == "일상":
         comorb = st.multiselect("주의 대상", ["임신 가능성","간질환 병력","신질환 병력","위장관 궤양/출혈력","항응고제 복용","고령(65+)"])
 
         fever_cat = _fever_bucket_from_temp(temp)
-        symptoms = {"콧물": nasal, "기침": cough, "설사": diarrhea, "구토": vomit, "증상일수": days_since_onset, "체온": temp, "발열": fever_cat, "눈꼽": eye}
+        symptoms = build_peds_symptoms(nasal, cough, diarrhea, vomit, days_since_onset, temp, fever_cat, eye)
 
         preds = predict_from_symptoms(symptoms, temp, comorb)
         st.markdown("#### 🤖 증상 기반 자동 추정")
@@ -450,7 +466,7 @@ else:
     st.warning("이 용량 정보는 **참고용**입니다. 반드시 **주치의와 상담**하십시오.")
 
     fever_cat = _fever_bucket_from_temp(temp)
-    symptoms = {"콧물": nasal, "기침": cough, "설사": diarrhea, "구토": vomit, "증상일수": days_since_onset, "체온": temp, "발열": fever_cat, "눈꼽": eye}
+    symptoms = build_peds_symptoms(nasal, cough, diarrhea, vomit, days_since_onset, temp, fever_cat, eye)
 
     if st.button("🔎 해석하기", key="analyze_peds"):
         st.session_state["analyzed"] = True
