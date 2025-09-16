@@ -48,10 +48,12 @@ def short_caption(label: str) -> str:
     }
     return defaults.get((label or "").strip(), "")
 
+
 def render_predictions(preds, show_copy=True):
     """예측 리스트 렌더링(짧은 해석 + N/100 점수 + 중복 없는 한 줄 요약)."""
     if not preds:
         return
+    summary_items = []
     for p in preds:
         label = p.get("label", "")
         score = int(max(0, min(100, int(p.get("score", 0)))))
@@ -60,39 +62,12 @@ def render_predictions(preds, show_copy=True):
         st.write(f"- **{label}**{tail} · 신뢰도 {score}/100")
         if cap:
             st.caption(f"↳ {cap}")
+        summary_items.append(f"{label}({score}/100)")
     if show_copy and not st.session_state.get("summary_line_shown"):
         st.caption("🧾 한 줄 요약 복사")
         st.code(" | ".join(summary_items), language="")
         st.session_state["summary_line_shown"] = True
-def short_caption(label: str) -> str:
-    """
-    peds_profiles.peds_short_caption()가 있으면 우선 사용,
-    없으면 기본 문구로 보조하는 안전 헬퍼.
-    """
-    try:
-        from peds_profiles import peds_short_caption as _peds_short_caption  # type: ignore
-        s = _peds_short_caption(label or "")
-        if s:
-            return s
-    except Exception:
-        pass
-    defaults = {
-        "로타바이러스 장염": "영유아 위장관염 — 물설사·구토, 탈수 주의",
-        "노로바이러스 장염": "급성 구토/설사 급발현 — 겨울철 유행, 탈수 주의",
-        "바이럴 장염(비특이)": "대개 바이러스성 — 수분·전해질 보충과 휴식",
-        "RSV": "모세기관지염 — 끈적가래로 쌕쌕/호흡곤란 가능",
-        "아데노바이러스 결막염 가능": "고열+양측 결막염 — 전염성, 위생 철저",
-        "세균성 결막염 가능": "농성 눈꼽·한쪽 시작 — 항생제 점안 상담",
-            "감기/상기도바이러스": "콧물·기침 중심 — 수분·가습·휴식",
-            "독감(인플루엔자) 의심": "고열+근육통 — 48시간 내 항바이러스제 상담",
-            "코로나 가능": "고열·기침·권태 — 신속항원검사/격리 고려",
-            "세균성 편도/부비동염 가능": "고열+농성 콧물/안면통 — 항생제 필요 여부 진료로 결정",
-            "장염(바이러스) 의심": "물설사·복통 — 수분·전해질 보충",
-            "알레르기성 결막염 가능": "맑은 눈물·가려움 — 냉찜질·항히스타민 점안",
-            "급성기관지염 가능": "기침 중심 — 대개 바이러스성, 경과관찰",
-            "폐렴 의심": "호흡곤란/흉통·고열 — 흉부 X-ray/항생제 평가",
-    }
-    return defaults.get((label or "").strip(), "")
+
 
 
 # ---------------- 초기화 ----------------
@@ -380,6 +355,12 @@ elif mode == "일상":
         st.warning("이 용량 정보는 **참고용**입니다. 반드시 **주치의와 상담**하십시오.")
 
         fever_cat = _fever_bucket_from_temp(temp)
+        # 입력 누락 대비 기본값 보정
+        if 'nasal' not in locals(): nasal = '없음'
+        if 'cough' not in locals(): cough = '없음'
+        if 'diarrhea' not in locals(): diarrhea = '없음'
+        if 'vomit' not in locals(): vomit = '없음'
+        if 'eye' not in locals(): eye = '없음'
         symptoms = {"콧물": nasal, "기침": cough, "설사": diarrhea, "구토": vomit, "증상일수": days_since_onset, "체온": temp, "발열": fever_cat, "눈꼽": eye}
         preds = predict_from_symptoms(symptoms, temp, age_m)
         st.markdown("#### 🤖 증상 기반 자동 추정")
