@@ -32,6 +32,14 @@ def short_caption(label: str) -> str:
         "RSV": "모세기관지염 — 끈적가래로 쌕쌕/호흡곤란 가능",
         "아데노바이러스 결막염 가능": "고열+양측 결막염 — 전염성, 위생 철저",
         "세균성 결막염 가능": "농성 눈꼽·한쪽 시작 — 항생제 점안 상담",
+            "감기/상기도바이러스": "콧물·기침 중심 — 수분·가습·휴식",
+            "독감(인플루엔자) 의심": "고열+근육통 — 48시간 내 항바이러스제 상담",
+            "코로나 가능": "고열·기침·권태 — 신속항원검사/격리 고려",
+            "세균성 편도/부비동염 가능": "고열+농성 콧물/안면통 — 항생제 필요 여부 진료로 결정",
+            "장염(바이러스) 의심": "물설사·복통 — 수분·전해질 보충",
+            "알레르기성 결막염 가능": "맑은 눈물·가려움 — 냉찜질·항히스타민 점안",
+            "급성기관지염 가능": "기침 중심 — 대개 바이러스성, 경과관찰",
+            "폐렴 의심": "호흡곤란/흉통·고열 — 흉부 X-ray/항생제 평가",
     }
     return defaults.get((label or "").strip(), "")
 
@@ -324,6 +332,39 @@ elif mode == "일상":
         symptoms = {"콧물":nasal,"기침":cough,"설사":diarrhea,"구토":vomit,"증상일수":days_since_onset,"체온":temp,"발열":fever_cat,"눈꼽":eye}
         preds = predict_from_symptoms(symptoms, temp, age_m)
         st.markdown("#### 🤖 증상 기반 자동 추정")
+        summary_items = []
+        for p in preds:
+            cap = short_caption(p.get("label",""))
+            tail = f" — {cap}" if cap else ""
+            st.write(f"- **{p['label']}**{tail} · 신뢰도 {p['score']}점")
+            try:
+                _sv = int(max(0, min(100, int(p.get('score',0)))))
+                st.progress(_sv/100.0)
+            except Exception:
+                pass
+            if cap:
+                st.caption(f"↳ {cap}")
+            summary_items.append(f"{p['label']}({int(p.get('score',0))})")
+        if summary_items:
+            st.caption("🧾 한 줄 요약 복사")
+            st.code(" | ".join(summary_items), language="")
+
+        for p in preds:
+            cap = short_caption(p.get("label",""))
+            tail = f" — {cap}" if cap else ""
+            st.write(f"- **{p['label']}**{tail} · 신뢰도 {p['score']}점")
+            try:
+                _sv = int(max(0, min(100, int(p.get('score',0)))))
+                st.progress(_sv/100.0)
+            except Exception:
+                pass
+            if cap:
+                st.caption(f"↳ {cap}")
+            summary_items.append(f"{p['label']}({int(p.get('score',0))})")
+        if summary_items:
+            st.caption("🧾 한 줄 요약 복사")
+            st.code(" | ".join(summary_items), language="")
+
         for p in preds:
             cap = short_caption(p.get("label",""))
             tail = f" — {cap}" if cap else ""
@@ -491,6 +532,23 @@ if results_only_after_analyze(st):
         preds = ctx.get("preds") or []
         if preds:
             st.subheader("🤖 증상 기반 자동 추정")
+            summary_items = []
+            for p in preds:
+                cap = short_caption(p.get("label",""))
+                tail = f" — {cap}" if cap else ""
+                st.write(f"- **{p['label']}**{tail} · 신뢰도 {p['score']}점")
+                try:
+                    _sv = int(max(0, min(100, int(p.get('score',0)))))
+                    st.progress(_sv/100.0)
+                except Exception:
+                    pass
+                if cap:
+                    st.caption(f"↳ {cap}")
+                summary_items.append(f"{p['label']}({int(p.get('score',0))})")
+            if summary_items:
+                st.caption("🧾 한 줄 요약 복사")
+                st.code(" | ".join(summary_items), language="")
+
             for p in preds:
                 cap = short_caption(p.get("label",""))
                 tail = f" — {cap}" if cap else ""
