@@ -654,7 +654,7 @@ if results_only_after_analyze(st):
     st.caption("문의/버그 제보: [피수치 가이드 공식카페](https://cafe.naver.com/bloodmap)")
     st.stop()
 
-# === Bundle V1 section (manual trigger; hidden for cancer & pediatric) ===
+# === Bundle V1 section (visible for non-cancer: Adult + Pediatric) ===
 try:
     import streamlit as st
     _ctx = st.session_state.get("analysis_ctx", {})
@@ -663,11 +663,10 @@ try:
     ctx_mode = str(_ctx.get("mode",""))
     ctx_group = str(_ctx.get("group",""))
     is_cancer = ("암" in (mode_str + ctx_mode + group_str + ctx_group)) or ("cancer" in (mode_str+ctx_mode).lower())
-    is_peds = ("소아" in (mode_str + ctx_mode + group_str + ctx_group))
 
-    if not (is_cancer or is_peds):
+    if not is_cancer:
         st.markdown("## 🧩 Bundle V1 — 투약·안전 / 기록·저장 / 보고서·문구")
-        with st.expander("옵션 기능 열기", expanded=False):
+        with st.expander("옵션 기능 열기", expanded=True):
             sel = st.multiselect("필요한 패키지를 선택하세요", ["투약·안전","기록·저장","보고서·문구"], default=[])
             run = st.button("선택 적용", key="bundle_v1_apply")
         if run:
