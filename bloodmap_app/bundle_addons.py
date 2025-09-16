@@ -210,3 +210,15 @@ def md_block_diary(df: pd.DataFrame) -> List[str]:
     except Exception:
         pass
     return lines
+
+
+# --- Fallback: ui_symptom_diary_card (minimal) ---
+def ui_symptom_diary_card(key: str):
+    import streamlit as st, pandas as pd
+    st.markdown("#### 📈 증상 일지(미니 차트)")
+    df = st.session_state.get("symptom_diary_df")
+    if df is None:
+        df = pd.DataFrame(columns=["날짜","체온","구토","설사","메모"])
+    df = st.data_editor(df, num_rows="dynamic", use_container_width=True, key=f"{key}_diary_editor")
+    st.session_state["symptom_diary_df"] = df
+    return df
