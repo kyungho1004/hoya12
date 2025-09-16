@@ -21,6 +21,7 @@ try:
         render_interactions_box, md_block_antipy_schedule, md_block_diary,
     )
     from interactions import compute_interactions
+    from onco_charts import ui_onco_trends_card
 except Exception as _imp_err:
     pass
 
@@ -649,38 +650,51 @@ if results_only_after_analyze(st):
     st.caption("문의/버그 제보: [피수치 가이드 공식카페](https://cafe.naver.com/bloodmap)")
     st.stop()
 
-# === Bundle V1 section (manual trigger) ===
+# === Bundle V1 section (manual trigger; hidden for cancer) ===
 try:
     import streamlit as st
-    st.markdown("## 🧩 Bundle V1 — 투약·안전 / 기록·저장 / 보고서·문구")
-    with st.expander("옵션 기능 열기", expanded=False):
-        sel = st.multiselect("필요한 패키지를 선택하세요", ["투약·안전","기록·저장","보고서·문구"], default=[])
-        run = st.button("선택 적용", key="bundle_v1_apply")
-    if run:
-        st.session_state["bundle_v1_active"] = sel
-    active = st.session_state.get("bundle_v1_active", [])
-    if active:
-        # 안전 기본값 (원 앱 변수 없을 때 대체)
-        _age_m = int(st.session_state.get("age_m") or st.session_state.get("age_months") or 12)
-        _wt = float(st.session_state.get("weight") or st.session_state.get("wt") or 20.0)
-        _temp = float(st.session_state.get("temp") or 37.8)
-        _key = "bundleV1"
+    # Heuristics to detect cancer mode from session
+    _ctx = st.session_state.get("analysis_ctx", {})
+    is_cancer = any([
+        str(st.session_state.get("mode","")) == "암",
+        str(_ctx.get("mode","")) == "암",
+        str(st.session_state.get("group","")) == "암",
+        "cancer" in str(st.session_state.get("mode","")).lower(),
+    ])
 
-        if "투약·안전" in active:
-            st.markdown("### 투약·안전")
-            sched_today = ui_antipyretic_card(_age_m, _wt, _temp, key=_key)
-            st.session_state.setdefault("bundle_cache", {})
-            st.session_state["bundle_cache"]["sched_today"] = sched_today
+    if is_cancer:
+        st.markdown("## 📊 암환자 피수치 그래프")
+        ui_onco_trends_card("onco")
+    else:
+        st.markdown("## 🧩 Bundle V1 — 투약·안전 / 기록·저장 / 보고서·문구")
+        with st.expander("옵션 기능 열기", expanded=False):
+            sel = st.multiselect("필요한 패키지를 선택하세요", ["투약·안전","기록·저장","보고서·문구"], default=[])
+            run = st.button("선택 적용", key="bundle_v1_apply")
+        if run:
+            st.session_state["bundle_v1_active"] = sel
+        active = st.session_state.get("bundle_v1_active", [])
+        if active:
+            # 안전 기본값 (원 앱 변수 없을 때 대체)
+            _age_m = int(st.session_state.get("age_m") or st.session_state.get("age_months") or 12)
+            _wt = float(st.session_state.get("weight") or st.session_state.get("wt") or 20.0)
+            _temp = float(st.session_state.get("temp") or 37.8)
+            _key = "bundleV1"
 
-        if "기록·저장" in active:
-            st.markdown("### 기록·저장")
-            diary_df = ui_symptom_diary_card(_key)
-            st.session_state.setdefault("bundle_cache", {})
-            st.session_state["bundle_cache"]["diary_df"] = diary_df
+            if "투약·안전" in active:
+                st.markdown("### 투약·안전")
+                sched_today = ui_antipyretic_card(_age_m, _wt, _temp, key=_key)
+                st.session_state.setdefault("bundle_cache", {})
+                st.session_state["bundle_cache"]["sched_today"] = sched_today
 
-        if "보고서·문구" in active:
-            st.markdown("### 보고서·문구")
-            st.caption("보고서 저장 시, 선택한 섹션은 자동으로 포함됩니다(시간표/일지/QR).")
+            if "기록·저장" in active:
+                st.markdown("### 기록·저장")
+                diary_df = ui_symptom_diary_card(_key)
+                st.session_state.setdefault("bundle_cache", {})
+                st.session_state["bundle_cache"]["diary_df"] = diary_df
+
+            if "보고서·문구" in active:
+                st.markdown("### 보고서·문구")
+                st.caption("보고서 저장 시, 선택한 섹션은 자동 포함됩니다(시간표/일지/QR).")
 
 except Exception as _bundle_err:
     import streamlit as st
