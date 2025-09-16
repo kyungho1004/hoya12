@@ -1,0 +1,5 @@
+# app.py 최상단 (임포트 1줄)
+from bloodmap_patch_allinone import render_bloodmap_patch
+
+# 원하는 위치에서 1줄 호출
+render_bloodmap_patch(ctx_title="BloodMap 해석 보고서", extra_blocks=[])
