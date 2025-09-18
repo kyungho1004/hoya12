@@ -216,7 +216,7 @@ def _export_report(ctx: dict, lines_blocks=None):
     return md, txt
 
 def fever_diarrhea_schedule():
-    """해열제 복용 / 설사 발생 시간 기록표 (별명+PIN 별 세션 저장)"""
+    \"\"\"해열제 복용 / 설사 발생 시간 기록표 (별명+PIN 별 세션 저장)\"\"\"
     import pandas as pd
     from datetime import date as _date, datetime as _dt
     st.markdown("#### ⏱️ 해열제/설사 시간 기록표")
@@ -254,9 +254,6 @@ ONCO_MAP = build_onco_map()
 
 st.set_page_config(page_title="BloodMap — 피수치가이드", page_icon="🩸", layout="centered")
 st.title("BloodMap — 피수치가이드")
-st.sidebar.markdown("### ⭐ 즐겨찾기")
-st.sidebar.caption("PC: Ctrl+D · 모바일: 공유 ▶︎ 홈 화면에 추가")
-
 
 st.info(
     "이 앱은 의료행위가 아니며, **참고용**입니다. 진단·치료를 **대체하지 않습니다**.\\n"
@@ -268,124 +265,6 @@ st.markdown("문의/버그 제보: **[피수치 가이드 공식카페](https://
 nick, pin, key = nickname_pin()
 st.divider()
 has_key = bool(nick and pin and len(pin) == 4)
-
-# ---------------- 해열제·설사 스케줄러 ----------------
-def _init_event_log():
-    st.session_state.setdefault("event_log", {})
-    key0 = st.session_state.get("key","guest")
-    if key0 not in st.session_state["event_log"]:
-        st.session_state["event_log"][key0] = pd.DataFrame(columns=["DT","유형","용량(ml)","체온(℃)","메모"])
-    return key0
-
-def _append_event(kind: str, when, dose=None, temp=None, note: str=""):
-    key0 = _init_event_log()
-    df = st.session_state["event_log"][key0]
-    row = {"DT": pd.to_datetime(when), "유형": str(kind), "용량(ml)": dose, "체온(℃)": temp, "메모": note}
-    df = pd.concat([df, pd.DataFrame([row])], ignore_index=True).sort_values("DT")
-    st.session_state["event_log"][key0] = df
-
-def _last_time_of(kind: str):
-    key0 = _init_event_log()
-    df = st.session_state["event_log"][key0]
-    if df.empty: return None
-    dff = df[df["유형"]==kind]
-    if dff.empty: return None
-    return pd.to_datetime(dff["DT"].iloc[-1])
-
-def _next_window(last_dt, lo_h: float, hi_h: float):
-    if last_dt is None: return None, None
-    lo = last_dt + pd.to_timedelta(lo_h, unit="h")
-    hi = last_dt + pd.to_timedelta(hi_h, unit="h")
-    return lo, hi
-
-def scheduler_ui(apap_ml_est: float|None = None, ibu_ml_est: float|None = None):
-    st.markdown("### ⏱️ 해열제·설사 스케줄러")
-    st.caption("아세트아미노펜=타이레놀 계열, 이부프로펜=브루펜 계열 · APAP/IBU 표기는 전문가용 약어입니다.")
-    key0 = _init_event_log()
-    df = st.session_state["event_log"][key0]
-
-    # Quick action buttons
-    c1,c2,c3 = st.columns(3)
-    with c1:
-        if st.button("지금 복용: 아세트아미노펜", use_container_width=True):
-            _append_event("해열제(아세트아미노펜/타이레놀)", pd.Timestamp.now(tz="Asia/Seoul"), dose=apap_ml_auto, temp=None, note="1회 복용")
-            st.success("아세트아미노펜 복용 시간이 기록되었습니다.")
-    with c2:
-        if st.button("지금 복용: 이부프로펜", use_container_width=True):
-            _append_event("해열제(이부프로펜/브루펜)", pd.Timestamp.now(tz="Asia/Seoul"), dose=ibu_ml_auto, temp=None, note="1회 복용")
-            st.success("이부프로펜 복용 시간이 기록되었습니다.")
-    with c3:
-        if st.button("지금: 설사 발생", use_container_width=True):
-            _append_event("설사", pd.Timestamp.now(tz="Asia/Seoul"), dose=1, temp=None, note="1회")
-            st.warning("설사 1회가 기록되었습니다. 수분/ORS 보충을 권장합니다.")
-
-    with st.expander("수동 입력(시간/용량/체온/메모)", expanded=False):
-        dcol = st.columns(4)
-        with dcol[0]:
-            dt_in = st.datetime_input("시간(한국시간)", value=pd.Timestamp.now(tz="Asia/Seoul"))
-        with dcol[1]:
-            kind = st.selectbox("유형", ["해열제(아세트아미노펜/타이레놀)","해열제(이부프로펜/브루펜)","설사"])
-        with dcol[2]:
-            dose = st.number_input("용량(ml, 선택)", min_value=0.0, step=0.5, value=0.0)
-            dose = None if dose == 0.0 else dose
-        with dcol[3]:
-            temp = st.number_input("체온(℃, 선택)", min_value=0.0, step=0.1, value=0.0)
-            temp = None if temp == 0.0 else temp
-        note = st.text_input("메모(선택)", value="")
-        if st.button("기록 추가"):
-            if kind == "설사":
-                _append_event(kind, dt_in, dose=1, temp=temp, note=note or "1회")
-            else:
-                _append_event(kind, dt_in, dose=dose, temp=temp, note=note)
-            st.success("기록이 추가되었습니다.")
-
-    # Guidance: next-dose windows
-    ap_last = _last_time_of("해열제(아세트아미노펜/타이레놀)")
-    ibu_last = _last_time_of("해열제(이부프로펜/브루펜)")
-    ap_lo, ap_hi = _next_window(ap_last, 4, 6) if ap_last is not None else (None, None)
-    ibu_lo, ibu_hi = _next_window(ibu_last, 6, 8) if ibu_last is not None else (None, None)
-
-    g1,g2 = st.columns(2)
-    with g1:
-        st.markdown("**아세트아미노펜(타이레놀) 다음 복용 가능 시간**")
-        if ap_last is None:
-            st.caption("기록된 복용이 없습니다.")
-        else:
-            st.metric("마지막 복용", ap_last.tz_convert("Asia/Seoul").strftime("%Y-%m-%d %H:%M"))
-            st.write(f"가능 시간: **{ap_lo.tz_convert('Asia/Seoul').strftime('%H:%M')} ~ {ap_hi.tz_convert('Asia/Seoul').strftime('%H:%M')}**")
-    with g2:
-        st.markdown("**이부프로펜(브루펜) 다음 복용 가능 시간**")
-        if ibu_last is None:
-            st.caption("기록된 복용이 없습니다.")
-        else:
-            st.metric("마지막 복용", ibu_last.tz_convert("Asia/Seoul").strftime("%Y-%m-%d %H:%M"))
-            st.write(f"가능 시간: **{ibu_lo.tz_convert('Asia/Seoul').strftime('%H:%M')} ~ {ibu_hi.tz_convert('Asia/Seoul').strftime('%H:%M')}**")
-
-    # Daily counts
-    if not df.empty:
-        df_view = df.copy()
-        df_view["DT"] = pd.to_datetime(df_view["DT"]).dt.tz_localize("UTC").dt.tz_convert("Asia/Seoul")
-        st.dataframe(df_view.sort_values("DT", ascending=False), use_container_width=True, height=220)
-        # 일별 집계
-        df_view["날짜"] = df_view["DT"].dt.strftime("%Y-%m-%d")
-        counts = (
-            df_view.groupby(["날짜","유형"])["DT"]
-            .count()
-            .reset_index()
-            .pivot(index="날짜", columns="유형", values="DT")
-            .fillna(0)
-            .astype(int)
-            .sort_index(ascending=False)
-        )
-        st.markdown("**일별 집계(횟수)**")
-        st.dataframe(counts, use_container_width=True, height=180)
-        csv = df.to_csv(index=False).encode("utf-8-sig")
-        st.download_button("⬇️ CSV 내보내기", data=csv, file_name="fever_diarrhea_log.csv")
-    else:
-        st.caption("아직 기록이 없습니다. 상단 버튼으로 '지금' 기록을 남겨보세요.")
-
-scheduler_visible=True
-
 st.session_state["key"] = key  # scheduler에서 사용
 
 # ---------------- 모드 선택 ----------------
@@ -512,20 +391,6 @@ elif mode == "일상":
             st.caption("간격 **6~8시간**, 위장 자극 시 음식과 함께")
         st.warning("이 용량 정보는 **참고용**입니다. 반드시 **주치의와 상담**하십시오.")
 
-    # ⏱️ 스케줄러: 소아 질환 모드
-    try:
-        scheduler_ui(apap_ml, ibu_ml)
-    except Exception as _e:
-        st.caption(f"스케줄러 로딩중 오류: {_e}")
-
-
-        # ⏱️ 스케줄러: 소아 일상 모드
-        try:
-            scheduler_ui(apap_ml, ibu_ml)
-        except Exception as _e:
-            st.caption(f"스케줄러 로딩중 오류: {_e}")
-
-
         fever_cat = _fever_bucket_from_temp(temp)
         symptoms = build_peds_symptoms(nasal, cough, diarrhea, vomit, days_since_onset, temp, fever_cat, eye)
         preds = predict_from_symptoms(symptoms, temp, age_m)
@@ -572,12 +437,6 @@ elif mode == "일상":
         st.info(triage)
 
         diet_lines = _adult_diet_fallback(symptoms)
-
-        # ⏱️ 스케줄러: 성인 일상 모드
-        try:
-            scheduler_ui(None, None)
-        except Exception as _e:
-            st.caption(f"스케줄러 로딩중 오류: {_e}")
 
         if st.button("🔎 해석하기", key="analyze_daily_adult"):
             st.session_state["analyzed"] = True
