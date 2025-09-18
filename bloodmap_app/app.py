@@ -263,6 +263,7 @@ if mode == "암":
             "lines_blocks": lines_blocks
         }
     schedule_block()
+    render_onco_antipyretic_log(storage_key="onco_antipyretic_log")
     # 공용 미니 스케줄
     with st.expander("🗓️ 공용 미니 스케줄표", expanded=False):
         mini_schedule_ui(storage_key="mini_sched_cancer")
