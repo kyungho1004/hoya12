@@ -22,24 +22,12 @@ from onco_map import build_onco_map, auto_recs_by_dx, dx_display
 from ui_results import results_only_after_analyze, render_adverse_effects, collect_top_ae_alerts
 from lab_diet import lab_diet_guides
 from peds_profiles import get_symptom_options
-    # 파일이 없을 때 앱이 죽지 않도록 폴백
-    def render_onco_antipyretic_log(*args, **kwargs):
-        import streamlit as st
-        st.info("onco_antipyretic_log 모듈을 찾을 수 없습니다.")
 
 # --- Pediatric dose: override first, fallback second ---
 try:
     from peds_dose_override import acetaminophen_ml, ibuprofen_ml  # type: ignore
 except Exception:
     from peds_dose import acetaminophen_ml, ibuprofen_ml  # type: ignore
-
-try:
-    from onco_antipyretic_log import render_onco_antipyretic_log
-except Exception:
-    # 파일이 없을 때 앱이 죽지 않도록 폴백
-    def render_onco_antipyretic_log(*args, **kwargs):
-        import streamlit as st
-        st.info("onco_antipyretic_log 모듈을 찾을 수 없습니다.")
 
 # --- Optional addons (fail-safe import) ---
 try:
@@ -62,12 +50,13 @@ except Exception:
 
 from pdf_export import export_md_to_pdf
 
-# --- Cancer support panel import (fail-safe) ---
+# --- Antipyretic log (fail-safe import) ---
 try:
-    from cancer_support_panel import render_onco_support  # type: ignore
+    from onco_antipyretic_log import render_onco_antipyretic_log
 except Exception:
-    def render_onco_support(labs=None, storage_key="onco_support"):
-        return {}
+    def render_onco_antipyretic_log(*args, **kwargs):
+        import streamlit as st
+        st.info("onco_antipyretic_log 모듈을 찾을 수 없습니다.")
 
 
 # 세션 플래그(중복 방지)
@@ -229,10 +218,6 @@ if mode == "암":
     labs = {code: clean_num(st.text_input(label, placeholder="예: 4500")) for code, label in LABS_ORDER}
 
     # 특수검사
-    # 암환자 보조 패널(해열제/설사)
-    with st.expander("🧯 암환자 — 증상/해열제(보조 패널)", expanded=False):
-        onco_support_ctx = render_onco_support(labs)
-
     from special_tests import special_tests_ui
     sp_lines = special_tests_ui()
     lines_blocks = []
@@ -278,7 +263,6 @@ if mode == "암":
             "lines_blocks": lines_blocks
         }
     schedule_block()
-    render_onco_antipyretic_log(storage_key="onco_antipyretic_log")
     # 공용 미니 스케줄
     with st.expander("🗓️ 공용 미니 스케줄표", expanded=False):
         mini_schedule_ui(storage_key="mini_sched_cancer")
