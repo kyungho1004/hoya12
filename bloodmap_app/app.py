@@ -29,38 +29,34 @@ try:
 except Exception:
     from peds_dose import acetaminophen_ml, ibuprofen_ml  # type: ignore
 
-
 # --- Optional addons (fail-safe import) ---
 try:
     from onco_mini_toggle import render_onco_mini  # type: ignore
 except Exception:
-    def render_onco_mini(ctx=None):
+    def render_onco_mini(ctx=None): 
         return None
-
 try:
     from mini_schedule import mini_schedule_ui  # type: ignore
 except Exception:
-    def mini_schedule_ui(storage_key="mini_sched"):
-        import streamlit as st
+    def mini_schedule_ui(storage_key="mini_sched"): 
         st.info("미니 스케줄 모듈이 로드되지 않았습니다.")
-
 try:
     from report_qr import render_qr, qr_url  # type: ignore
 except Exception:
-    def render_qr(st, data: str, size: int = 220, caption: str|None=None):
-        import streamlit as st
+    def render_qr(st, data: str, size: int = 220, caption: str|None=None): 
         st.caption("QR 모듈이 로드되지 않았습니다.")
-    def qr_url(data: str, size: int = 220, ec: str = "M") -> str:
+    def qr_url(data: str, size: int = 220, ec: str = "M") -> str: 
         return ""
 
-# 암환자 보조 패널(해열제/설사) — 독립 try/except
+from pdf_export import export_md_to_pdf
+
+# --- Cancer support panel import (fail-safe) ---
 try:
     from cancer_support_panel import render_onco_support  # type: ignore
 except Exception:
     def render_onco_support(labs=None, storage_key="onco_support"):
         return {}
 
-from pdf_export import export_md_to_pdf
 
 # 세션 플래그(중복 방지)
 if "summary_line_shown" not in st.session_state:
@@ -221,10 +217,9 @@ if mode == "암":
     labs = {code: clean_num(st.text_input(label, placeholder="예: 4500")) for code, label in LABS_ORDER}
 
     # 특수검사
-
-# 암환자 보조 패널(해열제/설사)
-with st.expander("🧯 암환자 — 증상/해열제(보조 패널)", expanded=False):
-    onco_support_ctx = render_onco_support(labs)
+    # 암환자 보조 패널(해열제/설사)
+    with st.expander("🧯 암환자 — 증상/해열제(보조 패널)", expanded=False):
+        onco_support_ctx = render_onco_support(labs)
 
     from special_tests import special_tests_ui
     sp_lines = special_tests_ui()
