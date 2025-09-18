@@ -729,6 +729,7 @@ try:
                 _wt = float(st.session_state.get("weight") or st.session_state.get("wt") or 20.0)
                 _temp = float(st.session_state.get("temp") or 37.8)
                 _key = "peds_auto"
+                dose_ctx = render_fever_panel(storage_key="fever_panel", default_age_m=36, default_weight=15.0)
                 st.markdown("### 🕒 해열제 24시간 시간표")
                 sched_today = ui_antipyretic_card(_age_m, _wt, _temp, key=_key)
                 st.markdown("### 기록·저장")
