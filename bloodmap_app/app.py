@@ -16,6 +16,7 @@ from lab_diet import lab_diet_guides
 from peds_profiles import get_symptom_options
 from peds_dose import acetaminophen_ml, ibuprofen_ml
 from pdf_export import export_md_to_pdf
+from fever_dose_ui import render_fever_panel
 
 # === Mode helpers (robust cancer detection) ===
 import re as _re
