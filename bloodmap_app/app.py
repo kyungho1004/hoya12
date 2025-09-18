@@ -14,7 +14,7 @@ from onco_map import build_onco_map, auto_recs_by_dx, dx_display
 from ui_results import results_only_after_analyze, render_adverse_effects, collect_top_ae_alerts
 from lab_diet import lab_diet_guides
 from peds_profiles import get_symptom_options
-from peds_dose import acetaminophen_ml, ibuprofen_ml
+from peds_dose_override import acetaminophen_ml, ibuprofen_ml
 from pdf_export import export_md_to_pdf
 from fever_dose_ui import render_fever_panel
 
