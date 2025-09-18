@@ -22,6 +22,7 @@ from onco_map import build_onco_map, auto_recs_by_dx, dx_display
 from ui_results import results_only_after_analyze, render_adverse_effects, collect_top_ae_alerts
 from lab_diet import lab_diet_guides
 from peds_profiles import get_symptom_options
+from antipyretic_schedule import render_antipyretic_schedule
 
 # --- Pediatric dose: override first, fallback second ---
 try:
