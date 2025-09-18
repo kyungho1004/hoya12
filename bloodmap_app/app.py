@@ -36,11 +36,11 @@ except Exception:
     def render_onco_mini(ctx=None): 
         return None
 try:
-    from mini_schedule import mini_schedule_ui  # type: ignore
-except Exception:
-    def mini_schedule_ui(storage_key="mini_sched"): 
-        st.info("미니 스케줄 모듈이 로드되지 않았습니다.")
-try:
+    from antipyretic_schedule import render_antipyretic_schedule
+
+with st.expander("🌡️ 해열제 스케줄러", expanded=True):
+    render_antipyretic_schedule(storage_key="antipy_sched")
+
     from report_qr import render_qr, qr_url  # type: ignore
 except Exception:
     def render_qr(st, data: str, size: int = 220, caption: str|None=None): 
