@@ -42,6 +42,7 @@ except Exception:
         st.info("미니 스케줄 모듈이 로드되지 않았습니다.")
 try:
     from report_qr import render_qr, qr_url  # type: ignore
+from cancer_support_panel import render_onco_support  # type: ignore
 except Exception:
     def render_qr(st, data: str, size: int = 220, caption: str|None=None): 
         st.caption("QR 모듈이 로드되지 않았습니다.")
@@ -209,6 +210,11 @@ if mode == "암":
     labs = {code: clean_num(st.text_input(label, placeholder="예: 4500")) for code, label in LABS_ORDER}
 
     # 특수검사
+
+# 암환자 보조 패널(해열제/설사)
+with st.expander("🧯 암환자 — 증상/해열제(보조 패널)", expanded=False):
+    onco_support_ctx = render_onco_support(labs)
+
     from special_tests import special_tests_ui
     sp_lines = special_tests_ui()
     lines_blocks = []
