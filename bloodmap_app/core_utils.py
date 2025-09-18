@@ -44,14 +44,14 @@ def nickname_pin():
     return n, p2, key
 
 # ---------- 스케줄 ----------
-def schedule_block():
+def schedule_block(key_prefix: str = 'sched'):
     st.markdown("#### 📅 항암 스케줄(간단)")
     from datetime import date, timedelta
     c1,c2,c3 = st.columns(3)
-    with c1: start = st.date_input("시작일", value=date.today())
-    with c2: cycle = st.number_input("주기(일)", min_value=1, step=1, value=21)
-    with c3: ncyc = st.number_input("사이클 수", min_value=1, step=1, value=6)
-    if st.button("스케줄 생성/추가"):
+    with c1: start = st.date_input("시작일", value=date.today(), key=f"{key_prefix}_start")
+    with c2: cycle = st.number_input("주기(일)", min_value=1, step=1, value=21, key=f"{key_prefix}_cycle")
+    with c3: ncyc = st.number_input("사이클 수", min_value=1, step=1, value=6, key=f"{key_prefix}_ncyc")
+    if st.button("스케줄 생성/추가", key=f"{key_prefix}_make"):
         rows = [{"Cycle": i+1, "Date": (start + timedelta(days=i*int(cycle))).strftime("%Y-%m-%d")} for i in range(int(ncyc))]
         df = pd.DataFrame(rows)
         st.session_state.setdefault("schedules", {})

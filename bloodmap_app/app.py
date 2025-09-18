@@ -223,9 +223,6 @@ if mode == "암":
     lines_blocks = []
     if sp_lines: lines_blocks.append(("특수검사 해석", sp_lines))
 
-    # ⏱️ 암: 특수검사 바로 밑 스케줄러
-    schedule_block()
-
     # 저장/그래프
     st.markdown("#### 💾 저장/그래프")
     when = st.date_input("측정일", value=date.today())
@@ -344,8 +341,6 @@ elif mode == "일상":
 
         diet_lines = _peds_diet_fallback(symptoms)
 
-        schedule_block()
-
         if st.button("🔎 해석하기", key="analyze_daily_child"):
             st.session_state["analyzed"] = True
             st.session_state["analysis_ctx"] = {
@@ -412,8 +407,6 @@ elif mode == "일상":
 
         diet_lines = _adult_diet_fallback(symptoms)
 
-        schedule_block()
-
         if st.button("🔎 해석하기", key="analyze_daily_adult"):
             st.session_state["analyzed"] = True
             st.session_state["analysis_ctx"] = {
@@ -469,8 +462,6 @@ else:
             fever_cat=fever_cat,
             eye=locals().get('eye'),
         )
-
-    schedule_block()
 
     if st.button("🔎 해석하기", key="analyze_peds"):
         st.session_state["analyzed"] = True
