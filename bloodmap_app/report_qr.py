@@ -27,4 +27,4 @@ def qr_url(data: str, size: int = 220, ec: str = "M") -> str:
 
 def render_qr(st, data: str, size: int = 220, caption: Optional[str] = None) -> None:
     url = qr_url(data, size=size)
-    st.image(url, caption=caption or "QR", use_column_width=False)
+    st.image(url, caption=caption or "QR", use_container_width=False)
