@@ -216,7 +216,7 @@ def _export_report(ctx: dict, lines_blocks=None):
     return md, txt
 
 def fever_diarrhea_schedule():
-    \"\"\"해열제 복용 / 설사 발생 시간 기록표 (별명+PIN 별 세션 저장)\"\"\"
+    """해열제 복용 / 설사 발생 시간 기록표 (별명+PIN 별 세션 저장)"""
     import pandas as pd
     from datetime import date as _date, datetime as _dt
     st.markdown("#### ⏱️ 해열제/설사 시간 기록표")
