@@ -100,6 +100,24 @@ def _peds_dose_ml(age_months: int|None, weight_kg: float|None):
 nick, pin, key = nickname_pin()
 st.divider()
 
+
+
+# --- Streamlit <=1.30 호환용 datetime 입력 ---
+def _datetime_picker(label: str, key_prefix: str, default_ts):
+    # default_ts: tz-aware pandas.Timestamp (Asia/Seoul)
+    import datetime as _dt
+    import pandas as _pd
+    if default_ts is None:
+        default_ts = _tz_now()
+    local = default_ts.tz_convert("Asia/Seoul")
+    dcol = st.columns([1,1])
+    with dcol[0]:
+        d = st.date_input(label + " (날짜)", value=local.date(), key=key_prefix+"_date")
+    with dcol[1]:
+        t = st.time_input(label + " (시각)", value=_dt.time(local.hour, local.minute), key=key_prefix+"_time")
+    combined = _pd.Timestamp.combine(d, t).tz_localize("Asia/Seoul")
+    return combined
+
 with st.expander("⏱️ 해열제·설사 스케줄러 (소아/성인)", expanded=True):
     st.caption("아세트아미노펜/이부프로펜계열 기록 · 한국시간 · 동일계열 4/6h 간격 · 교차 2h 안내")
 
@@ -151,7 +169,7 @@ with st.expander("⏱️ 해열제·설사 스케줄러 (소아/성인)", expand
     with st.expander("수동 입력(시간/용량/체온/메모)", expanded=False):
         dcol = st.columns(4)
         with dcol[0]:
-            dt_in = st.datetime_input("시간(한국시간)", value=_tz_now(), key="fd_dt")
+            dt_in = _datetime_picker("시간(한국시간)", "fd_dt", _tz_now())
         with dcol[1]:
             kind = st.selectbox("유형", ["해열제(아세트아미노펜)","해열제(이부프로펜계열)","설사"], key="fd_kind")
         with dcol[2]:
