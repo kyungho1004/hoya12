@@ -1,13 +1,9 @@
-       BloodMap Onco Master Pack — 2025-09-18 02:55:32 KST
-       포함:
-        - app_onco_with_log.py
-- onco_antipyretic_log.py
-- cancer_support_panel.py
-- peds_dose_override.py
-- report_qr.py
-- mini_schedule.py
+BloodMap — One-shot Deploy (20250918_033100)
+- app.py 포함, 항암 스케줄 하단에 해열제 기록 패널 연결
+- onco_antipyretic_log.py (간격/24h 경고 포함), cancer_support_panel.py (mL 표준, 전문가 설정 숨김)
 
-       사용법:
-       1) 압축을 프로젝트 루트에 풀어 덮어쓰기
-       2) 실행: streamlit run app_onco_with_log.py
-       3) 기존 app.py에서 쓰려면 암 모드에 기록 패널 호출 추가
+서버에서 바로 적용:
+  cd /mount/src/hoya12/bloodmap_app
+  unzip -o /mnt/data/prod_one_shot_deploy.zip
+  pkill -f "streamlit run" || true
+  streamlit run app.py --server.headless true --server.address 0.0.0.0 --server.port 8501
