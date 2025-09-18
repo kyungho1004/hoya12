@@ -254,6 +254,9 @@ ONCO_MAP = build_onco_map()
 
 st.set_page_config(page_title="BloodMap — 피수치가이드", page_icon="🩸", layout="centered")
 st.title("BloodMap — 피수치가이드")
+st.sidebar.markdown("### ⭐ 즐겨찾기")
+st.sidebar.caption("PC: Ctrl+D · 모바일: 공유 ▶︎ 홈 화면에 추가")
+
 
 st.info(
     "이 앱은 의료행위가 아니며, **참고용**입니다. 진단·치료를 **대체하지 않습니다**.\\n"
@@ -305,16 +308,16 @@ def scheduler_ui(apap_ml_est: float|None = None, ibu_ml_est: float|None = None):
     c1,c2,c3 = st.columns(3)
     with c1:
         if st.button("지금 복용: 아세트아미노펜", use_container_width=True):
-            _append_event("해열제(아세트아미노펜/타이레놀)", pd.Timestamp.now(tz="Asia/Seoul"), dose=apap_ml_est, temp=None, note="")
+            _append_event("해열제(아세트아미노펜/타이레놀)", pd.Timestamp.now(tz="Asia/Seoul"), dose=apap_ml_auto, temp=None, note="1회 복용")
             st.success("아세트아미노펜 복용 시간이 기록되었습니다.")
     with c2:
         if st.button("지금 복용: 이부프로펜", use_container_width=True):
-            _append_event("해열제(이부프로펜/브루펜)", pd.Timestamp.now(tz="Asia/Seoul"), dose=ibu_ml_est, temp=None, note="")
+            _append_event("해열제(이부프로펜/브루펜)", pd.Timestamp.now(tz="Asia/Seoul"), dose=ibu_ml_auto, temp=None, note="1회 복용")
             st.success("이부프로펜 복용 시간이 기록되었습니다.")
     with c3:
         if st.button("지금: 설사 발생", use_container_width=True):
-            _append_event("설사", pd.Timestamp.now(tz="Asia/Seoul"), dose=None, temp=None, note="")
-            st.warning("설사 발생 시간이 기록되었습니다. 수분/ORS 보충을 권장합니다.")
+            _append_event("설사", pd.Timestamp.now(tz="Asia/Seoul"), dose=1, temp=None, note="1회")
+            st.warning("설사 1회가 기록되었습니다. 수분/ORS 보충을 권장합니다.")
 
     with st.expander("수동 입력(시간/용량/체온/메모)", expanded=False):
         dcol = st.columns(4)
@@ -330,7 +333,10 @@ def scheduler_ui(apap_ml_est: float|None = None, ibu_ml_est: float|None = None):
             temp = None if temp == 0.0 else temp
         note = st.text_input("메모(선택)", value="")
         if st.button("기록 추가"):
-            _append_event(kind, dt_in, dose=dose, temp=temp, note=note)
+            if kind == "설사":
+                _append_event(kind, dt_in, dose=1, temp=temp, note=note or "1회")
+            else:
+                _append_event(kind, dt_in, dose=dose, temp=temp, note=note)
             st.success("기록이 추가되었습니다.")
 
     # Guidance: next-dose windows
