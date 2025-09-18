@@ -1,17 +1,13 @@
+
 # -*- coding: utf-8 -*-
-import io, os, re
+import io, os
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, ListFlowable, ListItem, Image
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, ListFlowable, ListItem
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_LEFT
-
-try:
-    import qrcode
-except Exception:
-    qrcode = None
 
 FONT_MAP = [
     ("/mnt/data/NanumBarunGothic.otf", "KOR"),
@@ -46,7 +42,6 @@ def _register_fonts():
     return regular, bold
 
 _styles = None
-
 def _get_styles():
     global _styles
     if _styles: return _styles
@@ -58,13 +53,7 @@ def _get_styles():
     _styles = ss
     return ss
 
-_QR_PATTERN = re.compile(r'\[\[QR:(?P<url>https?://[^\]]+)\]\]')
-
-def export_md_to_pdf(md_text: str, qr_url: str | None = None) -> bytes:
-    """Markdown 유사 포맷을 PDF로 변환.
-    지원: 제목(#, ##), 글머리(- ), 인라인 [[QR:<url>]]
-    qr_url 제공 시 문서 말미에 항상 QR을 추가합니다.
-    """
+def export_md_to_pdf(md_text: str) -> bytes:
     ss = _get_styles()
     story = []
     bullets = []
@@ -77,20 +66,12 @@ def export_md_to_pdf(md_text: str, qr_url: str | None = None) -> bytes:
             story.append(Spacer(1, 4))
             bullets = []
 
-    qr_candidates: list[str] = []
     for raw in (md_text or "").splitlines():
         line = raw.rstrip()
         if not line.strip():
             flush_bullets()
             story.append(Spacer(1, 6))
             continue
-        m = _QR_PATTERN.search(line)
-        if m:
-            flush_bullets()
-            url = m.group("url")
-            qr_candidates.append(url)
-            line = _QR_PATTERN.sub("(QR 코드가 문서 하단에 추가됩니다.)", line)
-
         if line.startswith("## "):
             flush_bullets()
             story.append(Paragraph(line[3:], ss["KOR-H2"]))
@@ -106,22 +87,6 @@ def export_md_to_pdf(md_text: str, qr_url: str | None = None) -> bytes:
         story.append(Paragraph(line, ss["KOR-Body"]))
 
     flush_bullets()
-
-    # QR at the end
-    final_qr = qr_url or (qr_candidates[-1] if qr_candidates else None)
-    if qrcode is not None and final_qr:
-        try:
-            img = qrcode.make(final_qr)
-            bio = io.BytesIO()
-            img.save(bio, format="PNG")
-            bio.seek(0)
-            story.append(Spacer(1, 8))
-            story.append(Paragraph("🔗 QR 코드", ss["KOR-H2"]))
-            story.append(Image(bio, width=32*mm, height=32*mm))
-            story.append(Paragraph(final_qr, ss["KOR-Body"]))
-        except Exception:
-            pass
-
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=18*mm, rightMargin=18*mm, topMargin=18*mm, bottomMargin=18*mm)
     doc.build(story)
