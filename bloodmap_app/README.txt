@@ -1,8 +1,9 @@
-BloodMap — Final Integrated (from upload) — 2025-09-18 03:51:49 KST
-포함:
-- app.py (업로드본): 해열제 스케줄러 패널 포함
-- antipyretic_schedule.py: 나이·체중 mL 계산 + 설사 시간대 기록 + 중복방지
 
-실행:
+BloodMap — Patched App with Antipyretic Scheduler
+Built at 2025-09-18 03:54:58 KST
+- app.py: patched from your upload (app_onco_with_log (1).py)
+- antipyretic_schedule.py: KST, age/weight mL calc, diarrhea time log, duplicate prevention
+
+Run:
   pip install streamlit pandas
   streamlit run app.py
