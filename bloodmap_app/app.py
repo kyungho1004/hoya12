@@ -257,8 +257,48 @@ def render_severity_list(title: str, lines: list[str], show_normals: bool, input
         st.markdown(f"- {badge} {color_open}{txt}]")
 
 # ---------- DEMO CHART WITH SHADED RANGES ----------
+
 def lab_trend_demo():
     st.markdown("### 📈 추이(데모 데이터)")
+    dfh = pd.DataFrame({
+        "Date": pd.date_range(datetime.now() - timedelta(days=14), periods=8, freq="2D"),
+        "WBC,백혈구": [4500,5200,6000,7000,6500,9000,8000,7600],
+        "Hb,혈색소": [11.8,12.2,12.5,12.7,12.3,12.9,13.1,12.8],
+        "PLT,혈소판": [140,180,210,260,300,280,240,220],
+        "CRP": [0.4,0.6,0.3,0.2,0.1,0.2,0.5,0.4],
+        "ANC,호중구": [1300,1600,2000,2500,2200,3000,2800,2600],
+    })
+    # strict dtypes
+    dfh["Date"] = pd.to_datetime(dfh["Date"]).dt.tz_localize(None)
+    for col in ["WBC,백혈구","Hb,혈색소","PLT,혈소판","CRP","ANC,호중구"]:
+        dfh[col] = pd.to_numeric(dfh[col], errors="coerce")
+    pick = st.multiselect("표시 항목", ["WBC,백혈구","Hb,혈색소","PLT,혈소판","CRP","ANC,호중구"], default=["WBC,백혈구","Hb,혈색소"])
+    if pick:
+        try:
+            age_is_child = st.toggle("연령: 소아 기준 사용", value=False, key="range_child_toggle_demo")
+            ranges_adult = {"WBC,백혈구": (4000, 10000), "Hb,혈색소": (12.0, 16.0), "PLT,혈소판": (150, 400), "CRP": (0, 0.5), "ANC,호중구": (1500, 8000)}
+            ranges_child = {"WBC,백혈구": (5000, 14500), "Hb,혈색소": (11.0, 15.0), "PLT,혈소판": (150, 400), "CRP": (0, 0.5), "ANC,호중구": (1500, 8000)}
+            df_tmp = dfh.copy()
+            df_tmp["Date"] = pd.to_datetime(df_tmp["Date"]).dt.tz_localize(None)
+            sel_df = df_tmp.set_index("Date")[pick].reset_index().melt("Date", var_name="item", value_name="value")
+            # build bands from a single row dataframe (vega-lite friendly)
+            lo_hi = {"item": [], "lo": [], "hi": []}
+            for it in pick:
+                r = (ranges_child if age_is_child else ranges_adult).get(it)
+                if r:
+                    lo_hi["item"].append(it); lo_hi["lo"].append(float(r[0])); lo_hi["hi"].append(float(r[1]))
+            import pandas as _pd
+            band_tbl = _pd.DataFrame(lo_hi)
+            base = alt.Chart(sel_df).encode(x=alt.X("Date:T", title="Date"), y=alt.Y("value:Q", title="Value"))
+            shade = alt.Chart(band_tbl).mark_rect(opacity=0.08).encode(
+                y="lo:Q", y2="hi:Q", color=alt.value("lightgray")
+            ).properties(width="container")
+            line = base.mark_line().encode(color="item:N")
+            chart = alt.layer(shade, line, data=sel_df)
+            st.altair_chart(chart, use_container_width=True)
+        except Exception as e:
+            st.warning(f"Altair 렌더링 이슈로 기본 차트로 대체: {e}")
+            st.line_chart(dfh.set_index("Date")[pick])
     dfh = pd.DataFrame({
         "Date": pd.date_range(datetime.now() - timedelta(days=14), periods=8, freq="2D"),
         "WBC,백혈구": [4500,5200,6000,7000,6500,9000,8000,7600],
