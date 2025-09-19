@@ -21,19 +21,108 @@ def kst_now() -> datetime:
 
 # ---- 케어 로그 유틸 (설사/구토/해열제/메모) ----
 def _init_care_log(user_key: str):
-    import pandas as _pd
     st.session_state.setdefault("care_log", {})
     if user_key not in st.session_state["care_log"]:
-        st.session_state["care_log"][user_key] = _pd.DataFrame(columns=["ts_kst","type","details"])
+        st.session_state["care_log"][user_key] = pd.DataFrame(columns=["ts_kst","type","details"])
 
 def _append_care_log(user_key: str, kind: str, details: str):
-    import pandas as _pd
     _init_care_log(user_key)
     now = kst_now().strftime("%Y-%m-%d %H:%M")
-    row = _pd.DataFrame([{"ts_kst": now, "type": kind, "details": details}])
-    st.session_state["care_log"][user_key] = _pd.concat(
+    row = pd.DataFrame([{"ts_kst": now, "type": kind, "details": details}])
+    st.session_state["care_log"][user_key] = pd.concat(
         [st.session_state["care_log"][user_key], row], ignore_index=True
     )
+
+def _care_log_df(user_key: str) -> pd.DataFrame:
+    _init_care_log(user_key)
+    return st.session_state["care_log"][user_key]
+
+def _care_log_to_md(df: pd.DataFrame, title="케어 로그") -> str:
+    lines = [f"# {title}", "", f"- 내보낸 시각(KST): {kst_now().strftime('%Y-%m-%d %H:%M')}",
+             "", "시간(KST) | 유형 | 내용", "---|---|---"]
+    for _, r in df.iterrows():
+        lines.append(f"{r.get('ts_kst','')} | {r.get('type','')} | {r.get('details','')}")
+    return "\n".join(lines)
+
+def render_care_log_ui(user_key: str, apap_ml=None, ibu_ml=None, section_title="설사/구토/해열제 기록"):
+    st.markdown(f"### {section_title}")
+    st.caption("APAP=아세트아미노펜, IBU=이부프로펜계열 (모든 시각은 한국시간 KST 기준)")
+    _init_care_log(user_key)
+    now = kst_now()
+
+    # 입력/버튼
+    note = st.text_input("메모(선택)", key=f"care_note_{section_title}")
+    colA, colB, colC, colD = st.columns(4)
+    if colA.button("구토 기록 추가", key=f"btn_log_vomit_{section_title}"):
+        _append_care_log(user_key, "구토",
+            f"구토 발생 — 보충 10 mL/kg, 5–10 mL q5min. 다음 점검 { (now+timedelta(minutes=30)).strftime('%H:%M') } / 활력 { (now+timedelta(hours=2)).strftime('%H:%M') } (KST)")
+        if note:
+            _append_care_log(user_key, "메모", note)
+        st.success("구토 기록 저장됨")
+    if colB.button("설사 기록 추가", key=f"btn_log_diarrhea_{section_title}"):
+        _append_care_log(user_key, "설사",
+            f"설사 발생 — 보충 10 mL/kg. 다음 점검 { (now+timedelta(minutes=30)).strftime('%H:%M') } / 활력 { (now+timedelta(hours=2)).strftime('%H:%M') } (KST)")
+        if note:
+            _append_care_log(user_key, "메모", note)
+        st.success("설사 기록 저장됨")
+    if colC.button("APAP(아세트아미노펜) 투약", key=f"btn_log_apap_{section_title}"):
+        dose = f"{apap_ml} ml" if apap_ml is not None else "용량 미기입"
+        _append_care_log(user_key, "해열제(APAP)",
+            f"{dose} 투약 — 다음 복용 가능 { (now+timedelta(hours=4)).strftime('%H:%M') }~{ (now+timedelta(hours=6)).strftime('%H:%M') } KST")
+        if note:
+            _append_care_log(user_key, "메모", note)
+        st.success("APAP 기록 저장됨")
+    if colD.button("IBU(이부프로펜계열) 투약", key=f"btn_log_ibu_{section_title}"):
+        dose = f"{ibu_ml} ml" if ibu_ml is not None else "용량 미기입"
+        _append_care_log(user_key, "해열제(IBU)",
+            f"{dose} 투약 — 다음 복용 가능 { (now+timedelta(hours=6)).strftime('%H:%M') }~{ (now+timedelta(hours=8)).strftime('%H:%M') } KST")
+        if note:
+            _append_care_log(user_key, "메모", note)
+        st.success("IBU 기록 저장됨")
+
+    # 표시/삭제/내보내기
+    df_log = _care_log_df(user_key)
+    if not df_log.empty:
+        st.dataframe(df_log.tail(50), use_container_width=True, height=260)
+        # 삭제 기능
+        st.markdown("#### 삭제")
+        max_idx = int(df_log.index.max())
+        del_idxs = st.multiselect("삭제할 행 인덱스 선택(표 왼쪽 번호)", options=list(df_log.index), key=f"del_idx_{section_title}")
+        if st.button("선택 행 삭제", key=f"btn_del_{section_title}") and del_idxs:
+            st.session_state['care_log'][user_key] = df_log.drop(index=del_idxs).reset_index(drop=True)
+            st.success(f"{len(del_idxs)}개 행 삭제 완료")
+            df_log = _care_log_df(user_key)
+
+        # 내보내기 (TXT/PDF)
+        st.markdown("#### 내보내기")
+        md = _care_log_to_md(df_log, title="케어 로그")
+        txt = md.replace("# ","").replace("## ","")
+        st.download_button("⬇️ TXT", data=txt, file_name="care_log.txt")
+        try:
+            pdf_bytes = export_md_to_pdf(md)
+            st.download_button("⬇️ PDF", data=pdf_bytes, file_name="care_log.pdf", mime="application/pdf")
+        except Exception as e:
+            st.caption(f"PDF 변환 오류: {e}")
+
+        # QR 코드 (앱 주소 연결)
+        st.markdown("#### QR 연동")
+        app_url = "https://bloodmap.streamlit.app/#carelog"
+        qr_ok = False
+        try:
+            import qrcode
+            import io
+            qr_img = qrcode.make(app_url)
+            buf = io.BytesIO()
+            qr_img.save(buf, format="PNG")
+            st.image(buf.getvalue(), caption="BloodMap 앱 이동 QR", width=160)
+            qr_ok = True
+        except Exception:
+            pass
+        if not qr_ok:
+            st.write("QR 모듈 미설치(qrcode). 아래 링크를 복사해 사용하세요:")
+            st.code(app_url, language="")
+    else:
+        st.caption("저장된 케어 로그가 없습니다. 위의 버튼으로 기록을 추가하세요.")
 
 # 중복키 방지용 스케줄 블록(암 모드에서만 사용)
 def safe_schedule_block(prefix: str = "onc"):
@@ -133,6 +222,7 @@ st.info(
     "약 변경/복용 중단 등은 반드시 주치의와 상의하세요.\n"
     "개인정보를 수집하지 않으며, 어떠한 개인정보 입력도 요구하지 않습니다."
 )
+st.markdown("문의/버그 제보: **[피수치 가이드 공식카페](https://cafe.naver.com/bloodmap)**")
 
 nick, pin, key = nickname_pin()
 st.divider()
@@ -330,49 +420,9 @@ if mode == "암":
     lines_blocks = []
     if sp_lines: lines_blocks.append(("특수검사 해석", sp_lines))
 
-    # --- 🔽 형 요구사항: 특수검사 '바로 밑' 토글 블록 (소아 해열제/설사 + KST 시간) ---
+    # --- 🔽 특수검사 '바로 밑' : 소아 해열제/설사 + 케어 로그 ---
     on_peds_tool = st.toggle("🧒 소아 해열제/설사 체크 (토글)", value=False, key="peds_tool_toggle_cancer")
     if on_peds_tool:
-
-        # ---- 케어 로그(설사/구토/해열제) 저장 ----
-        _init_care_log(st.session_state.get("key", "guest"))
-        # now 변수가 아래 버튼 핸들러에서 필요하므로 안전하게 다시 산출
-        now = kst_now()
-        st.markdown("#### 📝 케어 로그 저장")
-        note = st.text_input("메모(선택)", key="care_note_input")
-        colA, colB, colC, colD = st.columns(4)
-        if colA.button("구토 기록 추가", key="btn_log_vomit"):
-            _append_care_log(st.session_state.get("key","guest"), "구토",
-                             f"구토 발생 — 보충 10 mL/kg, 5~10mL q5min. 다음 점검 { (now+timedelta(minutes=30)).strftime('%H:%M') } / 활력 { (now+timedelta(hours=2)).strftime('%H:%M') } (KST)")
-            if note:
-                _append_care_log(st.session_state.get("key","guest"), "메모", note)
-            st.success("구토 기록 저장됨")
-        if colB.button("설사 기록 추가", key="btn_log_diarrhea"):
-            _append_care_log(st.session_state.get("key","guest"), "설사",
-                             f"설사 발생 — 보충 10 mL/kg. 다음 점검 { (now+timedelta(minutes=30)).strftime('%H:%M') } / 활력 { (now+timedelta(hours=2)).strftime('%H:%M') } (KST)")
-            if note:
-                _append_care_log(st.session_state.get("key","guest"), "메모", note)
-            st.success("설사 기록 저장됨")
-        if colC.button("APAP 투약 기록", key="btn_log_apap"):
-            _append_care_log(st.session_state.get("key","guest"), "해열제(APAP)",
-                             f"{apap_ml} ml 투약 — 다음 복용 가능 { (now+timedelta(hours=4)).strftime('%H:%M') }~{ (now+timedelta(hours=6)).strftime('%H:%M') } KST")
-            if note:
-                _append_care_log(st.session_state.get("key","guest"), "메모", note)
-            st.success("APAP 기록 저장됨")
-        if colD.button("IBU 투약 기록", key="btn_log_ibu"):
-            _append_care_log(st.session_state.get("key","guest"), "해열제(IBU)",
-                             f"{ibu_ml} ml 투약 — 다음 복용 가능 { (now+timedelta(hours=6)).strftime('%H:%M') }~{ (now+timedelta(hours=8)).strftime('%H:%M') } KST")
-            if note:
-                _append_care_log(st.session_state.get("key","guest"), "메모", note)
-            st.success("IBU 기록 저장됨")
-
-        # 표/다운로드
-        df_log = st.session_state["care_log"][st.session_state.get("key","guest")]
-        if not df_log.empty:
-            st.dataframe(df_log.tail(20), use_container_width=True, height=240)
-            st.download_button("⬇️ 케어 로그 CSV", data=df_log.to_csv(index=False), file_name="care_log.csv", mime="text/csv")
-        else:
-            st.caption("아직 저장된 케어 로그가 없습니다.")
         cc1, cc2 = st.columns(2)
         with cc1:
             age_m = st.number_input("나이(개월)", min_value=0, step=1, key="ped_age_m_cancer")
@@ -396,6 +446,9 @@ if mode == "암":
         st.write(f"- 다음 수분/탈수 점검: **{ (now+timedelta(minutes=30)).strftime('%H:%M') }** (30분 후, KST)")
         st.write(f"- 소변량/활력 점검: **{ (now+timedelta(hours=2)).strftime('%H:%M') }** (2시간 후, KST)")
         st.warning("이 용량/간격 정보는 참고용입니다. 반드시 주치의와 상담하세요.")
+
+        # 케어 로그 섹션 (암 모드)
+        render_care_log_ui(st.session_state.get("key","guest"), apap_ml=apap_ml, ibu_ml=ibu_ml, section_title="설사/구토/해열제 기록")
 
     # --- 저장/그래프 ---
     st.markdown("#### 💾 저장/그래프")
@@ -487,6 +540,9 @@ elif mode == "일상":
 
         diet_lines = _peds_diet_fallback(symptoms)
 
+        # 케어 로그 (일상/소아)
+        render_care_log_ui(st.session_state.get("key","guest"), apap_ml=apap_ml, ibu_ml=ibu_ml, section_title="설사/구토/해열제 기록(일상·소아)")
+
         if st.button("🔎 해석하기", key="analyze_daily_child"):
             st.session_state["analyzed"] = True
             st.session_state["analysis_ctx"] = {
@@ -522,6 +578,9 @@ elif mode == "일상":
         st.info(triage)
 
         diet_lines = _adult_diet_fallback(symptoms)
+
+        # 케어 로그 (일상/성인) - 해열제 텍스트만 저장(ml 미계산)
+        render_care_log_ui(st.session_state.get("key","guest"), apap_ml=None, ibu_ml=None, section_title="설사/구토/해열제 기록(일상·성인)")
 
         if st.button("🔎 해석하기", key="analyze_daily_adult"):
             st.session_state["analyzed"] = True
@@ -567,6 +626,9 @@ else:
 
     fever_cat = _fever_bucket_from_temp(temp)
     symptoms = build_peds_symptoms(nasal, cough, diarrhea, vomit, symptom_days, temp, fever_cat, eye)
+
+    # 케어 로그 (소아 질환 모드)
+    render_care_log_ui(st.session_state.get("key","guest"), apap_ml=apap_ml, ibu_ml=ibu_ml, section_title="설사/구토/해열제 기록(소아·질환)")
 
     if st.button("🔎 해석하기", key="analyze_peds"):
         st.session_state["analyzed"] = True
@@ -619,17 +681,6 @@ if results_only_after_analyze(st):
             st.markdown("**항생제**")
             render_adverse_effects(st, akeys, DRUG_DB)
 
-        
-        # ---- 케어 로그 미리보기/다운로드 ----
-        st.subheader("🗒️ 케어 로그")
-        _init_care_log(st.session_state.get("key","guest"))
-        df_log = st.session_state["care_log"][st.session_state.get("key","guest")]
-        if not df_log.empty:
-            st.dataframe(df_log.tail(50), use_container_width=True, height=260)
-            st.download_button("⬇️ 케어 로그 CSV", data=df_log.to_csv(index=False), file_name="care_log.csv", mime="text/csv")
-        else:
-            st.caption("저장된 케어 로그가 없습니다.")
-
         st.subheader("📝 보고서 저장")
         md, txt = _export_report(ctx, lines_blocks)
         st.download_button("⬇️ Markdown (.md)", data=md, file_name="BloodMap_Report.md")
@@ -673,17 +724,6 @@ if results_only_after_analyze(st):
         for L in (ctx.get("diet_lines") or []):
             st.write("- " + str(L))
 
-        
-        # ---- 케어 로그 미리보기/다운로드 ----
-        st.subheader("🗒️ 케어 로그")
-        _init_care_log(st.session_state.get("key","guest"))
-        df_log = st.session_state["care_log"][st.session_state.get("key","guest")]
-        if not df_log.empty:
-            st.dataframe(df_log.tail(50), use_container_width=True, height=260)
-            st.download_button("⬇️ 케어 로그 CSV", data=df_log.to_csv(index=False), file_name="care_log.csv", mime="text/csv")
-        else:
-            st.caption("저장된 케어 로그가 없습니다.")
-
         st.subheader("📝 보고서 저장")
         md, txt = _export_report(ctx, None)
         st.download_button("⬇️ Markdown (.md)", data=md, file_name="BloodMap_Report.md")
@@ -718,17 +758,6 @@ if results_only_after_analyze(st):
         st.subheader("🍽️ 식이가이드")
         for L in (ctx.get("diet_lines") or []):
             st.write("- " + str(L))
-
-        
-        # ---- 케어 로그 미리보기/다운로드 ----
-        st.subheader("🗒️ 케어 로그")
-        _init_care_log(st.session_state.get("key","guest"))
-        df_log = st.session_state["care_log"][st.session_state.get("key","guest")]
-        if not df_log.empty:
-            st.dataframe(df_log.tail(50), use_container_width=True, height=260)
-            st.download_button("⬇️ 케어 로그 CSV", data=df_log.to_csv(index=False), file_name="care_log.csv", mime="text/csv")
-        else:
-            st.caption("저장된 케어 로그가 없습니다.")
 
         st.subheader("📝 보고서 저장")
         md, txt = _export_report(ctx, None)
