@@ -76,9 +76,9 @@ def generate_ics(now_dt, have_apap: bool, have_ibu: bool) -> str:
     def dtfmt(dt): return dt.strftime("%Y%m%dT%H%M%S")
     items = [("수분/탈수 점검", now_dt + timedelta(minutes=30)), ("소변/활력 점검", now_dt + timedelta(hours=2))]
     if have_apap:
-        items.append(("APAP 다음 복용 가능(최조시각)", now_dt + timedelta(hours=4)))
+        items.append(("APAP 다음 복용 가능(최초시각)", now_dt + timedelta(hours=4)))
     if have_ibu:
-        items.append(("IBU 다음 복용 가능(최조시각)", now_dt + timedelta(hours=6)))
+        items.append(("IBU 다음 복용 가능(최초시각)", now_dt + timedelta(hours=6)))
     lines = ["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//BloodMap//CareLog//KO"]
     for title, dt in items:
         lines += ["BEGIN:VEVENT", f"DTSTART:{dtfmt(dt)}", f"SUMMARY:{title}", "END:VEVENT"]
@@ -537,7 +537,7 @@ if mode == "암":
     lines_blocks.append(("특수검사 해석", sp_lines if sp_lines else ["(입력값 없음 또는 특이 소견 없음)"]))
 
     # --- 🔽 특수검사 바로 아래: 소아 해열제/설사 체크(토글) + 케어 로그 ---
-    on_peds_tool = st.toggle("🧒해열제/설사 체크 (펼치기)", value=False, key="peds_tool_toggle_cancer")
+    on_peds_tool = st.toggle("🧒 소아 해열제/설사 체크 (펼치기)", value=False, key="peds_tool_toggle_cancer")
     if on_peds_tool:
         age_m_c = st.number_input("나이(개월)", min_value=0, step=1, key="ped_age_m_cancer")
         weight_c = st.number_input("체중(kg)", min_value=0.0, step=0.1, key="ped_weight_cancer")
@@ -657,7 +657,7 @@ elif mode == "일상":
             st.caption("간격 **6~8시간**, 위장 자극 시 음식과 함께")
         st.warning("이 용량 정보는 **참고용**입니다. 반드시 **주치의와 상담**하십시오.")
 
-        show_care = st.toggle("🧒해열제/설사 체크 (펼치기)", value=False, key="peds_tool_toggle_daily_child_result")
+        show_care = st.toggle("🧒 소아 해열제/설사 체크 (펼치기)", value=True, key="peds_tool_toggle_peds_result")
         if show_care:
             now = kst_now()
             st.caption(f"현재 시각 (KST): {now.strftime('%Y-%m-%d %H:%M')}")
@@ -897,7 +897,7 @@ if results_only_after_analyze(st):
                 st.caption("간격 **6~8시간**, 위장 자극 시 음식과 함께")
             st.warning("이 용량 정보는 **참고용**입니다. 반드시 **주치의와 상담**하십시오.")
 
-        show_care = st.toggle("🧒해열제/설사 체크 (펼치기)", value=False, key="peds_tool_toggle_daily_child_result")
+        show_care = st.toggle("🧒 소아 해열제/설사 체크 (펼치기)", value=True, key="peds_tool_toggle_peds_result")
         if show_care:
             now = kst_now()
             st.caption(f"현재 시각 (KST): {now.strftime('%Y-%m-%d %H:%M')}")
@@ -943,7 +943,7 @@ if results_only_after_analyze(st):
             st.caption("간격 **6~8시간**, 위장 자극 시 음식과 함께")
         st.warning("이 용량 정보는 **참고용**입니다. 반드시 **주치의와 상담**하십시오.")
 
-        show_care = st.toggle("🧒해열제/설사 체크 (펼치기)", value=False, key="peds_tool_toggle_daily_child_result")
+        show_care = st.toggle("🧒 소아 해열제/설사 체크 (펼치기)", value=True, key="peds_tool_toggle_peds_result")
         if show_care:
             now = kst_now()
             st.caption(f"현재 시각 (KST): {now.strftime('%Y-%m-%d %H:%M')}")
