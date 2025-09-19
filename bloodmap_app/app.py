@@ -421,7 +421,7 @@ if mode == "암":
     if sp_lines: lines_blocks.append(("특수검사 해석", sp_lines))
 
     # --- 🔽 특수검사 '바로 밑' : 소아 해열제/설사 + 케어 로그 ---
-    on_peds_tool = st.toggle("🧒 소아 해열제/설사 체크 (토글)", value=False, key="peds_tool_toggle_cancer")
+    on_peds_tool = st.toggle("🧒항암환자 해열제/설사 체크 (토글)", value=False, key="peds_tool_toggle_cancer")
     if on_peds_tool:
         cc1, cc2 = st.columns(2)
         with cc1:
