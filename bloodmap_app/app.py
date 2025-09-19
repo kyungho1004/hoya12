@@ -272,7 +272,7 @@ def lab_trend_demo():
     dfh["Date"] = pd.to_datetime(dfh["Date"]).dt.tz_localize(None)
     for col in ["WBC,백혈구","Hb,혈색소","PLT,혈소판","CRP","ANC,호중구"]:
         dfh[col] = pd.to_numeric(dfh[col], errors="coerce")
-    pick = st.multiselect("표시 항목", ["WBC,백혈구","Hb,혈색소","PLT,혈소판","CRP","ANC,호중구"], default=["WBC,백혈구","Hb,혈색소"])
+    pick = st.multiselect("표시 항목", ["WBC,백혈구","Hb,혈색소","PLT,혈소판","CRP","ANC,호중구"], default=["WBC,백혈구","Hb,혈색소"], key='lab_trend_pick')
     if pick:
         try:
             age_is_child = st.toggle("연령: 소아 기준 사용", value=False, key="range_child_toggle_demo")
@@ -307,7 +307,7 @@ def lab_trend_demo():
         "CRP": [0.4,0.6,0.3,0.2,0.1,0.2,0.5,0.4],
         "ANC,호중구": [1300,1600,2000,2500,2200,3000,2800,2600],
     })
-    pick = st.multiselect("표시 항목", ["WBC,백혈구","Hb,혈색소","PLT,혈소판","CRP","ANC,호중구"], default=["WBC,백혈구","Hb,혈색소"])
+    pick = st.multiselect("표시 항목", ["WBC,백혈구","Hb,혈색소","PLT,혈소판","CRP","ANC,호중구"], default=["WBC,백혈구","Hb,혈색소"], key='lab_trend_pick')
     if pick:
         age_is_child = st.toggle("연령: 소아 기준 사용", value=False, key="range_child_toggle_demo")
         ranges_adult = {"WBC,백혈구": (4000, 10000), "Hb,혈색소": (12.0, 16.0), "PLT,혈소판": (150, 400), "CRP": (0, 0.5), "ANC,호중구": (1500, 8000)}
