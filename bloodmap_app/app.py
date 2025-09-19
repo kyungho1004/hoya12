@@ -176,6 +176,10 @@ ONCO_MAP = build_onco_map()
 st.set_page_config(page_title="BloodMap — 피수치가이드", page_icon="🩸", layout="centered")
 st.title("BloodMap — 피수치가이드")
 
+
+st.info("📌 **즐겨찾기 안내** — PC: Ctrl/⌘+D 로 북마크.  모바일: 브라우저 **공유 → 홈 화면에 추가**를 누르면 더 빨리 열 수 있어요.")
+
+
 st.info(
     "이 앱은 의료행위가 아니며, **참고용**입니다. 진단·치료를 **대체하지 않습니다**.\n"
     "약 변경/복용 중단 등은 반드시 주치의와 상의하세요.\n"
@@ -507,6 +511,20 @@ elif mode == "일상":
         with d2:
             st.metric("이부프로펜 시럽 (평균 1회분)", f"{ibu_ml} ml")
             st.caption("간격 **6~8시간**, 위장 자극 시 음식과 함께")
+
+        # 🔽 토글: 소아 해열제/설사 체크 + 케어 로그
+        show_care = st.toggle("🧒 소아 해열제/설사 체크 (펼치기)", value=False, key="peds_tool_toggle_daily_child")
+        if show_care:
+            now = kst_now()
+            st.caption(f"현재 시각 (KST): {now.strftime('%Y-%m-%d %H:%M')}")
+            st.write(f"- 다음 APAP: { (now+timedelta(hours=4)).strftime('%H:%M') } ~ { (now+timedelta(hours=6)).strftime('%H:%M') }")
+            st.write(f"- 다음 IBU: { (now+timedelta(hours=6)).strftime('%H:%M') } ~ { (now+timedelta(hours=8)).strftime('%H:%M') }")
+            st.markdown("**설사/구토 시간 체크(최소 간격)**")
+            st.write("- 구토 시: **5분마다 5–10 mL**씩 소량 제공")
+            st.write("- 설사/구토 1회마다: **체중당 10 mL/kg** 추가 보충")
+            st.write(f"- 수분/탈수 점검: **{ (now+timedelta(minutes=30)).strftime('%H:%M') }** (30분 후) · 소변/활력 점검: **{ (now+timedelta(hours=2)).strftime('%H:%M') }** (2시간 후)")
+            render_care_log_ui(st.session_state.get("key","guest"), apap_ml=apap_ml, ibu_ml=ibu_ml, section_title="설사/구토/해열제 기록(일상·소아)")
+        
         st.warning("이 용량 정보는 **참고용**입니다. 반드시 **주치의와 상담**하십시오.")
 
         fever_cat = _fever_bucket_from_temp(temp)
