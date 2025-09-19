@@ -19,6 +19,22 @@ KST = ZoneInfo("Asia/Seoul")
 def kst_now() -> datetime:
     return datetime.now(KST)
 
+# ---- 케어 로그 유틸 (설사/구토/해열제/메모) ----
+def _init_care_log(user_key: str):
+    import pandas as _pd
+    st.session_state.setdefault("care_log", {})
+    if user_key not in st.session_state["care_log"]:
+        st.session_state["care_log"][user_key] = _pd.DataFrame(columns=["ts_kst","type","details"])
+
+def _append_care_log(user_key: str, kind: str, details: str):
+    import pandas as _pd
+    _init_care_log(user_key)
+    now = kst_now().strftime("%Y-%m-%d %H:%M")
+    row = _pd.DataFrame([{"ts_kst": now, "type": kind, "details": details}])
+    st.session_state["care_log"][user_key] = _pd.concat(
+        [st.session_state["care_log"][user_key], row], ignore_index=True
+    )
+
 # 중복키 방지용 스케줄 블록(암 모드에서만 사용)
 def safe_schedule_block(prefix: str = "onc"):
     st.markdown("#### 📅 항암 스케줄(간단)")
@@ -317,6 +333,44 @@ if mode == "암":
     # --- 🔽 형 요구사항: 특수검사 '바로 밑' 토글 블록 (소아 해열제/설사 + KST 시간) ---
     on_peds_tool = st.toggle("🧒 소아 해열제/설사 체크 (토글)", value=False, key="peds_tool_toggle_cancer")
     if on_peds_tool:
+
+        # ---- 케어 로그(설사/구토/해열제) 저장 ----
+        _init_care_log(st.session_state.get("key", "guest"))
+        st.markdown("#### 📝 케어 로그 저장")
+        note = st.text_input("메모(선택)", key="care_note_input")
+        colA, colB, colC, colD = st.columns(4)
+        if colA.button("구토 기록 추가", key="btn_log_vomit"):
+            _append_care_log(st.session_state.get("key","guest"), "구토",
+                             f"구토 발생 — 보충 10 mL/kg, 5~10mL q5min. 다음 점검 { (now+timedelta(minutes=30)).strftime('%H:%M') } / 활력 { (now+timedelta(hours=2)).strftime('%H:%M') } (KST)")
+            if note:
+                _append_care_log(st.session_state.get("key","guest"), "메모", note)
+            st.success("구토 기록 저장됨")
+        if colB.button("설사 기록 추가", key="btn_log_diarrhea"):
+            _append_care_log(st.session_state.get("key","guest"), "설사",
+                             f"설사 발생 — 보충 10 mL/kg. 다음 점검 { (now+timedelta(minutes=30)).strftime('%H:%M') } / 활력 { (now+timedelta(hours=2)).strftime('%H:%M') } (KST)")
+            if note:
+                _append_care_log(st.session_state.get("key","guest"), "메모", note)
+            st.success("설사 기록 저장됨")
+        if colC.button("APAP 투약 기록", key="btn_log_apap"):
+            _append_care_log(st.session_state.get("key","guest"), "해열제(APAP)",
+                             f"{apap_ml} ml 투약 — 다음 복용 가능 { (now+timedelta(hours=4)).strftime('%H:%M') }~{ (now+timedelta(hours=6)).strftime('%H:%M') } KST")
+            if note:
+                _append_care_log(st.session_state.get("key","guest"), "메모", note)
+            st.success("APAP 기록 저장됨")
+        if colD.button("IBU 투약 기록", key="btn_log_ibu"):
+            _append_care_log(st.session_state.get("key","guest"), "해열제(IBU)",
+                             f"{ibu_ml} ml 투약 — 다음 복용 가능 { (now+timedelta(hours=6)).strftime('%H:%M') }~{ (now+timedelta(hours=8)).strftime('%H:%M') } KST")
+            if note:
+                _append_care_log(st.session_state.get("key","guest"), "메모", note)
+            st.success("IBU 기록 저장됨")
+
+        # 표/다운로드
+        df_log = st.session_state["care_log"][st.session_state.get("key","guest")]
+        if not df_log.empty:
+            st.dataframe(df_log.tail(20), use_container_width=True, height=240)
+            st.download_button("⬇️ 케어 로그 CSV", data=df_log.to_csv(index=False), file_name="care_log.csv", mime="text/csv")
+        else:
+            st.caption("아직 저장된 케어 로그가 없습니다.")
         cc1, cc2 = st.columns(2)
         with cc1:
             age_m = st.number_input("나이(개월)", min_value=0, step=1, key="ped_age_m_cancer")
@@ -563,6 +617,17 @@ if results_only_after_analyze(st):
             st.markdown("**항생제**")
             render_adverse_effects(st, akeys, DRUG_DB)
 
+        
+        # ---- 케어 로그 미리보기/다운로드 ----
+        st.subheader("🗒️ 케어 로그")
+        _init_care_log(st.session_state.get("key","guest"))
+        df_log = st.session_state["care_log"][st.session_state.get("key","guest")]
+        if not df_log.empty:
+            st.dataframe(df_log.tail(50), use_container_width=True, height=260)
+            st.download_button("⬇️ 케어 로그 CSV", data=df_log.to_csv(index=False), file_name="care_log.csv", mime="text/csv")
+        else:
+            st.caption("저장된 케어 로그가 없습니다.")
+
         st.subheader("📝 보고서 저장")
         md, txt = _export_report(ctx, lines_blocks)
         st.download_button("⬇️ Markdown (.md)", data=md, file_name="BloodMap_Report.md")
@@ -606,6 +671,17 @@ if results_only_after_analyze(st):
         for L in (ctx.get("diet_lines") or []):
             st.write("- " + str(L))
 
+        
+        # ---- 케어 로그 미리보기/다운로드 ----
+        st.subheader("🗒️ 케어 로그")
+        _init_care_log(st.session_state.get("key","guest"))
+        df_log = st.session_state["care_log"][st.session_state.get("key","guest")]
+        if not df_log.empty:
+            st.dataframe(df_log.tail(50), use_container_width=True, height=260)
+            st.download_button("⬇️ 케어 로그 CSV", data=df_log.to_csv(index=False), file_name="care_log.csv", mime="text/csv")
+        else:
+            st.caption("저장된 케어 로그가 없습니다.")
+
         st.subheader("📝 보고서 저장")
         md, txt = _export_report(ctx, None)
         st.download_button("⬇️ Markdown (.md)", data=md, file_name="BloodMap_Report.md")
@@ -640,6 +716,17 @@ if results_only_after_analyze(st):
         st.subheader("🍽️ 식이가이드")
         for L in (ctx.get("diet_lines") or []):
             st.write("- " + str(L))
+
+        
+        # ---- 케어 로그 미리보기/다운로드 ----
+        st.subheader("🗒️ 케어 로그")
+        _init_care_log(st.session_state.get("key","guest"))
+        df_log = st.session_state["care_log"][st.session_state.get("key","guest")]
+        if not df_log.empty:
+            st.dataframe(df_log.tail(50), use_container_width=True, height=260)
+            st.download_button("⬇️ 케어 로그 CSV", data=df_log.to_csv(index=False), file_name="care_log.csv", mime="text/csv")
+        else:
+            st.caption("저장된 케어 로그가 없습니다.")
 
         st.subheader("📝 보고서 저장")
         md, txt = _export_report(ctx, None)
