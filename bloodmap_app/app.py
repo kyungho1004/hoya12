@@ -336,6 +336,8 @@ if mode == "암":
 
         # ---- 케어 로그(설사/구토/해열제) 저장 ----
         _init_care_log(st.session_state.get("key", "guest"))
+        # now 변수가 아래 버튼 핸들러에서 필요하므로 안전하게 다시 산출
+        now = kst_now()
         st.markdown("#### 📝 케어 로그 저장")
         note = st.text_input("메모(선택)", key="care_note_input")
         colA, colB, colC, colD = st.columns(4)
