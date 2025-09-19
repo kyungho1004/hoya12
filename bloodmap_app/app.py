@@ -385,9 +385,9 @@ if mode == "암":
 
     # --- 🔽 특수검사 바로 밑: 🌡️ 해열제/설사 안내 + 케어 로그 ---
 
-    on_peds_tool = st.toggle("🧒 소아 해열제/설사 체크 (펼치기)", value=False, key="peds_tool_toggle_cancer")
+    on_peds_tool = st.toggle("🧒해열제/설사 체크 (펼치기)", value=False, key="peds_tool_toggle_cancer")
     if on_peds_tool:
-        st.markdown("### 🌡️ 소아 해열제/설사 체크")
+        st.markdown("### 🌡️ 해열제/설사 체크")
 
         st.caption("APAP=아세트아미노펜, IBU=이부프로펜계열 — 용량/간격은 참고용, 반드시 주치의와 상담")
 
