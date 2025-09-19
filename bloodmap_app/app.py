@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
-from datetime import date
+from datetime import date, datetime, timedelta
 
 from core_utils import nickname_pin, clean_num, schedule_block
 from drug_db import DRUG_DB, ensure_onco_drug_db, display_label
@@ -12,7 +12,14 @@ from lab_diet import lab_diet_guides
 from peds_profiles import get_symptom_options
 from peds_dose import acetaminophen_ml, ibuprofen_ml
 from pdf_export import export_md_to_pdf
+from zoneinfo import ZoneInfo
 import altair as alt
+
+# ----- Timezone helpers -----
+KST = ZoneInfo("Asia/Seoul")
+def kst_now() -> datetime:
+    return datetime.now(KST)
+
 
 # ---------- 해열제 가드레일 & ICS ----------
 GUARD = {"APAP_MAX_DOSES_PER_DAY": 4, "IBU_MAX_DOSES_PER_DAY": 4}
@@ -67,6 +74,88 @@ def generate_ics(now_dt, have_apap: bool, have_ibu: bool) -> str:
 # 세션 플래그(중복 방지)
 if "summary_line_shown" not in st.session_state:
     st.session_state["summary_line_shown"] = False
+
+
+# ---------- 케어 로그 유틸 (세션 기반) ----------
+def _init_care_log(user_key: str):
+    st.session_state.setdefault("care_log", {})
+    if user_key not in st.session_state["care_log"]:
+        st.session_state["care_log"][user_key] = pd.DataFrame(columns=["ts_kst","type","details"])
+
+def _append_care_log(user_key: str, kind: str, details: str):
+    _init_care_log(user_key)
+    now = kst_now().strftime("%Y-%m-%d %H:%M")
+    row = pd.DataFrame([{"ts_kst": now, "type": kind, "details": details}])
+    st.session_state["care_log"][user_key] = pd.concat([st.session_state["care_log"][user_key], row], ignore_index=True)
+
+def _care_log_df(user_key: str) -> pd.DataFrame:
+    _init_care_log(user_key)
+    return st.session_state["care_log"][user_key]
+
+def _care_log_to_md(df: pd.DataFrame, title="케어 로그") -> str:
+    lines = [f"# {title}", "", f"- 내보낸 시각(KST): {kst_now().strftime('%Y-%m-%d %H:%M')}",
+             "", "시간(KST) | 유형 | 내용", "---|---|---"]
+    for _, r in df.iterrows():
+        lines.append(f"{r.get('ts_kst','')} | {r.get('type','')} | {r.get('details','')}")
+    return "\n".join(lines)
+
+def render_care_log_ui(user_key: str, apap_ml=None, ibu_ml=None, section_title="설사/구토/해열제 기록"):
+    st.markdown(f"### {section_title}")
+    st.caption("APAP=아세트아미노펜, IBU=이부프로펜계열 (모든 시각은 KST 기준)")
+    _init_care_log(user_key)
+    now = kst_now()
+    note = st.text_input("메모(선택)", key=f"care_note_{section_title}")
+    colA, colB, colC, colD = st.columns(4)
+    if colA.button("구토 기록 추가", key=f"btn_log_vomit_{section_title}"):
+        _append_care_log(user_key, "구토",
+            f"구토 — 보충 10 mL/kg, 5–10 mL q5min. 다음 점검 { (now+timedelta(minutes=30)).strftime('%H:%M') } / 활력 { (now+timedelta(hours=2)).strftime('%H:%M') } (KST)")
+        if note: _append_care_log(user_key, "메모", note); st.success("구토 기록 저장됨")
+    if colB.button("설사 기록 추가", key=f"btn_log_diarrhea_{section_title}"):
+        _append_care_log(user_key, "설사",
+            f"설사 — 보충 10 mL/kg. 다음 점검 { (now+timedelta(minutes=30)).strftime('%H:%M') } / 활력 { (now+timedelta(hours=2)).strftime('%H:%M') } (KST)")
+        if note: _append_care_log(user_key, "메모", note); st.success("설사 기록 저장됨")
+    if colC.button("APAP(아세트아미노펜) 투약", key=f"btn_log_apap_{section_title}"):
+        dose = f"{apap_ml} ml" if apap_ml is not None else "용량 미기입"
+        _append_care_log(user_key, "해열제(APAP)",
+            f"{dose} — 다음 복용 { (now+timedelta(hours=4)).strftime('%H:%M') }~{ (now+timedelta(hours=6)).strftime('%H:%M') } KST")
+        if note: _append_care_log(user_key, "메모", note); st.success("APAP 기록 저장됨")
+    if colD.button("IBU(이부프로펜계열) 투약", key=f"btn_log_ibu_{section_title}"):
+        dose = f"{ibu_ml} ml" if ibu_ml is not None else "용량 미기입"
+        _append_care_log(user_key, "해열제(IBU)",
+            f"{dose} — 다음 복용 { (now+timedelta(hours=6)).strftime('%H:%M') }~{ (now+timedelta(hours=8)).strftime('%H:%M') } KST")
+        if note: _append_care_log(user_key, "메모", note); st.success("IBU 기록 저장됨")
+
+    df_log = _care_log_df(user_key)
+    # 가드레일/중복 경고 & ICS 버튼 (helpers가 상단에 이미 정의됨)
+    try:
+        guardrail_panel(df_log, section_title, apap_enabled=(apap_ml is not None), ibu_enabled=(ibu_ml is not None))
+    except Exception:
+        pass
+
+    if not df_log.empty:
+        st.dataframe(df_log.tail(50), use_container_width=True, height=240)
+        st.markdown("#### 삭제")
+        del_idxs = st.multiselect("삭제할 행 인덱스 선택(표 왼쪽 번호)", options=list(df_log.index), key=f"del_idx_{section_title}")
+        if st.button("선택 행 삭제", key=f"btn_del_{section_title}") and del_idxs:
+            st.session_state['care_log'][user_key] = df_log.drop(index=del_idxs).reset_index(drop=True)
+            st.success(f"{len(del_idxs)}개 행 삭제 완료")
+        st.markdown("#### 내보내기")
+        md = _care_log_to_md(df_log, title="케어 로그")
+        st.download_button("⬇️ TXT", data=md.replace("# ","").replace("## ",""), file_name="care_log.txt")
+        try:
+            pdf_bytes = export_md_to_pdf(md)
+            st.download_button("⬇️ PDF", data=pdf_bytes, file_name="care_log.pdf", mime="application/pdf")
+        except Exception as e:
+            st.caption(f"PDF 변환 오류: {e}")
+        # 📅 캘린더(.ics)
+        try:
+            ics_data = generate_ics(kst_now(), have_apap=(apap_ml is not None), have_ibu=(ibu_ml is not None))
+            st.download_button("📅 캘린더(.ics)", data=ics_data, file_name="care_times.ics", mime="text/calendar", key=f"ics_{section_title}")
+        except Exception:
+            pass
+    else:
+        st.caption("저장된 케어 로그가 없습니다. 위의 버튼으로 기록을 추가하세요.")
+
 
 def short_caption(label: str) -> str:
     """
@@ -142,6 +231,8 @@ ONCO_MAP = build_onco_map()
 
 st.set_page_config(page_title="BloodMap — 피수치가이드", page_icon="🩸", layout="centered")
 st.title("BloodMap — 피수치가이드")
+st.info("📌 **즐겨찾기** — PC: Ctrl/⌘+D, 모바일: 브라우저 공유 → **홈 화면에 추가**")
+
 
 st.info(
     "이 앱은 의료행위가 아니며, **참고용**입니다. 진단·치료를 **대체하지 않습니다**.\n"
@@ -241,6 +332,30 @@ def _adult_diet_fallback(sym: dict) -> list[str]:
 
     tips.append("구토 시 30분 휴식 후 **맑은 수분**부터 재개, 한 번에 많이 마시지 말기")
     return tips
+
+
+def render_severity_list(title: str, lines: list[str], show_normals: bool, inputs_present: bool):
+    st.subheader("🧬 " + title)
+    if not lines:
+        st.markdown(":green[**(입력은 있었으나 특이 소견 없음)**]" if inputs_present else ":gray[(입력값 없음)]")
+        return
+    for L in lines:
+        txt = str(L)
+        t = txt.lower()
+        level = "gray"
+        if any(k in txt for k in ["위험","응급","심각","위독","G4","G3"]):
+            level = "red"
+        elif any(k in txt for k in ["주의","경계","모니터","G2"]):
+            level = "yellow"
+        elif any(k in t for k in ["정상","정상범위","ok","양호"]):
+            level = "green"
+        # hide normals if unchecked
+        if not show_normals and level == "green":
+            continue
+        badge = { "red": ":red_circle:", "yellow": ":large_yellow_circle:", "green": ":green_circle:", "gray": ":white_circle:" }.get(level, ":white_circle:")
+        color_open = { "red": ":red[", "yellow": ":orange[", "green": ":green[", "gray": ":gray[" }.get(level, ":gray[")
+        st.markdown(f"- {badge} {color_open}{txt}]")
+
 
 def _export_report(ctx: dict, lines_blocks=None):
     footer = (
@@ -344,7 +459,31 @@ if mode == "암":
     from special_tests import special_tests_ui
     sp_lines = special_tests_ui()
     lines_blocks = []
-    if sp_lines: lines_blocks.append(("특수검사 해석", sp_lines))
+    lines_blocks.append(("특수검사 해석", sp_lines if sp_lines else ["(입력값 없음 또는 특이 소견 없음)"]))
+
+    # --- 🔽 특수검사 바로 아래: 소아 해열제/설사 체크(토글) + 케어 로그 ---
+    on_peds_tool = st.toggle("🧒 소아 해열제/설사 체크 (펼치기)", value=False, key="peds_tool_toggle_cancer")
+    if on_peds_tool:
+        age_m_c = st.number_input("나이(개월)", min_value=0, step=1, key="ped_age_m_cancer")
+        weight_c = st.number_input("체중(kg)", min_value=0.0, step=0.1, key="ped_weight_cancer")
+        apap_ml_c, _w1 = acetaminophen_ml(age_m_c, weight_c or None)
+        ibu_ml_c,  _w2 = ibuprofen_ml(age_m_c, weight_c or None)
+        dd1, dd2 = st.columns(2)
+        with dd1:
+            st.metric("아세트아미노펜(APAP) 시럽 (1회 평균)", f"{apap_ml_c} ml")
+            st.caption("간격 **4~6시간**, 하루 최대 4회(성분 중복 금지)")
+        with dd2:
+            st.metric("이부프로펜(IBU) 시럽 (1회 평균)", f"{ibu_ml_c} ml")
+            st.caption("간격 **6~8시간**, 위장 자극 시 음식과 함께")
+        now = kst_now()
+        st.caption(f"현재 시각 (KST): {now.strftime('%Y-%m-%d %H:%M')}")
+        st.write(f"- 다음 APAP: { (now+timedelta(hours=4)).strftime('%H:%M') } ~ { (now+timedelta(hours=6)).strftime('%H:%M') }")
+        st.write(f"- 다음 IBU: { (now+timedelta(hours=6)).strftime('%H:%M') } ~ { (now+timedelta(hours=8)).strftime('%H:%M') }")
+        st.markdown("**설사/구토 시간 체크(최소 간격)**")
+        st.write("- 구토 시: **5분마다 5–10 mL**씩 소량 제공")
+        st.write("- 설사/구토 1회마다: **체중당 10 mL/kg** 추가 보충")
+        st.write(f"- 수분/탈수 점검: **{ (now+timedelta(minutes=30)).strftime('%H:%M') }** (30분 후) · 소변/활력 점검: **{ (now+timedelta(hours=2)).strftime('%H:%M') }** (2시간 후)")
+        render_care_log_ui(st.session_state.get("key","guest"), apap_ml=apap_ml_c, ibu_ml=ibu_ml_c, section_title="설사/구토/해열제 기록(암)")
 
     # 저장/그래프
     st.markdown("#### 💾 저장/그래프")
@@ -443,6 +582,19 @@ elif mode == "일상":
             st.caption("간격 **6~8시간**, 위장 자극 시 음식과 함께")
         st.warning("이 용량 정보는 **참고용**입니다. 반드시 **주치의와 상담**하십시오.")
 
+        show_care = st.toggle("🧒 소아 해열제/설사 체크 (펼치기)", value=False, key="peds_tool_toggle_daily_child")
+        if show_care:
+            now = kst_now()
+            st.caption(f"현재 시각 (KST): {now.strftime('%Y-%m-%d %H:%M')}")
+            st.write(f"- 다음 APAP: { (now+timedelta(hours=4)).strftime('%H:%M') } ~ { (now+timedelta(hours=6)).strftime('%H:%M') }")
+            st.write(f"- 다음 IBU: { (now+timedelta(hours=6)).strftime('%H:%M') } ~ { (now+timedelta(hours=8)).strftime('%H:%M') }")
+            st.markdown("**설사/구토 시간 체크(최소 간격)**")
+            st.write("- 구토 시: **5분마다 5–10 mL**씩 소량 제공")
+            st.write("- 설사/구토 1회마다: **체중당 10 mL/kg** 추가 보충")
+            st.write(f"- 수분/탈수 점검: **{ (now+timedelta(minutes=30)).strftime('%H:%M') }** (30분 후) · 소변/활력 점검: **{ (now+timedelta(hours=2)).strftime('%H:%M') }** (2시간 후)")
+            render_care_log_ui(st.session_state.get("key","guest"), apap_ml=apap_ml, ibu_ml=ibu_ml, section_title="설사/구토/해열제 기록(일상·소아)")
+
+
         fever_cat = _fever_bucket_from_temp(temp)
         # 입력 누락 대비 기본값 보정
         if "days_since_onset" not in locals(): days_since_onset = 0
@@ -516,6 +668,18 @@ elif mode == "일상":
         st.info(triage)
 
         diet_lines = _adult_diet_fallback(symptoms)
+
+        # 해열제/설사 체크 (성인) — 텍스트 가이드 + 케어 로그
+        show_care_adult = st.toggle("🧑 해열제/설사 체크 (펼치기)", value=False, key="peds_tool_toggle_daily_adult")
+        if show_care_adult:
+            now = kst_now()
+            st.caption(f"현재 시각 (KST): {now.strftime('%Y-%m-%d %H:%M')}")
+            st.write(f"- APAP 권장 간격: **4~6시간** / IBU: **6~8시간**")
+            st.markdown("**설사/구토 시간 체크(최소 간격)**")
+            st.write("- 구토 시: **5분마다 5–10 mL**씩 소량 제공")
+            st.write("- 설사/구토 1회마다: **체중당 10 mL/kg** 추가 보충")
+            render_care_log_ui(st.session_state.get("key","guest"), apap_ml=None, ibu_ml=None, section_title="설사/구토/해열제 기록(일상·성인)")
+
 
         if st.button("🔎 해석하기", key="analyze_daily_adult"):
             st.session_state["analyzed"] = True
@@ -600,10 +764,10 @@ if results_only_after_analyze(st):
 
         # 순서: 피수치 → 특수검사 → 식이가이드 → 부작용
         lines_blocks = ctx.get("lines_blocks") or []
+        show_normals = st.checkbox("정상 항목도 표시", value=True)
+        inputs_present = bool(ctx.get("labs"))
         for title2, lines2 in lines_blocks:
-            if lines2:
-                st.subheader("🧬 " + title2)
-                for L in lines2: st.write("- " + L)
+            render_severity_list(title2, lines2 or [], show_normals, inputs_present)
 
         st.subheader("🍽️ 식이가이드")
         diet_lines = lab_diet_guides(labs or {}, heme_flag=(ctx.get("group")=="혈액암"))
@@ -658,6 +822,19 @@ if results_only_after_analyze(st):
                 st.caption("간격 **6~8시간**, 위장 자극 시 음식과 함께")
             st.warning("이 용량 정보는 **참고용**입니다. 반드시 **주치의와 상담**하십시오.")
 
+        show_care = st.toggle("🧒 소아 해열제/설사 체크 (펼치기)", value=False, key="peds_tool_toggle_daily_child")
+        if show_care:
+            now = kst_now()
+            st.caption(f"현재 시각 (KST): {now.strftime('%Y-%m-%d %H:%M')}")
+            st.write(f"- 다음 APAP: { (now+timedelta(hours=4)).strftime('%H:%M') } ~ { (now+timedelta(hours=6)).strftime('%H:%M') }")
+            st.write(f"- 다음 IBU: { (now+timedelta(hours=6)).strftime('%H:%M') } ~ { (now+timedelta(hours=8)).strftime('%H:%M') }")
+            st.markdown("**설사/구토 시간 체크(최소 간격)**")
+            st.write("- 구토 시: **5분마다 5–10 mL**씩 소량 제공")
+            st.write("- 설사/구토 1회마다: **체중당 10 mL/kg** 추가 보충")
+            st.write(f"- 수분/탈수 점검: **{ (now+timedelta(minutes=30)).strftime('%H:%M') }** (30분 후) · 소변/활력 점검: **{ (now+timedelta(hours=2)).strftime('%H:%M') }** (2시간 후)")
+            render_care_log_ui(st.session_state.get("key","guest"), apap_ml=apap_ml, ibu_ml=ibu_ml, section_title="설사/구토/해열제 기록(일상·소아)")
+
+
         st.subheader("🍽️ 식이가이드")
         for L in (ctx.get("diet_lines") or []):
             st.write("- " + str(L))
@@ -690,6 +867,19 @@ if results_only_after_analyze(st):
             st.metric("이부프로펜 시럽", f"{ctx.get('ibu_ml')} ml")
             st.caption("간격 **6~8시간**, 위장 자극 시 음식과 함께")
         st.warning("이 용량 정보는 **참고용**입니다. 반드시 **주치의와 상담**하십시오.")
+
+        show_care = st.toggle("🧒 소아 해열제/설사 체크 (펼치기)", value=False, key="peds_tool_toggle_daily_child")
+        if show_care:
+            now = kst_now()
+            st.caption(f"현재 시각 (KST): {now.strftime('%Y-%m-%d %H:%M')}")
+            st.write(f"- 다음 APAP: { (now+timedelta(hours=4)).strftime('%H:%M') } ~ { (now+timedelta(hours=6)).strftime('%H:%M') }")
+            st.write(f"- 다음 IBU: { (now+timedelta(hours=6)).strftime('%H:%M') } ~ { (now+timedelta(hours=8)).strftime('%H:%M') }")
+            st.markdown("**설사/구토 시간 체크(최소 간격)**")
+            st.write("- 구토 시: **5분마다 5–10 mL**씩 소량 제공")
+            st.write("- 설사/구토 1회마다: **체중당 10 mL/kg** 추가 보충")
+            st.write(f"- 수분/탈수 점검: **{ (now+timedelta(minutes=30)).strftime('%H:%M') }** (30분 후) · 소변/활력 점검: **{ (now+timedelta(hours=2)).strftime('%H:%M') }** (2시간 후)")
+            render_care_log_ui(st.session_state.get("key","guest"), apap_ml=apap_ml, ibu_ml=ibu_ml, section_title="설사/구토/해열제 기록(일상·소아)")
+
 
         st.subheader("🍽️ 식이가이드")
         for L in (ctx.get("diet_lines") or []):
