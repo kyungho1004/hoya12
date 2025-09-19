@@ -380,32 +380,60 @@ if mode == "암":
     if sp_lines: lines_blocks.append(("특수검사 해석", sp_lines))
 
     # --- 🔽 특수검사 바로 밑: 🌡️ 해열제/설사 안내 + 케어 로그 ---
-    st.markdown("### 🌡️ 소아 해열제/설사 체크")
-    st.caption("APAP=아세트아미노펜, IBU=이부프로펜계열 — 용량/간격은 참고용, 반드시 주치의와 상담")
-    cc1, cc2 = st.columns(2)
-    with cc1:
-        age_m = st.number_input("나이(개월)", min_value=0, step=1, key="ped_age_m_cancer")
-        weight = st.number_input("체중(kg)", min_value=0.0, step=0.1, key="ped_weight_cancer")
-    apap_ml, _w1 = acetaminophen_ml(age_m, weight or None)
-    ibu_ml,  _w2 = ibuprofen_ml(age_m, weight or None)
-    d1, d2 = st.columns(2)
-    with d1:
-        st.metric("아세트아미노펜(APAP) 시럽 (1회 평균)", f"{apap_ml} ml")
-        st.caption("간격 **4~6시간**, 하루 최대 4회(성분 중복 금지)")
-    with d2:
-        st.metric("이부프로펜(IBU) 시럽 (1회 평균)", f"{ibu_ml} ml")
-        st.caption("간격 **6~8시간**, 위장 자극 시 음식과 함께")
-    now = kst_now()
-    st.caption(f"현재 시각 (KST): {now.strftime('%Y-%m-%d %H:%M')}")
-    st.write(f"- 다음 APAP: { (now+timedelta(hours=4)).strftime('%H:%M') } ~ { (now+timedelta(hours=6)).strftime('%H:%M') }")
-    st.write(f"- 다음 IBU: { (now+timedelta(hours=6)).strftime('%H:%M') } ~ { (now+timedelta(hours=8)).strftime('%H:%M') }")
-    st.markdown("**설사/구토 시간 체크(최소 간격)**")
-    st.write("- 구토 시: **5분마다 5–10 mL**씩 소량 제공")
-    st.write("- 설사/구토 1회마다: **체중당 10 mL/kg** 추가 보충")
-    st.write(f"- 수분/탈수 점검: **{ (now+timedelta(minutes=30)).strftime('%H:%M') }** (30분 후) · 소변/활력 점검: **{ (now+timedelta(hours=2)).strftime('%H:%M') }** (2시간 후)")
 
-    # 케어 로그 (삭제·TXT/PDF·QR 포함)
-    render_care_log_ui(st.session_state.get("key","guest"), apap_ml=apap_ml, ibu_ml=ibu_ml, section_title="설사/구토/해열제 기록")
+    on_peds_tool = st.toggle("🧒 소아 해열제/설사 체크 (펼치기)", value=False, key="peds_tool_toggle_cancer")
+    if on_peds_tool:
+        st.markdown("### 🌡️ 소아 해열제/설사 체크")
+
+        st.caption("APAP=아세트아미노펜, IBU=이부프로펜계열 — 용량/간격은 참고용, 반드시 주치의와 상담")
+
+        cc1, cc2 = st.columns(2)
+
+        with cc1:
+
+            age_m = st.number_input("나이(개월)", min_value=0, step=1, key="ped_age_m_cancer")
+
+            weight = st.number_input("체중(kg)", min_value=0.0, step=0.1, key="ped_weight_cancer")
+
+        apap_ml, _w1 = acetaminophen_ml(age_m, weight or None)
+
+        ibu_ml,  _w2 = ibuprofen_ml(age_m, weight or None)
+
+        d1, d2 = st.columns(2)
+
+        with d1:
+
+            st.metric("아세트아미노펜(APAP) 시럽 (1회 평균)", f"{apap_ml} ml")
+
+            st.caption("간격 **4~6시간**, 하루 최대 4회(성분 중복 금지)")
+
+        with d2:
+
+            st.metric("이부프로펜(IBU) 시럽 (1회 평균)", f"{ibu_ml} ml")
+
+            st.caption("간격 **6~8시간**, 위장 자극 시 음식과 함께")
+
+        now = kst_now()
+
+        st.caption(f"현재 시각 (KST): {now.strftime('%Y-%m-%d %H:%M')}")
+
+        st.write(f"- 다음 APAP: { (now+timedelta(hours=4)).strftime('%H:%M') } ~ { (now+timedelta(hours=6)).strftime('%H:%M') }")
+
+        st.write(f"- 다음 IBU: { (now+timedelta(hours=6)).strftime('%H:%M') } ~ { (now+timedelta(hours=8)).strftime('%H:%M') }")
+
+        st.markdown("**설사/구토 시간 체크(최소 간격)**")
+
+        st.write("- 구토 시: **5분마다 5–10 mL**씩 소량 제공")
+
+        st.write("- 설사/구토 1회마다: **체중당 10 mL/kg** 추가 보충")
+
+        st.write(f"- 수분/탈수 점검: **{ (now+timedelta(minutes=30)).strftime('%H:%M') }** (30분 후) · 소변/활력 점검: **{ (now+timedelta(hours=2)).strftime('%H:%M') }** (2시간 후)")
+
+
+
+        # 케어 로그 (삭제·TXT/PDF·QR 포함)
+
+        render_care_log_ui(st.session_state.get("key","guest"), apap_ml=apap_ml, ibu_ml=ibu_ml, section_title="설사/구토/해열제 기록")
 
     # 저장/그래프
     st.markdown("#### 💾 저장/그래프")
