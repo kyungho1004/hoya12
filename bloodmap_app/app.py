@@ -117,7 +117,6 @@ st.info(
     "약 변경/복용 중단 등은 반드시 주치의와 상의하세요.\n"
     "개인정보를 수집하지 않으며, 어떠한 개인정보 입력도 요구하지 않습니다."
 )
-st.markdown("문의/버그 제보: **[피수치 가이드 공식카페](https://cafe.naver.com/bloodmap)**")
 
 nick, pin, key = nickname_pin()
 st.divider()
@@ -234,7 +233,7 @@ def _export_report(ctx: dict, lines_blocks=None):
         if ctx.get("days_since_onset") is not None:
             body.append(f"- 경과일수: {ctx.get('days_since_onset')}일")
     if ctx.get("preds"):
-        preds_text = "; ".join(f\"{p['label']}({p['score']})\" for p in ctx["preds"])
+        preds_text = "; ".join(f"{p['label']}({p['score']})" for p in ctx["preds"])
         body.append(f"- 자동 추정: {preds_text}")
     if ctx.get("triage"):
         body.append(f"- 트리아지: {ctx['triage']}")
