@@ -177,6 +177,8 @@ def render_care_log_ui(user_key: str, apap_ml=None, ibu_ml=None, section_title="
         if (not ro) and st.button("선택 행 삭제", key=f"btn_del_{section_title}") and del_idxs:
             st.session_state['care_log'][user_key] = df_log.drop(index=del_idxs).reset_index(drop=True)
             st.success(f"{len(del_idxs)}개 행 삭제 완료")
+        st.markdown("#### 읽기 전용 링크")
+        share_link_panel(section_title)
         st.markdown("#### 내보내기")
         md = _care_log_to_md(df_log, title="케어 로그")
         st.download_button("⬇️ TXT", data=md.replace("# ","").replace("## ",""), file_name="care_log.txt")
@@ -655,7 +657,7 @@ elif mode == "일상":
             st.caption("간격 **6~8시간**, 위장 자극 시 음식과 함께")
         st.warning("이 용량 정보는 **참고용**입니다. 반드시 **주치의와 상담**하십시오.")
 
-        show_care = st.toggle("🧒 소아 해열제/설사 체크 (펼치기)", value=False, key="peds_tool_toggle_daily_child")
+        show_care = st.toggle("🧒 소아 해열제/설사 체크 (펼치기)", value=False, key="peds_tool_toggle_daily_child_result")
         if show_care:
             now = kst_now()
             st.caption(f"현재 시각 (KST): {now.strftime('%Y-%m-%d %H:%M')}")
@@ -895,7 +897,7 @@ if results_only_after_analyze(st):
                 st.caption("간격 **6~8시간**, 위장 자극 시 음식과 함께")
             st.warning("이 용량 정보는 **참고용**입니다. 반드시 **주치의와 상담**하십시오.")
 
-        show_care = st.toggle("🧒 소아 해열제/설사 체크 (펼치기)", value=False, key="peds_tool_toggle_daily_child")
+        show_care = st.toggle("🧒 소아 해열제/설사 체크 (펼치기)", value=False, key="peds_tool_toggle_daily_child_result")
         if show_care:
             now = kst_now()
             st.caption(f"현재 시각 (KST): {now.strftime('%Y-%m-%d %H:%M')}")
@@ -941,7 +943,7 @@ if results_only_after_analyze(st):
             st.caption("간격 **6~8시간**, 위장 자극 시 음식과 함께")
         st.warning("이 용량 정보는 **참고용**입니다. 반드시 **주치의와 상담**하십시오.")
 
-        show_care = st.toggle("🧒 소아 해열제/설사 체크 (펼치기)", value=False, key="peds_tool_toggle_daily_child")
+        show_care = st.toggle("🧒 소아 해열제/설사 체크 (펼치기)", value=False, key="peds_tool_toggle_daily_child_result")
         if show_care:
             now = kst_now()
             st.caption(f"현재 시각 (KST): {now.strftime('%Y-%m-%d %H:%M')}")
