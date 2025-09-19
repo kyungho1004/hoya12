@@ -2,63 +2,98 @@
 # -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
-import altair as alt
 import uuid
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-# ---------- OPTIONAL PROJECT IMPORTS (guarded) ----------
-# Safe to remove or replace. Used only if present.
+# ---------- Project imports (guarded) ----------
+# We try real modules first; if missing, we fall back to safe stubs.
 try:
-    from peds_dose import acetaminophen_ml, ibuprofen_ml   # EDIT HERE: connect your dose funcs
+    from core_utils import nickname_pin, clean_num, schedule_block
 except Exception:
-    # Fallback simple estimators (for demo only) — replace with real functions
-    def acetaminophen_ml(age_months, weight_kg):
-        if not weight_kg: return 0, None
-        # 10–15 mg/kg, assume syrup 160 mg/5mL => 3.125 mg/mL → 1 mL ≈ 3.2 mg
-        mg = max(10, min(15, 12)) * weight_kg
-        ml = round(mg / (160/5), 1)
-        return ml, {"note": "fallback"}
-    def ibuprofen_ml(age_months, weight_kg):
-        if not weight_kg: return 0, None
-        # 5–10 mg/kg, assume syrup 100 mg/5mL
-        mg = max(5, min(10, 8)) * weight_kg
-        ml = round(mg / (100/5), 1)
-        return ml, {"note": "fallback"}
+    def nickname_pin(): return "게스트#0000"
+    def clean_num(x): return x
+    def schedule_block(*a, **k): return ""
 
 try:
-    from pdf_export import export_md_to_pdf                # EDIT HERE: your md->pdf exporter
+    from drug_db import DRUG_DB, ensure_onco_drug_db, display_label
+except Exception:
+    DRUG_DB = {}
+    def ensure_onco_drug_db(): return {}
+    def display_label(x): return str(x)
+
+try:
+    from onco_map import build_onco_map, auto_recs_by_dx, dx_display
+except Exception:
+    def build_onco_map(*a, **k): return {}
+    def auto_recs_by_dx(*a, **k): return []
+    def dx_display(x): return str(x)
+
+try:
+    from ui_results import results_only_after_analyze, render_adverse_effects, collect_top_ae_alerts
+except Exception:
+    def results_only_after_analyze(*a, **k): return []
+    def render_adverse_effects(*a, **k): return []
+    def collect_top_ae_alerts(*a, **k): return []
+
+try:
+    from lab_diet import lab_diet_guides
+except Exception:
+    def lab_diet_guides(*a, **k): return []
+
+try:
+    from peds_profiles import get_symptom_options
+except Exception:
+    def get_symptom_options(): return {"발열":[],"구토":[],"설사":[]}
+
+try:
+    from peds_dose import acetaminophen_ml, ibuprofen_ml
+except Exception:
+    def acetaminophen_ml(age_m, wt_kg):
+        if not wt_kg: return None, None
+        # 10–15 mg/kg, syrup 160 mg/5mL
+        ml = round((12*wt_kg)/(160/5), 1)
+        return ml, {}
+    def ibuprofen_ml(age_m, wt_kg):
+        if not wt_kg: return None, None
+        # 5–10 mg/kg, syrup 100 mg/5mL
+        ml = round((8*wt_kg)/(100/5), 1)
+        return ml, {}
+
+try:
+    from pdf_export import export_md_to_pdf
 except Exception:
     export_md_to_pdf = None
 
-# ---------- GLOBAL / VERSION / TIMEZONE ----------
+try:
+    from special_tests import special_tests_ui
+except Exception:
+    def special_tests_ui():
+        with st.expander("특수검사 입력"):
+            st.text_input("예) 페리틴")
+            st.text_input("예) CRP")
+        return []
+
+# ---------- Global / Time ----------
 KST = ZoneInfo("Asia/Seoul")
-APP_VERSION = "v1.0.1"
+APP_VERSION = "v2.0.0-full"
 RULESET_DATE = "2025-09-19"
 
-def kst_now() -> datetime:
-    return datetime.now(KST)
+def kst_now(): return datetime.now(KST)
 
-def is_read_only() -> bool:
-    # Read-only shared view via ?view=read
-    try:
-        qp = st.query_params
-        v = qp.get("view", None)
-        if isinstance(v, list):
-            v = v[0] if v else None
-        return (str(v).lower() == "read")
-    except Exception:
-        return st.session_state.get("read_only_hint", False)
+# Stable, namespaced key prefix for this session (avoid DuplicateElementKey/Id)
+st.session_state.setdefault("UID", str(uuid.uuid4())[:8])
+KP = st.session_state["UID"]
 
-# ---------- PAGE / HEADER ----------
-st.set_page_config(page_title="BloodMap — 피수치가이드", layout="wide")
-st.title("BloodMap — 피수치가이드")
+# ---------- Page ----------
+st.set_page_config(page_title="BloodMap — 피수치가이드 (완전체)", layout="wide")
+st.title("BloodMap — 피수치가이드 (완전체)")
 st.info("📌 **즐겨찾기** — PC: Ctrl/⌘+D, 모바일: 브라우저 공유 → **홈 화면에 추가**")
 
-# ---------- EMERGENCY CHECKLIST ----------
+# ---------- Emergency checklist ----------
 def emergency_checklist_md() -> str:
     now = kst_now().strftime("%Y-%m-%d %H:%M")
-    return "\n".join([
+    return "\\n".join([
         "# 🆘 비상 안내(보호자용)",
         f"- 출력 시각(KST): {now}",
         "",
@@ -87,7 +122,32 @@ def emergency_checklist_md() -> str:
 with st.sidebar.expander("🆘 비상 안내(체크리스트)"):
     st.markdown(emergency_checklist_md())
 
-# ---------- CARE LOG / GUARDRAILS / ICS / SHARE ----------
+# ---------- Read-only view & share ----------
+def is_read_only():
+    try:
+        qp = st.query_params
+        v = qp.get("view", None)
+        if isinstance(v, list):
+            v = v[0] if v else None
+        return (str(v).lower() == "read")
+    except Exception:
+        return False
+
+def share_link_panel(section_title: str, anchor="#carelog"):
+    st.markdown("#### 읽기 전용 공유")
+    st.session_state.setdefault("share_key", str(uuid.uuid4())[:8])
+    key = st.session_state["share_key"]
+    base = "https://bloodmap.streamlit.app/"   # 배포 주소에 맞춰 교체
+    url = f"{base}{anchor}?view=read&k={key}"
+    st.code(url, language="")
+    try:
+        import qrcode, io as _io
+        img = qrcode.make(url); buf=_io.BytesIO(); img.save(buf, format="PNG")
+        st.image(buf.getvalue(), caption="읽기 전용 링크 QR", width=160)
+    except Exception:
+        st.caption("QR 모듈이 없으면 URL을 복사해 공유하세요.")
+
+# ---------- Care log / Guardrails / Export ----------
 def _init_care_log(user_key: str):
     st.session_state.setdefault("care_log", {})
     if user_key not in st.session_state["care_log"]:
@@ -108,12 +168,11 @@ def _care_log_to_md(df: pd.DataFrame, title="케어 로그") -> str:
              "", "시간(KST) | 유형 | 내용", "---|---|---"]
     for _, r in df.iterrows():
         lines.append(f"{r.get('ts_kst','')} | {r.get('type','')} | {r.get('details','')}")
-    return "\n".join(lines)
+    return "\\n".join(lines)
 
 GUARD = {"APAP_MAX_DOSES_PER_DAY": 4, "IBU_MAX_DOSES_PER_DAY": 4}
 
-def _today_str():
-    return kst_now().strftime("%Y-%m-%d")
+def _today_str(): return kst_now().strftime("%Y-%m-%d")
 
 def guardrail_panel(df_log: pd.DataFrame, section_title: str, apap_enabled: bool=True, ibu_enabled: bool=True):
     st.markdown("#### 해열제 안전 게이지/성분 중복 경고")
@@ -134,7 +193,7 @@ def guardrail_panel(df_log: pd.DataFrame, section_title: str, apap_enabled: bool
             st.metric("IBU 투약(오늘)", f"{ibu_count}/{GUARD['IBU_MAX_DOSES_PER_DAY']} 회")
             if ibu_count >= GUARD["IBU_MAX_DOSES_PER_DAY"]:
                 st.error("오늘 IBU 최대 권장 횟수 도달 — **추가 투약 금지**, 의료진 상담")
-    prod = st.text_input("현재 복용 중인 감기약/해열제 제품명(성분 중복 확인)", key=f"prod_names_{section_title}")
+    prod = st.text_input("현재 복용 중인 감기약/해열제 제품명(성분 중복 확인)", key=f"prod_names_{section_title}_{KP}")
     prod_txt = (prod or "").lower()
     warn_apap = any(x in prod_txt for x in ["타이레놀","아세트아미노펜","apap","acetaminophen","paracetamol"])
     warn_ibu  = any(x in prod_txt for x in ["이부프로펜","ibuprofen","advil","motrin"])
@@ -150,21 +209,7 @@ def generate_ics(now_dt, have_apap: bool, have_ibu: bool) -> str:
     lines = ["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//BloodMap//CareLog//KO"]
     for title, dt in items:
         lines += ["BEGIN:VEVENT", f"DTSTART:{dtfmt(dt)}", f"SUMMARY:{title}", "END:VEVENT"]
-    lines.append("END:VCALENDAR"); return "\n".join(lines)
-
-def share_link_panel(section_title: str, anchor="#carelog"):
-    st.markdown("#### 읽기 전용 공유")
-    st.session_state.setdefault("share_key", str(uuid.uuid4())[:8])
-    key = st.session_state["share_key"]
-    base = "https://bloodmap.streamlit.app/"   # EDIT HERE: 배포 주소로 교체
-    url = f"{base}{anchor}?view=read&k={key}"
-    st.code(url, language="")
-    try:
-        import qrcode, io as _io
-        img = qrcode.make(url); buf=_io.BytesIO(); img.save(buf, format="PNG")
-        st.image(buf.getvalue(), caption="읽기 전용 링크 QR", width=160)
-    except Exception:
-        st.caption("QR 모듈이 없으면 URL을 복사해 공유하세요.")
+    lines.append("END:VCALENDAR"); return "\\n".join(lines)
 
 def render_care_log_ui(user_key: str, apap_ml=None, ibu_ml=None, section_title="설사/구토/해열제 기록"):
     st.markdown(f"### {section_title}")
@@ -173,22 +218,22 @@ def render_care_log_ui(user_key: str, apap_ml=None, ibu_ml=None, section_title="
     now = kst_now()
     ro = is_read_only()
     if ro: st.info("🔒 읽기 전용 모드입니다 — 편집 불가")
-    note = st.text_input("메모(선택)", key=f"care_note_{section_title}")
+    note = st.text_input("메모(선택)", key=f"care_note_{section_title}_{KP}")
     colA, colB, colC, colD = st.columns(4)
-    if (not ro) and colA.button("구토 기록 추가", key=f"btn_log_vomit_{section_title}"):
+    if (not ro) and colA.button("구토 기록 추가", key=f"btn_log_vomit_{section_title}_{KP}"):
         _append_care_log(user_key, "구토",
             f"구토 — 보충 10 mL/kg, 5–10 mL q5min. 다음 점검 { (now+timedelta(minutes=30)).strftime('%H:%M') } / 활력 { (now+timedelta(hours=2)).strftime('%H:%M') } (KST)")
         if note: _append_care_log(user_key, "메모", note); st.success("구토 기록 저장됨")
-    if (not ro) and colB.button("설사 기록 추가", key=f"btn_log_diarrhea_{section_title}"):
+    if (not ro) and colB.button("설사 기록 추가", key=f"btn_log_diarrhea_{section_title}_{KP}"):
         _append_care_log(user_key, "설사",
             f"설사 — 보충 10 mL/kg. 다음 점검 { (now+timedelta(minutes=30)).strftime('%H:%M') } / 활력 { (now+timedelta(hours=2)).strftime('%H:%M') } (KST)")
         if note: _append_care_log(user_key, "메모", note); st.success("설사 기록 저장됨")
-    if (not ro) and colC.button("APAP(아세트아미노펜) 투약", key=f"btn_log_apap_{section_title}"):
+    if (not ro) and colC.button("APAP(아세트아미노펜) 투약", key=f"btn_log_apap_{section_title}_{KP}"):
         dose = f"{apap_ml} ml" if apap_ml is not None else "용량 미기입"
         _append_care_log(user_key, "해열제(APAP)",
             f"{dose} — 다음 복용 { (now+timedelta(hours=4)).strftime('%H:%M') }~{ (now+timedelta(hours=6)).strftime('%H:%M') } KST")
         if note: _append_care_log(user_key, "메모", note); st.success("APAP 기록 저장됨")
-    if (not ro) and colD.button("IBU(이부프로펜계열) 투약", key=f"btn_log_ibu_{section_title}"):
+    if (not ro) and colD.button("IBU(이부프로펜계열) 투약", key=f"btn_log_ibu_{section_title}_{KP}"):
         dose = f"{ibu_ml} ml" if ibu_ml is not None else "용량 미기입"
         _append_care_log(user_key, "해열제(IBU)",
             f"{dose} — 다음 복용 { (now+timedelta(hours=6)).strftime('%H:%M') }~{ (now+timedelta(hours=8)).strftime('%H:%M') } KST")
@@ -199,48 +244,27 @@ def render_care_log_ui(user_key: str, apap_ml=None, ibu_ml=None, section_title="
     if not df_log.empty:
         st.dataframe(df_log.tail(50), use_container_width=True, height=240)
         st.markdown("#### 삭제")
-        del_idxs = st.multiselect("삭제할 행 인덱스 선택(표 왼쪽 번호)", options=list(df_log.index), key=f"del_idx_{section_title}", disabled=ro)
-        if (not ro) and st.button("선택 행 삭제", key=f"btn_del_{section_title}") and del_idxs:
+        del_idxs = st.multiselect("삭제할 행 인덱스 선택(표 왼쪽 번호)", options=list(df_log.index), key=f"del_idx_{section_title}_{KP}", disabled=ro)
+        if (not ro) and st.button("선택 행 삭제", key=f"btn_del_{section_title}_{KP}") and del_idxs:
             st.session_state['care_log'][user_key] = df_log.drop(index=del_idxs).reset_index(drop=True)
             st.success(f"{len(del_idxs)}개 행 삭제 완료")
         st.markdown("#### 읽기 전용 링크")
         share_link_panel(section_title)
         st.markdown("#### 내보내기")
         md = _care_log_to_md(df_log, title="케어 로그")
-        st.download_button("⬇️ TXT", data=md.replace("# ","").replace("## ",""), file_name="care_log.txt")
+        st.download_button("⬇️ TXT", data=md.replace("# ","").replace("## ",""), file_name="care_log.txt", key=f"dl_txt_{section_title}_{KP}")
         if export_md_to_pdf:
             try:
                 pdf_bytes = export_md_to_pdf(md)
-                st.download_button("⬇️ PDF", data=pdf_bytes, file_name="care_log.pdf", mime="application/pdf")
+                st.download_button("⬇️ PDF", data=pdf_bytes, file_name="care_log.pdf", mime="application/pdf", key=f"dl_pdf_{section_title}_{KP}")
             except Exception as e:
                 st.caption(f"PDF 변환 오류: {e}")
         ics_data = generate_ics(kst_now(), have_apap=(apap_ml is not None), have_ibu=(ibu_ml is not None))
-        st.download_button("📅 캘린더(.ics)", data=ics_data, file_name="care_times.ics", mime="text/calendar", key=f"ics_{section_title}")
+        st.download_button("📅 캘린더(.ics)", data=ics_data, file_name="care_times.ics", mime="text/calendar", key=f"ics_{section_title}_{KP}")
     else:
         st.caption("저장된 케어 로그가 없습니다. 위의 버튼으로 기록을 추가하세요.")
 
-# ---------- SPECIAL TESTS (EDIT HERE: plug your own UI) ----------
-def special_tests_ui_safe():
-    """EDIT HERE: 기존 special_tests_ui()를 여기로 바꿔 연결하세요.
-       반환은 리스트[str] 형태 (해석 라인들)."""
-    try:
-        # 프로젝트의 실제 함수를 자동 탐지/호출
-        from special_tests import special_tests_ui as _real_ui
-        return _real_ui()
-    except Exception:
-        # 데모(없을 때 빈 리스트)
-        with st.expander("특수검사 입력(데모)"):
-            st.text_input("예) 페리틴", key="demo_sp_ferritin")
-            st.text_input("예) LDH", key="demo_sp_ldh")
-        return []
-
-def special_tests_block():
-    sp_lines = special_tests_ui_safe()
-    lines_blocks = []
-    lines_blocks.append(("특수검사 해석", sp_lines if sp_lines else ["(입력값 없음 또는 특이 소견 없음)"]))
-    return lines_blocks
-
-# ---------- SEVERITY-COLORED RENDERER ----------
+# ---------- Severity renderer ----------
 def render_severity_list(title: str, lines: list[str], show_normals: bool, inputs_present: bool):
     st.subheader("🧬 " + title)
     if not lines:
@@ -256,96 +280,25 @@ def render_severity_list(title: str, lines: list[str], show_normals: bool, input
         color_open = { "red": ":red[", "yellow": ":orange[", "green": ":green[", "gray": ":gray[" }.get(level, ":gray[")
         st.markdown(f"- {badge} {color_open}{txt}]")
 
-# ---------- DEMO CHART WITH SHADED RANGES ----------
-
-def lab_trend_demo():
-    st.markdown("### 📈 추이(데모 데이터)")
-    dfh = pd.DataFrame({
-        "Date": pd.date_range(datetime.now() - timedelta(days=14), periods=8, freq="2D"),
-        "WBC,백혈구": [4500,5200,6000,7000,6500,9000,8000,7600],
-        "Hb,혈색소": [11.8,12.2,12.5,12.7,12.3,12.9,13.1,12.8],
-        "PLT,혈소판": [140,180,210,260,300,280,240,220],
-        "CRP": [0.4,0.6,0.3,0.2,0.1,0.2,0.5,0.4],
-        "ANC,호중구": [1300,1600,2000,2500,2200,3000,2800,2600],
-    })
-    # strict dtypes
-    dfh["Date"] = pd.to_datetime(dfh["Date"]).dt.tz_localize(None)
-    for col in ["WBC,백혈구","Hb,혈색소","PLT,혈소판","CRP","ANC,호중구"]:
-        dfh[col] = pd.to_numeric(dfh[col], errors="coerce")
-    pick = st.multiselect("표시 항목", ["WBC,백혈구","Hb,혈색소","PLT,혈소판","CRP","ANC,호중구"], default=["WBC,백혈구","Hb,혈색소"], key='lab_trend_pick')
-    if pick:
-        try:
-            age_is_child = st.toggle("연령: 소아 기준 사용", value=False, key="range_child_toggle_demo")
-            ranges_adult = {"WBC,백혈구": (4000, 10000), "Hb,혈색소": (12.0, 16.0), "PLT,혈소판": (150, 400), "CRP": (0, 0.5), "ANC,호중구": (1500, 8000)}
-            ranges_child = {"WBC,백혈구": (5000, 14500), "Hb,혈색소": (11.0, 15.0), "PLT,혈소판": (150, 400), "CRP": (0, 0.5), "ANC,호중구": (1500, 8000)}
-            df_tmp = dfh.copy()
-            df_tmp["Date"] = pd.to_datetime(df_tmp["Date"]).dt.tz_localize(None)
-            sel_df = df_tmp.set_index("Date")[pick].reset_index().melt("Date", var_name="item", value_name="value")
-            # build bands from a single row dataframe (vega-lite friendly)
-            lo_hi = {"item": [], "lo": [], "hi": []}
-            for it in pick:
-                r = (ranges_child if age_is_child else ranges_adult).get(it)
-                if r:
-                    lo_hi["item"].append(it); lo_hi["lo"].append(float(r[0])); lo_hi["hi"].append(float(r[1]))
-            import pandas as _pd
-            band_tbl = _pd.DataFrame(lo_hi)
-            base = alt.Chart(sel_df).encode(x=alt.X("Date:T", title="Date"), y=alt.Y("value:Q", title="Value"))
-            shade = alt.Chart(band_tbl).mark_rect(opacity=0.08).encode(
-                y="lo:Q", y2="hi:Q", color=alt.value("lightgray")
-            ).properties(width="container")
-            line = base.mark_line().encode(color="item:N")
-            chart = alt.layer(shade, line, data=sel_df)
-            st.altair_chart(chart, use_container_width=True)
-        except Exception as e:
-            st.warning(f"Altair 렌더링 이슈로 기본 차트로 대체: {e}")
-            st.line_chart(dfh.set_index("Date")[pick])
-    dfh = pd.DataFrame({
-        "Date": pd.date_range(datetime.now() - timedelta(days=14), periods=8, freq="2D"),
-        "WBC,백혈구": [4500,5200,6000,7000,6500,9000,8000,7600],
-        "Hb,혈색소": [11.8,12.2,12.5,12.7,12.3,12.9,13.1,12.8],
-        "PLT,혈소판": [140,180,210,260,300,280,240,220],
-        "CRP": [0.4,0.6,0.3,0.2,0.1,0.2,0.5,0.4],
-        "ANC,호중구": [1300,1600,2000,2500,2200,3000,2800,2600],
-    })
-    pick = st.multiselect("표시 항목", ["WBC,백혈구","Hb,혈색소","PLT,혈소판","CRP","ANC,호중구"], default=["WBC,백혈구","Hb,혈색소"], key='lab_trend_pick')
-    if pick:
-        age_is_child = st.toggle("연령: 소아 기준 사용", value=False, key="range_child_toggle_demo")
-        ranges_adult = {"WBC,백혈구": (4000, 10000), "Hb,혈색소": (12.0, 16.0), "PLT,혈소판": (150, 400), "CRP": (0, 0.5), "ANC,호중구": (1500, 8000)}
-        ranges_child = {"WBC,백혈구": (5000, 14500), "Hb,혈색소": (11.0, 15.0), "PLT,혈소판": (150, 400), "CRP": (0, 0.5), "ANC,호중구": (1500, 8000)}
-        df_tmp = dfh.copy();
-        df_tmp["Date"] = pd.to_datetime(df_tmp["Date"]).dt.tz_localize(None)
-        sel_df = df_tmp.set_index("Date")[pick].reset_index().melt("Date", var_name="item", value_name="value")
-        base = alt.Chart(sel_df).encode(x=alt.X("Date:T", title="Date"), y=alt.Y("value:Q", title="Value"))
-        bands = []
-        for it in pick:
-            r = (ranges_child if age_is_child else ranges_adult).get(it); 
-            if not r: continue
-            lo, hi = r
-            if not sel_df.empty:
-                band_df = pd.DataFrame({"Date": [sel_df["Date"].min()], "Date2": [sel_df["Date"].max()], "lo": [lo], "hi": [hi]})
-                shade = alt.Chart(band_df).mark_rect(opacity=0.08).encode(x="Date:T", x2="Date2:T", y=alt.Y("lo:Q"), y2=alt.Y("hi:Q"))
-                bands.append(shade)
-        line = base.mark_line().encode(color="item:N", x="Date:T", y="value:Q")
-        chart = (alt.layer(*(bands+[line])) if bands else line)
-        st.altair_chart(chart, use_container_width=True)
-
-# ---------- MODES (Cancer / Daily / Peds disease) ----------
+# ---------- Modes ----------
 st.divider()
 seg = getattr(st, "segmented_control", None)
 if seg:
-    mode = st.segmented_control("모드 선택", options=["암", "일상", "소아(질환)"], key="mode_select")
+    mode = st.segmented_control("모드 선택", options=["암", "일상", "소아(질환)"], key=f"mode_{KP}")
 else:
-    mode = st.radio("모드 선택", options=["암", "일상", "소아(질환)"], horizontal=True, key="mode_select")
+    mode = st.radio("모드 선택", options=["암", "일상", "소아(질환)"], horizontal=True, key=f"mode_{KP}")
 
+# ---------- Mode: Cancer ----------
 if mode == "암":
     st.header("🧪 특수검사")
-    lines_blocks = special_tests_block()
+    sp_lines = special_tests_ui()  # always show, even if empty
+    lines_blocks = [("특수검사 해석", sp_lines if sp_lines else ["(입력값 없음 또는 특이 소견 없음)"])]
 
     # Pediatric care toggle under special tests
-    on_peds_tool = st.toggle("🧒 소아 해열제/설사 체크 (펼치기)", value=True, key="peds_tool_toggle_cancer")
+    on_peds_tool = st.toggle("🧒 소아 해열제/설사 체크 (펼치기)", value=True, key=f"peds_tool_toggle_cancer_{KP}")
     if on_peds_tool:
-        age_m_c = st.number_input("나이(개월)", min_value=0, step=1, key="ped_age_m_cancer")
-        weight_c = st.number_input("체중(kg)", min_value=0.0, step=0.1, key="ped_weight_cancer")
+        age_m_c = st.number_input("나이(개월)", min_value=0, step=1, key=f"ped_age_m_cancer_{KP}")
+        weight_c = st.number_input("체중(kg)", min_value=0.0, step=0.1, key=f"ped_weight_cancer_{KP}")
         apap_ml_c, _w1 = acetaminophen_ml(age_m_c, weight_c or None)
         ibu_ml_c,  _w2 = ibuprofen_ml(age_m_c, weight_c or None)
         c1, c2 = st.columns(2)
@@ -363,25 +316,24 @@ if mode == "암":
 
     st.divider()
     st.subheader("결과/해석")
-    show_normals = st.checkbox("정상 항목도 표시", value=True, key="show_normals_cancer")
+    show_normals = st.checkbox("정상 항목도 표시", value=True, key=f"show_normals_cancer_{KP}")
     inputs_present = True
     for title2, lines2 in lines_blocks:
         render_severity_list(title2, lines2 or [], show_normals, inputs_present)
 
-    lab_trend_demo()
-
+# ---------- Mode: Daily ----------
 elif mode == "일상":
     st.header("👶/🧑 일상 케어")
-    who = st.radio("대상", options=["소아","성인"], horizontal=True, key="daily_target")
+    who = st.radio("대상", options=["소아","성인"], horizontal=True, key=f"daily_target_{KP}")
 
     if who == "소아":
-        age_m = st.number_input("나이(개월)", min_value=0, step=1, key="ped_age_m_daily")
-        wt = st.number_input("체중(kg)", min_value=0.0, step=0.1, key="ped_weight_daily")
+        age_m = st.number_input("나이(개월)", min_value=0, step=1, key=f"ped_age_m_daily_{KP}")
+        wt = st.number_input("체중(kg)", min_value=0.0, step=0.1, key=f"ped_weight_daily_{KP}")
         apap_ml, _ = acetaminophen_ml(age_m, wt or None)
         ibu_ml,  _ = ibuprofen_ml(age_m, wt or None)
         st.warning("이 용량 정보는 **참고용**입니다. 반드시 **주치의와 상담**하십시오.")
 
-        show_care = st.toggle("🧒 소아 해열제/설사 체크 (펼치기)", value=True, key="peds_tool_toggle_daily_child")
+        show_care = st.toggle("🧒 소아 해열제/설사 체크 (펼치기)", value=True, key=f"peds_tool_toggle_daily_child_{KP}")
         if show_care:
             now = kst_now()
             st.caption(f"현재 시각 (KST): {now.strftime('%Y-%m-%d %H:%M')}")
@@ -394,9 +346,10 @@ elif mode == "일상":
             render_care_log_ui(st.session_state.get("key","guest"), apap_ml=apap_ml, ibu_ml=ibu_ml, section_title="설사/구토/해열제 기록(일상·소아)")
 
     else:
-        # EDIT HERE: 성인용 상세 가이드는 병원/팀 규칙에 맞게 확장
-        symptoms = st.multiselect("증상 선택", ["발열","구토","설사","복통","두통"])
-        show_care_adult = st.toggle("🧑 해열제/설사 체크 (펼치기)", value=False, key="peds_tool_toggle_daily_adult")
+        # 성인용 간단 가이드 + 케어 로그
+        st.markdown("#### 성인 케어")
+        symptoms = st.multiselect("지표 선택", options=["발열","구토","설사","복통","두통"], key=f"adult_sym_{KP}")
+        show_care_adult = st.toggle("🧑 해열제/설사 체크 (펼치기)", value=False, key=f"peds_tool_toggle_daily_adult_{KP}")
         if show_care_adult:
             now = kst_now(); st.caption(f"현재 시각 (KST): {now.strftime('%Y-%m-%d %H:%M')}")
             st.write(f"- APAP 권장 간격: **4~6시간** / IBU: **6~8시간**")
@@ -405,15 +358,16 @@ elif mode == "일상":
             st.write("- 설사/구토 1회마다: **체중당 10 mL/kg** 추가 보충")
             render_care_log_ui(st.session_state.get("key","guest"), apap_ml=None, ibu_ml=None, section_title="설사/구토/해열제 기록(일상·성인)")
 
+# ---------- Mode: Peds disease ----------
 elif mode == "소아(질환)":
     st.header("🧒 소아(질환) 모드")
-    dx = st.selectbox("진단/증상", ["발열","구토","설사","호흡기","경련","기타"], key="dx_peds")
-    age_m = st.number_input("나이(개월)", min_value=0, step=1, key="ped_age_m_peds")
-    wt = st.number_input("체중(kg)", min_value=0.0, step=0.1, key="ped_weight_peds")
+    dx = st.selectbox("진단/증상", ["발열","구토","설사","호흡기","경련","기타"], key=f"dx_peds_{KP}")
+    age_m = st.number_input("나이(개월)", min_value=0, step=1, key=f"ped_age_m_peds_{KP}")
+    wt = st.number_input("체중(kg)", min_value=0.0, step=0.1, key=f"ped_weight_peds_{KP}")
     apap_ml, _ = acetaminophen_ml(age_m, wt or None)
     ibu_ml,  _ = ibuprofen_ml(age_m, wt or None)
 
-    show_care_peds = st.toggle("🧒 소아 해열제/설사 체크 (펼치기)", value=True, key="peds_tool_toggle_peds_disease")
+    show_care_peds = st.toggle("🧒 소아 해열제/설사 체크 (펼치기)", value=True, key=f"peds_tool_toggle_peds_disease_{KP}")
     if show_care_peds:
         now = kst_now()
         st.caption(f"현재 시각 (KST): {now.strftime('%Y-%m-%d %H:%M')}")
@@ -424,41 +378,43 @@ elif mode == "소아(질환)":
         st.write("- 설사/구토 1회마다: **체중당 10 mL/kg** 추가 보충")
         render_care_log_ui(st.session_state.get("key","guest"), apap_ml=apap_ml, ibu_ml=ibu_ml, section_title="설사/구토/해열제 기록(소아·질환)")
 
-# ---------- REPORT EXPORT (Markdown/PDF) ----------
+# ---------- Report export ----------
 def export_report(lines_blocks=None):
-    title = "# BloodMap 결과 보고서\n\n"
+    title = "# BloodMap 결과 보고서\\n\\n"
     body = []
     if lines_blocks:
         for t, lines in lines_blocks:
-            body.append(f"## {t}\n")
+            body.append(f"## {t}\\n")
             for L in (lines or []):
-                body.append(f"- {L}\n")
-            body.append("\n")
+                body.append(f"- {L}\\n")
+            body.append("\\n")
     footer = (
-        "\n\n---\n"
-        "본 수치는 참고용이며, 해석 결과는 개발자와 무관합니다.\n"
-        "약 변경·복용 중단 등은 반드시 **주치의와 상담** 후 결정하십시오.\n"
-        "개인정보를 수집하지 않습니다.\n"
-        "버그/문의: 피수치 가이드 공식카페.\n"
-        f"앱 버전: {APP_VERSION} · 룰셋 업데이트: {RULESET_DATE}\n"
+        "\\n\\n---\\n"
+        "본 수치는 참고용이며, 해석 결과는 개발자와 무관합니다.\\n"
+        "약 변경·복용 중단 등은 반드시 **주치의와 상담** 후 결정하십시오.\\n"
+        "개인정보를 수집하지 않습니다.\\n"
+        "버그/문의: 피수치 가이드 공식카페.\\n"
+        f"앱 버전: {APP_VERSION} · 룰셋 업데이트: {RULESET_DATE}\\n"
     )
-    md = emergency_checklist_md() + "\n\n---\n\n" + title + "".join(body) + footer
+    md = emergency_checklist_md() + "\\n\\n---\\n\\n" + title + "".join(body) + footer
     c1, c2 = st.columns(2)
     with c1:
-        st.download_button("⬇️ Markdown (.md)", data=md, file_name="BloodMap_Report.md")
+        st.download_button("⬇️ Markdown (.md)", data=md, file_name="BloodMap_Report.md", key=f"dl_md_{KP}")
     with c2:
         if export_md_to_pdf:
             try:
                 pdf_bytes = export_md_to_pdf(md)
-                st.download_button("⬇️ PDF 보고서", data=pdf_bytes, file_name="BloodMap_Report.pdf", mime="application/pdf")
+                st.download_button("⬇️ PDF 보고서", data=pdf_bytes, file_name="BloodMap_Report.pdf", mime="application/pdf", key=f"dl_report_pdf_{KP}")
             except Exception as e:
                 st.caption(f"PDF 변환 오류: {e}")
         else:
             st.caption("PDF 변환기가 없어 .md로 내보냈습니다. (export_md_to_pdf 연결 시 버튼 활성화)")
 
-# ---------- DEMO: EXPORT BUTTON ----------
-with st.expander("📄 보고서 내보내기 (데모)"):
-    export_report(lines_blocks=[("특수검사 해석", ["예시 라인 A", "예시 라인 B"])])
+with st.expander("📄 보고서 내보내기"):
+    if mode == "암":
+        export_report(lines_blocks=lines_blocks)
+    else:
+        export_report(lines_blocks=[("일반 안내", ["현 모드에서는 특수검사 해석이 없습니다."])])
 
-# ---------- DEMO CHART ----------
-lab_trend_demo()
+st.caption("본 도구는 참고용입니다. 의료진의 진단/치료를 대체하지 않습니다.")
+st.caption("문의/버그 제보: 피수치 가이드 공식카페")
