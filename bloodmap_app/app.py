@@ -260,7 +260,7 @@ def render_severity_list(title: str, lines: list[str], show_normals: bool, input
 def lab_trend_demo():
     st.markdown("### 📈 추이(데모 데이터)")
     dfh = pd.DataFrame({
-        "Date": pd.date_range(kst_now() - timedelta(days=14), periods=8, freq="2D"),
+        "Date": pd.date_range(datetime.now() - timedelta(days=14), periods=8, freq="2D"),
         "WBC,백혈구": [4500,5200,6000,7000,6500,9000,8000,7600],
         "Hb,혈색소": [11.8,12.2,12.5,12.7,12.3,12.9,13.1,12.8],
         "PLT,혈소판": [140,180,210,260,300,280,240,220],
@@ -272,7 +272,9 @@ def lab_trend_demo():
         age_is_child = st.toggle("연령: 소아 기준 사용", value=False, key="range_child_toggle_demo")
         ranges_adult = {"WBC,백혈구": (4000, 10000), "Hb,혈색소": (12.0, 16.0), "PLT,혈소판": (150, 400), "CRP": (0, 0.5), "ANC,호중구": (1500, 8000)}
         ranges_child = {"WBC,백혈구": (5000, 14500), "Hb,혈색소": (11.0, 15.0), "PLT,혈소판": (150, 400), "CRP": (0, 0.5), "ANC,호중구": (1500, 8000)}
-        sel_df = dfh.set_index("Date")[pick].reset_index().melt("Date", var_name="item", value_name="value")
+        df_tmp = dfh.copy();
+        df_tmp["Date"] = pd.to_datetime(df_tmp["Date"]).dt.tz_localize(None)
+        sel_df = df_tmp.set_index("Date")[pick].reset_index().melt("Date", var_name="item", value_name="value")
         base = alt.Chart(sel_df).encode(x=alt.X("Date:T", title="Date"), y=alt.Y("value:Q", title="Value"))
         bands = []
         for it in pick:
