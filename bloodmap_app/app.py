@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
-from datetime import date
+from datetime import date, datetime, timedelta
 
 from core_utils import nickname_pin, clean_num, schedule_block
 from drug_db import DRUG_DB, ensure_onco_drug_db, display_label
@@ -12,6 +12,7 @@ from lab_diet import lab_diet_guides
 from peds_profiles import get_symptom_options
 from peds_dose import acetaminophen_ml, ibuprofen_ml
 from pdf_export import export_md_to_pdf
+from zoneinfo import ZoneInfo
 
 
 # 세션 플래그(중복 방지)
