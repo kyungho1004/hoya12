@@ -279,7 +279,40 @@ def _adult_diet_fallback(sym: dict) -> list[str]:
     tips.append("구토 시 30분 휴식 후 **맑은 수분**부터 재개, 한 번에 많이 마시지 말기")
     return tips
 
+
+def render_severity_list(title: str, lines: list[str], show_normals: bool, inputs_present: bool):
+    st.subheader("🧬 " + title)
+    if not lines:
+        st.markdown(":green[**(입력은 있었으나 특이 소견 없음)**]" if inputs_present else ":gray[(입력값 없음)]")
+        return
+    # Color rules (heuristic):
+    #   red: contains 위험/응급/G3/G4/위독/심각
+    #   yellow: contains 주의/경계/G2
+    #   green: contains 정상/정상범위/ok/양호
+    for L in lines:
+        txt = str(L)
+        t = txt.lower()
+        level = "gray"
+        if any(k in txt for k in ["위험","응급","심각","위독","G4","G3"]):
+            level = "red"
+        elif any(k in txt for k in ["주의","경계","모니터","G2"]):
+            level = "yellow"
+        elif any(k in t for k in ["정상","정상범위","ok","양호"]):
+            level = "green"
+        # hide normals when show_normals is False
+        if not show_normals and level == "green":
+            continue
+        badge = { "red": ":red_circle:", "yellow": ":large_yellow_circle:", "green": ":green_circle:", "gray": ":white_circle:" }.get(level, ":white_circle:")
+        color_open = { "red": ":red[", "yellow": ":orange[", "green": ":green[", "gray": ":gray[" }.get(level, ":gray[")
+        color_close = "]"
+        st.markdown(f"- {badge} {color_open}{txt}{color_close}")
+    # If nothing was shown because we hid normals:
+    if not any(True for L in lines if (("정상" in L or "정상범위" in L or "ok" in L.lower() or "양호" in L) or ("주의" in L or "경계" in L or "위험" in L or "응급" in L or "심각" in L or "G" in L)) and (show_normals or not (("정상" in L) or ("정상범위" in L) or ("ok" in L.lower()) or ("양호" in L)))):
+        st.markdown(":green[**(입력은 있었으나 특이 소견 없음)**]" if inputs_present else ":gray[(입력값 없음)]")
+
+
 def _export_report(ctx: dict, lines_blocks=None):
+
     footer = (
         "\n\n---\n"
         "본 수치는 참고용이며, 해석 결과는 개발자와 무관합니다.\n"
@@ -381,13 +414,13 @@ if mode == "암":
     from special_tests import special_tests_ui
     sp_lines = special_tests_ui()
     lines_blocks = []
-    if sp_lines: lines_blocks.append(("특수검사 해석", sp_lines))
+    lines_blocks.append(("특수검사 해석", sp_lines if sp_lines else ["(입력값 없음 또는 특이 소견 없음)"]))
 
     # --- 🔽 특수검사 바로 밑: 🌡️ 해열제/설사 안내 + 케어 로그 ---
 
-    on_peds_tool = st.toggle("🧒해열제/설사 체크 (펼치기)", value=False, key="peds_tool_toggle_cancer")
+    on_peds_tool = st.toggle("🧒 소아 해열제/설사 체크 (펼치기)", value=False, key="peds_tool_toggle_cancer")
     if on_peds_tool:
-        st.markdown("### 🌡️ 해열제/설사 체크")
+        st.markdown("### 🌡️ 소아 해열제/설사 체크")
 
         st.caption("APAP=아세트아미노펜, IBU=이부프로펜계열 — 용량/간격은 참고용, 반드시 주치의와 상담")
 
