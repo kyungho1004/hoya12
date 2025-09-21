@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 APP_TITLE  = "피수치 가이드 (BloodMap)"
 PAGE_TITLE = "BloodMap"
-MADE_BY    = "제작: Hoya/GPT  |  자문: Hoya/GPT" 
+MADE_BY    = "제작: Hoya/GPT  |  자문: Hoya/GPT"
 CAFE_LINK_MD = "[🔗 피수치 가이드 공식카페](https://cafe.naver.com/bloodmap)"
 FOOTER_CAFE  = "ⓒ BloodMap | caregiver-first UX"
 DISCLAIMER = (

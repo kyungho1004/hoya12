@@ -209,6 +209,7 @@ def special_tests_ui() -> List[str]:
                     if ppg2 >= 200: _emit(lines, "risk", f"식후2h {ppg2} ≥ 200 → 당뇨병 가능성")
                     elif ppg2 >= 140: _emit(lines, "warn", f"식후2h {ppg2} 140~199 → 내당능장애")
 
+            
             elif sec_id == "cardio":
                 h1,h2,h3,h4 = st.columns(4)
                 with h1: ck   = _num(st.text_input("CK (Creatine Kinase, 크레아틴키나아제, U/L)", placeholder="예: 160"))
@@ -217,13 +218,17 @@ def special_tests_ui() -> List[str]:
                 with h4: troT = _num(st.text_input("Troponin T (트로포닌 T, ng/mL)", placeholder="예: 0.005"))
                 ulnI = _num(st.text_input("ULN for Troponin I (정상상한, ng/mL)", placeholder="예: 0.04"))
                 ulnT = _num(st.text_input("ULN for Troponin T (정상상한, ng/mL)", placeholder="예: 0.014"))
+                mcol = _num(st.text_input("Myoglobin (미오글로빈, ng/mL)", placeholder="예: 60"))
                 if ck is not None:
                     if ck >= 5000: _emit(lines, "risk", f"CK {ck} → 횡문근융해 의심(즉시 상담)")
                     elif ck >= 1000: _emit(lines, "warn", f"CK {ck} → 근손상/운동/약물 영향 가능")
                 if ckmb is not None and ckmb >= 5: _emit(lines, "warn", f"CK-MB {ckmb} ≥ 5 → 심근 손상 지표 상승 가능")
                 if troI is not None and troI >= (ulnI if ulnI is not None else 0.04): _emit(lines, "risk", f"Troponin I {troI} ≥ ULN → 심근 손상 의심")
                 if troT is not None and troT >= (ulnT if ulnT is not None else 0.014): _emit(lines, "risk", f"Troponin T {troT} ≥ ULN → 심근 손상 의심")
-
+                if mcol is not None:
+                    # 참고치 병원별 차이 큼: 보수적으로 110 ng/mL 이상을 상승으로 표기
+                    if mcol >= 110:
+                        _emit(lines, "warn", f"Myoglobin 상승({mcol} ng/mL) → 근손상/심근 손상 가능(크레아티닌/임상과 함께 해석)")
             elif sec_id == "hepatobiliary":
                 a1,a2 = st.columns(2)
                 with a1: ggt = _num(st.text_input("GGT (Gamma-GT, 감마지티피, U/L)", placeholder="예: 35"))
