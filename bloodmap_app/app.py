@@ -1,80 +1,3 @@
-import time as _time
-import hashlib
-import json
-import os
-os.environ["BLOODMAP_DATA_DIR"] = "/mount/src/hoya12/bloodmap_app/data"
-
-# --- AUTO: nickname/PIN uniqueness helpers ---
-def _profiles_index_path():
-    return "/mnt/data/profile/index.json"
-
-def _load_profiles_index():
-    pth = _profiles_index_path()
-    if os.path.exists(pth):
-        try:
-            with open(pth, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return {}
-    return {}
-
-def _save_profiles_index(d: dict):
-    try:
-        os.makedirs("/mnt/data/profile", exist_ok=True)
-        with open(_profiles_index_path(), "w", encoding="utf-8") as f:
-            json.dump(d, f, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
-
-def _norm_nick(s: str) -> str:
-    return (s or "").strip().lower()
-
-def _make_uid(nick: str, pin: str) -> str:
-    seed = f"{_norm_nick(nick)}|{(pin or '').strip()}"
-    return hashlib.sha256(seed.encode("utf-8")).hexdigest()[:12]
-
-
-def validate_or_register_user(nickname: str, pin: str):
-    """Return (ok, msg, uid). Policy: nickname can duplicate; (nickname+PIN) must be unique."""
-    idx = _load_profiles_index() if ' _load_profiles_index' in globals() else {}
-    try:
-        from json import load as _load
-        import os, json, hashlib, time as _time
-        def _profiles_index_path(): return "/mnt/data/profile/index.json"
-        def _load_profiles_index():
-            p = _profiles_index_path()
-            if os.path.exists(p):
-                try: return json.load(open(p,"r",encoding="utf-8"))
-                except Exception: return {}
-            return {}
-        def _save_profiles_index(d: dict):
-            try:
-                os.makedirs("/mnt/data/profile", exist_ok=True)
-                json.dump(d, open(_profiles_index_path(),"w",encoding="utf-8"), ensure_ascii=False, indent=2)
-            except Exception: pass
-        def _norm_nick(s): return (s or "").strip().lower()
-        def _make_uid(nick,pin):
-            return hashlib.sha256(f"{_norm_nick(nick)}|{(pin or '').strip()}".encode("utf-8")).hexdigest()[:12]
-        nkey = _norm_nick(nickname); pin = (pin or '').strip()
-        if not nkey: return False, "별명을 입력하세요.", None
-        if not pin.isdigit() or len(pin) != 4: return False, "PIN(4자리 숫자)을 입력하세요.", None
-        idx = _load_profiles_index()
-        ck = f"{nkey}|{pin}"
-        legacy = idx.get(nkey)
-        if legacy and legacy.get("pin") == pin and ck not in idx:
-            idx[ck] = {"uid": legacy.get("uid"), "pin": pin, "nickname": nickname, "created_ts": legacy.get("created_ts")}
-            idx.pop(nkey, None); _save_profiles_index(idx)
-        rec = idx.get(ck)
-        if rec:
-            return True, "등록된 별명+PIN으로 로그인되었습니다.", rec.get("uid")
-        else:
-            uid = _make_uid(nickname, pin)
-            idx[ck] = {"uid": uid, "pin": pin, "nickname": nickname, "created_ts": int(_time.time())}
-            _save_profiles_index(idx)
-            return True, "새 별명+PIN으로 등록되었습니다.", uid
-    except Exception:
-        return False, "내부 오류: 사용자 등록 실패", None
-
 
 # -*- coding: utf-8 -*-
 import streamlit as st
@@ -168,8 +91,6 @@ ensure_onco_drug_db(DRUG_DB)
 ONCO_MAP = build_onco_map()
 
 st.set_page_config(page_title="BloodMap — 피수치가이드", page_icon="🩸", layout="centered")
-
-
 st.title("BloodMap — 피수치가이드")
 
 st.info(
@@ -178,19 +99,6 @@ st.info(
     "개인정보를 수집하지 않으며, 어떠한 개인정보 입력도 요구하지 않습니다."
 )
 st.markdown("문의/버그 제보: **[피수치 가이드 공식카페](https://cafe.naver.com/bloodmap)**")
-
-# --- AUTO: eGFR small UI under nickname (final) ---
-with st.expander("🧮 eGFR 계산(선택)"):
-    c_e1, c_e2, c_e3, c_e4 = st.columns(4)
-    with c_e1:
-        egfr_age = st.number_input("나이(년)", min_value=0, step=1, value=0, key="egfr_age")
-    with c_e2:
-        egfr_sex = st.selectbox("성별", ["", "남성", "여성"], index=0, key="egfr_sex")
-    with c_e3:
-        egfr_height = st.number_input("키(cm, 소아)", min_value=0.0, step=0.1, value=0.0, key="egfr_height")
-    with c_e4:
-        st.caption("Cr가 입력되면 eGFR이 결과 표에 함께 표시됩니다.")
-# --- /AUTO: eGFR small UI under nickname (final) ---
 
 nick, pin, key = nickname_pin()
 st.divider()
@@ -383,74 +291,6 @@ if mode == "암":
     labs = {code: clean_num(st.text_input(label, placeholder="예: 4500")) for code, label in LABS_ORDER}
 
     # 특수검사
-    # --- AUTO: GI/FEVER tools right under Special Tests ---
-    st.markdown("#### 🚽 설사 / 🤮 구토 / 🌡️ 해열제")
-    c_d1, c_d2 = st.columns([2,1])
-    with c_d1:
-        diarrhea_type = st.selectbox(
-            "설사(구분표)",
-            ["", "노란색 설사", "진한 노란색 설사", "거품 설사", "녹색 설사", "녹색 혈변", "혈변", "검은색 변"],
-            index=0,
-            help="참고용 간단 분류입니다. 정확한 진단은 의료진 판단에 따릅니다."
-        )
-    with c_d2:
-        diarrhea_freq = st.number_input("설사 횟수(회/일)", min_value=0, step=1, value=0)
-
-    c_v1, c_v2 = st.columns([2,1])
-    with c_v1:
-        vomit_type = st.selectbox(
-            "구토(구분)",
-            ["", "흰색/묽음", "노란색/담즙", "초록색/담즙", "혈성 의심"],
-            index=0
-        )
-    with c_v2:
-        vomit_freq = st.number_input("구토 횟수(회/일)", min_value=0, step=1, value=0)
-
-    st.caption("자가관리 참고용입니다. 🚨 탈수/고열/혈변·혈성 구토 시 즉시 병원에 연락.")
-
-    st.markdown("##### 🌡️ 해열제 자동 계산(체중 기반)")
-    c_w1, c_w2, c_w3 = st.columns(3)
-    with c_w1:
-        body_weight = st.number_input("체중(kg)", min_value=0.0, step=0.1, value=0.0, key="antipy_weight")
-    with c_w2:
-        age_years = st.number_input("나이(년)", min_value=0, step=1, value=0, key="antipy_age")
-    with c_w3:
-        fever_temp = st.number_input("체온(℃)", min_value=0.0, step=0.1, value=0.0, key="antipy_temp")
-
-    def _dose_apap(weight):
-        if not weight or weight <= 0: return None
-        low = round(10 * weight); high = round(15 * weight)
-        return low, high
-
-    def _dose_ibu(weight, age):
-        if not weight or weight <= 0: return None
-        if age is not None and age < 0.5:
-            return None
-        dose = round(10 * weight)
-        return dose
-
-    apap = _dose_apap(body_weight)
-    ibu  = _dose_ibu(body_weight, age_years)
-
-    colA, colB = st.columns(2)
-    with colA:
-        st.subheader("APAP(아세트아미노펜)")
-        if apap:
-            st.write(f"권장 1회 용량: **{apap[0]}–{apap[1]} mg** (4–6시간 간격)")
-            st.caption("하루 총량: 소아 60–75 mg/kg/day, 성인 보수적 3,000 mg/day 이하 권장. 간질환/과음 시 의료진 상의.")
-        else:
-            st.caption("체중을 입력하면 용량이 계산됩니다.")
-    with colB:
-        st.subheader("IBU(이부프로펜)")
-        if ibu:
-            st.write(f"권장 1회 용량: **{ibu} mg** (6–8시간 간격)")
-            st.caption("6개월 미만 영아 금기. 위장관/신장질환·탈수 시 복용 전 의료진 상의.")
-        else:
-            st.caption("체중/나이를 입력하면 용량이 계산됩니다.")
-
-    st.caption("같은 성분 중복(복합감기약 포함) 주의 — 마지막 복용 후 최소 간격: APAP ≥4h, IBU ≥6h. 하루 총량 초과 금지.")
-    # --- /AUTO ---
-
     from special_tests import special_tests_ui
     sp_lines = special_tests_ui()
     lines_blocks = []
@@ -796,30 +636,92 @@ if results_only_after_analyze(st):
     st.caption("문의/버그 제보: [피수치 가이드 공식카페](https://cafe.naver.com/bloodmap)")
     st.stop()
 
-# --- AUTO: nickname/PIN validation block ---
-# Validate nickname & PIN uniqueness
+
+# --- AUTO: sidebar visitor trend (14d) ---
 try:
-    _nickname_val = st.session_state.get("nickname_input_val")
+    import pandas as _pd
+    import datetime as _dt
+    data = _load_metrics() or {}
+    by_date = data.get("by_date", {})
+    # build last 14 days series
+    today = _dt.date.today()
+    rows = []
+    for i in range(13, -1, -1):
+        d = (today - _dt.timedelta(days=i)).isoformat()
+        r = by_date.get(d, {"unique": 0, "visits": 0})
+        rows.append({"date": d, "unique": r.get("unique", 0), "visits": r.get("visits", 0)})
+    _dfm = _pd.DataFrame(rows)
+    with st.sidebar:
+        st.markdown("###### 📈 최근 14일 추이")
+        st.line_chart(_dfm.set_index("date")[["unique","visits"]])
+except Exception as _e:
+    pass
+# --- /AUTO ---
+
+
+
+# --- AUTO: labs friendly chart ---
+def _render_labs_friendly_chart(uid: str):
+    try:
+        import pandas as _pd
+        import numpy as _np
+        import altair as alt
+        # load from session_state persist (if available)
+        hist = (st.session_state.get("lab_hist") or {}).get(uid)
+        if hist is None or len(getattr(hist, "index", [])) == 0:
+            return
+        df = hist.copy()
+        # Try to parse a 'date' column or index to datetime
+        date_col = None
+        for c in df.columns:
+            if c.lower() in ("date","날짜","검사일"):
+                date_col = c; break
+        if date_col is None:
+            # if index is datetime-like, move to column
+            try:
+                df = df.reset_index().rename(columns={"index": "date"})
+                date_col = "date"
+            except Exception:
+                pass
+        if date_col is None:
+            return
+        df[date_col] = _pd.to_datetime(df[date_col], errors="coerce")
+        df = df.dropna(subset=[date_col]).sort_values(date_col)
+
+        # numeric columns only for chart
+        num_cols = [c for c in df.columns if c != date_col and _pd.api.types.is_numeric_dtype(df[c])]
+        if not num_cols:
+            return
+
+        with st.expander("🩸 그래프 옵션", expanded=False):
+            cols_pick = st.multiselect("보기 항목", options=num_cols, default=num_cols[: min(5, len(num_cols))])
+            smooth = st.checkbox("이동평균(3포인트)", value=False)
+            y_min, y_max = st.slider("Y축 범위", value=(float(df[cols_pick].min(numeric_only=True).min()) if cols_pick else 0.0,
+                                                    float(df[cols_pick].max(numeric_only=True).max()) if cols_pick else 1.0))
+        if not cols_pick:
+            return
+        plot_df = df[[date_col] + cols_pick].copy()
+        if smooth:
+            for c in cols_pick:
+                plot_df[c] = plot_df[c].rolling(window=3, min_periods=1, center=True).mean()
+
+        # Melt for multi-series Altair
+        m = plot_df.melt(date_col, var_name="항목", value_name="값")
+        base = alt.Chart(m).mark_line(point=True).encode(
+            x=alt.X(f"{date_col}:T", title="날짜"),
+            y=alt.Y("값:Q", title="", scale=alt.Scale(domain=[y_min, y_max])),
+            color="항목:N",
+            tooltip=[alt.Tooltip(f"{date_col}:T", title="날짜"), "항목:N", alt.Tooltip("값:Q", format=".2f")]
+        ).properties(height=260, use_container_width=True)
+        st.altair_chart(base, use_container_width=True)
+    except Exception as _e:
+        st.caption(f"그래프 표시 오류: {_e}")
+
+# 메인 영역 어딘가에서 현재 uid가 있으면 표시
+try:
+    _uid_preview = st.session_state.get("user_key")
+    if _uid_preview:
+        _render_labs_friendly_chart(_uid_preview)
 except Exception:
-    _nickname_val = None
-
-_nickname_guess = _nickname_val or ""
-_pin_guess = ""
-
-for k in list(st.session_state.keys()):
-    if "별명" in k or "nickname" in k.lower():
-        _nickname_guess = st.session_state.get(k) or _nickname_guess
-    if "PIN" in k or "pin" in k.lower():
-        v = st.session_state.get(k)
-        if isinstance(v, (int, float)):
-            v = str(int(v)).zfill(4)
-        _pin_guess = str(v) if v is not None else _pin_guess
-
-_ok, _msg, _uid = validate_or_register_user(str(_nickname_guess or "").strip(), str(_pin_guess or "").strip())
-if _ok:
-    st.success(_msg)
-    st.session_state["user_key"] = _uid
-else:
-    st.warning(_msg)
-    st.stop()
+    pass
 # --- /AUTO ---
