@@ -33,34 +33,48 @@ def _make_uid(nick: str, pin: str) -> str:
     seed = f"{_norm_nick(nick)}|{(pin or '').strip()}"
     return hashlib.sha256(seed.encode("utf-8")).hexdigest()[:12]
 
-def validate_or_register_user(nickname: str, pin: str):
-    """Return (ok:bool, msg:str, uid:str|None). Enforce unique nickname.
-    - If nickname exists:
-        - Same PIN -> ok=True (login), return existing uid
-        - Different PIN -> ok=False, block
-    - If new nickname:
-        - Require 4-digit PIN; create uid and save index
-    """
-    idx = _load_profiles_index()
-    nkey = _norm_nick(nickname)
-    pin = (pin or '').strip()
-    if not nkey:
-        return False, "별명을 입력하세요.", None
-    if not pin.isdigit() or len(pin) != 4:
-        return False, "PIN(4자리 숫자)을 입력하세요.", None
 
-    rec = idx.get(nkey)
-    if rec:
-        if rec.get("pin") == pin:
-            return True, "등록된 별명으로 로그인되었습니다.", rec.get("uid")
+def validate_or_register_user(nickname: str, pin: str):
+    """Return (ok, msg, uid). Policy: nickname can duplicate; (nickname+PIN) must be unique."""
+    idx = _load_profiles_index() if ' _load_profiles_index' in globals() else {}
+    try:
+        from json import load as _load
+        import os, json, hashlib, time as _time
+        def _profiles_index_path(): return "/mnt/data/profile/index.json"
+        def _load_profiles_index():
+            p = _profiles_index_path()
+            if os.path.exists(p):
+                try: return json.load(open(p,"r",encoding="utf-8"))
+                except Exception: return {}
+            return {}
+        def _save_profiles_index(d: dict):
+            try:
+                os.makedirs("/mnt/data/profile", exist_ok=True)
+                json.dump(d, open(_profiles_index_path(),"w",encoding="utf-8"), ensure_ascii=False, indent=2)
+            except Exception: pass
+        def _norm_nick(s): return (s or "").strip().lower()
+        def _make_uid(nick,pin):
+            return hashlib.sha256(f"{_norm_nick(nick)}|{(pin or '').strip()}".encode("utf-8")).hexdigest()[:12]
+        nkey = _norm_nick(nickname); pin = (pin or '').strip()
+        if not nkey: return False, "별명을 입력하세요.", None
+        if not pin.isdigit() or len(pin) != 4: return False, "PIN(4자리 숫자)을 입력하세요.", None
+        idx = _load_profiles_index()
+        ck = f"{nkey}|{pin}"
+        legacy = idx.get(nkey)
+        if legacy and legacy.get("pin") == pin and ck not in idx:
+            idx[ck] = {"uid": legacy.get("uid"), "pin": pin, "nickname": nickname, "created_ts": legacy.get("created_ts")}
+            idx.pop(nkey, None); _save_profiles_index(idx)
+        rec = idx.get(ck)
+        if rec:
+            return True, "등록된 별명+PIN으로 로그인되었습니다.", rec.get("uid")
         else:
-            return False, "이미 사용 중인 별명입니다. 기존 PIN이 필요합니다.", None
-    else:
-        uid = _make_uid(nickname, pin)
-        idx[nkey] = {"uid": uid, "pin": pin, "created_ts": int(_time.time())}
-        _save_profiles_index(idx)
-        return True, "새 별명으로 등록되었습니다.", uid
-# --- /AUTO ---
+            uid = _make_uid(nickname, pin)
+            idx[ck] = {"uid": uid, "pin": pin, "nickname": nickname, "created_ts": int(_time.time())}
+            _save_profiles_index(idx)
+            return True, "새 별명+PIN으로 등록되었습니다.", uid
+    except Exception:
+        return False, "내부 오류: 사용자 등록 실패", None
+
 
 # -*- coding: utf-8 -*-
 import streamlit as st
