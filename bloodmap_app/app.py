@@ -584,6 +584,10 @@ try:
     from adult_rules import triage_advise as _triage_advise_ext
 
 
+
+
+
+
 # === AUTO: widget key namespacing helper ===
 def _k(name: str) -> str:
     import streamlit as st, uuid as _uuid
@@ -591,7 +595,6 @@ def _k(name: str) -> str:
         st.session_state["_session_id"] = _uuid.uuid4().hex[:8]
     return f"{name}_{st.session_state['_session_id']}"
 # === /AUTO ===
-
 
 except Exception:
     _get_adult_options_ext = _predict_from_symptoms_ext = _triage_advise_ext = None
