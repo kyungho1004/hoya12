@@ -83,7 +83,11 @@ st.markdown("문의/버그 제보: **[피수치 가이드 공식카페](https://
 nick, pin, key = nickname_pin()
 has_key = bool(nick and pin and len(pin)==4)
 uid = key or "guest"
-_ = bump_metrics(uid)  # 방문자 통계 증가
+stats = None
+try:
+    stats = bump_metrics(uid)  # 방문자 통계 증가
+except Exception:
+    stats = None
 
 # 약물 DB 로드
 ensure_onco_drug_db(DRUG_DB)
@@ -92,7 +96,7 @@ ensure_onco_drug_db(DRUG_DB)
 with st.sidebar:
     st.subheader("👥 방문자 통계")
     import json, os
-    path = "/mnt/data/metrics/visits.json"
+    path = (stats or {}).get("_path") or "/mnt/data/metrics/visits.json"
     if os.path.exists(path):
         data = json.load(open(path,"r",encoding="utf-8"))
         t = data.get("today",{})
