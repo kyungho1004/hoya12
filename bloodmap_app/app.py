@@ -626,6 +626,44 @@ def triage_advise(temp_c: float, comorb: list):
 # === /AUTO ===
 
 
+# === AUTO: predict_from_symptoms signature-compat wrapper ===
+try:
+    _PRED_EXT = _predict_from_symptoms_ext
+except NameError:
+    _PRED_EXT = None
+
+def predict_from_symptoms(symptoms, temp=None, comorb=None):
+    if _PRED_EXT:
+        try:
+            return _PRED_EXT(symptoms, temp, comorb)
+        except TypeError:
+            try:
+                return _PRED_EXT(symptoms)
+            except Exception:
+                pass
+        except Exception:
+            pass
+    try:
+        t = float(temp) if temp is not None else None
+    except Exception:
+        t = None
+    results = []
+    if t is not None:
+        if t >= 39.0:
+            results.append({"label":"고열","prob":0.9,"note":"39℃ 이상"})
+        elif t >= 38.0:
+            results.append({"label":"발열","prob":0.7,"note":"38~39℃"})
+    d = (symptoms or {})
+    if d.get("설사") in ("4~6회","7회 이상"):
+        results.append({"label":"위장관염 의심","prob":0.6,"note":"다빈도 설사"})
+    if d.get("콧물") in ("노랑(초록)","누런"):
+        results.append({"label":"상기도염 의심","prob":0.5,"note":"농성 콧물"})
+    return results
+# === /AUTO ===
+
+
+
+
 def _labs_fetch_latest_cr(uid: str|None):
     """Return (value_mgdl, date_string) for latest serum creatinine from the user's labs CSV if available."""
     if not uid:
