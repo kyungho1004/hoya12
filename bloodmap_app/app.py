@@ -91,7 +91,18 @@ ensure_onco_drug_db(DRUG_DB)
 ONCO_MAP = build_onco_map()
 
 st.set_page_config(page_title="BloodMap — 피수치가이드", page_icon="🩸", layout="centered")
-# --- AUTO: eGFR small UI (fallback under page title) ---
+
+
+st.title("BloodMap — 피수치가이드")
+
+st.info(
+    "이 앱은 의료행위가 아니며, **참고용**입니다. 진단·치료를 **대체하지 않습니다**.\n"
+    "약 변경/복용 중단 등은 반드시 주치의와 상의하세요.\n"
+    "개인정보를 수집하지 않으며, 어떠한 개인정보 입력도 요구하지 않습니다."
+)
+st.markdown("문의/버그 제보: **[피수치 가이드 공식카페](https://cafe.naver.com/bloodmap)**")
+
+# --- AUTO: eGFR small UI under nickname (final) ---
 with st.expander("🧮 eGFR 계산(선택)"):
     c_e1, c_e2, c_e3, c_e4 = st.columns(4)
     with c_e1:
@@ -102,16 +113,7 @@ with st.expander("🧮 eGFR 계산(선택)"):
         egfr_height = st.number_input("키(cm, 소아)", min_value=0.0, step=0.1, value=0.0, key="egfr_height")
     with c_e4:
         st.caption("Cr가 입력되면 eGFR이 결과 표에 함께 표시됩니다.")
-# --- /AUTO ---
-
-st.title("BloodMap — 피수치가이드")
-
-st.info(
-    "이 앱은 의료행위가 아니며, **참고용**입니다. 진단·치료를 **대체하지 않습니다**.\n"
-    "약 변경/복용 중단 등은 반드시 주치의와 상의하세요.\n"
-    "개인정보를 수집하지 않으며, 어떠한 개인정보 입력도 요구하지 않습니다."
-)
-st.markdown("문의/버그 제보: **[피수치 가이드 공식카페](https://cafe.naver.com/bloodmap)**")
+# --- /AUTO: eGFR small UI under nickname (final) ---
 
 nick, pin, key = nickname_pin()
 st.divider()
@@ -716,3 +718,31 @@ if results_only_after_analyze(st):
     st.caption("본 도구는 참고용입니다. 의료진의 진단/치료를 대체하지 않습니다.")
     st.caption("문의/버그 제보: [피수치 가이드 공식카페](https://cafe.naver.com/bloodmap)")
     st.stop()
+
+# --- AUTO: nickname/PIN validation block ---
+# Validate nickname & PIN uniqueness
+try:
+    _nickname_val = st.session_state.get("nickname_input_val")
+except Exception:
+    _nickname_val = None
+
+_nickname_guess = _nickname_val or ""
+_pin_guess = ""
+
+for k in list(st.session_state.keys()):
+    if "별명" in k or "nickname" in k.lower():
+        _nickname_guess = st.session_state.get(k) or _nickname_guess
+    if "PIN" in k or "pin" in k.lower():
+        v = st.session_state.get(k)
+        if isinstance(v, (int, float)):
+            v = str(int(v)).zfill(4)
+        _pin_guess = str(v) if v is not None else _pin_guess
+
+_ok, _msg, _uid = validate_or_register_user(str(_nickname_guess or "").strip(), str(_pin_guess or "").strip())
+if _ok:
+    st.success(_msg)
+    st.session_state["user_key"] = _uid
+else:
+    st.warning(_msg)
+    st.stop()
+# --- /AUTO ---

@@ -1,0 +1,14 @@
+{
+  "app.py": {
+    "size": 35203,
+    "sha256": "a1950f1d38d50018b662d32b59d3519f19e3d0d2070147d650c273d8b72c66fb"
+  },
+  "special_tests.py": {
+    "size": 18994,
+    "sha256": "9ab18eb44bc76b046c135f5a694a17da3b444925b39e387f6ffee92165a13091"
+  },
+  "lab_diet.py": {
+    "size": 3706,
+    "sha256": "ef569ece527756632b8145d00de6d9537978f4624b67fa417b13f91fb44edcd3"
+  }
+}
