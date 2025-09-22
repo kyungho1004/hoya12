@@ -269,6 +269,44 @@ def load_last_row(uid):
     except Exception:
         return None
 
+
+# -------- 특수검사 렌더링(안전 필터) --------
+def render_special_tests(labs: dict):
+    st.subheader("🧬 특수검사")
+    lines = []
+    # Myoglobin rule (no ULN known): only hard cut
+    try:
+        mg = labs.get("Myoglobin")
+        if isinstance(mg,(int,float)):
+            if mg >= 500: lines.append("🔴 Myoglobin ≥500 ng/mL: 심한 근육손상/횡문근융해 가능 — 즉시 평가")
+            elif mg is not None: lines.append("🟡 Myoglobin 상승 가능성: 근손상/초기 심근 손상 고려(ULN 비교 필요)")
+    except Exception: pass
+    # Cardiac enzymes
+    try:
+        tro = labs.get("Troponin")
+        if isinstance(tro,(int,float)) and tro>0.04: lines.append("🔴 Troponin 상승: 심근 손상 의심(참고치 종속)")
+    except Exception: pass
+    try:
+        ckmb = labs.get("CKMB") or labs.get("CK_MB") or labs.get("CK-MB")
+        if isinstance(ckmb,(int,float)) and ckmb>5: lines.append("🟡 CK‑MB 상승 가능: 심근 관련성 고려")
+    except Exception: pass
+    # Coagulation
+    try:
+        inr = labs.get("INR")
+        if isinstance(inr,(int,float)) and inr>=1.5: lines.append("🟡 INR ≥1.5: 출혈 위험 증가, 시술 전 주의")
+    except Exception: pass
+    try:
+        dd = labs.get("D-Dimer") or labs.get("D_dimer")
+        if isinstance(dd,(int,float)) and dd>=0.5: lines.append("🟡 D‑Dimer ≥0.5: 혈전성 질환 감별 필요(비특이적)")
+    except Exception: pass
+    # Null/dirty guard
+    lines = [str(x).strip() for x in lines if isinstance(x,(str,)) and str(x).strip() and "NULL" not in str(x).upper()]
+    if not lines:
+        st.caption("특수검사 입력/해석 없음")
+        return []
+    for L in lines: st.write("- " + L)
+    return lines
+
 # -------- Δ와 식이가이드(빽빽) --------
 def delta_icon(cur, prev):
     try:
@@ -358,6 +396,9 @@ def labs_input_with_units(uid, cols_per_row=1):
         ("Glu","Glu(혈당)"), ("AST","AST(간수치)"), ("ALT","ALT(간수치)"),
         ("Cr","Cr(크레아티닌)"), ("CRP","CRP(C-반응단백)"), ("Cl","Cl(염소)"),
         ("UA","UA(요산)"), ("T.B","T.B(총빌리루빈)"), ("P","P(인)"),
+        # --- 특수검사 입력 ---
+        ("Myoglobin","Myoglobin(근육)"), ("CK","CK(크레아틴키나제)"), ("CKMB","CK-MB"), ("Troponin","Troponin"),
+        ("PT","PT(초)"), ("aPTT","aPTT(초)"), ("INR","INR"), ("D-Dimer","D-Dimer") ,
         ("CR","CR(별칭/이전 표기)")
     ]
     unit_opts = {"Glu":"mg/dL","P":"mg/dL","Ca":"mg/dL","Cr":"mg/dL"}
@@ -444,6 +485,7 @@ if mode == "암":
     labs = labs_input_with_units(uid, cols_per_row)
     prof = load_profile(uid) or {"age":30,"sex":"남","height_cm":170.0,"weight":60.0}
     show_lab_summary(uid, labs, prof)
+    sp_lines = render_special_tests(labs)
 
     # 저장/그래프 CSV
     st.markdown("#### 💾 저장/그래프 CSV")
@@ -501,7 +543,7 @@ if mode == "암":
         st.session_state["analyzed"] = True
         st.session_state["analysis_ctx"] = {
             "mode":"암","group":group,"dx":dx,"dx_label": dx_display(group, dx),
-            "labs": labs, "diet_lines": diet_lines,
+            "labs": labs, "diet_lines": diet_lines, "special_tests": sp_lines,
             "user_chemo": [], "user_targeted": [], "user_abx": [],
             "care_lines": care_lines if place_carelog_under_special else [],
             "triage_high": analyze_symptoms(care_entries)[0] if place_carelog_under_special else [],
@@ -545,6 +587,7 @@ def export_report(ctx: dict):
     if ctx.get("triage_high"): body.append("- 🆘 응급도: " + " · ".join(ctx["triage_high"]))
     if ctx.get("care_lines"): body.append("\n## 🗒️ 최근 24h 케어로그\n" + "\n".join(ctx["care_lines"]))
     if ctx.get("diet_lines"): body.append("\n## 🍽️ 식이가이드\n" + "\n".join(f"- {x}" for x in ctx["diet_lines"]))
+    if ctx.get("special_tests"): body.append("\n## 🧬 특수검사\n" + "\n".join(f"- {x}" for x in ctx["special_tests"]))
     if ctx.get("labs"):
         labs = ctx["labs"].copy()
         if "CR" in labs and "Cr" not in labs: labs["Cr"] = labs["CR"]
