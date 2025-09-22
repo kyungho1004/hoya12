@@ -70,31 +70,37 @@ def nickname_pin():
     c1,c2 = st.columns([2,1])
     with c1: n = st.text_input("별명", placeholder="예: 은서엄마")
     with c2: p = st.text_input("PIN(4자리 숫자)", max_chars=4, placeholder="0000")
-    p2 = "".join([c for c in (p or "") if c.isdigit()])[:4]
-    if p and p2!=p: st.warning("PIN은 숫자 4자리만 허용됩니다.")
+    # normalize PIN (preserve leading zeros)
+    p2 = "".join(ch for ch in (p or "") if ch.isdigit())[:4]
+    if p and p2 != p:
+        st.warning("PIN은 숫자 4자리만 허용됩니다.")
     key = (n.strip()+"#"+p2) if (n and p2) else (n or "guest")
     st.session_state["key"] = key
 
-    # --- AUTO: enforce uniqueness & set uid ---
+    # registry check
     nkey = _norm_nick(n)
-    if nkey:
+    if nkey and p2 and len(p2) == 4:
         idx = _load_profiles_index()
-        if not p2 or len(p2) != 4:
-            st.warning("PIN(4자리 숫자)을 입력하세요."); st.toast("PIN 4자리 필요", icon="⚠️"); st.stop()
-        rec = idx.get(nkey)
-        if rec:
-            if rec.get("pin") == p2:
-                st.session_state["user_key"] = rec.get("uid")
-                st.caption("등록된 별명으로 로그인되었습니다."); st.toast("로그인 완료", icon="✅")
-            else:
-                st.warning("이미 사용 중인 별명입니다. 기존 PIN이 필요합니다."); st.toast("별명 중복 차단", icon="⚠️"); st.stop()
-        else:
+        ck = f"{nkey}|{p2}"
+        # find existing first
+        rec = idx.get(ck)
+
+        if rec:  # EXISTING → login
+            uid = rec.get("uid")
+            st.session_state["user_key"] = uid
+            st.caption(f"등록된 별명+PIN으로 로그인되었습니다. UID: **{uid}** (기존)")
+            try: st.toast("로그인 완료", icon="✅")
+            except Exception: pass
+        else:    # NEW → register
             uid = _make_uid(n, p2)
-            idx[nkey] = {"uid": uid, "pin": p2, "created_ts": int(_time.time())}
+            idx[ck] = {"uid": uid, "pin": p2, "nickname": n, "created_ts": int(_time.time())}
             _save_profiles_index(idx)
             st.session_state["user_key"] = uid
-            st.caption("새 별명으로 등록되었습니다."); st.toast("등록 완료", icon="✅")
-    # --- /AUTO ---
+            st.caption(f"새 별명+PIN으로 등록되었습니다. UID: **{uid}** (신규)")
+            try: st.toast("등록 완료", icon="✅")
+            except Exception: pass
+    elif nkey and (not p2 or len(p2) != 4):
+        st.warning("PIN(4자리 숫자)을 입력하세요.")
     return n, p2, key
 # ---------- 스케줄 ----------
 def schedule_block():
