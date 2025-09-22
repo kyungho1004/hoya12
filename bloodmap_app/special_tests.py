@@ -264,3 +264,35 @@ def special_tests_ui() -> List[str]:
                 lc = _num(st.text_input("Lactate (젖산, mmol/L)", placeholder="예: 1.5"))
                 if lc is not None and lc >= 2: _emit(lines, "warn", f"Lactate {lc} ≥ 2 → 조직저산소/패혈증 감시")
     return lines
+
+
+
+# --- AUTO: Myoglobin input & interpretation ---
+def _num_auto(v):
+    try:
+        if v is None: return None
+        s = str(v).strip().replace(",", "")
+        return float(s)
+    except Exception:
+        return None
+
+try:
+    st.markdown("#### 🫀 Myoglobin")
+    m1, m2 = st.columns(2)
+    with m1: _myo = st.text_input("Myoglobin (마이오글로빈, ng/mL 또는 µg/L)", placeholder="예: 45")
+    with m2: _uln = st.text_input("ULN for Myoglobin (정상상한, ng/mL)", placeholder="예: 70")
+    myo = _num_auto(_myo); myo_uln = _num_auto(_uln)
+    if myo is not None:
+        if myo_uln and myo_uln > 0:
+            ratio = myo / myo_uln
+            if ratio >= 3:
+                st.warning(f"Myoglobin {myo} (ULN×{ratio:.1f}) → 급성 근손상/심근손상 가능(비특이). CK·Troponin/임상과 함께 해석.")
+            elif ratio >= 1:
+                st.info(f"Myoglobin {myo} ≥ ULN → 근육 손상 가능(운동/외상/신부전 영향 가능). CK·Troponin 동반 확인.")
+            else:
+                st.success(f"Myoglobin {myo} < ULN")
+        else:
+            st.caption("Myoglobin ULN을 입력하면 해석이 더 정확합니다.")
+except Exception:
+    pass
+# --- /AUTO ---

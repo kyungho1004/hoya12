@@ -1,10 +1,68 @@
+# --- AUTO: visit metrics ---
+def _metrics_path() -> str:
+    return "/mnt/data/metrics/visits.json"
+
+def _load_metrics() -> dict:
+    path = _metrics_path()
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+def _save_metrics(d: dict) -> None:
+    try:
+        with open(_metrics_path(), "w", encoding="utf-8") as f:
+            json.dump(d, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+def update_visit_counters():
+    import datetime as _dt
+    st.session_state.setdefault("_client_uuid", str(uuid.uuid4()))
+    uid = st.session_state["_client_uuid"]
+    today = _dt.date.today().isoformat()
+    data = _load_metrics() or {}
+    by_date = data.setdefault("by_date", {})
+    cum = data.setdefault("cumulative", {"unique": 0, "visits": 0, "uuids": []})
+
+    td = by_date.setdefault(today, {"unique": 0, "visits": 0, "uuids": []})
+    td["visits"] += 1
+    if uid not in td["uuids"]:
+        td["uuids"].append(uid)
+        td["unique"] += 1
+
+    data["cumulative"]["visits"] += 1
+    if uid not in cum["uuids"]:
+        cum["uuids"].append(uid)
+        cum["unique"] += 1
+
+    _save_metrics(data)
+    return td["unique"], td["visits"], cum["unique"], cum["visits"]
+# --- /AUTO ---
+
+
+import os
+import json
+import uuid
+
+# --- AUTO: ensure data directories exist ---
+for _p in ["/mnt/data/bloodmap_graph", "/mnt/data/care_log", "/mnt/data/profile", "/mnt/data/metrics"]:
+    try:
+        os.makedirs(_p, exist_ok=True)
+    except Exception:
+        pass
+# --- /AUTO ---
+
 # -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
 from datetime import date
 
 from core_utils import nickname_pin, clean_num, schedule_block
-from drug_db import DRUG_DB, ensure_onco_drug_db, display_label, key_from_label
+from drug_db import DRUG_DB, ensure_onco_drug_db, display_label
 from onco_map import build_onco_map, auto_recs_by_dx, dx_display
 from ui_results import results_only_after_analyze, render_adverse_effects, collect_top_ae_alerts
 from lab_diet import lab_diet_guides
@@ -12,6 +70,10 @@ from peds_profiles import get_symptom_options
 from peds_dose import acetaminophen_ml, ibuprofen_ml
 from pdf_export import export_md_to_pdf
 
+
+# 세션 플래그(중복 방지)
+if "summary_line_shown" not in st.session_state:
+    st.session_state["summary_line_shown"] = False
 
 def short_caption(label: str) -> str:
     """
@@ -64,11 +126,42 @@ def render_predictions(preds, show_copy=True):
         st.session_state["summary_line_shown"] = True
 
 
-# === Initialization ===
+def build_peds_symptoms(nasal=None, cough=None, diarrhea=None, vomit=None,
+                        days_since_onset=None, temp=None, fever_cat=None, eye=None):
+    """소아 증상 dict를 안전하게 생성(누락 변수 기본값 보정)."""
+    if nasal is None: nasal = "없음"
+    if cough is None: cough = "없음"
+    if diarrhea is None: diarrhea = "없음"
+    if vomit is None: vomit = "없음"
+    if days_since_onset is None: days_since_onset = 0
+    if temp is None: temp = 0.0
+    if fever_cat is None: fever_cat = "정상"
+    if eye is None: eye = "없음"
+    return {
+        "콧물": nasal, "기침": cough, "설사": diarrhea, "구토": vomit,
+        "증상일수": days_since_onset, "체온": temp, "발열": fever_cat, "눈꼽": eye
+    }
+
+
+# ---------------- 초기화 ----------------
 ensure_onco_drug_db(DRUG_DB)
 ONCO_MAP = build_onco_map()
 
 st.set_page_config(page_title="BloodMap — 피수치가이드", page_icon="🩸", layout="centered")
+
+
+# --- AUTO: sidebar visitor stats ---
+try:
+    tu, tv, cu, cv = update_visit_counters()
+    with st.sidebar:
+        st.markdown("### 👥 방문자 통계")
+        st.metric("오늘(고유)", tu)
+        st.metric("오늘(방문)", tv)
+        st.metric("누적 고유", cu)
+        st.metric("총 방문수", cv)
+except Exception as _e:
+    pass
+# --- /AUTO ---
 st.title("BloodMap — 피수치가이드")
 
 st.info(
@@ -77,10 +170,6 @@ st.info(
     "개인정보를 수집하지 않으며, 어떠한 개인정보 입력도 요구하지 않습니다."
 )
 st.markdown("문의/버그 제보: **[피수치 가이드 공식카페](https://cafe.naver.com/bloodmap)**")
-
-# --- Session guards ---
-if "summary_line_shown" not in st.session_state:
-    st.session_state["summary_line_shown"] = False
 
 nick, pin, key = nickname_pin()
 st.divider()
@@ -114,55 +203,16 @@ def _one_line_selection(ctx: dict) -> str:
     if b: parts.append(f"표적/면역: {b}")
     c = names(ctx.get("user_abx"))
     if c: parts.append(f"항생제: {c}")
-    extra = names(ctx.get("user_extra"))
-    if extra: parts.append(f"추가: {extra}")
     return " · ".join(parts) if parts else "선택된 약물이 없습니다."
-
-# --- new: GI color/type options used across modes ---
-VOMIT_TYPES = ["없음","흰","노랑","초록"]
-DIARRHEA_TYPES = ["없음","노란","진한노란","거품","녹색","녹색혈변","혈변","검은색"]
-
-def build_peds_symptoms(nasal=None, cough=None, diarrhea=None, vomit=None,
-                        days_since_onset=None, temp=None, fever_cat=None, eye=None,
-                        diarrhea_type=None, vomit_type=None):
-    """소아/성인 공용 증상 dict를 안전하게 생성(누락 변수 기본값 보정)."""
-    if nasal is None: nasal = "없음"
-    if cough is None: cough = "없음"
-    if diarrhea is None: diarrhea = "없음"
-    if vomit is None: vomit = "없음"
-    if days_since_onset is None: days_since_onset = 0
-    if temp is None: temp = 0.0
-    if fever_cat is None: fever_cat = "정상"
-    if eye is None: eye = "없음"
-    if diarrhea_type is None: diarrhea_type = "없음"
-    if vomit_type is None: vomit_type = "없음"
-    return {
-        "콧물": nasal, "기침": cough,
-        "설사(횟수/일)": diarrhea, "설사(성상)": diarrhea_type,
-        "구토(횟수/일)": vomit, "구토(성상)": vomit_type,
-        "증상일수": days_since_onset, "체온": temp, "발열": fever_cat, "눈꼽": eye
-    }
-
-def _apap_ibu_cautions(count_apap:int, count_ibu:int) -> list[str]:
-    tips = []
-    if count_apap > 0 and count_ibu > 0:
-        tips.append("APAP/IBU **교차 복용 중** → 간격 준수(최소 APAP 4–6h, IBU 6–8h), 같은 성분 중복 금지.")
-    if count_apap > 4:
-        tips.append("아세트아미노펜 **24시간 4회 초과** → 과량 위험. 즉시 복용 중단 및 상담.")
-    if count_ibu > 4:
-        tips.append("이부프로펜 **24시간 4회 초과** → 위장관/신장 부작용 위험. 상담 필요.")
-    return tips
 
 def _peds_diet_fallback(sym: dict, disease: str|None=None) -> list[str]:
     tips = []
     temp = float((sym or {}).get("체온") or 0)
     days = int((sym or {}).get("증상일수") or 0)
-    diarrhea = (sym or {}).get("설사(횟수/일)") or ""
-    vomit = (sym or {}).get("구토(횟수/일)") or ""
+    diarrhea = (sym or {}).get("설사") or ""
+    vomit = (sym or {}).get("구토") or ""
     nasal = (sym or {}).get("콧물") or ""
     cough = (sym or {}).get("기침") or ""
-    d_type = (sym or {}).get("설사(성상)") or "없음"
-    v_type = (sym or {}).get("구토(성상)") or "없음"
 
     if diarrhea in ["3~4회","4~6회","5~6회","7회 이상"] or vomit in ["3~4회","4~6회","7회 이상"]:
         tips.append("ORS(경구수액): 수시 소량. 설사/구토 1회마다 **체중당 10 mL/kg** 보충")
@@ -174,12 +224,6 @@ def _peds_diet_fallback(sym: dict, disease: str|None=None) -> list[str]:
 
     if disease in ["로타","노로","장염"]:
         tips.append("유제품은 설사 멎을 때까지 일시 제한(개인차 고려)")
-
-    # color-based red flags
-    if d_type in ["혈변","검은색","녹색혈변"]:
-        tips.append("🚨 **혈변/흑색변**: 즉시 진료/응급실 고려.")
-    if v_type == "초록":
-        tips.append("🚨 **초록색 구토(담즙)**: 장폐색 등 감별 위해 즉시 평가.")
 
     if temp >= 38.5:
         tips.append("체온 38.5℃↑: 얇게 입히고 미온수 닦기, 필요 시 해열제(간격 준수)")
@@ -195,25 +239,17 @@ def _peds_diet_fallback(sym: dict, disease: str|None=None) -> list[str]:
 def _adult_diet_fallback(sym: dict) -> list[str]:
     tips = []
     temp = float((sym or {}).get("체온") or 0)
-    diarrhea = (sym or {}).get("설사(횟수/일)") or ""
-    vomit = (sym or {}).get("구토(횟수/일)") or ""
+    diarrhea = (sym or {}).get("설사") or ""
+    vomit = (sym or {}).get("구토") or ""
     nasal = (sym or {}).get("콧물") or ""
     cough = (sym or {}).get("기침") or ""
-    d_type = (sym or {}).get("설사(성상)") or "없음"
-    v_type = (sym or {}).get("구토(성상)") or "없음"
 
     if diarrhea in ["4~6회","7회 이상"] or vomit in ["3~4회","4~6회","7회 이상"]:
         tips.append("설사/구토 다회: **ORS** 수시 복용, 설사/구토 1회마다 **10 mL/kg** 보충")
         tips.append("초기 4~6시간은 물/커피/주스 대신 ORS 권장")
         tips.append("연식(BRAT) 위주, 기름진/매운 음식·알코올 회피")
-    elif diarrhea in ["1~3회","1~2회","3~4회"]:
+    elif diarrhea in ["1~3회"]:
         tips.append("설사 소량: 수분 보충 + 자극적 음식 줄이기")
-
-    # color-based red flags
-    if d_type in ["혈변","검은색","녹색혈변"]:
-        tips.append("🚨 **혈변/흑색변**: 즉시 진료/응급실 고려.")
-    if v_type == "초록":
-        tips.append("🚨 **초록색 구토(담즙)**: 장폐색 등 감별 위해 즉시 평가.")
 
     if temp >= 38.5:
         tips.append("38.5℃↑: 미온수 샤워·가벼운 옷차림, 필요 시 해열제(간격 준수)")
@@ -229,13 +265,13 @@ def _adult_diet_fallback(sym: dict) -> list[str]:
 
 def _export_report(ctx: dict, lines_blocks=None):
     footer = (
-        "\\n\\n---\\n"
-        "본 수치는 참고용이며, 해석 결과는 개발자와 무관합니다.\\n"
-        "약 변경·복용 중단 등은 반드시 **주치의와 상담** 후 결정하십시오.\\n"
-        "개인정보를 수집하지 않습니다.\\n"
-        "버그/문의: 피수치 가이드 공식카페.\\n"
+        "\n\n---\n"
+        "본 수치는 참고용이며, 해석 결과는 개발자와 무관합니다.\n"
+        "약 변경·복용 중단 등은 반드시 **주치의와 상담** 후 결정하십시오.\n"
+        "개인정보를 수집하지 않습니다.\n"
+        "버그/문의: 피수치 가이드 공식카페.\n"
     )
-    title = f"# BloodMap 결과 ({ctx.get('mode','')})\\n\\n"
+    title = f"# BloodMap 결과 ({ctx.get('mode','')})\n\n"
     body = []
 
     if ctx.get("mode") == "암":
@@ -249,10 +285,6 @@ def _export_report(ctx: dict, lines_blocks=None):
             body.append(f"- 체온: {ctx.get('temp')} ℃")
         if ctx.get("days_since_onset") is not None:
             body.append(f"- 경과일수: {ctx.get('days_since_onset')}일")
-        if ctx.get("apap_24h") is not None or ctx.get("ibu_24h") is not None:
-            body.append(f"- 24시간 해열제 횟수: APAP {ctx.get('apap_24h','?')}회 / IBU {ctx.get('ibu_24h','?')}회")
-            if ctx.get("antipyretic_notes"):
-                body.append("- 해열제 주의: " + " | ".join(ctx.get("antipyretic_notes")))
     if ctx.get("preds"):
         preds_text = "; ".join(f"{p['label']}({p['score']})" for p in ctx["preds"])
         body.append(f"- 자동 추정: {preds_text}")
@@ -266,19 +298,19 @@ def _export_report(ctx: dict, lines_blocks=None):
     if lines_blocks:
         for title2, lines in lines_blocks:
             if lines:
-                body.append(f"\\n## {title2}\\n" + "\\n".join(f"- {L}" for L in lines))
+                body.append(f"\n## {title2}\n" + "\n".join(f"- {L}" for L in lines))
 
     if ctx.get("diet_lines"):
         diet = [str(x) for x in ctx["diet_lines"] if x]
         if diet:
-            body.append("\\n## 🍽️ 식이가이드\\n" + "\\n".join(f"- {L}" for L in diet))
+            body.append("\n## 🍽️ 식이가이드\n" + "\n".join(f"- {L}" for L in diet))
 
     if ctx.get("mode") == "암":
         summary = _one_line_selection(ctx)
         if summary:
-            body.append("\\n## 🗂️ 선택 요약\\n- " + summary)
+            body.append("\n## 🗂️ 선택 요약\n- " + summary)
 
-    md = title + "\\n".join(body) + footer
+    md = title + "\n".join(body) + footer
     txt = md.replace("# ","").replace("## ","")
     return md, txt
 
@@ -301,27 +333,23 @@ if mode == "암":
     if dx: st.caption(_dx_fmt(dx))
 
     st.markdown("### 2) 개인 선택")
+    from drug_db import picklist, key_from_label
     rec_local = auto_recs_by_dx(group, dx, DRUG_DB, ONCO_MAP)
-
-    chemo_opts    = [display_label(k) for k in (rec_local.get("chemo") or [])]
-    targeted_opts = [display_label(k) for k in (rec_local.get("targeted") or [])]
-    abx_opts      = [display_label(k) for k in (rec_local.get("abx") or [])]
-
+    chemo_opts    = picklist(rec_local.get("chemo", []))
+    targeted_opts = picklist(rec_local.get("targeted", []))
+    abx_opts      = picklist(rec_local.get("abx") or [
+        "Piperacillin/Tazobactam","Cefepime","Meropenem","Imipenem/Cilastatin","Aztreonam",
+        "Amikacin","Vancomycin","Linezolid","Daptomycin","Ceftazidime","Levofloxacin","TMP-SMX",
+        "Metronidazole","Amoxicillin/Clavulanate"
+    ])
     c1,c2,c3 = st.columns(3)
     with c1: user_chemo_labels = st.multiselect("항암제(개인)", chemo_opts, default=[])
     with c2: user_targeted_labels = st.multiselect("표적/면역(개인)", targeted_opts, default=[])
     with c3: user_abx_labels = st.multiselect("항생제(개인)", abx_opts, default=[])
-
-    # --- 전체 목록에서 추가(선택지 비어있을 때 대비) ---
-    with st.expander("➕ 고급: 전체 목록에서 추가(필요 시)", expanded=False):
-        all_labels = sorted({display_label(k) for k in DRUG_DB.keys()})
-        extra_labels = st.multiselect("추가 약물(전체)", all_labels, default=[])
-    user_extra = extra_labels[:] if extra_labels else []
-
-    # 라벨을 키로 사용(별도 변환 불필요; DRUG_DB가 alias도 key로 보유)
-    user_chemo    = user_chemo_labels[:]
-    user_targeted = user_targeted_labels[:]
-    user_abx      = user_abx_labels[:]
+    from drug_db import key_from_label
+    user_chemo    = [key_from_label(x) for x in user_chemo_labels]
+    user_targeted = [key_from_label(x) for x in user_targeted_labels]
+    user_abx      = [key_from_label(x) for x in user_abx_labels]
 
     st.markdown("### 3) 피수치 입력 (숫자만)")
     LABS_ORDER = [
@@ -376,7 +404,7 @@ if mode == "암":
         st.session_state["analysis_ctx"] = {
             "mode":"암","group":group,"dx":dx,"dx_label": dx_display(group, dx),
             "labs": labs, "user_chemo": user_chemo, "user_targeted": user_targeted, "user_abx": user_abx,
-            "user_extra": user_extra, "lines_blocks": lines_blocks
+            "lines_blocks": lines_blocks
         }
     schedule_block()
 
@@ -399,10 +427,6 @@ elif mode == "일상":
         with c5: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1, value=0.0)
         with c6: eye = st.selectbox("눈꼽", eye_opts)
 
-        c7,c8 = st.columns(2)
-        with c7: diarrhea_type = st.selectbox("설사(성상/색)", DIARRHEA_TYPES, index=0)
-        with c8: vomit_type = st.selectbox("구토(성상/색)", VOMIT_TYPES, index=0)
-
         age_m = st.number_input("나이(개월)", min_value=0, step=1)
         weight = st.number_input("체중(kg)", min_value=0.0, step=0.1)
 
@@ -417,24 +441,28 @@ elif mode == "일상":
             st.caption("간격 **6~8시간**, 위장 자극 시 음식과 함께")
         st.warning("이 용량 정보는 **참고용**입니다. 반드시 **주치의와 상담**하십시오.")
 
-        st.markdown("#### 해열제 중복 체크(지난 24시간)")
-        c_ap, c_ib = st.columns(2)
-        with c_ap: apap_24h = st.number_input("APAP 횟수", min_value=0, step=1, value=0)
-        with c_ib: ibu_24h = st.number_input("IBU 횟수", min_value=0, step=1, value=0)
-        antipyretic_notes = _apap_ibu_cautions(int(apap_24h), int(ibu_24h))
-        for note in antipyretic_notes:
-            st.error(note)
-
         fever_cat = _fever_bucket_from_temp(temp)
-
+        # 입력 누락 대비 기본값 보정
+        if "days_since_onset" not in locals(): days_since_onset = 0
+        if "temp" not in locals(): temp = 0.0
+        if "fever_cat" not in locals(): fever_cat = "정상"
+        if 'nasal' not in locals(): nasal = '없음'
+        if 'cough' not in locals(): cough = '없음'
+        if 'diarrhea' not in locals(): diarrhea = '없음'
+        if 'vomit' not in locals(): vomit = '없음'
+        if 'eye' not in locals(): eye = '없음'
         symptoms = build_peds_symptoms(
-            nasal=nasal, cough=cough, diarrhea=diarrhea, vomit=vomit,
-            days_since_onset=days_since_onset, temp=temp, fever_cat=fever_cat, eye=eye,
-            diarrhea_type=diarrhea_type, vomit_type=vomit_type,
+            nasal=locals().get('nasal'),
+            cough=locals().get('cough'),
+            diarrhea=locals().get('diarrhea'),
+            vomit=locals().get('vomit'),
+            days_since_onset=locals().get('days_since_onset'),
+            temp=locals().get('temp'),
+            fever_cat=locals().get('fever_cat'),
+            eye=locals().get('eye'),
         )
         preds = predict_from_symptoms(symptoms, temp, age_m)
         st.markdown("#### 🤖 증상 기반 자동 추정")
-        from app import render_predictions  # self import safe in Streamlit rerun context
         render_predictions(preds, show_copy=True)
 
         triage = triage_advise(temp, age_m, diarrhea)
@@ -448,8 +476,7 @@ elif mode == "일상":
                 "mode":"일상","who":"소아","symptoms":symptoms,
                 "temp":temp,"age_m":age_m,"weight":weight or None,
                 "apap_ml":apap_ml,"ibu_ml":ibu_ml,"preds":preds,"triage":triage,
-                "days_since_onset": days_since_onset, "diet_lines": diet_lines,
-                "apap_24h": int(apap_24h), "ibu_24h": int(ibu_24h), "antipyretic_notes": antipyretic_notes,
+                "days_since_onset": days_since_onset, "diet_lines": diet_lines
             }
 
     else:  # 성인
@@ -465,22 +492,22 @@ elif mode == "일상":
         with c5: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1, value=0.0)
         with c6: eye = st.selectbox("눈꼽", eye_opts)
 
-        c7,c8 = st.columns(2)
-        with c7: diarrhea_type = st.selectbox("설사(성상/색)", DIARRHEA_TYPES, index=0)
-        with c8: vomit_type = st.selectbox("구토(성상/색)", VOMIT_TYPES, index=0)
-
         comorb = st.multiselect("주의 대상", ["임신 가능성","간질환 병력","신질환 병력","위장관 궤양/출혈력","항응고제 복용","고령(65+)"])
 
         fever_cat = _fever_bucket_from_temp(temp)
         symptoms = build_peds_symptoms(
-            nasal=nasal, cough=cough, diarrhea=diarrhea, vomit=vomit,
-            days_since_onset=days_since_onset, temp=temp, fever_cat=fever_cat, eye=eye,
-            diarrhea_type=diarrhea_type, vomit_type=vomit_type,
+            nasal=locals().get('nasal'),
+            cough=locals().get('cough'),
+            diarrhea=locals().get('diarrhea'),
+            vomit=locals().get('vomit'),
+            days_since_onset=locals().get('days_since_onset'),
+            temp=locals().get('temp'),
+            fever_cat=locals().get('fever_cat'),
+            eye=locals().get('eye'),
         )
 
         preds = predict_from_symptoms(symptoms, temp, comorb)
         st.markdown("#### 🤖 증상 기반 자동 추정")
-        from app import render_predictions  # self import safe
         render_predictions(preds, show_copy=True)
 
         triage = triage_advise(temp, comorb)
@@ -500,7 +527,7 @@ elif mode == "일상":
 else:
     ctop = st.columns(4)
     with ctop[0]: disease = st.selectbox("소아 질환", ["로타","독감","RSV","아데노","마이코","수족구","편도염","코로나","중이염"], index=0)
-    st.caption(dx_display("소아", disease) if hasattr(__import__('onco_map'), 'dx_display') else "")
+    st.caption(short_caption(disease))
     with ctop[1]: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1)
     with ctop[2]: age_m = st.number_input("나이(개월)", min_value=0, step=1)
     with ctop[3]: weight = st.number_input("체중(kg)", min_value=0.0, step=0.1)
@@ -516,10 +543,6 @@ else:
     with c5: eye = st.selectbox("눈꼽", eye_opts)
     with c6: symptom_days = st.number_input("**증상일수**(일)", min_value=0, step=1, value=0)
 
-    c7,c8 = st.columns(2)
-    with c7: diarrhea_type = st.selectbox("설사(성상/색)", DIARRHEA_TYPES, index=0)
-    with c8: vomit_type = st.selectbox("구토(성상/색)", VOMIT_TYPES, index=0)
-
     apap_ml, _ = acetaminophen_ml(age_m, weight or None)
     ibu_ml,  _ = ibuprofen_ml(age_m, weight or None)
     dc = st.columns(2)
@@ -533,9 +556,14 @@ else:
 
     fever_cat = _fever_bucket_from_temp(temp)
     symptoms = build_peds_symptoms(
-            nasal=nasal, cough=cough, diarrhea=diarrhea, vomit=vomit,
-            days_since_onset=symptom_days, temp=temp, fever_cat=fever_cat, eye=eye,
-            diarrhea_type=diarrhea_type, vomit_type=vomit_type,
+            nasal=locals().get('nasal'),
+            cough=locals().get('cough'),
+            diarrhea=locals().get('diarrhea'),
+            vomit=locals().get('vomit'),
+            days_since_onset=locals().get('days_since_onset'),
+            temp=locals().get('temp'),
+            fever_cat=locals().get('fever_cat'),
+            eye=locals().get('eye'),
         )
 
     if st.button("🔎 해석하기", key="analyze_peds"):
@@ -562,8 +590,8 @@ if results_only_after_analyze(st):
                 with rcols[i]: st.metric(k, v)
         if ctx.get("dx_label"): st.caption(f"진단: **{ctx['dx_label']}**")
 
-        alerts = collect_top_ae_alerts((_filter_known(ctx.get("user_chemo"))) + (_filter_known(ctx.get("user_abx"))) + (_filter_known(ctx.get("user_extra"))), db=DRUG_DB)
-        if alerts: st.error("\\n".join(alerts))
+        alerts = collect_top_ae_alerts((_filter_known(ctx.get("user_chemo"))) + (_filter_known(ctx.get("user_abx"))), db=DRUG_DB)
+        if alerts: st.error("\n".join(alerts))
 
         st.subheader("🗂️ 선택 요약")
         st.write(_one_line_selection(ctx))
@@ -583,16 +611,12 @@ if results_only_after_analyze(st):
         st.subheader("💊 부작용")
         ckeys = _filter_known(ctx.get("user_chemo"))
         akeys = _filter_known(ctx.get("user_abx"))
-        ekeys = _filter_known(ctx.get("user_extra"))
         if ckeys:
             st.markdown("**항암제(세포독성)**")
             render_adverse_effects(st, ckeys, DRUG_DB)
         if akeys:
             st.markdown("**항생제**")
             render_adverse_effects(st, akeys, DRUG_DB)
-        if ekeys:
-            st.markdown("**추가 약물**")
-            render_adverse_effects(st, ekeys, DRUG_DB)
 
         st.subheader("📝 보고서 저장")
         md, txt = _export_report(ctx, lines_blocks)
@@ -614,14 +638,12 @@ if results_only_after_analyze(st):
             st.caption(f"경과일수: {ctx['days_since_onset']}일")
         if ctx.get("temp") is not None:
             st.caption(f"체온: {ctx['temp']} ℃")
-        if ctx.get("apap_24h") is not None or ctx.get("ibu_24h") is not None:
-            st.caption(f"24시간 해열제: APAP {ctx.get('apap_24h','?')}회 / IBU {ctx.get('ibu_24h','?')}회")
 
         preds = ctx.get("preds") or []
         if preds:
             st.subheader("🤖 증상 기반 자동 추정")
-            from app import render_predictions
             render_predictions(preds, show_copy=True)
+
 
         if ctx.get("who") == "소아":
             st.subheader("🌡️ 해열제 1회분(평균)")
@@ -633,9 +655,6 @@ if results_only_after_analyze(st):
                 st.metric("이부프로펜 시럽", f"{ctx.get('ibu_ml')} ml")
                 st.caption("간격 **6~8시간**, 위장 자극 시 음식과 함께")
             st.warning("이 용량 정보는 **참고용**입니다. 반드시 **주치의와 상담**하십시오.")
-            if ctx.get("antipyretic_notes"):
-                for note in ctx["antipyretic_notes"]:
-                    st.error(note)
 
         st.subheader("🍽️ 식이가이드")
         for L in (ctx.get("diet_lines") or []):
@@ -687,3 +706,103 @@ if results_only_after_analyze(st):
     st.caption("본 도구는 참고용입니다. 의료진의 진단/치료를 대체하지 않습니다.")
     st.caption("문의/버그 제보: [피수치 가이드 공식카페](https://cafe.naver.com/bloodmap)")
     st.stop()
+
+
+# --- AUTO: eGFR helpers ---
+def egfr_ckd_epi_2021(scr_mgdl: float, age_years: float, sex: str) -> float|None:
+    try:
+        scr = float(scr_mgdl)
+        age = float(age_years)
+        sex = (sex or "").strip().lower()
+        kappa = 0.7 if sex.startswith("f") or "여" in sex else 0.9
+        alpha = -0.241 if kappa == 0.7 else -0.302
+        min_ratio = min(scr / kappa, 1.0) ** alpha
+        max_ratio = max(scr / kappa, 1.0) ** -1.200
+        sex_coef = 1.012 if kappa == 0.7 else 1.0
+        egfr = 142.0 * min_ratio * max_ratio * (0.9938 ** age) * sex_coef
+        return round(egfr, 1)
+    except Exception:
+        return None
+
+def egfr_schwartz_bedside(scr_mgdl: float, height_cm: float) -> float|None:
+    try:
+        scr = float(scr_mgdl); h = float(height_cm)
+        if scr <= 0 or h <= 0: return None
+        return round(0.413 * h / scr, 1)
+    except Exception:
+        return None
+
+def egfr_auto(scr: float|None, age_years: float|None, sex: str|None, height_cm: float|None):
+    if scr is None: return None, ""
+    if age_years is not None and age_years < 18 and height_cm:
+        val = egfr_schwartz_bedside(scr, height_cm)
+        return val, "Schwartz(소아)"
+    if age_years is not None and sex:
+        val = egfr_ckd_epi_2021(scr, age_years, sex)
+        return val, "CKD‑EPI 2021(성인)"
+    return None, ""
+# --- /AUTO ---
+
+
+
+# --- AUTO: graph CSV persist helpers ---
+def _graph_csv_path(uid: str) -> str:
+    return f"/mnt/data/bloodmap_graph/{uid}.labs.csv"
+
+def load_persisted_graph(uid: str):
+    try:
+        path = _graph_csv_path(uid)
+        if os.path.exists(path):
+            import pandas as pd
+            df = pd.read_csv(path)
+            st.session_state.setdefault("lab_hist", {})[uid] = df
+    except Exception:
+        pass
+
+def save_persisted_graph(uid: str, df):
+    try:
+        df.to_csv(_graph_csv_path(uid), index=False)
+    except Exception:
+        pass
+# --- /AUTO ---
+
+
+
+# --- AUTO: render Δ + eGFR table ---
+def render_labs_with_delta_and_egfr(labs: dict, labels_map: dict, dfh, egfr_value: float|None, egfr_label: str):
+    import pandas as _pd
+    rows = []
+    prev_map = {}
+    if dfh is not None and hasattr(dfh, "empty") and not dfh.empty:
+        last = dfh.iloc[-1].to_dict()
+        for code, label in (labels_map or {}).items():
+            if label in last:
+                try:
+                    prev_map[code] = float(last.get(label)) if last.get(label) not in [None, ""] else None
+                except Exception:
+                    prev_map[code] = None
+    for code, cur in (labs or {}).items():
+        prev = prev_map.get(code)
+        if cur is not None and prev is not None:
+            delta = round(float(cur) - float(prev), 2)
+        else:
+            delta = None
+        rows.append({"항목": code, "현재": cur, "Δ(최근 저장값 대비)": delta})
+    if egfr_value is not None:
+        rows.append({"항목": f"eGFR ({egfr_label})", "현재": egfr_value, "Δ(최근 저장값 대비)": None})
+    dfshow = _pd.DataFrame(rows)
+    st.dataframe(dfshow, use_container_width=True, height=300)
+# --- /AUTO ---
+
+
+
+# --- AUTO: optional eGFR small UI (safe-append) ---
+try:
+    st.markdown("#### 🧮 eGFR 계산(선택)")
+    c_e1, c_e2, c_e3 = st.columns(3)
+    with c_e1: egfr_age = st.number_input("나이(년)", min_value=0, step=1, value=0)
+    with c_e2: egfr_sex = st.selectbox("성별", ["", "남성", "여성"], index=0)
+    with c_e3: egfr_height = st.number_input("키(cm, 소아)", min_value=0.0, step=0.1, value=0.0)
+except Exception:
+    egfr_age = None; egfr_sex = ""; egfr_height = None
+# --- /AUTO ---
