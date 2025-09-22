@@ -31,11 +31,14 @@ def short_caption(label: str) -> str:
     except Exception:
         pass
 
-# === AUTO: widget key namespacing helper ===
+
+# === AUTO: widget key helpers ===
 def _k(name: str) -> str:
+    import streamlit as st, uuid as _uuid
+    if "_session_id" not in st.session_state:
+        st.session_state["_session_id"] = _uuid.uuid4().hex[:8]
+    return f"{name}_{st.session_state['_session_id']}"
 
-
-# === AUTO: widget key per-render counter helper ===
 def _k2(name: str) -> str:
     import streamlit as st, uuid as _uuid
     if "_session_id" not in st.session_state:
@@ -46,11 +49,6 @@ def _k2(name: str) -> str:
 # === /AUTO ===
 
 
-    import streamlit as st, uuid as _uuid
-    if "_session_id" not in st.session_state:
-        st.session_state["_session_id"] = _uuid.uuid4().hex[:8]
-    return f"{name}_{st.session_state['_session_id']}"
-# === /AUTO ===
 
     defaults = {
         "로타바이러스 장염": "영유아 위장관염 — 물설사·구토, 탈수 주의",
