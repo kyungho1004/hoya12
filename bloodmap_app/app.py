@@ -117,6 +117,38 @@ st.markdown("문의/버그 제보: **[피수치 가이드 공식카페](https://
 
 nick, pin, key = nickname_pin()
 
+# === AUTO: profile I/O guard (for eGFR) ===
+if "_profile_load" not in globals():
+    import os as _os, json as _json
+    def _norm_nick(n: str) -> str:
+        n = (n or "").strip().lower()
+        return "".join(ch for ch in n if ch.isalnum() or ch in ("_", "-"))
+    def _profile_dir():
+        base = "/mnt/data/profile"
+        try: _os.makedirs(base, exist_ok=True)
+        except Exception: pass
+        return base
+    def _profile_path(nick: str) -> str:
+        return f"{_profile_dir()}/{_norm_nick(nick)}.json"
+    def _profile_load(nick: str) -> dict:
+        p = _profile_path(nick)
+        try:
+            with open(p, "r", encoding="utf-8") as f:
+                return _json.load(f)
+        except Exception:
+            return {}
+    def _profile_save(nick: str, data: dict):
+        p = _profile_path(nick)
+        tmp = p + ".tmp"
+        try:
+            with open(tmp, "w", encoding="utf-8") as f:
+                _json.dump(data, f, ensure_ascii=False, indent=2)
+            _os.replace(tmp, p)
+        except Exception:
+            pass
+# === /AUTO ===
+
+
 
 # === AUTO: eGFR UI under nickname ===
 import datetime as _dt
