@@ -91,6 +91,21 @@ ensure_onco_drug_db(DRUG_DB)
 ONCO_MAP = build_onco_map()
 
 st.set_page_config(page_title="BloodMap — 피수치가이드", page_icon="🩸", layout="centered")
+
+# === AUTO: sidebar visitor stats ===
+try:
+    _stats = _metrics_today_totals()
+    st.sidebar.markdown("### 👥 오늘(고유/방문)")
+    st.sidebar.write(f"{_stats['today_unique']} / {_stats['today_visits']}")
+    st.sidebar.markdown("— 누적 고유")
+    st.sidebar.write(f"{_stats['total_unique']}")
+    st.sidebar.markdown("— 총 방문수")
+    st.sidebar.write(f"{_stats['total_visits']}")
+except Exception:
+    st.sidebar.caption("방문자 통계 불러오기 오류")
+# === /AUTO ===
+
+
 st.title("BloodMap — 피수치가이드")
 
 st.info(
@@ -101,6 +116,21 @@ st.info(
 st.markdown("문의/버그 제보: **[피수치 가이드 공식카페](https://cafe.naver.com/bloodmap)**")
 
 nick, pin, key = nickname_pin()
+
+# === AUTO: bump visits (once per session/day) ===
+try:
+    if "_session_id" not in st.session_state:
+        import uuid as _uuid
+        st.session_state["_session_id"] = _uuid.uuid4().hex[:12]
+    _today_key = "metrics_bumped_" + str(__import__("datetime").date.today())
+    if not st.session_state.get(_today_key):
+        _metrics_bump(st.session_state.get("user_key"), st.session_state.get("_session_id"))
+        st.session_state[_today_key] = True
+except Exception:
+    pass
+# === /AUTO ===
+
+
 st.divider()
 has_key = bool(nick and pin and len(pin) == 4)
 
@@ -239,24 +269,6 @@ def _export_report(ctx: dict, lines_blocks=None):
         if summary:
             body.append("\n## 🗂️ 선택 요약\n- " + summary)
 
-    # GI 요약 포함
-
-
-    try:
-
-
-        if ctx.get('gi_summary_md'):
-
-
-            body.append(ctx['gi_summary_md'])
-
-
-    except Exception:
-
-
-        pass
-
-
     md = title + "\n".join(body) + footer
     txt = md.replace("# ","").replace("## ","")
     return md, txt
@@ -313,15 +325,6 @@ if mode == "암":
     sp_lines = special_tests_ui()
     lines_blocks = []
     if sp_lines: lines_blocks.append(("특수검사 해석", sp_lines))
-
-    # 특수검사 바로 아래 GI/FEVER 섹션
-    if "ctx" not in globals():
-        ctx = {}
-    try:
-        _gi_block_render_and_log(ctx)
-    except Exception as _e:
-        st.caption(f"GI 블록 오류: {_e}")
-
 
     # 저장/그래프
     st.markdown("#### 💾 저장/그래프")
@@ -437,6 +440,62 @@ elif mode == "일상":
 
     else:  # 성인
         from adult_rules import predict_from_symptoms, triage_advise, get_adult_options
+
+
+# === AUTO: visitor metrics helpers ===
+import os as _os, json as _json, datetime as _dt, uuid as _uuid
+def _metrics_visits_path():
+    base = "/mnt/data/metrics"
+    try: _os.makedirs(base, exist_ok=True)
+    except Exception: pass
+    return f"{base}/visits.json"
+def _metrics_load():
+    try:
+        with open(_metrics_visits_path(), "r", encoding="utf-8") as f:
+            return _json.load(f)
+    except Exception:
+        return {}
+def _metrics_save(d: dict):
+    p = _metrics_visits_path()
+    tmp = p + ".tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            _json.dump(d, f, ensure_ascii=False, indent=2)
+        _os.replace(tmp, p)
+    except Exception:
+        pass
+def _metrics_bump(uid: str|None, session_id: str|None):
+    data = _metrics_load() or {}
+    today = _dt.date.today().isoformat()
+    t = data.get("today") or {}
+    if t.get("date") != today:
+        t = {"date": today, "visits": 0, "unique": 0, "uids": []}
+    data["today"] = t
+    tot = data.get("totals") or {"visits": 0, "unique": 0, "uids": []}
+    data["totals"] = tot
+    key = str(uid or session_id or _uuid.uuid4().hex[:12])
+    t["visits"] = int(t.get("visits", 0)) + 1
+    tot["visits"] = int(tot.get("visits", 0)) + 1
+    if key not in t.get("uids", []):
+        t["uids"].append(key)
+        t["unique"] = int(t.get("unique", 0)) + 1
+    if key not in tot.get("uids", []):
+        tot["uids"].append(key)
+        tot["unique"] = int(tot.get("unique", 0)) + 1
+    _metrics_save(data)
+def _metrics_today_totals():
+    d = _metrics_load() or {}
+    t = d.get("today") or {}
+    T = d.get("totals") or {}
+    return {
+        "today_unique": int(t.get("unique", 0) or 0),
+        "today_visits": int(t.get("visits", 0) or 0),
+        "total_unique": int(T.get("unique", 0) or 0),
+        "total_visits": int(T.get("visits", 0) or 0),
+    }
+# === /AUTO ===
+
+
         opts = get_adult_options()
         eye_opts = opts.get("눈꼽", ["없음","맑음","노랑-농성","가려움 동반","한쪽","양쪽"])
 
@@ -662,125 +721,3 @@ if results_only_after_analyze(st):
     st.caption("본 도구는 참고용입니다. 의료진의 진단/치료를 대체하지 않습니다.")
     st.caption("문의/버그 제보: [피수치 가이드 공식카페](https://cafe.naver.com/bloodmap)")
     st.stop()
-
-
-# --- AUTO: sidebar visitor trend (14d) ---
-try:
-    import pandas as _pd
-    import datetime as _dt
-    data = _load_metrics() or {}
-    by_date = data.get("by_date", {})
-    # build last 14 days series
-    today = _dt.date.today()
-    rows = []
-    for i in range(13, -1, -1):
-        d = (today - _dt.timedelta(days=i)).isoformat()
-        r = by_date.get(d, {"unique": 0, "visits": 0})
-        rows.append({"date": d, "unique": r.get("unique", 0), "visits": r.get("visits", 0)})
-    _dfm = _pd.DataFrame(rows)
-    with st.sidebar:
-        st.markdown("###### 📈 최근 14일 추이")
-        st.line_chart(_dfm.set_index("date")[["unique","visits"]])
-except Exception as _e:
-    pass
-# --- /AUTO ---
-
-
-
-# --- AUTO: labs friendly chart ---
-def _render_labs_friendly_chart(uid: str):
-    try:
-        import pandas as _pd
-        import numpy as _np
-        import altair as alt
-        # load from session_state persist (if available)
-        hist = (st.session_state.get("lab_hist") or {}).get(uid)
-        if hist is None or len(getattr(hist, "index", [])) == 0:
-            return
-        df = hist.copy()
-        # Try to parse a 'date' column or index to datetime
-        date_col = None
-        for c in df.columns:
-            if c.lower() in ("date","날짜","검사일"):
-                date_col = c; break
-        if date_col is None:
-            # if index is datetime-like, move to column
-            try:
-                df = df.reset_index().rename(columns={"index": "date"})
-                date_col = "date"
-            except Exception:
-                pass
-        if date_col is None:
-            return
-        df[date_col] = _pd.to_datetime(df[date_col], errors="coerce")
-        df = df.dropna(subset=[date_col]).sort_values(date_col)
-
-        # numeric columns only for chart
-        num_cols = [c for c in df.columns if c != date_col and _pd.api.types.is_numeric_dtype(df[c])]
-        if not num_cols:
-            return
-
-        with st.expander("🩸 그래프 옵션", expanded=False):
-            cols_pick = st.multiselect("보기 항목", options=num_cols, default=num_cols[: min(5, len(num_cols))])
-            smooth = st.checkbox("이동평균(3포인트)", value=False)
-            y_min, y_max = st.slider("Y축 범위", value=(float(df[cols_pick].min(numeric_only=True).min()) if cols_pick else 0.0,
-                                                    float(df[cols_pick].max(numeric_only=True).max()) if cols_pick else 1.0))
-        if not cols_pick:
-            return
-        plot_df = df[[date_col] + cols_pick].copy()
-        if smooth:
-            for c in cols_pick:
-                plot_df[c] = plot_df[c].rolling(window=3, min_periods=1, center=True).mean()
-
-        # Melt for multi-series Altair
-        m = plot_df.melt(date_col, var_name="항목", value_name="값")
-        base = alt.Chart(m).mark_line(point=True).encode(
-            x=alt.X(f"{date_col}:T", title="날짜"),
-            y=alt.Y("값:Q", title="", scale=alt.Scale(domain=[y_min, y_max])),
-            color="항목:N",
-            tooltip=[alt.Tooltip(f"{date_col}:T", title="날짜"), "항목:N", alt.Tooltip("값:Q", format=".2f")]
-        ).properties(height=260, use_container_width=True)
-        st.altair_chart(base, use_container_width=True)
-    except Exception as _e:
-        st.caption(f"그래프 표시 오류: {_e}")
-
-# 메인 영역 어딘가에서 현재 uid가 있으면 표시
-try:
-    _uid_preview = st.session_state.get("user_key")
-    if _uid_preview:
-        _render_labs_friendly_chart(_uid_preview)
-except Exception:
-    pass
-# --- /AUTO ---
-
-
-
-# === AUTO (safe): sidebar visitor metrics cards ===
-try:
-    import datetime as _dt, json as _json, os as _os, streamlit as st
-    def _metrics_path():
-        return "/mnt/data/metrics/visits.json"
-    def _load_metrics_safe():
-        try:
-            with open(_metrics_path(), "r", encoding="utf-8") as f:
-                return _json.load(f)
-        except Exception:
-            return {}
-    with st.sidebar:
-        st.markdown("### 👥 방문자 통계")
-        _m = _load_metrics_safe() or {}
-        td = _m.get("today", {})
-        tt = _m.get("totals", {})
-        c1,c2 = st.columns(2)
-        with c1:
-            st.metric("오늘(고유)", td.get("unique", 0))
-            st.metric("누적 고유", tt.get("unique", 0))
-        with c2:
-            st.metric("오늘(방문)", td.get("visits", 0))
-            st.metric("총 방문수", tt.get("visits", 0))
-except Exception:
-    pass
-# === /AUTO ===
-
-
-
