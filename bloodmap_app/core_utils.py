@@ -1,70 +1,3 @@
-# --- AUTO: nickname registry helpers (unique nickname, PIN for auth) ---
-import os, json, hashlib, time as _time, tempfile
-
-def _profiles_index_path():
-    return os.environ.get("BLOODMAP_PROFILE_INDEX", "/mnt/data/profile/index.json")
-
-def _atomic_write_json(path, data):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".tmp_idx_", suffix=".json")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-        os.replace(tmp, path)
-    finally:
-        try: os.remove(tmp)
-        except Exception: pass
-
-def _load_profiles_index():
-    p = _profiles_index_path()
-    if os.path.exists(p):
-        try:
-            with open(p, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return {}
-    return {}
-
-def _save_profiles_index(d: dict):
-    try:
-        _atomic_write_json(_profiles_index_path(), d)
-    except Exception:
-        pass
-
-def _norm_nick(s: str) -> str:
-    return (s or "").strip().lower()
-
-def _make_uid(nick: str, pin: str) -> str:
-    seed = f"{_norm_nick(nick)}|{(pin or '').strip()}"
-    return hashlib.sha256(seed.encode("utf-8")).hexdigest()[:12]
-
-def _migrate_composite_keys(idx: dict) -> dict:
-    # Fold keys like "nickname|PIN" into single "nickname"
-    changed = False
-    items = list(idx.items())
-    for k, v in items:
-        if "|" in k:
-            nkey, p = k.split("|", 1)
-            rec = idx.get(nkey)
-            if not rec:
-                idx[nkey] = {"uid": v.get("uid"), "pin": v.get("pin") or p, "nickname": v.get("nickname") or nkey, "created_ts": v.get("created_ts") or int(_time.time())}
-                changed = True
-            else:
-                # prefer existing uid; if no pin stored, adopt this pin
-                if "pin" not in rec or not rec.get("pin"):
-                    rec["pin"] = v.get("pin") or p
-                    changed = True
-            idx.pop(k, None)
-            changed = True
-    if changed:
-        _save_profiles_index(idx)
-    return idx
-# --- /AUTO ---
-
-import time as _time
-import hashlib
-import json
-import os
 # -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
@@ -100,51 +33,42 @@ def rr_thr_by_age_m(m):
     return 30
 
 # ---------- 닉네임/PIN ----------
-# --- AUTO: nickname registry helpers ---
-def _profiles_index_path():
-    return "/mnt/data/profile/index.json"
-
-def _load_profiles_index():
-    pth = _profiles_index_path()
-    if os.path.exists(pth):
-        try:
-            with open(pth, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return {}
-    return {}
-
-def _save_profiles_index(d: dict):
-    try:
-        os.makedirs("/mnt/data/profile", exist_ok=True)
-        with open(_profiles_index_path(), "w", encoding="utf-8") as f:
-            json.dump(d, f, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
-
-def _norm_nick(s: str) -> str:
-    return (s or "").strip().lower()
-
-def _make_uid(nick: str, pin: str) -> str:
-    seed = f"{_norm_nick(nick)}|{(pin or '').strip()}"
-    return hashlib.sha256(seed.encode("utf-8")).hexdigest()[:12]
-# --- /AUTO ---
 def nickname_pin():
-    c1,c2 = st.columns([2,1])
-    with c1: n = st.text_input("별명", placeholder="예: 은서엄마")
-    with c2: p = st.text_input("PIN(4자리 숫자)", max_chars=4, placeholder="0000")
+    # 2:1:1 레이아웃으로 별명 / PIN / 저장 버튼 한 줄 배치
+    c1, c2, c3 = st.columns([2, 1, 1])
+    with c1:
+        n = st.text_input("별명", placeholder="예: 은서엄마", key="nickname_field")
+    with c2:
+        p = st.text_input("PIN(4자리 숫자)", max_chars=4, placeholder="0000", key="pin_field")
+    with c3:
+        save_clicked = st.button("저장", use_container_width=True, type="primary")
+        st.caption(" ")
+
+    # 항상 key는 구성(그래프 CSV 파일명 등 다른 곳에서 사용 가능)
     p2 = "".join(ch for ch in (p or "") if ch.isdigit())[:4]
-    if p and p2 != p:
-        st.warning("PIN은 숫자 4자리만 허용됩니다.")
     key = (n.strip()+"#"+p2) if (n and p2) else (n or "guest")
     st.session_state["key"] = key
 
-    nkey = _norm_nick(n)
-    if nkey:
+    # 저장 버튼 눌렀을 때만 검증/등록/로그인 실행
+    if save_clicked:
+        if p and p2 != p:
+            st.warning("PIN은 숫자 4자리만 허용됩니다.")
+            try: st.toast("PIN 4자리 필요", icon="⚠️")
+            except Exception: pass
+            st.stop()
+
+        nkey = _norm_nick(n)
+        if not nkey:
+            st.warning("별명을 입력하세요.")
+            try: st.toast("별명 필요", icon="⚠️")
+            except Exception: pass
+            st.stop()
+
         idx = _load_profiles_index()
-        idx = _migrate_composite_keys(idx)  # fold legacy entries
+        idx = _migrate_composite_keys(idx) if ' _migrate_composite_keys' in globals() else idx
         rec = idx.get(nkey)
-        if rec:  # nickname exists -> require correct PIN
+
+        if rec:  # 기존 별명 → PIN 확인
             if not p2 or len(p2) != 4:
                 st.warning("PIN(4자리 숫자)을 입력하세요."); st.stop()
             if rec.get("pin") == p2:
@@ -158,7 +82,7 @@ def nickname_pin():
                 try: st.toast("잘못된 PIN", icon="❌")
                 except Exception: pass
                 st.stop()
-        else:    # new nickname -> register with provided PIN
+        else:    # 새 별명 → 등록
             if not p2 or len(p2) != 4:
                 st.warning("PIN(4자리 숫자)을 입력하세요."); st.stop()
             uid = _make_uid(n, p2)
@@ -168,6 +92,7 @@ def nickname_pin():
             st.caption(f"새 별명으로 등록되었습니다. UID: **{uid}**")
             try: st.toast("등록 완료", icon="✅")
             except Exception: pass
+
     return n, p2, key
 # ---------- 스케줄 ----------
 def schedule_block():
