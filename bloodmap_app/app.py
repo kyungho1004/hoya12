@@ -575,6 +575,57 @@ import os as _os, json as _json, math as _math
 
 # === AUTO: labs auto-fetch helper ===
 import csv as _csv, os as _os
+
+
+# === AUTO: import adult_rules with fallbacks ===
+try:
+    from adult_rules import get_adult_options as _get_adult_options_ext
+    from adult_rules import predict_from_symptoms as _predict_from_symptoms_ext
+    from adult_rules import triage_advise as _triage_advise_ext
+except Exception:
+    _get_adult_options_ext = _predict_from_symptoms_ext = _triage_advise_ext = None
+
+def get_adult_options():
+    """Proxy to adult_rules or minimal fallback set."""
+    if _get_adult_options_ext:
+        try:
+            return _get_adult_options_ext()
+        except Exception:
+            pass
+    return {
+        "콧물": ["없음","투명","흰색","노랑(초록)","누런","피 섞임"],
+        "기침": ["없음","가끔","자주","심함"],
+        "설사": ["없음","1~3회","4~6회","7회 이상"],
+        "발열": ["없음","37.5~38","38~38.5","38.5~39","39+"],
+        "눈꼽": ["없음","맑음","노랑-농성","가려움 동반","한쪽","양쪽"],
+    }
+
+def predict_from_symptoms(symptoms: dict):
+    if _predict_from_symptoms_ext:
+        try:
+            return _predict_from_symptoms_ext(symptoms)
+        except Exception:
+            pass
+    # very naive fallback: return empty list
+    return []
+
+def triage_advise(temp_c: float, comorb: list):
+    if _triage_advise_ext:
+        try:
+            return _triage_advise_ext(temp_c, comorb)
+        except Exception:
+            pass
+    # simple fallback advise
+    if temp_c >= 39.0:
+        return "🟥 39.0℃ 이상 → 즉시 병원 연락/내원 권고"
+    if temp_c >= 38.5:
+        return "🟧 38.5~39.0℃ → 해열제 복용 + 외래 상담 고려"
+    if temp_c >= 37.5:
+        return "🟩 37.5~38.5℃ → 수분/휴식, 자가 경과관찰"
+    return "🟢 정상 또는 미열"
+# === /AUTO ===
+
+
 def _labs_fetch_latest_cr(uid: str|None):
     """Return (value_mgdl, date_string) for latest serum creatinine from the user's labs CSV if available."""
     if not uid:
