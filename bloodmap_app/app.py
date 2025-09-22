@@ -30,26 +30,6 @@ def short_caption(label: str) -> str:
             return s
     except Exception:
         pass
-
-
-# === AUTO: widget key helpers ===
-def _k(name: str) -> str:
-    import streamlit as st, uuid as _uuid
-    if "_session_id" not in st.session_state:
-        st.session_state["_session_id"] = _uuid.uuid4().hex[:8]
-    return f"{name}_{st.session_state['_session_id']}"
-
-def _k2(name: str) -> str:
-    import streamlit as st, uuid as _uuid
-    if "_session_id" not in st.session_state:
-        st.session_state["_session_id"] = _uuid.uuid4().hex[:8]
-    cnt_key = "_key_counter"
-    st.session_state[cnt_key] = int(st.session_state.get(cnt_key, 0)) + 1
-    return f"{name}_{st.session_state['_session_id']}_{st.session_state[cnt_key]}"
-# === /AUTO ===
-
-
-
     defaults = {
         "로타바이러스 장염": "영유아 위장관염 — 물설사·구토, 탈수 주의",
         "노로바이러스 장염": "급성 구토/설사 급발현 — 겨울철 유행, 탈수 주의",
@@ -111,22 +91,12 @@ ensure_onco_drug_db(DRUG_DB)
 ONCO_MAP = build_onco_map()
 
 st.set_page_config(page_title="BloodMap — 피수치가이드", page_icon="🩸", layout="centered")
-
-# === AUTO: sidebar visitor stats ===
-try:
-    _stats = _metrics_today_totals()
-    st.sidebar.markdown("### 👥 오늘(고유/방문)")
-    st.sidebar.write(f"{_stats['today_unique']} / {_stats['today_visits']}")
-    st.sidebar.markdown("— 누적 고유")
-    st.sidebar.write(f"{_stats['total_unique']}")
-    st.sidebar.markdown("— 총 방문수")
-    st.sidebar.write(f"{_stats['total_visits']}")
-except Exception:
-    st.sidebar.caption("방문자 통계 불러오기 오류")
-# === /AUTO ===
-
-
 st.title("BloodMap — 피수치가이드")
+
+# ---- widget key helper (avoid DuplicateElementId) ----
+def _k(name: str) -> str:
+    return f"{st.session_state.get('key','guest')}::" + name
+
 
 st.info(
     "이 앱은 의료행위가 아니며, **참고용**입니다. 진단·치료를 **대체하지 않습니다**.\n"
@@ -136,144 +106,6 @@ st.info(
 st.markdown("문의/버그 제보: **[피수치 가이드 공식카페](https://cafe.naver.com/bloodmap)**")
 
 nick, pin, key = nickname_pin()
-
-# === AUTO: profile I/O guard (for eGFR) ===
-if "_profile_load" not in globals():
-    import os as _os, json as _json
-    def _norm_nick(n: str) -> str:
-        n = (n or "").strip().lower()
-        return "".join(ch for ch in n if ch.isalnum() or ch in ("_", "-"))
-    def _profile_dir():
-        base = "/mnt/data/profile"
-        try: _os.makedirs(base, exist_ok=True)
-        except Exception: pass
-        return base
-    def _profile_path(nick: str) -> str:
-        return f"{_profile_dir()}/{_norm_nick(nick)}.json"
-    def _profile_load(nick: str) -> dict:
-        p = _profile_path(nick)
-        try:
-            with open(p, "r", encoding="utf-8") as f:
-                return _json.load(f)
-        except Exception:
-            return {}
-    def _profile_save(nick: str, data: dict):
-        p = _profile_path(nick)
-        tmp = p + ".tmp"
-        try:
-            with open(tmp, "w", encoding="utf-8") as f:
-                _json.dump(data, f, ensure_ascii=False, indent=2)
-            _os.replace(tmp, p)
-        except Exception:
-            pass
-# === /AUTO ===
-
-# === AUTO: eGFR helpers guard ===
-if "_egfr_ckdepi_2021" not in globals():
-    def _egfr_ckdepi_2021(scr_mgdl: float, age: float, is_female: bool):
-        if scr_mgdl is None or age is None: return None
-        kappa = 0.7 if is_female else 0.9
-        alpha = -0.241 if is_female else -0.302
-        scr_k = (scr_mgdl or 0) / kappa
-        try:
-            return 142 * (min(scr_k, 1)**alpha) * (max(scr_k, 1)**-1.200) * (0.9938**(age or 0)) * (1.012 if is_female else 1.0)
-        except Exception:
-            return None
-if "_egfr_schwartz_2009" not in globals():
-    def _egfr_schwartz_2009(height_cm: float, scr_mgdl: float):
-        try:
-            if not height_cm or not scr_mgdl: return None
-            return 0.413 * (height_cm) / scr_mgdl
-        except Exception:
-            return None
-# === /AUTO ===
-
-
-
-
-# === AUTO: eGFR UI under nickname ===
-import datetime as _dt
-st.markdown("### 🧮 eGFR 계산 (선택)")
-_prof_cache = _profile_load(nick or "")
-c1, c2, c3, c4, c5 = st.columns([1,1,1,1,1])
-with c1:
-    egfr_age = st.number_input("나이(년)", min_value=0, step=1,
-                               value=int(_prof_cache.get("egfr_age") or 0))
-with c2:
-    egfr_sex = st.selectbox("성별", ["여","남"], index=0 if (_prof_cache.get("egfr_sex","여")=="여") else 1)
-with c3:
-    egfr_scr = st.number_input("Cr(mg/dL)", min_value=0.0, step=0.01,
-                               value=float(_prof_cache.get("egfr_scr") or 0.0))
-with c4:
-    egfr_height = st.number_input("키(cm)", min_value=0.0, step=0.1,
-                                  value=float(_prof_cache.get("egfr_height") or 0.0))
-with c5:
-    st.caption("성인: CKD‑EPI 2021, 소아: Schwartz")
-
-
-# --- AUTO+: try auto-fill Cr from user's latest labs CSV ---
-_uid = st.session_state.get("user_key")
-col_af1, col_af2 = st.columns([1,3])
-if col_af1.button("최근 검사값 불러오기", use_container_width=True):
-    _cr_val, _cr_date = _labs_fetch_latest_cr(_uid)
-    if _cr_val is not None:
-        egfr_scr = float(_cr_val)
-        st.session_state["egfr_scr_autofill"] = egfr_scr
-        st.success(f"최근 SCr 자동 입력: {egfr_scr:.2f} mg/dL" + (f" ({_cr_date})" if _cr_date else ""))
-    else:
-        st.warning("최근 검사 CSV에서 크레아티닌을 찾지 못했어요. 피수치 CSV 컬럼명이 'Cr/Creatinine'인지 확인해주세요.")
-if "egfr_scr_autofill" in st.session_state and (not egfr_scr or egfr_scr == 0.0):
-    egfr_scr = float(st.session_state["egfr_scr_autofill"])
-if not egfr_scr:
-    st.caption("ℹ️ eGFR은 혈청 크레아티닌(SCr)이 필요해요. '최근 검사값 불러오기'를 눌러 자동 채우거나, 검사 결과지의 Cr(mg/dL)을 입력해 주세요.")
-# --- /AUTO+ ---
-
-is_child = (egfr_age or 0) < 18
-if is_child:
-    egfr_val = _egfr_schwartz_2009(egfr_height or 0, egfr_scr or 0)
-    egfr_method = "Schwartz 2009"
-else:
-    egfr_val = _egfr_ckdepi_2021(egfr_scr or 0, egfr_age or 0, egfr_sex=="여")
-    egfr_method = "CKD‑EPI 2021"
-if egfr_val:
-    st.success(f"eGFR ≈ {egfr_val:.1f} mL/min/1.73㎡  ({egfr_method})")
-else:
-    st.info("필요값을 입력하면 자동 계산합니다.")
-col_s1, col_s2 = st.columns([1,3])
-if col_s1.button("eGFR 저장", use_container_width=True):
-    data = _profile_load(nick or "")
-    data.update({
-        "egfr_age": egfr_age,
-        "egfr_sex": egfr_sex,
-        "egfr_scr": egfr_scr,
-        "egfr_height": egfr_height,
-        "egfr_value": float(egfr_val) if egfr_val else None,
-        "egfr_method": egfr_method,
-        "egfr_saved_at": _dt.datetime.now().isoformat(timespec="minutes"),
-    })
-    _profile_save(nick or "", data)
-    st.success("eGFR를 저장했습니다. 별명으로 자동 불러옵니다.")
-if "ctx" not in globals():
-    ctx = {}
-if egfr_val:
-    ctx["egfr_summary_md"] = f"**eGFR:** {egfr_val:.1f} mL/min/1.73㎡ ({egfr_method})"
-# === /AUTO ===
-
-
-# === AUTO: bump visits (once per session/day) ===
-try:
-    if "_session_id" not in st.session_state:
-        import uuid as _uuid
-        st.session_state["_session_id"] = _uuid.uuid4().hex[:12]
-    _today_key = "metrics_bumped_" + str(__import__("datetime").date.today())
-    if not st.session_state.get(_today_key):
-        _metrics_bump(st.session_state.get("user_key"), st.session_state.get("_session_id"))
-        st.session_state[_today_key] = True
-except Exception:
-    pass
-# === /AUTO ===
-
-
 st.divider()
 has_key = bool(nick and pin and len(pin) == 4)
 
@@ -526,8 +358,8 @@ elif mode == "일상":
         with c2: cough = st.selectbox("기침", opts["기침"])
         with c3: diarrhea = st.selectbox("설사(횟수/일)", opts["설사"])
         with c4: vomit = st.selectbox("구토(횟수/일)", ["없음","1~2회","3~4회","4~6회","7회 이상"])
-        with c5: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1, value=0.0)
-        with c6: eye = st.selectbox("눈꼽", eye_opts, key=_k2("adult_main_eye"))
+        with c5: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1, value=0.0, key=_k("daily_child_temp", key=_k("daily_adult_temp", key=_k("temp_auto"))))
+        with c6: eye = st.selectbox("눈꼽", eye_opts)
 
         age_m = st.number_input("나이(개월)", min_value=0, step=1)
         weight = st.number_input("체중(kg)", min_value=0.0, step=0.1)
@@ -583,300 +415,54 @@ elif mode == "일상":
 
     else:  # 성인
         from adult_rules import predict_from_symptoms, triage_advise, get_adult_options
+        opts = get_adult_options()
+        eye_opts = opts.get("눈꼽", ["없음","맑음","노랑-농성","가려움 동반","한쪽","양쪽"])
 
+        c1,c2,c3,c4,c5,c6 = st.columns(6)
+        with c1: nasal = st.selectbox("콧물", opts["콧물"])
+        with c2: cough = st.selectbox("기침", opts["기침"])
+        with c3: diarrhea = st.selectbox("설사(횟수/일)", opts["설사"])
+        with c4: vomit = st.selectbox("구토(횟수/일)", ["없음","1~3회","4~6회","7회 이상"])
+        with c5: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1, value=0.0, key=_k("temp_auto"))
+        with c6: eye = st.selectbox("눈꼽", eye_opts)
 
-# === AUTO: visitor metrics helpers ===
-import os as _os, json as _json, datetime as _dt, uuid as _uuid
+        comorb = st.multiselect("주의 대상", ["임신 가능성","간질환 병력","신질환 병력","위장관 궤양/출혈력","항응고제 복용","고령(65+)"])
 
+        fever_cat = _fever_bucket_from_temp(temp)
+        symptoms = build_peds_symptoms(
+            nasal=locals().get('nasal'),
+            cough=locals().get('cough'),
+            diarrhea=locals().get('diarrhea'),
+            vomit=locals().get('vomit'),
+            days_since_onset=locals().get('days_since_onset'),
+            temp=locals().get('temp'),
+            fever_cat=locals().get('fever_cat'),
+            eye=locals().get('eye'),
+        )
 
-# === AUTO: eGFR helpers & profile IO ===
-import os as _os, json as _json, math as _math
+        preds = predict_from_symptoms(symptoms, temp, comorb)
+        st.markdown("#### 🤖 증상 기반 자동 추정")
+        render_predictions(preds, show_copy=True)
 
+        triage = triage_advise(temp, comorb)
+        st.info(triage)
 
-# === AUTO: labs auto-fetch helper ===
-import csv as _csv, os as _os
+        diet_lines = _adult_diet_fallback(symptoms)
 
-
-# === AUTO: import adult_rules with fallbacks ===
-try:
-    from adult_rules import get_adult_options as _get_adult_options_ext
-    from adult_rules import predict_from_symptoms as _predict_from_symptoms_ext
-    from adult_rules import triage_advise as _triage_advise_ext
-
-
-
-
-
-
-
-except Exception:
-    _get_adult_options_ext = _predict_from_symptoms_ext = _triage_advise_ext = None
-
-def get_adult_options():
-    """Proxy to adult_rules or minimal fallback set."""
-    if _get_adult_options_ext:
-        try:
-            return _get_adult_options_ext()
-        except Exception:
-            pass
-    return {
-        "콧물": ["없음","투명","흰색","노랑(초록)","누런","피 섞임"],
-        "기침": ["없음","가끔","자주","심함"],
-        "설사": ["없음","1~3회","4~6회","7회 이상"],
-        "발열": ["없음","37.5~38","38~38.5","38.5~39","39+"],
-        "눈꼽": ["없음","맑음","노랑-농성","가려움 동반","한쪽","양쪽"],
-    }
-
-def predict_from_symptoms(symptoms: dict):
-    if _predict_from_symptoms_ext:
-        try:
-            return _predict_from_symptoms_ext(symptoms)
-        except Exception:
-            pass
-    # very naive fallback: return empty list
-    return []
-
-def triage_advise(temp_c: float, comorb: list):
-    if _triage_advise_ext:
-        try:
-            return _triage_advise_ext(temp_c, comorb)
-        except Exception:
-            pass
-    # simple fallback advise
-    if temp_c >= 39.0:
-        return "🟥 39.0℃ 이상 → 즉시 병원 연락/내원 권고"
-    if temp_c >= 38.5:
-        return "🟧 38.5~39.0℃ → 해열제 복용 + 외래 상담 고려"
-    if temp_c >= 37.5:
-        return "🟩 37.5~38.5℃ → 수분/휴식, 자가 경과관찰"
-    return "🟢 정상 또는 미열"
-# === /AUTO ===
-
-
-# === AUTO: predict_from_symptoms signature-compat wrapper ===
-try:
-    _PRED_EXT = _predict_from_symptoms_ext
-except NameError:
-    _PRED_EXT = None
-
-def predict_from_symptoms(symptoms, temp=None, comorb=None):
-    if _PRED_EXT:
-        try:
-            return _PRED_EXT(symptoms, temp, comorb)
-        except TypeError:
-            try:
-                return _PRED_EXT(symptoms)
-            except Exception:
-                pass
-        except Exception:
-            pass
-    try:
-        t = float(temp) if temp is not None else None
-    except Exception:
-        t = None
-    results = []
-    if t is not None:
-        if t >= 39.0:
-            results.append({"label":"고열","prob":0.9,"note":"39℃ 이상"})
-        elif t >= 38.0:
-            results.append({"label":"발열","prob":0.7,"note":"38~39℃"})
-    d = (symptoms or {})
-    if d.get("설사") in ("4~6회","7회 이상"):
-        results.append({"label":"위장관염 의심","prob":0.6,"note":"다빈도 설사"})
-    if d.get("콧물") in ("노랑(초록)","누런"):
-        results.append({"label":"상기도염 의심","prob":0.5,"note":"농성 콧물"})
-    return results
-# === /AUTO ===
-
-
-
-
-def _labs_fetch_latest_cr(uid: str|None):
-    """Return (value_mgdl, date_string) for latest serum creatinine from the user's labs CSV if available."""
-    if not uid:
-        return None, None
-    p = f"/mnt/data/bloodmap_graph/{uid}.labs.csv"
-    if not _os.path.exists(p):
-        return None, None
-    try:
-        with open(p, "r", encoding="utf-8") as f:
-            reader = list(_csv.DictReader(f))
-    except Exception:
-        return None, None
-    if not reader:
-        return None, None
-    cand = ["cr", "creatinine", "scr", "serum creatinine", "creat"]
-    headers = [h for h in reader[0].keys()]
-    pick_col = None
-    for h in headers:
-        hnorm = (h or "").lower()
-        hnorm = hnorm.replace("(mg/dl)", "").replace(" ", "").replace("_","")
-        for c in cand:
-            if c.replace(" ","") in hnorm:
-                pick_col = h
-                break
-        if pick_col:
-            break
-    if not pick_col:
-        return None, None
-    date_col = None
-    for h in headers:
-        hl = (h or "").lower()
-        if "date" in hl or "when" in hl or "일시" in hl or "날짜" in hl:
-            date_col = h
-            break
-    for row in reversed(reader):
-        raw = row.get(pick_col, "").strip()
-        if not raw:
-            continue
-        try:
-            val = float(str(raw).replace(",",""))
-        except Exception:
-            continue
-        ds = str(row.get(date_col, "")).strip() if date_col else ""
-        return val, ds
-    return None, None
-# === /AUTO ===
-
-
-def _norm_nick(n: str) -> str:
-    n = (n or "").strip().lower()
-    return "".join(ch for ch in n if ch.isalnum() or ch in ("_", "-"))
-def _profile_dir():
-    base = "/mnt/data/profile"
-    try: _os.makedirs(base, exist_ok=True)
-    except Exception: pass
-    return base
-def _profile_path(nick: str) -> str:
-    return f"{_profile_dir()}/{_norm_nick(nick)}.json"
-def _profile_load(nick: str) -> dict:
-    p = _profile_path(nick)
-    try:
-        with open(p, "r", encoding="utf-8") as f:
-            return _json.load(f)
-    except Exception:
-        return {}
-def _profile_save(nick: str, data: dict):
-    p = _profile_path(nick)
-    tmp = p + ".tmp"
-    try:
-        with open(tmp, "w", encoding="utf-8") as f:
-            _json.dump(data, f, ensure_ascii=False, indent=2)
-        _os.replace(tmp, p)
-    except Exception:
-        pass
-def _egfr_ckdepi_2021(scr_mgdl: float, age: float, is_female: bool):
-    if scr_mgdl is None or age is None: return None
-    kappa = 0.7 if is_female else 0.9
-    alpha = -0.241 if is_female else -0.302
-    scr_k = scr_mgdl / kappa
-    return 142 * (min(scr_k, 1)**alpha) * (max(scr_k, 1)**-1.200) * (0.9938**age) * (1.012 if is_female else 1.0)
-def _egfr_schwartz_2009(height_cm: float, scr_mgdl: float):
-    if not height_cm or not scr_mgdl: return None
-    return 0.413 * (height_cm) / scr_mgdl
-# === /AUTO ===
-
-
-def _metrics_visits_path():
-    base = "/mnt/data/metrics"
-    try: _os.makedirs(base, exist_ok=True)
-    except Exception: pass
-    return f"{base}/visits.json"
-def _metrics_load():
-    try:
-        with open(_metrics_visits_path(), "r", encoding="utf-8") as f:
-            return _json.load(f)
-    except Exception:
-        return {}
-def _metrics_save(d: dict):
-    p = _metrics_visits_path()
-    tmp = p + ".tmp"
-    try:
-        with open(tmp, "w", encoding="utf-8") as f:
-            _json.dump(d, f, ensure_ascii=False, indent=2)
-        _os.replace(tmp, p)
-    except Exception:
-        pass
-def _metrics_bump(uid: str|None, session_id: str|None):
-    data = _metrics_load() or {}
-    today = _dt.date.today().isoformat()
-    t = data.get("today") or {}
-    if t.get("date") != today:
-        t = {"date": today, "visits": 0, "unique": 0, "uids": []}
-    data["today"] = t
-    tot = data.get("totals") or {"visits": 0, "unique": 0, "uids": []}
-    data["totals"] = tot
-    key = str(uid or session_id or _uuid.uuid4().hex[:12])
-    t["visits"] = int(t.get("visits", 0)) + 1
-    tot["visits"] = int(tot.get("visits", 0)) + 1
-    if key not in t.get("uids", []):
-        t["uids"].append(key)
-        t["unique"] = int(t.get("unique", 0)) + 1
-    if key not in tot.get("uids", []):
-        tot["uids"].append(key)
-        tot["unique"] = int(tot.get("unique", 0)) + 1
-    _metrics_save(data)
-def _metrics_today_totals():
-    d = _metrics_load() or {}
-    t = d.get("today") or {}
-    T = d.get("totals") or {}
-    return {
-        "today_unique": int(t.get("unique", 0) or 0),
-        "today_visits": int(t.get("visits", 0) or 0),
-        "total_unique": int(T.get("unique", 0) or 0),
-        "total_visits": int(T.get("visits", 0) or 0),
-    }
-# === /AUTO ===
-
-
-opts = get_adult_options()
-eye_opts = opts.get("눈꼽", ["없음","맑음","노랑-농성","가려움 동반","한쪽","양쪽"])
-
-c1,c2,c3,c4,c5,c6 = st.columns(6)
-with c1: nasal = st.selectbox("콧물", opts["콧물"])
-with c2: cough = st.selectbox("기침", opts["기침"])
-with c3: diarrhea = st.selectbox("설사(횟수/일)", opts["설사"])
-with c4: vomit = st.selectbox("구토(횟수/일)", ["없음","1~3회","4~6회","7회 이상"])
-with c5: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1, value=0.0)
-with c6: eye = st.selectbox("눈꼽", eye_opts, key=_k2("adult_main_eye"))
-
-comorb = st.multiselect("주의 대상", ["임신 가능성","간질환 병력","신질환 병력","위장관 궤양/출혈력","항응고제 복용","고령(65+)"])
-
-fever_cat = _fever_bucket_from_temp(temp)
-symptoms = build_peds_symptoms(
-    nasal=locals().get('nasal'),
-    cough=locals().get('cough'),
-    diarrhea=locals().get('diarrhea'),
-    vomit=locals().get('vomit'),
-    days_since_onset=locals().get('days_since_onset'),
-    temp=locals().get('temp'),
-    fever_cat=locals().get('fever_cat'),
-    eye=locals().get('eye'),
-)
-
-preds = predict_from_symptoms(symptoms, temp, comorb)
-st.markdown("#### 🤖 증상 기반 자동 추정")
-render_predictions(preds, show_copy=True)
-
-triage = triage_advise(temp, comorb)
-st.info(triage)
-
-diet_lines = _adult_diet_fallback(symptoms)
-
-if st.button("🔎 해석하기", key="analyze_daily_adult"):
-    st.session_state["analyzed"] = True
-    st.session_state["analysis_ctx"] = {
-        "mode":"일상","who":"성인","symptoms":symptoms,
-        "temp":temp,"comorb":comorb,"preds":preds,"triage":triage,
-        "days_since_onset": days_since_onset, "diet_lines": diet_lines
-    }
+        if st.button("🔎 해석하기", key="analyze_daily_adult"):
+            st.session_state["analyzed"] = True
+            st.session_state["analysis_ctx"] = {
+                "mode":"일상","who":"성인","symptoms":symptoms,
+                "temp":temp,"comorb":comorb,"preds":preds,"triage":triage,
+                "days_since_onset": days_since_onset, "diet_lines": diet_lines
+            }
 
 # ---------------- 소아(질환) 모드 ----------------
 else:
     ctop = st.columns(4)
     with ctop[0]: disease = st.selectbox("소아 질환", ["로타","독감","RSV","아데노","마이코","수족구","편도염","코로나","중이염"], index=0)
     st.caption(short_caption(disease))
-    with ctop[1]: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1)
+    with ctop[1]: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1, key=_k("peds_disease_temp", key=_k("temp_auto")))
     with ctop[2]: age_m = st.number_input("나이(개월)", min_value=0, step=1)
     with ctop[3]: weight = st.number_input("체중(kg)", min_value=0.0, step=0.1)
 
@@ -888,7 +474,7 @@ else:
     with c2: cough = st.selectbox("기침", opts.get("기침", ["없음","조금","보통","심함"]))
     with c3: diarrhea = st.selectbox("설사(횟수/일)", opts.get("설사", ["없음","1~2회","3~4회","5~6회"]))
     with c4: vomit = st.selectbox("구토(횟수/일)", ["없음","1~2회","3~4회","4~6회","7회 이상"])
-    with c5: eye = st.selectbox("눈꼽", eye_opts, key=_k2("adult_main_eye"))
+    with c5: eye = st.selectbox("눈꼽", eye_opts)
     with c6: symptom_days = st.number_input("**증상일수**(일)", min_value=0, step=1, value=0)
 
     apap_ml, _ = acetaminophen_ml(age_m, weight or None)
