@@ -18,10 +18,45 @@ from report_builder import build_report_blocks
 from metrics import bump as bump_metrics
 
 KST = timezone(timedelta(hours=9))
+# ---- Writable data root helpers (ENV + /mnt/data + /tmp fallback) ----
+import tempfile
+def _ensure_dir_for(path: str):
+    d = os.path.dirname(path)
+    if d and not os.path.exists(d):
+        os.makedirs(d, exist_ok=True)
+
+def _writable_dir(d: str) -> bool:
+    try:
+        os.makedirs(d, exist_ok=True)
+        probe = os.path.join(d, ".probe")
+        with open(probe, "w", encoding="utf-8") as f:
+            f.write("ok")
+        os.remove(probe)
+        return True
+    except Exception:
+        return False
+
+def _data_root() -> str:
+    env = os.getenv("BLOODMAP_DATA_ROOT", "").strip()
+    cand = [env] if env else ["/mnt/data"]
+    cand.append(os.path.join(tempfile.gettempdir(), "bloodmap_data"))
+    for r in cand:
+        if not r:
+            continue
+        if _writable_dir(r):
+            return r
+    # last resort: tmp
+    r = os.path.join(tempfile.gettempdir(), "bloodmap_data")
+    os.makedirs(r, exist_ok=True)
+    return r
+
+def _data_path(*parts) -> str:
+    return os.path.join(_data_root(), *parts)
+
 # ---- Disk I/O helpers ----
 import json, os
-def _profile_path(uid:str): return f"/mnt/data/profile/{uid}.json"
-def _carelog_path(uid:str): return f"/mnt/data/care_log/{uid}.json"
+def _profile_path(uid:str): return _data_path("profile", f"{uid}.json")
+def _carelog_path(uid:str): return _data_path("care_log", f"{uid}.json")
 
 def load_profile(uid: str):
     try:
@@ -103,7 +138,7 @@ with st.sidebar:
         st.write(f"오늘: 고유 {t.get('unique',0)} / 방문 {t.get('visits',0)}")
         st.write(f"누적 고유: {data.get('unique_count',0)}")
         st.write(f"총 방문수: {data.get('total_visits',0)}")
-    st.caption("※ /mnt/data/metrics/visits.json")
+    st.caption(f"※ 통계 저장경로: {(stats or {}).get('_path') or '/mnt/data/metrics/visits.json'}")
 
 # ------------ 프로필(성별/나이/키/체중/시럽농도 등) ------------
 st.markdown("### 0) 프로필")
@@ -159,7 +194,7 @@ st.markdown("#### 💾 저장/그래프")
 when = st.date_input("측정일", value=date.today())
 if st.button("📈 피수치 저장/추가"):
     import os, csv
-    path = f"/mnt/data/bloodmap_graph/{uid}.labs.csv"
+    path = _data_path("bloodmap_graph", f"{uid}.labs.csv")
     os.makedirs(os.path.dirname(path), exist_ok=True)
     row = {"Date": when.strftime("%Y-%m-%d")}
     for code, _ in LABS_ORDER:
@@ -310,7 +345,7 @@ if results_only_after_analyze(st):
 
     # Δ(변화량) from CSV (last two records)
     try:
-        path = f"/mnt/data/bloodmap_graph/{uid}.labs.csv"
+        path = _data_path("bloodmap_graph", f"{uid}.labs.csv")
         df = pd.read_csv(path) if os.path.exists(path) else None
     except Exception:
         df = None
