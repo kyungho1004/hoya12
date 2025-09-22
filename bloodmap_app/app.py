@@ -14,6 +14,188 @@ from peds_dose import acetaminophen_ml, ibuprofen_ml
 from pdf_export import export_md_to_pdf
 
 
+
+
+# === AUTO: visitor metrics helpers ===
+import os as _os, json as _json, datetime as _dt, uuid as _uuid
+def _metrics_visits_path():
+    base = "/mnt/data/metrics"
+    try: _os.makedirs(base, exist_ok=True)
+    except Exception: pass
+    return f"{base}/visits.json"
+def _metrics_load():
+    try:
+        with open(_metrics_visits_path(), "r", encoding="utf-8") as f:
+            return _json.load(f)
+    except Exception: return {}
+def _metrics_save(d: dict):
+    p = _metrics_visits_path(); tmp = p + ".tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            _json.dump(d, f, ensure_ascii=False, indent=2)
+        _os.replace(tmp, p)
+    except Exception: pass
+def _metrics_bump(uid: str|None, session_id: str|None):
+    data = _metrics_load() or {}
+    today = _dt.date.today().isoformat()
+    t = data.get("today") or {}
+    if t.get("date") != today: t = {"date": today, "visits": 0, "unique": 0, "uids": []}
+    data["today"] = t
+    tot = data.get("totals") or {"visits": 0, "unique": 0, "uids": []}
+    data["totals"] = tot
+    key = str(uid or session_id or _uuid.uuid4().hex[:12])
+    t["visits"] = int(t.get("visits", 0)) + 1; tot["visits"] = int(tot.get("visits", 0)) + 1
+    if key not in t.get("uids", []):
+        t["uids"].append(key); t["unique"] = int(t.get("unique", 0)) + 1
+    if key not in tot.get("uids", []):
+        tot["uids"].append(key); tot["unique"] = int(tot.get("unique", 0)) + 1
+    _metrics_save(data)
+def _metrics_today_totals():
+    d = _metrics_load() or {}
+    t = d.get("today") or {}
+    T = d.get("totals") or {}
+    return {
+        "today_unique": int(t.get("unique", 0) or 0),
+        "today_visits": int(t.get("visits", 0) or 0),
+        "total_unique": int(T.get("unique", 0) or 0),
+        "total_visits": int(T.get("visits", 0) or 0),
+    }
+# === /AUTO ===
+
+
+
+
+# === AUTO: GI/FEVER tools (under Special Tests) with summary + log + filters/CSV ===
+def _gi_block_render_and_log(context: dict):
+    import streamlit as st, datetime as _dt, pandas as _pd, os as _os, json as _json, io as _io
+    def _calc_severity(diarrhea_type, diarrhea_freq, vomit_type, vomit_freq, fever_temp):
+        sev = "🟢 안정"; reasons = []
+        try:
+            if (fever_temp or 0) >= 39.0: sev = "🚨 위중"; reasons.append("고열 ≥39℃")
+            elif (fever_temp or 0) >= 38.0: sev = "🟧 주의"; reasons.append("발열 ≥38℃")
+            if (diarrhea_freq or 0) >= 4:
+                if sev!="🚨 위중": sev = "🟧 주의"
+                reasons.append("설사 ≥4회/일")
+            if (vomit_freq or 0) >= 3:
+                if sev!="🚨 위중": sev = "🟧 주의"
+                reasons.append("구토 ≥3회/일")
+            if ("혈변" in (diarrhea_type or "")) or ("혈성" in (vomit_type or "")):
+                sev = "🚨 위중"; reasons.append("혈변/혈성 구토")
+        except Exception:
+            pass
+        return sev, reasons
+    def _gi_log_path(uid:str):
+        base = "/mnt/data/care_log"
+        try: _os.makedirs(base, exist_ok=True)
+        except Exception: pass
+        return f"{base}/{uid}_gi.jsonl"
+    def _gi_log_append(uid:str, rec:dict):
+        p = _gi_log_path(uid)
+        try:
+            with open(p, "a", encoding="utf-8") as f:
+                f.write(_json.dumps(rec, ensure_ascii=False) + "\n")
+        except Exception: pass
+    def _gi_log_read(uid:str, limit:int=1000):
+        p = _gi_log_path(uid)
+        rows = []
+        try:
+            with open(p, "r", encoding="utf-8") as f:
+                for line in f:
+                    try: rows.append(_json.loads(line))
+                    except Exception: continue
+        except FileNotFoundError: pass
+        rows = rows[-limit:]
+        return _pd.DataFrame(rows) if rows else _pd.DataFrame(columns=["ts","설사","횟수","구토","횟수2","체온"])
+    st.markdown("#### 🚽 설사 / 🤮 구토 / 🌡️ 해열제")
+    with st.expander("기록/계산", expanded=False):
+        c_d1, c_d2 = st.columns([2,1])
+        with c_d1:
+            diarrhea_type = st.selectbox("설사(구분표)", ["", "노란색 설사", "진한 노란색 설사", "거품 설사", "녹색 설사", "녹색 혈변", "혈변", "검은색 변"], index=0)
+        with c_d2:
+            diarrhea_freq = st.number_input("설사 횟수(회/일)", min_value=0, step=1, value=0)
+        c_v1, c_v2 = st.columns([2,1])
+        with c_v1:
+            vomit_type = st.selectbox("구토(구분)", ["", "흰색/묽음", "노란색/담즙", "초록색/담즙", "혈성 의심"], index=0)
+        with c_v2:
+            vomit_freq = st.number_input("구토 횟수(회/일)", min_value=0, step=1, value=0)
+        c_w1, c_w2, c_w3 = st.columns(3)
+        with c_w1:
+            body_weight = st.number_input("체중(kg)", min_value=0.0, step=0.1, value=0.0, key="antipy_weight_gi")
+        with c_w2:
+            age_years = st.number_input("나이(년)", min_value=0, step=1, value=0, key="antipy_age_gi")
+        with c_w3:
+            fever_temp = st.number_input("체온(℃)", min_value=0.0, step=0.1, value=0.0, key="antipy_temp_gi")
+        def _dose_apap(weight):
+            if not weight or weight <= 0: return None
+            low = round(10 * weight); high = round(15 * weight)
+            return low, high
+        def _dose_ibu(weight, age):
+            if not weight or weight <= 0: return None
+            if age is not None and age < 0.5: return None
+            dose = round(10 * weight)
+            return dose
+        apap = _dose_apap(body_weight); ibu  = _dose_ibu(body_weight, age_years)
+        sev_level, reasons = _calc_severity(diarrhea_type, diarrhea_freq, vomit_type, vomit_freq, fever_temp)
+        summary_lines = []
+        summary_lines.append(f"- 응급도: **{sev_level}**" + (f" ({' / '.join(reasons)})" if reasons else ""))
+        if fever_temp: summary_lines.append(f"- 체온: {fever_temp:.1f}℃")
+        if diarrhea_type or diarrhea_freq: summary_lines.append(f"- 설사: {diarrhea_type or '-'} / {int(diarrhea_freq or 0)}회/일")
+        if vomit_type or vomit_freq: summary_lines.append(f"- 구토: {vomit_type or '-'} / {int(vomit_freq or 0)}회/일")
+        if apap: summary_lines.append(f"- APAP 권장 1회: {apap[0]}–{apap[1]} mg (4–6h)")
+        if ibu:  summary_lines.append(f"- IBU 권장 1회: {ibu} mg (6–8h)")
+        context["gi_summary_md"] = "## 🚽/🤮/🌡️ 위장/발열 요약\n" + "\n".join(summary_lines)
+        st.markdown(f"**응급도: {sev_level}**  " + (" / ".join(reasons) if reasons else ""))
+        _uid = st.session_state.get("user_key")
+        col_log_btn, _ = st.columns([1,3])
+        clicked = col_log_btn.button("기록 추가", use_container_width=True)
+        if clicked and _uid:
+            rec = {"ts": _dt.datetime.now().strftime("%Y-%m-%d %H:%M"),
+                   "설사": diarrhea_type, "횟수": int(diarrhea_freq or 0),
+                   "구토": vomit_type, "횟수2": int(vomit_freq or 0),
+                   "체온": float(fever_temp or 0.0)}
+            _gi_log_append(_uid, rec); st.success("기록을 저장했어요.")
+        if _uid:
+            df_log = _gi_log_read(_uid, limit=2000)
+            if not df_log.empty:
+                def _parse_ts(s):
+                    try: return _dt.datetime.strptime(str(s), "%Y-%m-%d %H:%M")
+                    except Exception:
+                        try: return _dt.datetime.fromisoformat(str(s))
+                        except Exception: return None
+                df_log["__dt"] = df_log["ts"].apply(_parse_ts); df_log = df_log.dropna(subset=["__dt"])
+                def _sev_row(row):
+                    sev,_ = _calc_severity(row.get("설사"), row.get("횟수"), row.get("구토"), row.get("횟수2"), row.get("체온"))
+                    return sev
+                df_log["응급도"] = df_log.apply(_sev_row, axis=1)
+                min_d = df_log["__dt"].min().date(); max_d = df_log["__dt"].max().date()
+                f1, f2, f3, f4 = st.columns([1.2, 1.2, 1.2, 1.4])
+                with f1:
+                    d_from = st.date_input("시작일", value=min_d, min_value=min_d, max_value=max_d, key="gi_filter_from")
+                with f2:
+                    d_to   = st.date_input("종료일", value=max_d, min_value=min_d, max_value=max_d, key="gi_filter_to")
+                with f3:
+                    sev_pick = st.multiselect("응급도", options=["🚨 위중","🟧 주의","🟢 안정"], default=[], key="gi_filter_sev")
+                with f4:
+                    kw = st.text_input("키워드(설사/구토/메모)", value="", key="gi_filter_kw", placeholder="예: 혈변, 담즙")
+                mask = (df_log["__dt"].dt.date >= d_from) & (df_log["__dt"].dt.date <= d_to)
+                if sev_pick: mask &= df_log["응급도"].isin(sev_pick)
+                if kw:
+                    kwl = kw.strip().lower()
+                    def _has_kw(row):
+                        blob = f"{row.get('설사','')} {row.get('구토','')}".lower()
+                        return kwl in blob
+                    mask &= df_log.apply(_has_kw, axis=1)
+                df_f = df_log.loc[mask].copy().sort_values("__dt", ascending=False)
+                view_cols = ["ts","응급도","설사","횟수","구토","횟수2","체온"]
+                st.markdown("##### 최근 기록 (필터 적용)")
+                st.dataframe(df_f[view_cols], use_container_width=True, hide_index=True)
+                buf = _io.StringIO(); df_f[view_cols].to_csv(buf, index=False, encoding="utf-8")
+                st.download_button("CSV 내보내기", data=buf.getvalue().encode("utf-8"),
+                                   file_name=f"{_uid}_gi_log_filtered.csv", mime="text/csv",
+                                   use_container_width=True)
+# === /AUTO ===
+
+
 # 세션 플래그(중복 방지)
 if "summary_line_shown" not in st.session_state:
     st.session_state["summary_line_shown"] = False
@@ -269,6 +451,27 @@ def _export_report(ctx: dict, lines_blocks=None):
         if summary:
             body.append("\n## 🗂️ 선택 요약\n- " + summary)
 
+    # GI 요약/URL 포함
+
+
+    try:
+
+
+        if ctx.get('gi_summary_md'):
+
+
+            body.append(ctx['gi_summary_md'])
+
+
+    except Exception:
+
+
+        pass
+
+
+    body.append("\n\nBloodMap: https://bloodmap.streamlit.app/")
+
+
     md = title + "\n".join(body) + footer
     txt = md.replace("# ","").replace("## ","")
     return md, txt
@@ -323,6 +526,15 @@ if mode == "암":
     # 특수검사
     from special_tests import special_tests_ui
     sp_lines = special_tests_ui()
+
+    # 특수검사 바로 아래 GI/FEVER 섹션
+    if "ctx" not in globals():
+        ctx = {}
+    try:
+        _gi_block_render_and_log(ctx)
+    except Exception as _e:
+        st.caption(f"GI 블록 오류: {_e}")
+
     lines_blocks = []
     if sp_lines: lines_blocks.append(("특수검사 해석", sp_lines))
 
@@ -440,62 +652,6 @@ elif mode == "일상":
 
     else:  # 성인
         from adult_rules import predict_from_symptoms, triage_advise, get_adult_options
-
-
-# === AUTO: visitor metrics helpers ===
-import os as _os, json as _json, datetime as _dt, uuid as _uuid
-def _metrics_visits_path():
-    base = "/mnt/data/metrics"
-    try: _os.makedirs(base, exist_ok=True)
-    except Exception: pass
-    return f"{base}/visits.json"
-def _metrics_load():
-    try:
-        with open(_metrics_visits_path(), "r", encoding="utf-8") as f:
-            return _json.load(f)
-    except Exception:
-        return {}
-def _metrics_save(d: dict):
-    p = _metrics_visits_path()
-    tmp = p + ".tmp"
-    try:
-        with open(tmp, "w", encoding="utf-8") as f:
-            _json.dump(d, f, ensure_ascii=False, indent=2)
-        _os.replace(tmp, p)
-    except Exception:
-        pass
-def _metrics_bump(uid: str|None, session_id: str|None):
-    data = _metrics_load() or {}
-    today = _dt.date.today().isoformat()
-    t = data.get("today") or {}
-    if t.get("date") != today:
-        t = {"date": today, "visits": 0, "unique": 0, "uids": []}
-    data["today"] = t
-    tot = data.get("totals") or {"visits": 0, "unique": 0, "uids": []}
-    data["totals"] = tot
-    key = str(uid or session_id or _uuid.uuid4().hex[:12])
-    t["visits"] = int(t.get("visits", 0)) + 1
-    tot["visits"] = int(tot.get("visits", 0)) + 1
-    if key not in t.get("uids", []):
-        t["uids"].append(key)
-        t["unique"] = int(t.get("unique", 0)) + 1
-    if key not in tot.get("uids", []):
-        tot["uids"].append(key)
-        tot["unique"] = int(tot.get("unique", 0)) + 1
-    _metrics_save(data)
-def _metrics_today_totals():
-    d = _metrics_load() or {}
-    t = d.get("today") or {}
-    T = d.get("totals") or {}
-    return {
-        "today_unique": int(t.get("unique", 0) or 0),
-        "today_visits": int(t.get("visits", 0) or 0),
-        "total_unique": int(T.get("unique", 0) or 0),
-        "total_visits": int(T.get("visits", 0) or 0),
-    }
-# === /AUTO ===
-
-
         opts = get_adult_options()
         eye_opts = opts.get("눈꼽", ["없음","맑음","노랑-농성","가려움 동반","한쪽","양쪽"])
 
@@ -721,3 +877,243 @@ if results_only_after_analyze(st):
     st.caption("본 도구는 참고용입니다. 의료진의 진단/치료를 대체하지 않습니다.")
     st.caption("문의/버그 제보: [피수치 가이드 공식카페](https://cafe.naver.com/bloodmap)")
     st.stop()
+
+
+# --- AUTO: sidebar visitor trend (14d) ---
+try:
+    import pandas as _pd
+    import datetime as _dt
+    data = _load_metrics() or {}
+    by_date = data.get("by_date", {})
+    # build last 14 days series
+    today = _dt.date.today()
+    rows = []
+    for i in range(13, -1, -1):
+        d = (today - _dt.timedelta(days=i)).isoformat()
+        r = by_date.get(d, {"unique": 0, "visits": 0})
+        rows.append({"date": d, "unique": r.get("unique", 0), "visits": r.get("visits", 0)})
+    _dfm = _pd.DataFrame(rows)
+    with st.sidebar:
+        st.markdown("###### 📈 최근 14일 추이")
+        st.line_chart(_dfm.set_index("date")[["unique","visits"]])
+except Exception as _e:
+    pass
+# --- /AUTO ---
+
+
+
+# --- AUTO: labs friendly chart ---
+def _render_labs_friendly_chart(uid: str):
+    try:
+        import pandas as _pd
+        import numpy as _np
+        import altair as alt
+        # load from session_state persist (if available)
+        hist = (st.session_state.get("lab_hist") or {}).get(uid)
+        if hist is None or len(getattr(hist, "index", [])) == 0:
+            return
+        df = hist.copy()
+        # Try to parse a 'date' column or index to datetime
+        date_col = None
+        for c in df.columns:
+            if c.lower() in ("date","날짜","검사일"):
+                date_col = c; break
+        if date_col is None:
+            # if index is datetime-like, move to column
+            try:
+                df = df.reset_index().rename(columns={"index": "date"})
+                date_col = "date"
+            except Exception:
+                pass
+        if date_col is None:
+            return
+        df[date_col] = _pd.to_datetime(df[date_col], errors="coerce")
+        df = df.dropna(subset=[date_col]).sort_values(date_col)
+
+        # numeric columns only for chart
+        num_cols = [c for c in df.columns if c != date_col and _pd.api.types.is_numeric_dtype(df[c])]
+        if not num_cols:
+            return
+
+        with st.expander("🩸 그래프 옵션", expanded=False):
+            cols_pick = st.multiselect("보기 항목", options=num_cols, default=num_cols[: min(5, len(num_cols))])
+            smooth = st.checkbox("이동평균(3포인트)", value=False)
+            y_min, y_max = st.slider("Y축 범위", value=(float(df[cols_pick].min(numeric_only=True).min()) if cols_pick else 0.0,
+                                                    float(df[cols_pick].max(numeric_only=True).max()) if cols_pick else 1.0))
+        if not cols_pick:
+            return
+        plot_df = df[[date_col] + cols_pick].copy()
+        if smooth:
+            for c in cols_pick:
+                plot_df[c] = plot_df[c].rolling(window=3, min_periods=1, center=True).mean()
+
+        # Melt for multi-series Altair
+        m = plot_df.melt(date_col, var_name="항목", value_name="값")
+        base = alt.Chart(m).mark_line(point=True).encode(
+            x=alt.X(f"{date_col}:T", title="날짜"),
+            y=alt.Y("값:Q", title="", scale=alt.Scale(domain=[y_min, y_max])),
+            color="항목:N",
+            tooltip=[alt.Tooltip(f"{date_col}:T", title="날짜"), "항목:N", alt.Tooltip("값:Q", format=".2f")]
+        ).properties(height=260, use_container_width=True)
+        st.altair_chart(base, use_container_width=True)
+    except Exception as _e:
+        st.caption(f"그래프 표시 오류: {_e}")
+
+# 메인 영역 어딘가에서 현재 uid가 있으면 표시
+try:
+    _uid_preview = st.session_state.get("user_key")
+    if _uid_preview:
+        _render_labs_friendly_chart(_uid_preview)
+except Exception:
+    pass
+# --- /AUTO ---
+
+
+
+# === AUTO (safe): sidebar visitor metrics cards ===
+try:
+    import datetime as _dt, json as _json, os as _os, streamlit as st
+    def _metrics_path():
+        return "/mnt/data/metrics/visits.json"
+    def _load_metrics_safe():
+        try:
+            with open(_metrics_path(), "r", encoding="utf-8") as f:
+                return _json.load(f)
+        except Exception:
+            return {}
+    with st.sidebar:
+        st.markdown("### 👥 방문자 통계")
+        _m = _load_metrics_safe() or {}
+        td = _m.get("today", {})
+        tt = _m.get("totals", {})
+        c1,c2 = st.columns(2)
+        with c1:
+            st.metric("오늘(고유)", td.get("unique", 0))
+            st.metric("누적 고유", tt.get("unique", 0))
+        with c2:
+            st.metric("오늘(방문)", td.get("visits", 0))
+            st.metric("총 방문수", tt.get("visits", 0))
+except Exception:
+    pass
+# === /AUTO ===
+
+
+
+# === AUTO (safe): GI/FEVER tools with log ===
+try:
+    import streamlit as st, datetime as _dt, pandas as _pd, os as _os, json as _json
+    st.markdown("#### 🚽 설사 / 🤮 구토 / 🌡️ 해열제")
+    with st.expander("기록/계산", expanded=False):
+        c_d1, c_d2 = st.columns([2,1])
+        with c_d1:
+            diarrhea_type = st.selectbox(
+                "설사(구분표)", ["", "노란색 설사", "진한 노란색 설사", "거품 설사", "녹색 설사", "녹색 혈변", "혈변", "검은색 변"], index=0
+            )
+        with c_d2:
+            diarrhea_freq = st.number_input("설사 횟수(회/일)", min_value=0, step=1, value=0)
+
+        c_v1, c_v2 = st.columns([2,1])
+        with c_v1:
+            vomit_type = st.selectbox("구토(구분)", ["", "흰색/묽음", "노란색/담즙", "초록색/담즙", "혈성 의심"], index=0)
+        with c_v2:
+            vomit_freq = st.number_input("구토 횟수(회/일)", min_value=0, step=1, value=0)
+
+        c_w1, c_w2, c_w3 = st.columns(3)
+        with c_w1:
+            body_weight = st.number_input("체중(kg)", min_value=0.0, step=0.1, value=0.0, key="antipy_weight3")
+        with c_w2:
+            age_years = st.number_input("나이(년)", min_value=0, step=1, value=0, key="antipy_age3")
+        with c_w3:
+            fever_temp = st.number_input("체온(℃)", min_value=0.0, step=0.1, value=0.0, key="antipy_temp3")
+
+        def _dose_apap(weight):
+            if not weight or weight <= 0: return None
+            low = round(10 * weight); high = round(15 * weight)
+            return low, high
+        def _dose_ibu(weight, age):
+            if not weight or weight <= 0: return None
+            if age is not None and age < 0.5: return None
+            dose = round(10 * weight)
+            return dose
+        apap = _dose_apap(body_weight)
+        ibu  = _dose_ibu(body_weight, age_years)
+
+        sev_level = "🟢 안정"; reasons = []
+        try:
+            if (fever_temp or 0) >= 39.0: sev_level = "🚨 위중"; reasons.append("고열 ≥39℃")
+            elif (fever_temp or 0) >= 38.0: sev_level = "🟧 주의"; reasons.append("발열 ≥38℃")
+            if (diarrhea_freq or 0) >= 4: 
+                if sev_level!="🚨 위중": sev_level = "🟧 주의"
+                reasons.append("설사 ≥4회/일")
+            if (vomit_freq or 0) >= 3:
+                if sev_level!="🚨 위중": sev_level = "🟧 주의"
+                reasons.append("구토 ≥3회/일")
+            if ("혈변" in (diarrhea_type or "")) or ("혈성" in (vomit_type or "")):
+                sev_level = "🚨 위중"; reasons.append("혈변/혈성 구토")
+        except Exception:
+            pass
+        st.markdown(f"**응급도: {sev_level}**  " + (" / ".join(reasons) if reasons else ""))
+
+        colA, colB = st.columns(2)
+        with colA:
+            st.subheader("APAP(아세트아미노펜)")
+            if apap:
+                st.write(f"권장 1회: **{apap[0]}–{apap[1]} mg** (4–6h 간격)")
+                st.caption("소아 60–75 mg/kg/day, 성인 보수 3,000 mg/day 이하. 간질환/과음 시 의료진 상의.")
+            else:
+                st.caption("체중을 입력하면 계산됩니다.")
+        with colB:
+            st.subheader("IBU(이부프로펜)")
+            if ibu:
+                st.write(f"권장 1회: **{ibu} mg** (6–8h 간격)")
+                st.caption("6개월 미만 금기. 위장관/신장질환·탈수 시 복용 전 의료진 상의.")
+            else:
+                st.caption("체중/나이를 입력하면 계산됩니다.")
+
+        # 기록 저장 & 표
+        def _gi_log_path(uid:str):
+            base = "/mnt/data/care_log"
+            try: _os.makedirs(base, exist_ok=True)
+            except Exception: pass
+            return f"{base}/{uid}_gi.jsonl"
+        def _gi_log_append(uid:str, rec:dict):
+            p = _gi_log_path(uid)
+            try:
+                with open(p, "a", encoding="utf-8") as f:
+                    f.write(_json.dumps(rec, ensure_ascii=False) + "\n")
+            except Exception:
+                pass
+        def _gi_log_read(uid:str, limit:int=100):
+            p = _gi_log_path(uid)
+            rows = []
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    for line in f:
+                        try: rows.append(_json.loads(line))
+                        except Exception: continue
+            except FileNotFoundError:
+                pass
+            rows = rows[-limit:]
+            return _pd.DataFrame(rows) if rows else _pd.DataFrame(columns=["ts","설사","횟수","구토","횟수2","체온"])
+
+        _uid = st.session_state.get("user_key")
+        col_log_btn, _ = st.columns([1,3])
+        clicked = col_log_btn.button("기록 추가", use_container_width=True)
+        if clicked and _uid:
+            rec = {
+                "ts": _dt.datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "설사": diarrhea_type, "횟수": int(diarrhea_freq or 0),
+                "구토": vomit_type, "횟수2": int(vomit_freq or 0),
+                "체온": float(fever_temp or 0.0)
+            }
+            _gi_log_append(_uid, rec)
+            st.success("기록을 저장했어요.")
+        if _uid:
+            df_log = _gi_log_read(_uid, limit=200)
+            if not df_log.empty:
+                st.markdown("##### 최근 기록")
+                st.dataframe(df_log.sort_values("ts", ascending=False), use_container_width=True, hide_index=True)
+except Exception:
+    pass
+# === /AUTO ===
+
