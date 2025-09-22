@@ -15,6 +15,13 @@ from safety import (
     next_allowed, total_24h_mg, limit_for_day, block_ibu_reason, apap_caution_reason
 )
 from report_builder import build_report_blocks
+
+# ---- Unique key helper to avoid DuplicateElementKey ----
+def _unique_key(base: str) -> str:
+    c = st.session_state.get('_uniq_counter', 0) + 1
+    st.session_state['_uniq_counter'] = c
+    return f"{base}_{c}"
+
 from metrics import bump as bump_metrics
 
 KST = timezone(timedelta(hours=9))
@@ -321,7 +328,7 @@ except Exception as e:
 
 with st.sidebar:
     st.markdown("### 🔄 로그 복구")
-    if st.button("소아/과거 케어로그 복구", key=f"btn_recover_legacy_{uid}"):
+    if st.button("소아/과거 케어로그 복구", key=_unique_key("btn_recover_legacy")):
         try:
             migrated, found_files, merged_count = migrate_legacy_carelog_if_needed(uid)
             if migrated:
@@ -341,7 +348,7 @@ except Exception as e:
 
 with st.sidebar:
     st.markdown("### 🔄 로그 복구")
-    if st.button("소아/과거 케어로그 복구", key=f"btn_recover_legacy_{uid}"):
+    if st.button("소아/과거 케어로그 복구", key=_unique_key("btn_recover_legacy")):
         try:
             migrated, found_files, merged_count = migrate_legacy_carelog_if_needed(uid)
             if migrated:
