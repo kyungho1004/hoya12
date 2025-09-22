@@ -208,6 +208,7 @@ def build_ics_for_next_doses(apap_next, ibu_next):
 st.set_page_config(page_title="BloodMap — 피수치가이드", page_icon="🩸", layout="centered")
 render_deploy_banner("https://bloodmap.streamlit.app/", "만든이: Hoya/GPT · 자문: Hoya/GPT")
 st.title("BloodMap — 피수치가이드")
+st.caption("v2025-09-22 p6e")
 
 st.info(
     "이 앱은 의료행위가 아니며, **참고용**입니다. 진단·치료를 **대체하지 않습니다**.\n"
@@ -328,6 +329,25 @@ except Exception as e:
 
 with st.sidebar:
     st.markdown("### 🔄 로그 복구")
+
+with st.sidebar:
+    st.markdown("### 🧒 소아 진단 로그")
+    try:
+        mig, fcnt, cnt = migrate_legacy_peds_dx_if_needed(uid)
+        if mig:
+            st.success(f"소아 진단 로그 자동 복구: {cnt}건 (원본 {fcnt}개)")
+    except Exception as e:
+        st.caption(f"진단 로그 복구 스킵: {e}")
+    if st.button("소아 진단 로그 복구", key=_unique_key("btn_recover_peds_dx")):
+        try:
+            mig, fcnt, cnt = migrate_legacy_peds_dx_if_needed(uid)
+            if mig:
+                st.success(f"복구 완료: {cnt}건 (원본 {fcnt}개)")
+            else:
+                st.info("복구할 로그가 없거나 이미 최신입니다.")
+        except Exception as e:
+            st.error(f"복구 중 오류: {e}")
+
     if st.button("소아/과거 케어로그 복구", key=_unique_key("btn_recover_legacy")):
         try:
             migrated, found_files, merged_count = migrate_legacy_carelog_if_needed(uid)
@@ -348,6 +368,25 @@ except Exception as e:
 
 with st.sidebar:
     st.markdown("### 🔄 로그 복구")
+
+with st.sidebar:
+    st.markdown("### 🧒 소아 진단 로그")
+    try:
+        mig, fcnt, cnt = migrate_legacy_peds_dx_if_needed(uid)
+        if mig:
+            st.success(f"소아 진단 로그 자동 복구: {cnt}건 (원본 {fcnt}개)")
+    except Exception as e:
+        st.caption(f"진단 로그 복구 스킵: {e}")
+    if st.button("소아 진단 로그 복구", key=_unique_key("btn_recover_peds_dx")):
+        try:
+            mig, fcnt, cnt = migrate_legacy_peds_dx_if_needed(uid)
+            if mig:
+                st.success(f"복구 완료: {cnt}건 (원본 {fcnt}개)")
+            else:
+                st.info("복구할 로그가 없거나 이미 최신입니다.")
+        except Exception as e:
+            st.error(f"복구 중 오류: {e}")
+
     if st.button("소아/과거 케어로그 복구", key=_unique_key("btn_recover_legacy")):
         try:
             migrated, found_files, merged_count = migrate_legacy_carelog_if_needed(uid)
@@ -381,24 +420,29 @@ def _add_log(entry):
     st.session_state["care_log"][uid].append(entry)
     save_carelog(uid, st.session_state["care_log"][uid])
 
+
+
+
 c1,c2,c3,c4,c5 = st.columns(5)
 with c1:
-    if st.button("발열 기록 +", key="btn_add_fever"):
-        t = st.number_input("현재 체온(℃)", min_value=35.0, step=0.1, value=38.0, key="temp_add")
+    if st.button("발열 기록 +", key=f"btn_add_fever_{uid}"):
+        t = st.number_input("현재 체온(℃)", min_value=35.0, step=0.1, value=38.0, key=f"temp_add_{uid}")
         _add_log({"type":"fever","temp":t,"ts": now.isoformat()})
         st.success("발열 기록됨.")
 with c2:
-    if st.button("구토 +", key="btn_add_vomit"):
-        _add_log({"type":"vomit","ts": now.isoformat(), "note": ""})
+    vomit_kind = st.selectbox("구토 유형", ["흰","노랑","초록(담즙)","기타"], index=1, key=f"vomit_kind_{uid}")
+    if st.button("구토 +", key=f"btn_add_vomit_{uid}"):
+        _add_log({"type":"vomit","kind":vomit_kind,"ts": now.isoformat()})
         st.success("구토 기록됨.")
 with c3:
-    if st.button("설사 +", key="btn_add_diarrhea"):
-        _add_log({"type":"diarrhea","ts": now.isoformat(), "note": ""})
+    diarrhea_kind = st.selectbox("설사 유형", ["노랑","진한노랑","거품","녹색","녹색혈변","혈변","검은색","기타"], index=0, key=f"diarrhea_kind_{uid}")
+    if st.button("설사 +", key=f"btn_add_diarrhea_{uid}"):
+        _add_log({"type":"diarrhea","kind":diarrhea_kind,"ts": now.isoformat()})
         st.success("설사 기록됨.")
 with c4:
-    apap_mg = st.number_input("APAP(아세트아미노펜) 투여량 mg", min_value=0.0, step=50.0, value=0.0)
+    apap_mg = st.number_input("APAP(아세트아미노펜) 투여량 mg", min_value=0.0, step=50.0, value=0.0, key=f"apap_mg_{uid}")
 with c5:
-    ibu_mg = st.number_input("IBU(이부프로펜) 투여량 mg", min_value=0.0, step=50.0, value=0.0)
+    ibu_mg = st.number_input("IBU(이부프로펜) 투여량 mg", min_value=0.0, step=50.0, value=0.0, key=f"ibu_mg_{uid}")
 
 # 24h 총량 및 쿨다운
 adult_flag = adult
@@ -414,7 +458,7 @@ ibu_block = block_ibu_reason(labs, egfr)
 
 d1,d2 = st.columns(2)
 with d1:
-    if st.button("APAP 투여 기록", key="btn_log_apap"):
+    if st.button("APAP 투여 기록", key=f"btn_log_apap_{uid}"):
         if apap_mg <= 0:
             st.warning("용량을 입력하세요.")
         elif apap_next and now < apap_next:
@@ -425,7 +469,7 @@ with d1:
             _add_log({"type":"apap","mg": apap_mg, "ts": now.isoformat()})
             st.success("APAP 기록됨.")
 with d2:
-    if st.button("IBU 투여 기록", key="btn_log_ibu"):
+    if st.button("IBU 투여 기록", key=f"btn_log_ibu_{uid}"):
         if ibu_block:
             st.error(ibu_block)
         elif ibu_mg <= 0:
@@ -455,15 +499,15 @@ if care_24h:
 
     # Export buttons
     ics_data = build_ics_for_next_doses(apap_next, ibu_next)
-    st.download_button("📅 다음 3회 복용 일정 (.ics)", key="dl_ics", data=ics_data, file_name="next_doses.ics")
+    st.download_button("📅 다음 3회 복용 일정 (.ics)", key="dl_ics", data=ics_data, file_name=f"next_doses_{uid}.ics")
     # TXT/PDF export for care log (24h)
     log_lines = ["케어로그(최근 24h)"] + [f"- {e.get('ts')} · {e.get('type')}" + (f" {e.get('temp')}℃" if e.get('type')=='fever' else (f" {e.get('mg')} mg" if e.get('type') in ('apap','ibu') else "")) for e in sorted(care_24h, key=lambda x: x['ts'])]
     log_txt = "\n".join(log_lines)
-    st.download_button("⬇️ 케어로그 TXT", key="dl_carelog_txt", data=log_txt, file_name="carelog_24h.txt")
+    st.download_button("⬇️ 케어로그 TXT", key="dl_carelog_txt", data=log_txt, file_name=f"carelog_24h_{uid}.txt")
     try:
         from pdf_export import export_md_to_pdf
         log_pdf = export_md_to_pdf("\n".join(["# 케어로그(24h)"] + log_lines))
-        st.download_button("⬇️ 케어로그 PDF", key="dl_carelog_pdf", data=log_pdf, file_name="carelog_24h.pdf", mime="application/pdf")
+        st.download_button("⬇️ 케어로그 PDF", key="dl_carelog_pdf", data=log_pdf, file_name=f"carelog_24h_{uid}.pdf", mime="application/pdf")
     except Exception as e:
         st.caption(f"케어로그 PDF 오류: {e}")
 
@@ -541,6 +585,14 @@ if results_only_after_analyze(st):
         st.markdown("**항생제**")
         render_adverse_effects(st, akeys, DRUG_DB)
 
+
+    # 24h summary counts (for report memo)
+    sum_fever = sum(1 for e in care_24h if e.get("type")=="fever")
+    sum_vomit = sum(1 for e in care_24h if e.get("type")=="vomit")
+    sum_diarr = sum(1 for e in care_24h if e.get("type")=="diarrhea")
+    sum_apap  = sum(1 for e in care_24h if e.get("type")=="apap")
+    sum_ibu   = sum(1 for e in care_24h if e.get("type")=="ibu")
+
     # 보고서
     st.subheader("📝 보고서 저장")
     # blocks: 응급도, 24h 케어로그 요약, 부작용 요약
@@ -558,6 +610,14 @@ if results_only_after_analyze(st):
         body.append(f"- 주요 수치: {labs_t}")
     if ctx.get("egfr") is not None:
         body.append(f"- eGFR: {ctx['egfr']} mL/min/1.73㎡")
+    # 소아 진단 로그(최근 최대 5건)
+    try:
+        rows = load_peds_dx(uid)
+        if rows:
+            body.append("- 소아 진단(최근): " + " / ".join(f"{e.get('ts')} {e.get('dx')}" for e in rows[-5:]))
+    except Exception:
+        pass
+    body.append(f"- 최근 24h 요약: 발열 {sum_fever} · 구토 {sum_vomit} · 설사 {sum_diarr} · APAP {sum_apap} · IBU {sum_ibu}")
     for title2, lines in blocks:
         if lines:
             body.append("\n## " + title2 + "\n" + "\n".join("- " + L for L in lines))
