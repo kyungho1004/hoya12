@@ -239,6 +239,24 @@ def _export_report(ctx: dict, lines_blocks=None):
         if summary:
             body.append("\n## 🗂️ 선택 요약\n- " + summary)
 
+    # GI 요약 포함
+
+
+    try:
+
+
+        if ctx.get('gi_summary_md'):
+
+
+            body.append(ctx['gi_summary_md'])
+
+
+    except Exception:
+
+
+        pass
+
+
     md = title + "\n".join(body) + footer
     txt = md.replace("# ","").replace("## ","")
     return md, txt
@@ -295,6 +313,15 @@ if mode == "암":
     sp_lines = special_tests_ui()
     lines_blocks = []
     if sp_lines: lines_blocks.append(("특수검사 해석", sp_lines))
+
+    # 특수검사 바로 아래 GI/FEVER 섹션
+    if "ctx" not in globals():
+        ctx = {}
+    try:
+        _gi_block_render_and_log(ctx)
+    except Exception as _e:
+        st.caption(f"GI 블록 오류: {_e}")
+
 
     # 저장/그래프
     st.markdown("#### 💾 저장/그래프")
@@ -756,122 +783,4 @@ except Exception:
 # === /AUTO ===
 
 
-
-# === AUTO (safe): GI/FEVER tools with log ===
-try:
-    import streamlit as st, datetime as _dt, pandas as _pd, os as _os, json as _json
-    st.markdown("#### 🚽 설사 / 🤮 구토 / 🌡️ 해열제")
-    with st.expander("기록/계산", expanded=False):
-        c_d1, c_d2 = st.columns([2,1])
-        with c_d1:
-            diarrhea_type = st.selectbox(
-                "설사(구분표)", ["", "노란색 설사", "진한 노란색 설사", "거품 설사", "녹색 설사", "녹색 혈변", "혈변", "검은색 변"], index=0
-            )
-        with c_d2:
-            diarrhea_freq = st.number_input("설사 횟수(회/일)", min_value=0, step=1, value=0)
-
-        c_v1, c_v2 = st.columns([2,1])
-        with c_v1:
-            vomit_type = st.selectbox("구토(구분)", ["", "흰색/묽음", "노란색/담즙", "초록색/담즙", "혈성 의심"], index=0)
-        with c_v2:
-            vomit_freq = st.number_input("구토 횟수(회/일)", min_value=0, step=1, value=0)
-
-        c_w1, c_w2, c_w3 = st.columns(3)
-        with c_w1:
-            body_weight = st.number_input("체중(kg)", min_value=0.0, step=0.1, value=0.0, key="antipy_weight3")
-        with c_w2:
-            age_years = st.number_input("나이(년)", min_value=0, step=1, value=0, key="antipy_age3")
-        with c_w3:
-            fever_temp = st.number_input("체온(℃)", min_value=0.0, step=0.1, value=0.0, key="antipy_temp3")
-
-        def _dose_apap(weight):
-            if not weight or weight <= 0: return None
-            low = round(10 * weight); high = round(15 * weight)
-            return low, high
-        def _dose_ibu(weight, age):
-            if not weight or weight <= 0: return None
-            if age is not None and age < 0.5: return None
-            dose = round(10 * weight)
-            return dose
-        apap = _dose_apap(body_weight)
-        ibu  = _dose_ibu(body_weight, age_years)
-
-        sev_level = "🟢 안정"; reasons = []
-        try:
-            if (fever_temp or 0) >= 39.0: sev_level = "🚨 위중"; reasons.append("고열 ≥39℃")
-            elif (fever_temp or 0) >= 38.0: sev_level = "🟧 주의"; reasons.append("발열 ≥38℃")
-            if (diarrhea_freq or 0) >= 4: 
-                if sev_level!="🚨 위중": sev_level = "🟧 주의"
-                reasons.append("설사 ≥4회/일")
-            if (vomit_freq or 0) >= 3:
-                if sev_level!="🚨 위중": sev_level = "🟧 주의"
-                reasons.append("구토 ≥3회/일")
-            if ("혈변" in (diarrhea_type or "")) or ("혈성" in (vomit_type or "")):
-                sev_level = "🚨 위중"; reasons.append("혈변/혈성 구토")
-        except Exception:
-            pass
-        st.markdown(f"**응급도: {sev_level}**  " + (" / ".join(reasons) if reasons else ""))
-
-        colA, colB = st.columns(2)
-        with colA:
-            st.subheader("APAP(아세트아미노펜)")
-            if apap:
-                st.write(f"권장 1회: **{apap[0]}–{apap[1]} mg** (4–6h 간격)")
-                st.caption("소아 60–75 mg/kg/day, 성인 보수 3,000 mg/day 이하. 간질환/과음 시 의료진 상의.")
-            else:
-                st.caption("체중을 입력하면 계산됩니다.")
-        with colB:
-            st.subheader("IBU(이부프로펜)")
-            if ibu:
-                st.write(f"권장 1회: **{ibu} mg** (6–8h 간격)")
-                st.caption("6개월 미만 금기. 위장관/신장질환·탈수 시 복용 전 의료진 상의.")
-            else:
-                st.caption("체중/나이를 입력하면 계산됩니다.")
-
-        # 기록 저장 & 표
-        def _gi_log_path(uid:str):
-            base = "/mnt/data/care_log"
-            try: _os.makedirs(base, exist_ok=True)
-            except Exception: pass
-            return f"{base}/{uid}_gi.jsonl"
-        def _gi_log_append(uid:str, rec:dict):
-            p = _gi_log_path(uid)
-            try:
-                with open(p, "a", encoding="utf-8") as f:
-                    f.write(_json.dumps(rec, ensure_ascii=False) + "\n")
-            except Exception:
-                pass
-        def _gi_log_read(uid:str, limit:int=100):
-            p = _gi_log_path(uid)
-            rows = []
-            try:
-                with open(p, "r", encoding="utf-8") as f:
-                    for line in f:
-                        try: rows.append(_json.loads(line))
-                        except Exception: continue
-            except FileNotFoundError:
-                pass
-            rows = rows[-limit:]
-            return _pd.DataFrame(rows) if rows else _pd.DataFrame(columns=["ts","설사","횟수","구토","횟수2","체온"])
-
-        _uid = st.session_state.get("user_key")
-        col_log_btn, _ = st.columns([1,3])
-        clicked = col_log_btn.button("기록 추가", use_container_width=True)
-        if clicked and _uid:
-            rec = {
-                "ts": _dt.datetime.now().strftime("%Y-%m-%d %H:%M"),
-                "설사": diarrhea_type, "횟수": int(diarrhea_freq or 0),
-                "구토": vomit_type, "횟수2": int(vomit_freq or 0),
-                "체온": float(fever_temp or 0.0)
-            }
-            _gi_log_append(_uid, rec)
-            st.success("기록을 저장했어요.")
-        if _uid:
-            df_log = _gi_log_read(_uid, limit=200)
-            if not df_log.empty:
-                st.markdown("##### 최근 기록")
-                st.dataframe(df_log.sort_values("ts", ascending=False), use_container_width=True, hide_index=True)
-except Exception:
-    pass
-# === /AUTO ===
 
