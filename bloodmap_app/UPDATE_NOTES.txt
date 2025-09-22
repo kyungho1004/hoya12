@@ -1,0 +1,43 @@
+# BloodMap 월요일 통합 업데이트 (스냅샷) — 2025-09-22 10:38 KST
+## 포함 파일
+- app.py (30656 bytes)
+- core_utils.py (2312 bytes)
+- config.py (1678 bytes)
+- ui_results.py (4508 bytes)
+- special_tests.py (18994 bytes)
+- peds_rules.py (7260 bytes)
+- peds_profiles.py (3340 bytes)
+- peds_dose.py (1259 bytes)
+- adult_rules.py (4807 bytes)
+- lab_diet.py (3706 bytes)
+- onco_map.py (11955 bytes)
+- dx_ko_map.py (2702 bytes)
+- drug_db.py (30555 bytes)
+- pdf_export.py (3237 bytes)
+- branding.py (1814 bytes)
+- style.css (173 bytes)
+- requirements.txt (43 bytes)
+- final_drug_coverage.json (92 bytes)
+
+## 핵심 변경·기능(정적 점검)
+- ✅ — Pinned 그래프(별명+PIN 사용자 한정)
+- ✅ — 그래프 저장/표시 로직 존재(세션/저장)
+- ✅ — 케어로그/모드/내보내기 UI
+- ✅ — Altair 차트 or line_chart 대체
+- ✅ — 위젯 키 사용(중복 회피)
+- ✅ — 배포/고정/안내 배너
+- ✅ — 피수치 입력 + 식이가이드/해석
+- ✅ — 소아 해열제 자동계산(APAP/IBU)
+- ✅ — 특수검사 해석 섹션 연결
+
+## 모듈 심볼 누락 점검
+- peds_rules.py: predict_from_symptoms:✅, triage_advise:✅
+- special_tests.py: special_tests_ui:✅
+- peds_dose.py: acetaminophen_ml:✅, ibuprofen_ml:✅
+- ui_results.py: render_adverse_effects:✅, collect_top_ae_alerts:✅
+- core_utils.py: nickname_pin:✅, schedule_block:✅
+- pdf_export.py: export_md_to_pdf:✅
+
+## 주의/추가 확인 권장
+- 그래프 외부 저장 경로(/mnt/data/bloodmap_graph 등)로의 **파일 저장 로직은 미포함**으로 보입니다. 세션 저장만 확인됨.
+- 케어로그(설사/구토/해열제) '추가/삭제/24h 내보내기/ICS' **UI/로직은 미포함**으로 확인됩니다(후속 패치 필요).

@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 import io, os
 from reportlab.lib.pagesizes import A4
@@ -13,6 +14,7 @@ FONT_MAP = [
     ("/mnt/data/NanumBarunGothicBold.otf", "KOR-Bold"),
     ("/mnt/data/NanumBarunGothicLight.otf", "KOR-Light"),
     ("/mnt/data/NanumBarunGothicUltraLight.otf", "KOR-UL"),
+    ("/mnt/data/d84103a9-b7ea-4030-8304-a4ef04d3e1f7.otf", "KOR-Alt"),
 ]
 
 def _register_fonts():

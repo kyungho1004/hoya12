@@ -1,635 +1,198 @@
+
 # -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
-from datetime import date, datetime, timedelta, timezone
+from datetime import date
 
-from branding import render_deploy_banner
 from core_utils import nickname_pin, clean_num, schedule_block
-from drug_db import DRUG_DB, ensure_onco_drug_db, display_label, key_from_label, picklist
+from drug_db import DRUG_DB, ensure_onco_drug_db, display_label
+from onco_map import build_onco_map, auto_recs_by_dx, dx_display
 from ui_results import results_only_after_analyze, render_adverse_effects, collect_top_ae_alerts
 from lab_diet import lab_diet_guides
-from special_tests import special_tests_ui
+from peds_profiles import get_symptom_options
+from peds_dose import acetaminophen_ml, ibuprofen_ml
 from pdf_export import export_md_to_pdf
-from safety import (
-    now_kst, urgent_banners, egfr_ckd_epi_2021, egfr_schwartz_2009,
-    next_allowed, total_24h_mg, limit_for_day, block_ibu_reason, apap_caution_reason
-)
-from report_builder import build_report_blocks
 
-# ---- Unique key helper to avoid DuplicateElementKey ----
-def _unique_key(base: str) -> str:
-    c = st.session_state.get('_uniq_counter', 0) + 1
-    st.session_state['_uniq_counter'] = c
-    return f"{base}_{c}"
 
-from metrics import bump as bump_metrics
+# 세션 플래그(중복 방지)
+if "summary_line_shown" not in st.session_state:
+    st.session_state["summary_line_shown"] = False
 
-KST = timezone(timedelta(hours=9))
-# ---- Writable data root helpers (ENV + /mnt/data + /tmp fallback) ----
-import tempfile
-def _ensure_dir_for(path: str):
-    d = os.path.dirname(path)
-    if d and not os.path.exists(d):
-        os.makedirs(d, exist_ok=True)
-
-def _writable_dir(d: str) -> bool:
+def short_caption(label: str) -> str:
+    """
+    peds_profiles.peds_short_caption()가 있으면 우선 사용,
+    없으면 기본 문구로 보조하는 안전 헬퍼.
+    """
     try:
-        os.makedirs(d, exist_ok=True)
-        probe = os.path.join(d, ".probe")
-        with open(probe, "w", encoding="utf-8") as f:
-            f.write("ok")
-        os.remove(probe)
-        return True
-    except Exception:
-        return False
-
-def _data_root() -> str:
-    env = os.getenv("BLOODMAP_DATA_ROOT", "").strip()
-    cand = [env] if env else ["/mnt/data"]
-    cand.append(os.path.join(tempfile.gettempdir(), "bloodmap_data"))
-    for r in cand:
-        if not r:
-            continue
-        if _writable_dir(r):
-            return r
-    # last resort: tmp
-    r = os.path.join(tempfile.gettempdir(), "bloodmap_data")
-    os.makedirs(r, exist_ok=True)
-    return r
-
-def _data_path(*parts) -> str:
-    return os.path.join(_data_root(), *parts)
-
-# ---- Legacy carelog migration helpers ----
-def _legacy_carelog_paths(uid: str) -> list:
-    # Known legacy locations to search
-    cands = [
-        f"/mnt/data/care_log/{uid}.json",                   # original location
-        f"/mnt/data/care_log/{uid}.log.json",               # some variants
-        f"/mnt/data/care_log/{uid}_peds.json",              # pediatric mode legacy
-        f"/tmp/bloodmap_data/care_log/{uid}.json",          # tmp fallback
-        f"/tmp/bloodmap_data/care_log/{uid}_peds.json",
-    ]
-    # also wildcard: any file that contains the nick regardless of pin
-    try:
-        nick_only = (uid.split("_")[0] if "_" in uid else uid)
-        legacy_dir = "/mnt/data/care_log"
-        if os.path.isdir(legacy_dir):
-            for fn in os.listdir(legacy_dir):
-                if nick_only and nick_only in fn and fn.endswith(".json"):
-                    cands.append(os.path.join(legacy_dir, fn))
+        from peds_profiles import peds_short_caption as _peds_short_caption  # type: ignore
+        s = _peds_short_caption(label or "")
+        if s:
+            return s
     except Exception:
         pass
-    # dedupe while preserving order
-    out, seen = [], set()
-    for p in cands:
-        if p and p not in seen:
-            out.append(p); seen.add(p)
-    return out
-
-def _read_json_silent(path: str):
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return None
-
-def _merge_carelogs(*logs_lists):
-    # flatten + dedupe by (ts,type,mg,temp)
-    items = []
-    seen = set()
-    for logs in logs_lists:
-        if not isinstance(logs, list): 
-            continue
-        for e in logs:
-            if not isinstance(e, dict): 
-                continue
-            key = (e.get("ts"), e.get("type"), e.get("mg"), e.get("temp"))
-            if key in seen: 
-                continue
-            seen.add(key)
-            items.append(e)
-    # sort by ts if possible
-    def _key(e):
-        return str(e.get("ts") or "")
-    items.sort(key=_key)
-    return items
-
-def migrate_legacy_carelog_if_needed(uid: str) -> tuple[bool,int,list]:
-    """
-    Returns: (migrated: bool, found_files: int, merged_count: int)
-    """
-    # current
-    cur = load_carelog(uid)
-    if cur: 
-        return False, 0, len(cur)
-    paths = _legacy_carelog_paths(uid)
-    merged = []
-    found = 0
-    for p in paths:
-        data = _read_json_silent(p)
-        if not data: 
-            continue
-        found += 1
-        # legacy might be dict with keys: {uid:[...]} or {"peds":[...]}
-        if isinstance(data, dict):
-            # try common keys
-            for k in [uid, "peds", "소아", "child", "kids", "carelog", "log", "logs"]:
-                if k in data and isinstance(data[k], list):
-                    merged = _merge_carelogs(merged, data[k])
-            # or flatten values
-            for v in data.values():
-                if isinstance(v, list):
-                    merged = _merge_carelogs(merged, v)
-        elif isinstance(data, list):
-            merged = _merge_carelogs(merged, data)
-    if merged:
-        save_carelog(uid, merged)
-        return True, found, len(merged)
-    return False, found, 0
-
-# ---- Disk I/O helpers ----
-import json, os
-def _profile_path(uid:str): return _data_path("profile", f"{uid}.json")
-def _carelog_path(uid:str): return _data_path("care_log", f"{uid}.json")
-
-def load_profile(uid: str):
-    try:
-        with open(_profile_path(uid),"r",encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return {}
-
-def save_profile(uid: str, data: dict):
-    path = _profile_path(uid)
-    _ensure_dir_for(path)
-    tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, path)
-
-def load_carelog(uid: str):
-    try:
-        with open(_carelog_path(uid),"r",encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return []
-
-def save_carelog(uid: str, entries: list):
-    path = _carelog_path(uid)
-    _ensure_dir_for(path)
-    tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(entries, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, path)
-
-# ---- ICS export helper ----
-def build_ics_for_next_doses(apap_next, ibu_next):
-    def ics_event(dt, title):
-        # naive ICS VEVENT (KST)
-        return (
-            "BEGIN:VEVENT\n"
-            f"DTSTART;TZID=Asia/Seoul:{dt.strftime('%Y%m%dT%H%M%S')}\n"
-            f"SUMMARY:{title}\n"
-            "END:VEVENT\n"
-        )
-    parts = ["BEGIN:VCALENDAR\nPRODID:-//BloodMap//carelog//KR\nVERSION:2.0\n"]
-    if apap_next:
-        for i in range(3):
-            parts.append(ics_event(apap_next + timedelta(hours=4*i), "APAP 다음 가능 시각"))
-    if ibu_next:
-        for i in range(3):
-            parts.append(ics_event(ibu_next + timedelta(hours=6*i), "IBU 다음 가능 시각"))
-    parts.append("END:VCALENDAR\n")
-    return "".join(parts)
+    defaults = {
+        "로타바이러스 장염": "영유아 위장관염 — 물설사·구토, 탈수 주의",
+        "노로바이러스 장염": "급성 구토/설사 급발현 — 겨울철 유행, 탈수 주의",
+        "바이럴 장염(비특이)": "대개 바이러스성 — 수분·전해질 보충과 휴식",
+        "감기/상기도바이러스": "콧물·기침 중심 — 수분·가습·휴식",
+        "독감(인플루엔자) 의심": "고열+근육통 — 48시간 내 항바이러스제 상담",
+        "코로나 가능": "고열·기침·권태 — 신속항원검사/격리 고려",
+        "세균성 편도/부비동염 가능": "고열+농성 콧물/안면통 — 항생제 필요 여부 진료로 결정",
+        "장염(바이러스) 의심": "물설사·복통 — 수분·전해질 보충",
+        "세균성 결막염 가능": "농성 눈꼽·한쪽 시작 — 항생제 점안 상담",
+        "아데노바이러스 결막염 가능": "고열+양측 결막염 — 전염성, 위생 철저",
+        "알레르기성 결막염 가능": "맑은 눈물·가려움 — 냉찜질·항히스타민 점안",
+        "급성기관지염 가능": "기침 중심 — 대개 바이러스성, 경과관찰",
+        "폐렴 의심": "호흡곤란/흉통·고열 — 흉부 X-ray/항생제 평가",
+        "RSV": "모세기관지염 — 끈적가래로 쌕쌕/호흡곤란 가능",
+    }
+    return defaults.get((label or "").strip(), "")
 
 
-# ------------ 초기 세팅 ------------
+def render_predictions(preds, show_copy=True):
+    """예측 리스트 렌더링(짧은 해석 + N/100 점수 + 중복 없는 한 줄 요약)."""
+    if not preds:
+        return
+    summary_items = []
+    for p in preds:
+        label = p.get("label", "")
+        score = int(max(0, min(100, int(p.get("score", 0)))))
+        cap = short_caption(label)
+        tail = f" — {cap}" if cap else ""
+        st.write(f"- **{label}**{tail} · 신뢰도 {score}/100")
+        if cap:
+            st.caption(f"↳ {cap}")
+        summary_items.append(f"{label}({score}/100)")
+    if show_copy and not st.session_state.get("summary_line_shown"):
+        st.caption("🧾 한 줄 요약 복사")
+        st.code(" | ".join(summary_items), language="")
+        st.session_state["summary_line_shown"] = True
+
+
+def build_peds_symptoms(nasal=None, cough=None, diarrhea=None, vomit=None,
+                        days_since_onset=None, temp=None, fever_cat=None, eye=None):
+    """소아 증상 dict를 안전하게 생성(누락 변수 기본값 보정)."""
+    if nasal is None: nasal = "없음"
+    if cough is None: cough = "없음"
+    if diarrhea is None: diarrhea = "없음"
+    if vomit is None: vomit = "없음"
+    if days_since_onset is None: days_since_onset = 0
+    if temp is None: temp = 0.0
+    if fever_cat is None: fever_cat = "정상"
+    if eye is None: eye = "없음"
+    return {
+        "콧물": nasal, "기침": cough, "설사": diarrhea, "구토": vomit,
+        "증상일수": days_since_onset, "체온": temp, "발열": fever_cat, "눈꼽": eye
+    }
+
+
+# ---------------- 초기화 ----------------
+ensure_onco_drug_db(DRUG_DB)
+ONCO_MAP = build_onco_map()
+
 st.set_page_config(page_title="BloodMap — 피수치가이드", page_icon="🩸", layout="centered")
-render_deploy_banner("https://bloodmap.streamlit.app/", "만든이: Hoya/GPT · 자문: Hoya/GPT")
 st.title("BloodMap — 피수치가이드")
-st.caption("v2025-09-22 p6e")
 
 st.info(
     "이 앱은 의료행위가 아니며, **참고용**입니다. 진단·치료를 **대체하지 않습니다**.\n"
-    "약 변경/복용 중단 등은 반드시 주치의와 상의하세요. 모든 시간은 한국시간(KST) 기준입니다."
+    "약 변경/복용 중단 등은 반드시 주치의와 상의하세요.\n"
+    "개인정보를 수집하지 않으며, 어떠한 개인정보 입력도 요구하지 않습니다."
 )
 st.markdown("문의/버그 제보: **[피수치 가이드 공식카페](https://cafe.naver.com/bloodmap)**")
 
-# 별명/PIN
 nick, pin, key = nickname_pin()
-has_key = bool(nick and pin and len(pin)==4)
-uid = key or "guest"
-stats = None
-try:
-    stats = bump_metrics(uid)  # 방문자 통계 증가
-except Exception:
-    stats = None
+st.divider()
+has_key = bool(nick and pin and len(pin) == 4)
 
-# 약물 DB 로드
-ensure_onco_drug_db(DRUG_DB)
+# ---------------- 유틸 ----------------
+def _fever_bucket_from_temp(temp: float|None) -> str:
+    if temp is None: return ""
+    if temp < 37.5: return "정상"
+    if temp < 38.0: return "37.5~38"
+    if temp < 38.5: return "38.0~38.5"
+    if temp < 39.0: return "38.5~39"
+    return "39+"
 
-# Sidebar 방문자 통계
-with st.sidebar:
-    st.subheader("👥 방문자 통계")
-    import json, os
-    path = (stats or {}).get("_path") or "/mnt/data/metrics/visits.json"
-    if os.path.exists(path):
-        data = json.load(open(path,"r",encoding="utf-8"))
-        t = data.get("today",{})
-        st.write(f"오늘: 고유 {t.get('unique',0)} / 방문 {t.get('visits',0)}")
-        st.write(f"누적 고유: {data.get('unique_count',0)}")
-        st.write(f"총 방문수: {data.get('total_visits',0)}")
-    st.caption(f"※ 통계 저장경로: {(stats or {}).get('_path') or '/mnt/data/metrics/visits.json'}")
+def _safe_label(k):
+    try:
+        return display_label(k)
+    except Exception:
+        return str(k)
 
-# ------------ 프로필(성별/나이/키/체중/시럽농도 등) ------------
-st.markdown("### 0) 프로필")
-prof0 = load_profile(uid)
-c1,c2,c3,c4 = st.columns(4)
-with c1: sex = st.selectbox("성별", ["여","남"], index=0 if prof0.get("sex","여")=="여" else 1)
-with c2: age = st.number_input("나이(년)", min_value=0, step=1, value=int(prof0.get("age",30)))
-with c3: height_cm = st.number_input("키(cm)", min_value=0.0, step=0.5, value=float(prof0.get("height_cm",160.0)))
-with c4: weight_kg = st.number_input("체중(kg)", min_value=0.0, step=0.1, value=float(prof0.get("weight_kg",50.0)))
-st.session_state["profile"] = {"sex":sex, "age":age, "height_cm":height_cm, "weight_kg":weight_kg}
-save_profile(uid, st.session_state["profile"])
+def _filter_known(keys):
+    return [k for k in (keys or []) if k in DRUG_DB]
 
-# ------------ 암 모드 Only: 진단 & 약물 선택 ------------
-st.markdown("### 1) 암/약물 선택")
-group = st.selectbox("암 카테고리", ["혈액암","림프종","고형암","육종","희귀암"], index=0)
-dx = st.text_input("진단(영문/축약)", value="APL")
-st.caption("세포·면역 치료는 표기하지 않습니다(혼돈 방지 정책).")
+def _one_line_selection(ctx: dict) -> str:
+    def names(keys):
+        return ", ".join(display_label(k) for k in _filter_known(keys))
+    parts = []
+    a = names(ctx.get("user_chemo"))
+    if a: parts.append(f"항암제: {a}")
+    b = names(ctx.get("user_targeted"))
+    if b: parts.append(f"표적/면역: {b}")
+    c = names(ctx.get("user_abx"))
+    if c: parts.append(f"항생제: {c}")
+    return " · ".join(parts) if parts else "선택된 약물이 없습니다."
 
-# 개인 약물 선택
-chemo_opts = ["Tretinoin","Arsenic Trioxide","Cytarabine","Daunorubicin","Idarubicin","MTX","6-MP"]
-abx_opts   = ["Piperacillin/Tazobactam","Cefepime","Meropenem","Vancomycin","Levofloxacin","Ceftazidime","TMP-SMX"]
-c1,c2 = st.columns(2)
-with c1: user_chemo_labels = st.multiselect("항암제(개인)", picklist(chemo_opts), default=[])
-with c2: user_abx_labels   = st.multiselect("항생제(개인)", picklist(abx_opts), default=[])
-user_chemo = [key_from_label(x) for x in user_chemo_labels]
-user_abx   = [key_from_label(x) for x in user_abx_labels]
+def _peds_diet_fallback(sym: dict, disease: str|None=None) -> list[str]:
+    tips = []
+    temp = float((sym or {}).get("체온") or 0)
+    days = int((sym or {}).get("증상일수") or 0)
+    diarrhea = (sym or {}).get("설사") or ""
+    vomit = (sym or {}).get("구토") or ""
+    nasal = (sym or {}).get("콧물") or ""
+    cough = (sym or {}).get("기침") or ""
 
-# ------------ 2) 피수치 입력 + eGFR ------------
-st.markdown("### 2) 피수치 입력 (숫자만)")
-LABS_ORDER = [
-    ("WBC","WBC"), ("Hb","Hb"), ("PLT","PLT"), ("ANC","ANC"),
-    ("Na","Na"), ("K","K"), ("P","P"), ("Alb","Alb"), ("Ca","Ca 보정전"), ("Glu","Glu"),
-    ("AST","AST"), ("ALT","ALT"), ("CRP","CRP"), ("Cr","Cr"), ("BUN","BUN")
-]
-labs = {code: clean_num(st.text_input(label, placeholder="예: 4500")) for code, label in LABS_ORDER}
-
-# eGFR 계산
-adult = (age >= 18)
-egfr = None
-if labs.get("Cr"):
-    scr = float(labs["Cr"])
-    if adult:
-        egfr = egfr_ckd_epi_2021(scr, int(age), sex=="여")
+    if diarrhea in ["3~4회","4~6회","5~6회","7회 이상"] or vomit in ["3~4회","4~6회","7회 이상"]:
+        tips.append("ORS(경구수액): 수시 소량. 설사/구토 1회마다 **체중당 10 mL/kg** 보충")
+        tips.append("초기 4~6시간은 물/주스/스포츠음료 대신 **ORS 우선**")
+        tips.append("연식(BRAT: 바나나·쌀죽·사과퓨레·토스트), 기름진 음식·매운 음식·카페인·탄산 회피")
     else:
-        egfr = egfr_schwartz_2009(scr, float(height_cm))
-st.caption(f"eGFR: {egfr} mL/min/1.73㎡" if egfr is not None else "eGFR: —")
+        tips.append("수분을 자주 소량씩 제공(맑은 물/미온수). 구토 시 30분 휴식 후 재개")
+    tips.append("구토가 있으면 **5분마다 5–10 mL**씩, 멎으면 점진 증량")
 
-# 특수검사: Myoglobin 포함
-sp_lines = special_tests_ui()
+    if disease in ["로타","노로","장염"]:
+        tips.append("유제품은 설사 멎을 때까지 일시 제한(개인차 고려)")
 
-# 저장/그래프 CSV
-st.markdown("#### 💾 저장/그래프")
-when = st.date_input("측정일", value=date.today())
-if st.button("📈 피수치 저장/추가", key="btn_save_graph"):
-    import os, csv
-    path = _data_path("bloodmap_graph", f"{uid}.labs.csv")
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    row = {"Date": when.strftime("%Y-%m-%d")}
-    for code, _ in LABS_ORDER:
-        row[code] = labs.get(code)
-    # append or merge unique-date
-    if os.path.exists(path):
-        import pandas as pd
-        df = pd.read_csv(path)
-        df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
-        df = df.drop_duplicates(subset=["Date"], keep="last").sort_values("Date")
-        df.to_csv(path, index=False)
-    else:
-        import pandas as pd
-        pd.DataFrame([row]).to_csv(path, index=False)
-    st.success(f"저장 완료 → {path}")
+    if temp >= 38.5:
+        tips.append("체온 38.5℃↑: 얇게 입히고 미온수 닦기, 필요 시 해열제(간격 준수)")
+    if cough in ["가끔","자주","심함"] or nasal in ["투명","흰색","누런","노랑(초록)"]:
+        tips.append("호흡기 증상: 실내 가습/비강 세척, 자극물(담배연기) 회피")
 
-# 긴급 배너
-care_entries = st.session_state.get("care_log", {}).get(uid)
-if care_entries is None:
-    care_entries = load_carelog(uid)
-    st.session_state.setdefault("care_log", {})
-    st.session_state["care_log"][uid] = care_entries
-# --- Auto-migrate legacy carelog if current is empty
-try:
-    migrated, found_files, merged_count = migrate_legacy_carelog_if_needed(uid)
-    if migrated:
-        st.success(f"소아/과거 케어로그 자동 복구: {merged_count}건 (원본 {found_files}개 기준)")
-except Exception as e:
-    st.caption(f"로그 복구 스킵: {e}")
+    if days >= 2:
+        tips.append("증상 48시간 이상 지속 → 소아과 상담 권장")
+    tips.append("탈수 징후(소변 감소/입마름/축 처짐) 시 즉시 진료")
 
-with st.sidebar:
-    st.markdown("### 🔄 로그 복구")
+    return tips
 
-with st.sidebar:
-    st.markdown("### 🧒 소아 진단 로그")
-    try:
-        mig, fcnt, cnt = migrate_legacy_peds_dx_if_needed(uid)
-        if mig:
-            st.success(f"소아 진단 로그 자동 복구: {cnt}건 (원본 {fcnt}개)")
-    except Exception as e:
-        st.caption(f"진단 로그 복구 스킵: {e}")
-    if st.button("소아 진단 로그 복구", key=_unique_key("btn_recover_peds_dx")):
-        try:
-            mig, fcnt, cnt = migrate_legacy_peds_dx_if_needed(uid)
-            if mig:
-                st.success(f"복구 완료: {cnt}건 (원본 {fcnt}개)")
-            else:
-                st.info("복구할 로그가 없거나 이미 최신입니다.")
-        except Exception as e:
-            st.error(f"복구 중 오류: {e}")
+def _adult_diet_fallback(sym: dict) -> list[str]:
+    tips = []
+    temp = float((sym or {}).get("체온") or 0)
+    diarrhea = (sym or {}).get("설사") or ""
+    vomit = (sym or {}).get("구토") or ""
+    nasal = (sym or {}).get("콧물") or ""
+    cough = (sym or {}).get("기침") or ""
 
-    if st.button("소아/과거 케어로그 복구", key=_unique_key("btn_recover_legacy")):
-        try:
-            migrated, found_files, merged_count = migrate_legacy_carelog_if_needed(uid)
-            if migrated:
-                st.success(f"복구 완료: {merged_count}건 (원본 {found_files}개)")
-            else:
-                st.info("복구할 로그가 없거나 이미 최신 경로에 있습니다.")
-        except Exception as e:
-            st.error(f"복구 중 오류: {e}")
+    if diarrhea in ["4~6회","7회 이상"] or vomit in ["3~4회","4~6회","7회 이상"]:
+        tips.append("설사/구토 다회: **ORS** 수시 복용, 설사/구토 1회마다 **10 mL/kg** 보충")
+        tips.append("초기 4~6시간은 물/커피/주스 대신 ORS 권장")
+        tips.append("연식(BRAT) 위주, 기름진/매운 음식·알코올 회피")
+    elif diarrhea in ["1~3회"]:
+        tips.append("설사 소량: 수분 보충 + 자극적 음식 줄이기")
 
-# --- Auto-migrate legacy carelog if current is empty
-try:
-    migrated, found_files, merged_count = migrate_legacy_carelog_if_needed(uid)
-    if migrated:
-        st.success(f"소아/과거 케어로그 자동 복구: {merged_count}건 (원본 {found_files}개 기준)")
-except Exception as e:
-    st.caption(f"로그 복구 스킵: {e}")
+    if temp >= 38.5:
+        tips.append("38.5℃↑: 미온수 샤워·가벼운 옷차림, 필요 시 해열제(간격 준수)")
+    if cough in ["가끔","자주","심함"]:
+        tips.append("기침: 따뜻한 수분·꿀차(소아 제외)")
+    if nasal in ["투명","흰색"]:
+        tips.append("맑은 콧물: 실내 가습·비강 세척")
+    elif nasal in ["누런","노랑(초록)"]:
+        tips.append("탁한 콧물: 수분섭취/세척, 악화 시 상담")
 
-with st.sidebar:
-    st.markdown("### 🔄 로그 복구")
+    tips.append("구토 시 30분 휴식 후 **맑은 수분**부터 재개, 한 번에 많이 마시지 말기")
+    return tips
 
-with st.sidebar:
-    st.markdown("### 🧒 소아 진단 로그")
-    try:
-        mig, fcnt, cnt = migrate_legacy_peds_dx_if_needed(uid)
-        if mig:
-            st.success(f"소아 진단 로그 자동 복구: {cnt}건 (원본 {fcnt}개)")
-    except Exception as e:
-        st.caption(f"진단 로그 복구 스킵: {e}")
-    if st.button("소아 진단 로그 복구", key=_unique_key("btn_recover_peds_dx")):
-        try:
-            mig, fcnt, cnt = migrate_legacy_peds_dx_if_needed(uid)
-            if mig:
-                st.success(f"복구 완료: {cnt}건 (원본 {fcnt}개)")
-            else:
-                st.info("복구할 로그가 없거나 이미 최신입니다.")
-        except Exception as e:
-            st.error(f"복구 중 오류: {e}")
-
-    if st.button("소아/과거 케어로그 복구", key=_unique_key("btn_recover_legacy")):
-        try:
-            migrated, found_files, merged_count = migrate_legacy_carelog_if_needed(uid)
-            if migrated:
-                st.success(f"복구 완료: {merged_count}건 (원본 {found_files}개)")
-            else:
-                st.info("복구할 로그가 없거나 이미 최신 경로에 있습니다.")
-        except Exception as e:
-            st.error(f"복구 중 오류: {e}")
-
-    care_entries = load_carelog(uid)
-    st.session_state.setdefault("care_log", {})
-    st.session_state["care_log"][uid] = care_entries
-now = now_kst()
-def _dt(ts): 
-    try:
-        return datetime.fromisoformat(ts)
-    except Exception:
-        return None
-care_24h = [e for e in care_entries if _dt(e.get("ts")) and (now - _dt(e.get("ts"))).total_seconds() <= 24*3600]
-banners = urgent_banners(labs, care_24h)
-for b in banners:
-    st.error(b)
-
-# ------------ 3) 케어로그 + 해열제 게이트 ------------
-st.markdown("### 3) 케어로그 & 해열제")
-st.caption("모든 기록은 한국시간(KST)으로 저장됩니다.")
-def _add_log(entry):
-    st.session_state.setdefault("care_log", {})
-    st.session_state["care_log"].setdefault(uid, [])
-    st.session_state["care_log"][uid].append(entry)
-    save_carelog(uid, st.session_state["care_log"][uid])
-
-
-
-
-c1,c2,c3,c4,c5 = st.columns(5)
-with c1:
-    if st.button("발열 기록 +", key=f"btn_add_fever_{uid}"):
-        t = st.number_input("현재 체온(℃)", min_value=35.0, step=0.1, value=38.0, key=f"temp_add_{uid}")
-        _add_log({"type":"fever","temp":t,"ts": now.isoformat()})
-        st.success("발열 기록됨.")
-with c2:
-    vomit_kind = st.selectbox("구토 유형", ["흰","노랑","초록(담즙)","기타"], index=1, key=f"vomit_kind_{uid}")
-    if st.button("구토 +", key=f"btn_add_vomit_{uid}"):
-        _add_log({"type":"vomit","kind":vomit_kind,"ts": now.isoformat()})
-        st.success("구토 기록됨.")
-with c3:
-    diarrhea_kind = st.selectbox("설사 유형", ["노랑","진한노랑","거품","녹색","녹색혈변","혈변","검은색","기타"], index=0, key=f"diarrhea_kind_{uid}")
-    if st.button("설사 +", key=f"btn_add_diarrhea_{uid}"):
-        _add_log({"type":"diarrhea","kind":diarrhea_kind,"ts": now.isoformat()})
-        st.success("설사 기록됨.")
-with c4:
-    apap_mg = st.number_input("APAP(아세트아미노펜) 투여량 mg", min_value=0.0, step=50.0, value=0.0, key=f"apap_mg_{uid}")
-with c5:
-    ibu_mg = st.number_input("IBU(이부프로펜) 투여량 mg", min_value=0.0, step=50.0, value=0.0, key=f"ibu_mg_{uid}")
-
-# 24h 총량 및 쿨다운
-adult_flag = adult
-apap_next = next_allowed(care_entries, "apap")
-ibu_next  = next_allowed(care_entries, "ibu")
-apap_24 = total_24h_mg(care_entries, "apap", now)
-ibu_24  = total_24h_mg(care_entries, "ibu", now)
-apap_lim = limit_for_day("apap", float(weight_kg) if weight_kg else None, adult_flag)
-ibu_lim  = limit_for_day("ibu", float(weight_kg) if weight_kg else None, adult_flag)
-
-apap_cau = apap_caution_reason(labs)
-ibu_block = block_ibu_reason(labs, egfr)
-
-d1,d2 = st.columns(2)
-with d1:
-    if st.button("APAP 투여 기록", key=f"btn_log_apap_{uid}"):
-        if apap_mg <= 0:
-            st.warning("용량을 입력하세요.")
-        elif apap_next and now < apap_next:
-            st.error(f"쿨다운 중: 다음 가능 시각 {apap_next.strftime('%Y-%m-%d %H:%M KST')}")
-        elif apap_24 + apap_mg > apap_lim:
-            st.error(f"24h 한도 초과({apap_24:.0f}/{apap_lim:.0f} mg)")
-        else:
-            _add_log({"type":"apap","mg": apap_mg, "ts": now.isoformat()})
-            st.success("APAP 기록됨.")
-with d2:
-    if st.button("IBU 투여 기록", key=f"btn_log_ibu_{uid}"):
-        if ibu_block:
-            st.error(ibu_block)
-        elif ibu_mg <= 0:
-            st.warning("용량을 입력하세요.")
-        elif ibu_next and now < ibu_next:
-            st.error(f"쿨다운 중: 다음 가능 시각 {ibu_next.strftime('%Y-%m-%d %H:%M KST')}")
-        elif ibu_24 + ibu_mg > ibu_lim:
-            st.error(f"24h 한도 초과({ibu_24:.0f}/{ibu_lim:.0f} mg)")
-        else:
-            _add_log({"type":"ibu","mg": ibu_mg, "ts": now.isoformat()})
-            st.success("IBU 기록됨.")
-
-st.caption(f"APAP 24h: {apap_24:.0f}/{apap_lim:.0f} mg · 다음가능: {apap_next.strftime('%H:%M') if apap_next else '—'}")
-st.caption(f"IBU  24h: {ibu_24:.0f}/{ibu_lim:.0f} mg · 다음가능: {ibu_next.strftime('%H:%M') if ibu_next else '—'}")
-if apap_cau: st.warning(apap_cau)
-
-# 최근 24h 케어로그 요약
-if care_24h:
-    st.markdown(f"#### 🗒️ 최근 24h 로그 — {nick} ({uid})")
-    for e in sorted(care_24h, key=lambda x: x["ts"]):
-        if e["type"]=="fever":
-            st.write(f"- {e['ts']} · 발열 {e.get('temp')}℃")
-        elif e["type"] in ("apap","ibu"):
-            st.write(f"- {e['ts']} · {e['type'].upper()} {e.get('mg')} mg")
-        else:
-            st.write(f"- {e['ts']} · {e['type']}")
-
-    # Export buttons
-    ics_data = build_ics_for_next_doses(apap_next, ibu_next)
-    st.download_button("📅 다음 3회 복용 일정 (.ics)", key="dl_ics", data=ics_data, file_name=f"next_doses_{nick or uid}.ics")
-    # TXT/PDF export for care log (24h)
-    log_lines = ["케어로그(최근 24h) — " + (nick or uid)] + [
-        (
-            f"- {e['ts']} · 발열 {e.get('temp')}℃" if e.get("type")=="fever" else
-            f"- {e['ts']} · {e.get('type').upper()} {e.get('mg')} mg" if e.get("type") in ("apap","ibu") else
-            f"- {e['ts']} · " + ({"vomit":"구토","diarrhea":"설사"}.get(e.get("type"), e.get("type")) + (f" ({e.get('kind')})" if e.get("kind") else ""))
-        )
-        for e in sorted(care_24h, key=lambda x: x["ts"])
-    ]
-    log_txt = "\n".join(log_lines)
-    st.download_button("⬇️ 케어로그 TXT", key="dl_carelog_txt", data=log_txt, file_name=f"carelog_24h_{nick or uid}.txt")
-    try:
-        from pdf_export import export_md_to_pdf
-        log_pdf = export_md_to_pdf("\n".join(["# 케어로그(24h)"] + log_lines))
-        st.download_button("⬇️ 케어로그 PDF", key="dl_carelog_pdf", data=log_pdf, file_name=f"carelog_24h_{nick or uid}.pdf", mime="application/pdf")
-    except Exception as e:
-        st.caption(f"케어로그 PDF 오류: {e}")
-
-# ------------ 4) 해석/보고서/부작용/식이가이드 ------------
-if st.button("🔎 해석하기", key="analyze"):
-    st.session_state["analyzed"] = True
-    ctx = {
-        "group": group, "dx": dx, "labs": labs, "egfr": egfr,
-        "user_chemo": user_chemo, "user_abx": user_abx,
-        "uid": uid, "profile": st.session_state.get("profile")
-    }
-    st.session_state["analysis_ctx"] = ctx
-
-if results_only_after_analyze(st):
-    ctx = st.session_state.get("analysis_ctx", {})
-    labs = ctx.get("labs", {})
-    st.subheader("🧪 피수치 요약")
-    if labs:
-        rcols = st.columns(len(labs))
-        for i, (k, v) in enumerate(labs.items()):
-            with rcols[i]: st.metric(k, v)
-    if ctx.get("dx"): st.caption(f"진단: **{ctx['dx']}**")
-
-    # Δ(변화량) from CSV (last two records)
-    try:
-        path = _data_path("bloodmap_graph", f"{uid}.labs.csv")
-        df = pd.read_csv(path) if os.path.exists(path) else None
-    except Exception:
-        df = None
-    if df is not None and len(df)>=2:
-        df = df.sort_values("Date")
-        last = df.iloc[-1]
-        prev = df.iloc[-2]
-        deltas = []
-        for code, _ in LABS_ORDER:
-            try:
-                v_last = float(last.get(code))
-                v_prev = float(prev.get(code))
-                dv = v_last - v_prev
-                if abs(dv) > 0:
-                    deltas.append(f"{code} Δ {dv:+.1f}")
-            except Exception:
-                continue
-        if deltas:
-            st.caption("최근 변화: " + ", ".join(deltas[:8]))
-
-    # 위험/주의 배너
-    care_entries = st.session_state.get("care_log", {}).get(uid, [])
-    now = now_kst()
-    def _dt(ts): 
-        try:
-            return datetime.fromisoformat(ts)
-        except Exception:
-            return None
-    care_24h = [e for e in care_entries if _dt(e.get("ts")) and (now - _dt(e.get("ts"))).total_seconds() <= 24*3600]
-    for b in urgent_banners(labs, care_24h):
-        st.error(b)
-
-    # 식이가이드
-    st.subheader("🍽️ 식이가이드")
-    diet_lines = lab_diet_guides(labs or {}, heme_flag=(group=="혈액암"))
-    for L in diet_lines: st.write("- " + L)
-    ctx["diet_lines"] = diet_lines
-
-    # 부작용
-    st.subheader("💊 부작용")
-    ckeys = ctx.get("user_chemo") or []
-    akeys = ctx.get("user_abx") or []
-    alerts = collect_top_ae_alerts(ckeys+akeys, db=DRUG_DB)
-    if alerts: st.error(" / ".join(alerts))
-    if ckeys:
-        st.markdown("**항암제(세포독성)**")
-        render_adverse_effects(st, ckeys, DRUG_DB)
-    if akeys:
-        st.markdown("**항생제**")
-        render_adverse_effects(st, akeys, DRUG_DB)
-
-
-    # 24h summary counts (for report memo)
-    sum_fever = sum(1 for e in care_24h if e.get("type")=="fever")
-    sum_vomit = sum(1 for e in care_24h if e.get("type")=="vomit")
-    sum_diarr = sum(1 for e in care_24h if e.get("type")=="diarrhea")
-    sum_apap  = sum(1 for e in care_24h if e.get("type")=="apap")
-    sum_ibu   = sum(1 for e in care_24h if e.get("type")=="ibu")
-
-    # 보고서
-    st.subheader("📝 보고서 저장")
-    # blocks: 응급도, 24h 케어로그 요약, 부작용 요약
-    now = now_kst()
-    care_2h = [e for e in care_entries if _dt(e.get("ts")) and (now - _dt(e.get("ts"))).total_seconds() <= 2*3600]
-    blocks = build_report_blocks(ctx, care_24h, care_2h, ckeys+akeys)
-
-    # compose MD/TXT
-    title = "# BloodMap 결과 (암 모드)\n\n"
-    body = []
-    body.append(f"- 카테고리: {ctx.get('group')}")
-    body.append(f"- 진단: {ctx.get('dx')}")
-    if labs:
-        labs_t = "; ".join(f"{k}:{v}" for k,v in labs.items() if v is not None)
-        body.append(f"- 주요 수치: {labs_t}")
-    if ctx.get("egfr") is not None:
-        body.append(f"- eGFR: {ctx['egfr']} mL/min/1.73㎡")
-    # 소아 진단 로그(최근 최대 5건)
-    try:
-        rows = load_peds_dx(uid)
-        if rows:
-            body.append("- 소아 진단(최근): " + " / ".join(f"{e.get('ts')} {e.get('dx')}" for e in rows[-5:]))
-    except Exception:
-        pass
-    body.append(f"- 최근 24h 요약: 발열 {sum_fever} · 구토 {sum_vomit} · 설사 {sum_diarr} · APAP {sum_apap} · IBU {sum_ibu}")
-    for title2, lines in blocks:
-        if lines:
-            body.append("\n## " + title2 + "\n" + "\n".join("- " + L for L in lines))
-    if ctx.get("diet_lines"):
-        body.append("\n## 🍽️ 식이가이드\n" + "\n".join("- " + L for L in ctx["diet_lines"]))
+def _export_report(ctx: dict, lines_blocks=None):
     footer = (
         "\n\n---\n"
         "본 수치는 참고용이며, 해석 결과는 개발자와 무관합니다.\n"
@@ -637,13 +200,438 @@ if results_only_after_analyze(st):
         "개인정보를 수집하지 않습니다.\n"
         "버그/문의: 피수치 가이드 공식카페.\n"
     )
+    title = f"# BloodMap 결과 ({ctx.get('mode','')})\n\n"
+    body = []
+
+    if ctx.get("mode") == "암":
+        body.append(f"- 카테고리: {ctx.get('group')}")
+        body.append(f"- 진단: {ctx.get('dx_label') or ctx.get('dx')}")
+    if ctx.get("mode") in ["소아","일상"]:
+        body.append(f"- 대상: {ctx.get('who','소아')}")
+        if ctx.get("symptoms"):
+            body.append("- 증상: " + ", ".join(f"{k}:{v}" for k,v in ctx["symptoms"].items()))
+        if ctx.get("temp") is not None:
+            body.append(f"- 체온: {ctx.get('temp')} ℃")
+        if ctx.get("days_since_onset") is not None:
+            body.append(f"- 경과일수: {ctx.get('days_since_onset')}일")
+    if ctx.get("preds"):
+        preds_text = "; ".join(f"{p['label']}({p['score']})" for p in ctx["preds"])
+        body.append(f"- 자동 추정: {preds_text}")
+    if ctx.get("triage"):
+        body.append(f"- 트리아지: {ctx['triage']}")
+    if ctx.get("labs"):
+        labs_t = "; ".join(f"{k}:{v}" for k,v in ctx["labs"].items() if v is not None)
+        if labs_t:
+            body.append(f"- 주요 수치: {labs_t}")
+
+    if lines_blocks:
+        for title2, lines in lines_blocks:
+            if lines:
+                body.append(f"\n## {title2}\n" + "\n".join(f"- {L}" for L in lines))
+
+    if ctx.get("diet_lines"):
+        diet = [str(x) for x in ctx["diet_lines"] if x]
+        if diet:
+            body.append("\n## 🍽️ 식이가이드\n" + "\n".join(f"- {L}" for L in diet))
+
+    if ctx.get("mode") == "암":
+        summary = _one_line_selection(ctx)
+        if summary:
+            body.append("\n## 🗂️ 선택 요약\n- " + summary)
+
     md = title + "\n".join(body) + footer
     txt = md.replace("# ","").replace("## ","")
+    return md, txt
 
-    st.download_button("⬇️ Markdown (.md)", key="dl_md", data=md, file_name="BloodMap_Report.md")
-    st.download_button("⬇️ 텍스트 (.txt)", key="dl_txt", data=txt, file_name="BloodMap_Report.txt")
-    try:
-        pdf_bytes = export_md_to_pdf(md)
-        st.download_button("⬇️ PDF (.pdf)", key="dl_pdf", data=pdf_bytes, file_name="BloodMap_Report.pdf", mime="application/pdf")
-    except Exception as e:
-        st.caption(f"PDF 변환 중 오류: {e}")
+# ---------------- 모드 선택 ----------------
+mode = st.radio("모드 선택", ["암", "일상", "소아"], horizontal=True)
+
+# ---------------- 암 모드 ----------------
+if mode == "암":
+    st.markdown("### 1) 암 선택")
+    group = st.selectbox("암 카테고리", ["혈액암","림프종","고형암","육종","희귀암"])
+    dx_options = list(ONCO_MAP.get(group, {}).keys())
+
+    def _dx_fmt(opt: str) -> str:
+        try: return dx_display(group, opt)
+        except Exception: return f"{group} - {opt}"
+
+    dx = st.selectbox("진단(영문+한글)", dx_options or ["직접 입력"], format_func=_dx_fmt)
+    if dx == "직접 입력":
+        dx = st.text_input("진단(영문/축약 직접 입력)", value="")
+    if dx: st.caption(_dx_fmt(dx))
+
+    st.markdown("### 2) 개인 선택")
+    from drug_db import picklist, key_from_label
+    rec_local = auto_recs_by_dx(group, dx, DRUG_DB, ONCO_MAP)
+    chemo_opts    = picklist(rec_local.get("chemo", []))
+    targeted_opts = picklist(rec_local.get("targeted", []))
+    abx_opts      = picklist(rec_local.get("abx") or [
+        "Piperacillin/Tazobactam","Cefepime","Meropenem","Imipenem/Cilastatin","Aztreonam",
+        "Amikacin","Vancomycin","Linezolid","Daptomycin","Ceftazidime","Levofloxacin","TMP-SMX",
+        "Metronidazole","Amoxicillin/Clavulanate"
+    ])
+    c1,c2,c3 = st.columns(3)
+    with c1: user_chemo_labels = st.multiselect("항암제(개인)", chemo_opts, default=[])
+    with c2: user_targeted_labels = st.multiselect("표적/면역(개인)", targeted_opts, default=[])
+    with c3: user_abx_labels = st.multiselect("항생제(개인)", abx_opts, default=[])
+    from drug_db import key_from_label
+    user_chemo    = [key_from_label(x) for x in user_chemo_labels]
+    user_targeted = [key_from_label(x) for x in user_targeted_labels]
+    user_abx      = [key_from_label(x) for x in user_abx_labels]
+
+    st.markdown("### 3) 피수치 입력 (숫자만)")
+    LABS_ORDER = [
+        ("WBC","WBC,백혈구"), ("Hb","Hb,혈색소"), ("PLT","PLT,혈소판"), ("ANC","ANC,호중구"),
+        ("Ca","Ca,칼슘"), ("Na","Na,소디움"), ("K","K,칼륨"),
+        ("Alb","Alb,알부민"), ("Glu","Glu,혈당"), ("TP","TP,총단백"),
+        ("AST","AST"), ("ALT","ALT"), ("LDH","LDH"),
+        ("CRP","CRP"), ("Cr","Cr,크레아티닌"), ("UA","UA,요산"), ("TB","TB,총빌리루빈"), ("BUN","BUN")
+    ]
+    labs = {code: clean_num(st.text_input(label, placeholder="예: 4500")) for code, label in LABS_ORDER}
+
+    # 특수검사
+    from special_tests import special_tests_ui
+    sp_lines = special_tests_ui()
+    lines_blocks = []
+    if sp_lines: lines_blocks.append(("특수검사 해석", sp_lines))
+
+    # 저장/그래프
+    st.markdown("#### 💾 저장/그래프")
+    when = st.date_input("측정일", value=date.today())
+    if st.button("📈 피수치 저장/추가"):
+        st.session_state.setdefault("lab_hist", {}).setdefault(key, pd.DataFrame())
+        df_prev = st.session_state["lab_hist"][key]
+        row = {"Date": when.strftime("%Y-%m-%d")}
+        labels = [label for _, label in LABS_ORDER]
+        for code, label in LABS_ORDER: row[label] = labs.get(code)
+        newdf = pd.DataFrame([row])
+        if df_prev is None or df_prev.empty: df = newdf
+        else:
+            df = pd.concat([df_prev, newdf], ignore_index=True).drop_duplicates(subset=["Date"], keep="last").sort_values("Date")
+        for col in (["Date"]+labels):
+            if col not in df.columns: df[col] = pd.NA
+        df = df.reindex(columns=(["Date"]+labels))
+        st.session_state["lab_hist"][key] = df
+        st.success("저장 완료!")
+
+    dfh = st.session_state.get("lab_hist", {}).get(key)
+    if has_key and isinstance(dfh, pd.DataFrame) and not dfh.empty:
+        st.markdown("##### 📊 추이 그래프")
+        nonnull = [c for c in dfh.columns if (c!="Date" and dfh[c].notna().any())]
+        default_pick = [c for c in ["WBC,백혈구","Hb,혈색소","PLT,혈소판","CRP","ANC,호중구"] if c in nonnull]
+        pick = st.multiselect("지표 선택", options=nonnull, default=default_pick)
+        if pick: st.line_chart(dfh.set_index("Date")[pick], use_container_width=True)
+        st.dataframe(dfh[["Date"]+nonnull], use_container_width=True, height=220)
+    elif not has_key:
+        st.info("그래프는 별명 + PIN(4자리) 저장 시 표시됩니다.")
+    else:
+        st.info("저장된 히스토리가 없습니다. 값을 입력하고 ‘피수치 저장/추가’를 눌러 보세요.")
+
+    if st.button("🔎 해석하기", key="analyze_cancer"):
+        st.session_state["analyzed"] = True
+        st.session_state["analysis_ctx"] = {
+            "mode":"암","group":group,"dx":dx,"dx_label": dx_display(group, dx),
+            "labs": labs, "user_chemo": user_chemo, "user_targeted": user_targeted, "user_abx": user_abx,
+            "lines_blocks": lines_blocks
+        }
+    schedule_block()
+
+# ---------------- 일상 모드 ----------------
+elif mode == "일상":
+    st.markdown("### 1) 대상 선택")
+    who = st.radio("대상", ["소아","성인"], horizontal=True)
+    days_since_onset = st.number_input("증상 시작 후 경과일수(일)", min_value=0, step=1, value=0)
+
+    if who == "소아":
+        from peds_rules import predict_from_symptoms, triage_advise
+        opts = get_symptom_options("기본")
+        eye_opts = opts.get("눈꼽", ["없음","맑음","노랑-농성","가려움 동반","한쪽","양쪽"])
+
+        c1,c2,c3,c4,c5,c6 = st.columns(6)
+        with c1: nasal = st.selectbox("콧물", opts["콧물"])
+        with c2: cough = st.selectbox("기침", opts["기침"])
+        with c3: diarrhea = st.selectbox("설사(횟수/일)", opts["설사"])
+        with c4: vomit = st.selectbox("구토(횟수/일)", ["없음","1~2회","3~4회","4~6회","7회 이상"])
+        with c5: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1, value=0.0)
+        with c6: eye = st.selectbox("눈꼽", eye_opts)
+
+        age_m = st.number_input("나이(개월)", min_value=0, step=1)
+        weight = st.number_input("체중(kg)", min_value=0.0, step=0.1)
+
+        apap_ml, _ = acetaminophen_ml(age_m, weight or None)
+        ibu_ml,  _ = ibuprofen_ml(age_m, weight or None)
+        d1,d2 = st.columns(2)
+        with d1:
+            st.metric("아세트아미노펜 시럽 (평균 1회분)", f"{apap_ml} ml")
+            st.caption("간격 **4~6시간**, 하루 최대 4회(성분별 중복 금지)")
+        with d2:
+            st.metric("이부프로펜 시럽 (평균 1회분)", f"{ibu_ml} ml")
+            st.caption("간격 **6~8시간**, 위장 자극 시 음식과 함께")
+        st.warning("이 용량 정보는 **참고용**입니다. 반드시 **주치의와 상담**하십시오.")
+
+        fever_cat = _fever_bucket_from_temp(temp)
+        # 입력 누락 대비 기본값 보정
+        if "days_since_onset" not in locals(): days_since_onset = 0
+        if "temp" not in locals(): temp = 0.0
+        if "fever_cat" not in locals(): fever_cat = "정상"
+        if 'nasal' not in locals(): nasal = '없음'
+        if 'cough' not in locals(): cough = '없음'
+        if 'diarrhea' not in locals(): diarrhea = '없음'
+        if 'vomit' not in locals(): vomit = '없음'
+        if 'eye' not in locals(): eye = '없음'
+        symptoms = build_peds_symptoms(
+            nasal=locals().get('nasal'),
+            cough=locals().get('cough'),
+            diarrhea=locals().get('diarrhea'),
+            vomit=locals().get('vomit'),
+            days_since_onset=locals().get('days_since_onset'),
+            temp=locals().get('temp'),
+            fever_cat=locals().get('fever_cat'),
+            eye=locals().get('eye'),
+        )
+        preds = predict_from_symptoms(symptoms, temp, age_m)
+        st.markdown("#### 🤖 증상 기반 자동 추정")
+        render_predictions(preds, show_copy=True)
+
+        triage = triage_advise(temp, age_m, diarrhea)
+        st.info(triage)
+
+        diet_lines = _peds_diet_fallback(symptoms)
+
+        if st.button("🔎 해석하기", key="analyze_daily_child"):
+            st.session_state["analyzed"] = True
+            st.session_state["analysis_ctx"] = {
+                "mode":"일상","who":"소아","symptoms":symptoms,
+                "temp":temp,"age_m":age_m,"weight":weight or None,
+                "apap_ml":apap_ml,"ibu_ml":ibu_ml,"preds":preds,"triage":triage,
+                "days_since_onset": days_since_onset, "diet_lines": diet_lines
+            }
+
+    else:  # 성인
+        from adult_rules import predict_from_symptoms, triage_advise, get_adult_options
+        opts = get_adult_options()
+        eye_opts = opts.get("눈꼽", ["없음","맑음","노랑-농성","가려움 동반","한쪽","양쪽"])
+
+        c1,c2,c3,c4,c5,c6 = st.columns(6)
+        with c1: nasal = st.selectbox("콧물", opts["콧물"])
+        with c2: cough = st.selectbox("기침", opts["기침"])
+        with c3: diarrhea = st.selectbox("설사(횟수/일)", opts["설사"])
+        with c4: vomit = st.selectbox("구토(횟수/일)", ["없음","1~3회","4~6회","7회 이상"])
+        with c5: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1, value=0.0)
+        with c6: eye = st.selectbox("눈꼽", eye_opts)
+
+        comorb = st.multiselect("주의 대상", ["임신 가능성","간질환 병력","신질환 병력","위장관 궤양/출혈력","항응고제 복용","고령(65+)"])
+
+        fever_cat = _fever_bucket_from_temp(temp)
+        symptoms = build_peds_symptoms(
+            nasal=locals().get('nasal'),
+            cough=locals().get('cough'),
+            diarrhea=locals().get('diarrhea'),
+            vomit=locals().get('vomit'),
+            days_since_onset=locals().get('days_since_onset'),
+            temp=locals().get('temp'),
+            fever_cat=locals().get('fever_cat'),
+            eye=locals().get('eye'),
+        )
+
+        preds = predict_from_symptoms(symptoms, temp, comorb)
+        st.markdown("#### 🤖 증상 기반 자동 추정")
+        render_predictions(preds, show_copy=True)
+
+        triage = triage_advise(temp, comorb)
+        st.info(triage)
+
+        diet_lines = _adult_diet_fallback(symptoms)
+
+        if st.button("🔎 해석하기", key="analyze_daily_adult"):
+            st.session_state["analyzed"] = True
+            st.session_state["analysis_ctx"] = {
+                "mode":"일상","who":"성인","symptoms":symptoms,
+                "temp":temp,"comorb":comorb,"preds":preds,"triage":triage,
+                "days_since_onset": days_since_onset, "diet_lines": diet_lines
+            }
+
+# ---------------- 소아(질환) 모드 ----------------
+else:
+    ctop = st.columns(4)
+    with ctop[0]: disease = st.selectbox("소아 질환", ["로타","독감","RSV","아데노","마이코","수족구","편도염","코로나","중이염"], index=0)
+    st.caption(short_caption(disease))
+    with ctop[1]: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1)
+    with ctop[2]: age_m = st.number_input("나이(개월)", min_value=0, step=1)
+    with ctop[3]: weight = st.number_input("체중(kg)", min_value=0.0, step=0.1)
+
+    opts = get_symptom_options(disease)
+    eye_opts = opts.get("눈꼽", ["없음","맑음","노랑-농성","가려움 동반","한쪽","양쪽"])
+    st.markdown("### 증상 체크")
+    c1,c2,c3,c4,c5,c6 = st.columns(6)
+    with c1: nasal = st.selectbox("콧물", opts.get("콧물", ["없음","투명","흰색","누런","피섞임"]))
+    with c2: cough = st.selectbox("기침", opts.get("기침", ["없음","조금","보통","심함"]))
+    with c3: diarrhea = st.selectbox("설사(횟수/일)", opts.get("설사", ["없음","1~2회","3~4회","5~6회"]))
+    with c4: vomit = st.selectbox("구토(횟수/일)", ["없음","1~2회","3~4회","4~6회","7회 이상"])
+    with c5: eye = st.selectbox("눈꼽", eye_opts)
+    with c6: symptom_days = st.number_input("**증상일수**(일)", min_value=0, step=1, value=0)
+
+    apap_ml, _ = acetaminophen_ml(age_m, weight or None)
+    ibu_ml,  _ = ibuprofen_ml(age_m, weight or None)
+    dc = st.columns(2)
+    with dc[0]:
+        st.metric("아세트아미노펜 시럽 (평균 1회분)", f"{apap_ml} ml")
+        st.caption("간격 **4~6시간**, 하루 최대 4회(성분별 중복 금지)")
+    with dc[1]:
+        st.metric("이부프로펜 시럽 (평균 1회분)", f"{ibu_ml} ml")
+        st.caption("간격 **6~8시간**, 위장 자극 시 음식과 함께")
+    st.warning("이 용량 정보는 **참고용**입니다. 반드시 **주치의와 상담**하십시오.")
+
+    fever_cat = _fever_bucket_from_temp(temp)
+    symptoms = build_peds_symptoms(
+            nasal=locals().get('nasal'),
+            cough=locals().get('cough'),
+            diarrhea=locals().get('diarrhea'),
+            vomit=locals().get('vomit'),
+            days_since_onset=locals().get('days_since_onset'),
+            temp=locals().get('temp'),
+            fever_cat=locals().get('fever_cat'),
+            eye=locals().get('eye'),
+        )
+
+    if st.button("🔎 해석하기", key="analyze_peds"):
+        st.session_state["analyzed"] = True
+        st.session_state["analysis_ctx"] = {
+            "mode":"소아", "disease": disease,
+            "symptoms": symptoms,
+            "temp": temp, "age_m": age_m, "weight": weight or None,
+            "apap_ml": apap_ml, "ibu_ml": ibu_ml, "vals": {},
+            "diet_lines": _peds_diet_fallback(symptoms, disease=disease)
+        }
+
+# ---------------- 결과 게이트 ----------------
+if results_only_after_analyze(st):
+    ctx = st.session_state.get("analysis_ctx", {})
+    m = ctx.get("mode")
+
+    if m == "암":
+        labs = ctx.get("labs", {})
+        st.subheader("🧪 피수치 요약")
+        if labs:
+            rcols = st.columns(len(labs))
+            for i, (k, v) in enumerate(labs.items()):
+                with rcols[i]: st.metric(k, v)
+        if ctx.get("dx_label"): st.caption(f"진단: **{ctx['dx_label']}**")
+
+        alerts = collect_top_ae_alerts((_filter_known(ctx.get("user_chemo"))) + (_filter_known(ctx.get("user_abx"))), db=DRUG_DB)
+        if alerts: st.error("\n".join(alerts))
+
+        st.subheader("🗂️ 선택 요약")
+        st.write(_one_line_selection(ctx))
+
+        # 순서: 피수치 → 특수검사 → 식이가이드 → 부작용
+        lines_blocks = ctx.get("lines_blocks") or []
+        for title2, lines2 in lines_blocks:
+            if lines2:
+                st.subheader("🧬 " + title2)
+                for L in lines2: st.write("- " + L)
+
+        st.subheader("🍽️ 식이가이드")
+        diet_lines = lab_diet_guides(labs or {}, heme_flag=(ctx.get("group")=="혈액암"))
+        for L in diet_lines: st.write("- " + L)
+        ctx["diet_lines"] = diet_lines
+
+        st.subheader("💊 부작용")
+        ckeys = _filter_known(ctx.get("user_chemo"))
+        akeys = _filter_known(ctx.get("user_abx"))
+        if ckeys:
+            st.markdown("**항암제(세포독성)**")
+            render_adverse_effects(st, ckeys, DRUG_DB)
+        if akeys:
+            st.markdown("**항생제**")
+            render_adverse_effects(st, akeys, DRUG_DB)
+
+        st.subheader("📝 보고서 저장")
+        md, txt = _export_report(ctx, lines_blocks)
+        st.download_button("⬇️ Markdown (.md)", data=md, file_name="BloodMap_Report.md")
+        st.download_button("⬇️ 텍스트 (.txt)", data=txt, file_name="BloodMap_Report.txt")
+        try:
+            pdf_bytes = export_md_to_pdf(md)
+            st.download_button("⬇️ PDF (.pdf)", data=pdf_bytes, file_name="BloodMap_Report.pdf", mime="application/pdf")
+        except Exception as e:
+            st.caption(f"PDF 변환 중 오류: {e}")
+
+    elif m == "일상":
+        st.subheader("👪 증상 요약")
+        sy = ctx.get("symptoms", {})
+        sy_cols = st.columns(max(1, min(4, len(sy))))
+        for i, k in enumerate(sy.keys()):
+            with sy_cols[i % len(sy_cols)]: st.metric(k, sy[k])
+        if ctx.get("days_since_onset") is not None:
+            st.caption(f"경과일수: {ctx['days_since_onset']}일")
+        if ctx.get("temp") is not None:
+            st.caption(f"체온: {ctx['temp']} ℃")
+
+        preds = ctx.get("preds") or []
+        if preds:
+            st.subheader("🤖 증상 기반 자동 추정")
+            render_predictions(preds, show_copy=True)
+
+
+        if ctx.get("who") == "소아":
+            st.subheader("🌡️ 해열제 1회분(평균)")
+            d1,d2 = st.columns(2)
+            with d1:
+                st.metric("아세트아미노펜 시럽", f"{ctx.get('apap_ml')} ml")
+                st.caption("간격 **4~6시간**, 하루 최대 4회(성분별 중복 금지)")
+            with d2:
+                st.metric("이부프로펜 시럽", f"{ctx.get('ibu_ml')} ml")
+                st.caption("간격 **6~8시간**, 위장 자극 시 음식과 함께")
+            st.warning("이 용량 정보는 **참고용**입니다. 반드시 **주치의와 상담**하십시오.")
+
+        st.subheader("🍽️ 식이가이드")
+        for L in (ctx.get("diet_lines") or []):
+            st.write("- " + str(L))
+
+        st.subheader("📝 보고서 저장")
+        md, txt = _export_report(ctx, None)
+        st.download_button("⬇️ Markdown (.md)", data=md, file_name="BloodMap_Report.md")
+        st.download_button("⬇️ 텍스트 (.txt)", data=txt, file_name="BloodMap_Report.txt")
+        try:
+            pdf_bytes = export_md_to_pdf(md)
+            st.download_button("⬇️ PDF (.pdf)", data=pdf_bytes, file_name="BloodMap_Report.pdf", mime="application/pdf")
+        except Exception as e:
+            st.caption(f"PDF 변환 중 오류: {e}")
+
+    else:  # 소아(질환)
+        st.subheader("👶 증상 요약")
+        sy = ctx.get("symptoms", {})
+        sy_cols = st.columns(max(1, min(4, len(sy))))
+        for i, k in enumerate(sy.keys()):
+            with sy_cols[i % len(sy_cols)]: st.metric(k, sy[k])
+        if ctx.get("temp") is not None:
+            st.caption(f"체온: {ctx['temp']} ℃")
+
+        st.subheader("🌡️ 해열제 1회분(평균)")
+        d1,d2 = st.columns(2)
+        with d1:
+            st.metric("아세트아미노펜 시럽", f"{ctx.get('apap_ml')} ml")
+            st.caption("간격 **4~6시간**, 하루 최대 4회(성분별 중복 금지)")
+        with d2:
+            st.metric("이부프로펜 시럽", f"{ctx.get('ibu_ml')} ml")
+            st.caption("간격 **6~8시간**, 위장 자극 시 음식과 함께")
+        st.warning("이 용량 정보는 **참고용**입니다. 반드시 **주치의와 상담**하십시오.")
+
+        st.subheader("🍽️ 식이가이드")
+        for L in (ctx.get("diet_lines") or []):
+            st.write("- " + str(L))
+
+        st.subheader("📝 보고서 저장")
+        md, txt = _export_report(ctx, None)
+        st.download_button("⬇️ Markdown (.md)", data=md, file_name="BloodMap_Report.md")
+        st.download_button("⬇️ 텍스트 (.txt)", data=txt, file_name="BloodMap_Report.txt")
+        try:
+            pdf_bytes = export_md_to_pdf(md)
+            st.download_button("⬇️ PDF (.pdf)", data=pdf_bytes, file_name="BloodMap_Report.pdf", mime="application/pdf")
+        except Exception as e:
+            st.caption(f"PDF 변환 중 오류: {e}")
+
+    st.caption("본 도구는 참고용입니다. 의료진의 진단/치료를 대체하지 않습니다.")
+    st.caption("문의/버그 제보: [피수치 가이드 공식카페](https://cafe.naver.com/bloodmap)")
+    st.stop()
