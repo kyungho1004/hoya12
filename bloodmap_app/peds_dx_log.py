@@ -1,9 +1,9 @@
 
 # -*- coding: utf-8 -*-
 """
-peds_dx_log (hotfix)
-- Adds alias `migrate_legacy_peds_dx_if_needed` for backward compatibility.
-- Safe to drop-in replace existing peds_dx_log.py.
+peds_dx_log
+- Pediatric diagnosis logs (소아 진단 로그): load/save + legacy migration + UI + export
+- Drop‑in for app_onco_with_log.py
 """
 from __future__ import annotations
 import os, json
@@ -41,6 +41,7 @@ def save_peds_dx(uid: str, rows: List[Dict[str, Any]]) -> None:
         json.dump(rows, f, ensure_ascii=False, indent=2)
     os.replace(tmp, p)
 
+# ----- Legacy migration -----
 def _legacy_paths(uid: str) -> List[str]:
     nick_only = uid.split("_")[0] if "_" in uid else uid
     cands = [
@@ -58,6 +59,7 @@ def _legacy_paths(uid: str) -> List[str]:
                         cands.append(os.path.join(d, fn))
         except Exception:
             pass
+    # de‑dupe
     out, seen = [], set()
     for p in cands:
         if p and p not in seen:
@@ -101,10 +103,7 @@ def migrate_peds_dx_if_needed(uid: str):
         save_peds_dx(uid, uniq); return True, found, len(uniq)
     return False, found, 0
 
-# ---- Backward compatible alias (fixes NameError) ----
-def migrate_legacy_peds_dx_if_needed(uid: str):
-    return migrate_peds_dx_if_needed(uid)
-
+# ----- UI -----
 def render_peds_dx_section(nick: str, uid: str) -> None:
     st.markdown("### 🧒 소아 진단 로그")
     try:
