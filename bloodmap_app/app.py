@@ -30,6 +30,15 @@ def short_caption(label: str) -> str:
             return s
     except Exception:
         pass
+
+# === AUTO: widget key namespacing helper ===
+def _k(name: str) -> str:
+    import streamlit as st, uuid as _uuid
+    if "_session_id" not in st.session_state:
+        st.session_state["_session_id"] = _uuid.uuid4().hex[:8]
+    return f"{name}_{st.session_state['_session_id']}"
+# === /AUTO ===
+
     defaults = {
         "로타바이러스 장염": "영유아 위장관염 — 물설사·구토, 탈수 주의",
         "노로바이러스 장염": "급성 구토/설사 급발현 — 겨울철 유행, 탈수 주의",
@@ -588,13 +597,6 @@ try:
 
 
 
-# === AUTO: widget key namespacing helper ===
-def _k(name: str) -> str:
-    import streamlit as st, uuid as _uuid
-    if "_session_id" not in st.session_state:
-        st.session_state["_session_id"] = _uuid.uuid4().hex[:8]
-    return f"{name}_{st.session_state['_session_id']}"
-# === /AUTO ===
 
 except Exception:
     _get_adult_options_ext = _predict_from_symptoms_ext = _triage_advise_ext = None
