@@ -1,210 +1,178 @@
 
 # -*- coding: utf-8 -*-
+"""
+onco_antipyretic_log
+- Antipyretic/Care log UI + 24h renderer (한국어 라벨 + 세부유형 + 개인별 파일명)
+- Drop‑in for app_onco_with_log.py
+"""
 from __future__ import annotations
-from typing import Dict, Any, Tuple
-import streamlit as st
-import pandas as pd
+import os, json
 from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List
+import streamlit as st
 
-# Pediatric override
-try:
-    from peds_dose_override import acetaminophen_ml, ibuprofen_ml  # type: ignore
-except Exception:
-    def _w_from_age(age_m: float) -> float:
-        if age_m <= 0: return 3.3
-        if age_m < 12: return 3.3 + 0.5*age_m
-        return (age_m/12.0)*2.0 + 8.0
-    def acetaminophen_ml(age_m: float, weight_kg: float|None):
-        w = weight_kg if (weight_kg and weight_kg>0) else _w_from_age(age_m or 0)
-        mgkg, c = 12.5, 160.0
-        ml = round(w*mgkg*5.0/c, 1)
-        return ml, {"weight_used": round(w,1)}
-    def ibuprofen_ml(age_m: float, weight_kg: float|None):
-        w = weight_kg if (weight_kg and weight_kg>0) else _w_from_age(age_m or 0)
-        mgkg, c = 7.5, 100.0
-        ml = round(w*mgkg*5.0/c, 1)
-        return ml, {"weight_used": round(w,1)}
+KST = timezone(timedelta(hours=9))
 
-def _to_float(x, default=None):
-    try: return float(x)
-    except Exception: return default
+# --------------- basic data paths (safe, with /tmp fallback) ---------------
+def _writable_dir(d: str) -> bool:
+    try:
+        os.makedirs(d, exist_ok=True)
+        p = os.path.join(d, ".probe")
+        with open(p, "w", encoding="utf-8") as f: f.write("ok")
+        os.remove(p); return True
+    except Exception:
+        return False
 
-def _adult_apap_ml(weight_kg: float|None, mg_per_kg: float, syrup_mg_per_5ml: float):
-    w = _to_float(weight_kg, None) or 60.0
-    mg = min(1000.0, max(325.0, w*mg_per_kg))
-    ml = round(mg * 5.0 / max(1e-6, syrup_mg_per_5ml), 1)
-    return ml, {"mg": int(round(mg)), "weight_used": w}
+def _data_root() -> str:
+    cand = []
+    env = os.getenv("BLOODMAP_DATA_ROOT", "").strip()
+    if env: cand.append(env)
+    cand.append("/mnt/data")
+    cand.append(os.path.join(os.getenv("TMPDIR") or "/tmp", "bloodmap_data"))
+    for d in cand:
+        if _writable_dir(d): return d
+    d = os.path.join(os.getenv("TMPDIR") or "/tmp", "bloodmap_data")
+    os.makedirs(d, exist_ok=True)
+    return d
 
-def _adult_ibu_ml(weight_kg: float|None, mg_per_kg: float, syrup_mg_per_5ml: float):
-    w = _to_float(weight_kg, None) or 60.0
-    mg = min(400.0, max(200.0, w*mg_per_kg))
-    ml = round(mg * 5.0 / max(1e-6, syrup_mg_per_5ml), 1)
-    return ml, {"mg": int(round(mg)), "weight_used": w}
+def _data_path(*parts: str) -> str:
+    return os.path.join(_data_root(), *parts)
 
-def _kst_now():
-    return datetime.now(timezone(timedelta(hours=9)))
+# --------------- storage helpers ---------------
+def _carelog_path(uid: str) -> str:
+    return _data_path("care_log", f"{uid}.json")
 
-def _ensure_df(key: str) -> pd.DataFrame:
-    df = st.session_state.get(key)
-    if isinstance(df, pd.DataFrame):
-        return df.copy()
-    cols = ["KST_time","Who","Age_m","Weight_kg","Diarrhea","Agent","Dose_mL","Dose_meta","Note"]
-    return pd.DataFrame(columns=cols)
+def load_carelog(uid: str) -> List[Dict[str, Any]]:
+    try:
+        with open(_carelog_path(uid), "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return []
 
-def _save_df(key: str, df: pd.DataFrame):
-    st.session_state[key] = df
+def save_carelog(uid: str, entries: List[Dict[str, Any]]) -> None:
+    p = _carelog_path(uid)
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    tmp = p + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(entries, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, p)
 
-def render_onco_antipyretic_log(storage_key: str = "onco_antipyretic_log") -> pd.DataFrame:
-    st.markdown("### 🌡️ 해열제 복용 기록 (mL 통일) — 한국시간")
+# --------------- utilities ---------------
+def now_kst() -> datetime:
+    return datetime.now(KST)
 
-    # 일반 사용자 기본값
-    apap_c, ibu_c = 160.0, 100.0
-    apap_mgkg, ibu_mgkg = 12.5, 7.5
+def _qr_png_bytes(text: str) -> bytes:
+    import qrcode
+    from io import BytesIO
+    img = qrcode.make(text)
+    buf = BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
 
-    # 전문가만 노출
-    with st.expander("⚙️ 전문가 설정(약사/의료진)", expanded=False):
-        expert = st.checkbox("mg/kg·농도 직접 조정", value=False, key=f"{storage_key}_expert")
-        if expert:
-            cC1, cC2, cC3, cC4 = st.columns(4)
-            with cC1:
-                apap_c = st.number_input("아세트아미노펜(APAP) 농도 (mg/5mL)", 80.0, 500.0, value=160.0, step=10.0, key=f"{storage_key}_apap_c")
-            with cC2:
-                ibu_c  = st.number_input("이부프로펜(IBU) 농도 (mg/5mL)",  50.0, 400.0, value=100.0, step=10.0, key=f"{storage_key}_ibu_c")
-            with cC3:
-                apap_mgkg = st.number_input("아세트아미노펜(APAP) mg/kg", 8.0, 15.0, value=12.5, step=0.5, key=f"{storage_key}_apap_mgkg")
-            with cC4:
-                ibu_mgkg  = st.number_input("이부프로펜(IBU) mg/kg",  5.0, 10.0, value=7.5,  step=0.5, key=f"{storage_key}_ibu_mgkg")
+def build_ics_for_next_doses(apap_next: datetime|None, ibu_next: datetime|None) -> str:
+    # Minimal ICS: 2 events if provided
+    def _evt(dt: datetime, title: str) -> str:
+        stamp = dt.astimezone(KST).strftime("%Y%m%dT%H%M%S")
+        return f"BEGIN:VEVENT\nDTSTART;TZID=Asia/Seoul:{stamp}\nSUMMARY:{title}\nEND:VEVENT"
+    events = []
+    if apap_next: events.append(_evt(apap_next, "APAP 다음 복용"))
+    if ibu_next:  events.append(_evt(ibu_next,  "IBU 다음 복용"))
+    return "BEGIN:VCALENDAR\n" + "\n".join(events) + "\nEND:VCALENDAR"
 
-    c0, c1, c2 = st.columns([0.25, 0.25, 0.5])
-    with c0:
-        who = st.radio("대상", ["성인","소아"], horizontal=True, key=f"{storage_key}_who")
-    with c1:
-        diarrhea = st.selectbox("설사(횟수/일)", ["없음","1~3회","4~6회","7회 이상"], key=f"{storage_key}_diarrhea")
-    with c2:
-        st.caption(f"현재 한국시간: **{_kst_now().strftime('%Y-%m-%d %H:%M:%S KST')}**")
-
-    if who == "소아":
-        a1, a2, _ = st.columns([0.25,0.25,0.5])
-        with a1: age_m = st.number_input("나이(개월)", min_value=0, step=1, key=f"{storage_key}_age")
-        with a2: weight = st.number_input("체중(kg)", min_value=0.0, step=0.1, key=f"{storage_key}_wt")
-        apap_ml, meta1 = acetaminophen_ml(age_m, weight or None)
-        ibu_ml,  meta2 = ibuprofen_ml(age_m, weight or None)
-        used_w = float(weight or meta1.get("weight_used") or meta2.get("weight_used") or 0.0)
-    else:
-        a1, _ = st.columns([0.25,0.75])
-        with a1:
-            weight = st.number_input("체중(kg)", min_value=0.0, step=0.5, value=60.0, key=f"{storage_key}_wt_adult")
-        age_m = None
-        apap_ml, mA = _adult_apap_ml(weight or None, apap_mgkg, apap_c)
-        ibu_ml,  mI = _adult_ibu_ml(weight or None,  ibu_mgkg, ibu_c)
-        used_w = float(mA["weight_used"])
-
-    # 입력 공통
-    tcol1, tcol2, tcol3 = st.columns([0.33,0.33,0.34])
-    with tcol1:
-        date_pick = st.date_input("복용 날짜 (KST)", value=_kst_now().date(), key=f"{storage_key}_date")
-    with tcol2:
-        time_pick = st.time_input("복용 시각 (KST)", value=_kst_now().time().replace(second=0, microsecond=0), key=f"{storage_key}_time")
-    with tcol3:
-        note = st.text_input("비고/메모", key=f"{storage_key}_note")
-
-
-
-# --- 간격/24시간 체크용 헬퍼 ---
-
-    # --- 간격/24시간 체크 (함수 내부) ---
-    def _parse_kst(dt_str: str):
-        from datetime import datetime, timedelta, timezone
+def total_24h_mg(entries: List[Dict[str, Any]], kind: str, now: datetime|None=None) -> float:
+    now = now or now_kst()
+    s = 0.0
+    for e in entries or []:
+        if e.get("type") != kind: continue
         try:
-            return datetime.strptime(dt_str, "%Y-%m-%d %H:%M").replace(tzinfo=timezone(timedelta(hours=9)))
+            ts = datetime.fromisoformat(e.get("ts"))
         except Exception:
-            return None
+            continue
+        if (now - ts).total_seconds() <= 24*3600:
+            try: s += float(e.get("mg") or 0)
+            except Exception: pass
+    return s
 
-    def _last_and_count(df, agent: str, ref_dt):
-        if df is None or df.empty:
-            return None, 0
-        dfa = df[df["Agent"] == agent]
-        if dfa.empty:
-            return None, 0
-        dfa = dfa.copy()
-        dfa["__dt"] = dfa["KST_time"].apply(_parse_kst)
-        dfa = dfa.dropna(subset=["__dt"])
-        if dfa.empty:
-            return None, 0
-        last_dt = dfa["__dt"].max()
-        cutoff = ref_dt - timedelta(hours=24)
-        cnt_24h = (dfa["__dt"] >= cutoff).sum()
-        return last_dt, int(cnt_24h)
+def _ko_label_event(e: Dict[str, Any]) -> str:
+    t = e.get("type"); ts = e.get("ts")
+    if t == "fever":
+        return f"- {ts} · 발열 {e.get('temp')}℃"
+    if t in ("apap","ibu"):
+        return f"- {ts} · {t.upper()} {e.get('mg')} mg"
+    if t in ("vomit","diarrhea"):
+        kind = e.get("kind")
+        ko = "구토" if t=="vomit" else "설사"
+        return f"- {ts} · {ko}" + (f" ({kind})" if kind else "")
+    ko_map = {"vomit":"구토","diarrhea":"설사"}
+    return f"- {ts} · {ko_map.get(t, t)}"
 
-    apap_min_h = 4
-    ibu_min_h  = 6
-    apap_max_per_24h = 4
-    ibu_max_per_24h  = 4
+# --------------- UI: add‑buttons + 24h renderer ---------------
+def render_onco_antipyretic_log(nick: str, uid: str, apap_next=None, ibu_next=None) -> None:
+    st.markdown("### 3) 케어로그 & 해열제 (개인별)")
+    st.session_state.setdefault("care_log", {})
+    care = st.session_state["care_log"].get(uid) or load_carelog(uid)
 
-    planned_dt = datetime.combine(date_pick, time_pick).replace(tzinfo=timezone(timedelta(hours=9)))
+    # input row
+    c1,c2,c3,c4,c5 = st.columns(5)
+    with c1:
+        if st.button("발열 기록 +", key=f"btn_add_fever_{uid}"):
+            t = st.number_input("현재 체온(℃)", min_value=35.0, step=0.1, value=38.0, key=f"temp_add_{uid}")
+            care.append({"type":"fever","temp":t,"ts": now_kst().isoformat()})
+            save_carelog(uid, care); st.success("발열 기록됨.")
+    with c2:
+        vomit_kind = st.selectbox("구토 유형", ["흰","노랑","초록(담즙)","기타"], index=1, key=f"vomit_kind_{uid}")
+        if st.button("구토 +", key=f"btn_add_vomit_{uid}"):
+            care.append({"type":"vomit","kind":vomit_kind,"ts": now_kst().isoformat()})
+            save_carelog(uid, care); st.success("구토 기록됨.")
+    with c3:
+        diarrhea_kind = st.selectbox("설사 유형", ["노랑","진한노랑","거품","녹색","녹색혈변","혈변","검은색","기타"], index=0, key=f"diarrhea_kind_{uid}")
+        if st.button("설사 +", key=f"btn_add_diarrhea_{uid}"):
+            care.append({"type":"diarrhea","kind":diarrhea_kind,"ts": now_kst().isoformat()})
+            save_carelog(uid, care); st.success("설사 기록됨.")
+    with c4:
+        apap_mg = st.number_input("APAP(아세트아미노펜) 투여량 mg", min_value=0.0, step=50.0, value=0.0, key=f"apap_mg_{uid}")
+        if st.button("APAP 투여 기록", key=f"btn_log_apap_{uid}"):
+            care.append({"type":"apap","mg":apap_mg,"ts": now_kst().isoformat()})
+            save_carelog(uid, care); st.success("APAP 기록됨.")
+    with c5:
+        ibu_mg = st.number_input("IBU(이부프로펜) 투여량 mg", min_value=0.0, step=50.0, value=0.0, key=f"ibu_mg_{uid}")
+        if st.button("IBU 투여 기록", key=f"btn_log_ibu_{uid}"):
+            care.append({"type":"ibu","mg":ibu_mg,"ts": now_kst().isoformat()})
+            save_carelog(uid, care); st.success("IBU 기록됨.")
 
-    df_now_for_check = _ensure_df(storage_key)
-    apap_last, apap_24h = _last_and_count(df_now_for_check, "아세트아미노펜(APAP)", planned_dt)
-    ibu_last,  ibu_24h  = _last_and_count(df_now_for_check, "이부프로펜(IBU)", planned_dt)
+    # 24h render
+    now = now_kst()
+    care_24h = [e for e in care if (now - datetime.fromisoformat(e["ts"])).total_seconds() <= 24*3600]
+    if care_24h:
+        st.markdown(f"#### 🗒️ 최근 24h 로그 — {nick} ({uid})")
+        # summary
+        cnt = lambda t: sum(1 for e in care_24h if e.get("type")==t)
+        st.caption(f"요약: 발열 {cnt('fever')}회 · 구토 {cnt('vomit')}회 · 설사 {cnt('diarrhea')}회 · APAP {cnt('apap')}회 · IBU {cnt('ibu')}회")
+        for e in sorted(care_24h, key=lambda x: x["ts"]):
+            st.write(_ko_label_event(e))
 
-    warn_apap = ""
-    warn_ibu = ""
-    if apap_last:
-        delta_h = (planned_dt - apap_last).total_seconds() / 3600.0
-        if delta_h < apap_min_h:
-            next_ok = apap_last + timedelta(hours=apap_min_h)
-            warn_apap = f"아세트아미노펜(APAP) 마지막 복용으로부터 **{delta_h:.1f}시간** 경과. 최소 {apap_min_h}시간 간격 권장 → **{next_ok.strftime('%Y-%m-%d %H:%M KST')}** 이후 복용 권장."
-    if apap_24h >= apap_max_per_24h:
-        warn_apap = (warn_apap + " " if warn_apap else "") + f"최근 24시간 내 {apap_24h}회 기록됨(권장 최대 {apap_max_per_24h}회)."
+        # exports
+        ics_data = build_ics_for_next_doses(apap_next, ibu_next)
+        st.download_button("📅 다음 3회 복용 일정 (.ics)",
+                           data=ics_data, file_name=f"next_doses_{nick or uid}.ics",
+                           key=f"dl_ics_{uid}")
+        lines = [f"케어로그(최근 24h) — {nick or uid}"] + [_ko_label_event(e) for e in sorted(care_24h, key=lambda x: x["ts"])]
+        log_txt = "\n".join(lines)
+        st.download_button("⬇️ 케어로그 TXT", data=log_txt, file_name=f"carelog_24h_{nick or uid}.txt", key=f"dl_carelog_txt_{uid}")
+        try:
+            # Local PDF generator optional: if not present, silently skip
+            try:
+                from pdf_export import export_md_to_pdf  # type: ignore
+                pdf = export_md_to_pdf("\n".join(["# 케어로그(24h)"] + lines))
+                st.download_button("⬇️ 케어로그 PDF", data=pdf, file_name=f"carelog_24h_{nick or uid}.pdf", mime="application/pdf", key=f"dl_carelog_pdf_{uid}")
+            except Exception:
+                pass
+            try:
+                qr = _qr_png_bytes("\n".join(lines))
+                st.download_button("⬇️ 케어로그 QR (PNG)", data=qr, file_name=f"carelog_24h_{nick or uid}.qr.png", mime="image/png", key=f"dl_carelog_qr_{uid}")
+            except Exception:
+                pass
+        except Exception as e:
+            st.caption(f"내보내기 오류: {e}")
 
-    if ibu_last:
-        delta_h = (planned_dt - ibu_last).total_seconds() / 3600.0
-        if delta_h < ibu_min_h:
-            next_ok = ibu_last + timedelta(hours=ibu_min_h)
-            warn_ibu = f"이부프로펜(IBU) 마지막 복용으로부터 **{delta_h:.1f}시간** 경과. 최소 {ibu_min_h}시간 간격 권장 → **{next_ok.strftime('%Y-%m-%d %H:%M KST')}** 이후 복용 권장."
-    if ibu_24h >= ibu_max_per_24h:
-        warn_ibu = (warn_ibu + " " if warn_ibu else "") + f"최근 24시간 내 {ibu_24h}회 기록됨(권장 최대 {ibu_max_per_24h}회)."
-    
-    # 버튼
-    b1, b2, b3, b4 = st.columns([0.22,0.22,0.22,0.34])
-    def _add_row(agent: str, dose_ml: float, meta_label: str):
-        kst_dt = datetime.combine(date_pick, time_pick).replace(tzinfo=timezone(timedelta(hours=9)))
-        df_prev = _ensure_df(storage_key)
-        row = {
-            "KST_time": kst_dt.strftime("%Y-%m-%d %H:%M"),
-            "Who": who, "Age_m": (int(age_m) if (age_m is not None) else ""),
-            "Weight_kg": round(used_w, 1), "Diarrhea": diarrhea,
-            "Agent": agent, "Dose_mL": float(dose_ml), "Dose_meta": meta_label,
-            "Note": note or "",
-        }
-        df = pd.concat([df_prev, pd.DataFrame([row])], ignore_index=True)
-        _save_df(storage_key, df)
-        st.success(f"{agent} {dose_ml} mL 기록됨 ({row['KST_time']} KST).")
-    with b1:
-        if warn_apap:
-            st.warning(warn_apap)
-        if st.button("➕ 아세트아미노펜(APAP) 기록", key=f"{storage_key}_add_apap"):
-            label = f"{apap_mgkg} mg/kg, {apap_c} mg/5mL"
-            _add_row("아세트아미노펜(APAP)", apap_ml, label)
-    with b2:
-        if warn_ibu:
-            st.warning(warn_ibu)
-        if st.button("➕ 이부프로펜(IBU) 기록", key=f"{storage_key}_add_ibu"):
-            label = f"{ibu_mgkg} mg/kg, {ibu_c} mg/5mL"
-            _add_row("이부프로펜(IBU)", ibu_ml, label)
-    with b3:
-        if st.button("🧹 전체 삭제", key=f"{storage_key}_clear"):
-            _save_df(storage_key, _ensure_df(storage_key).iloc[0:0])
-            st.warning("모든 기록을 삭제했습니다.")
-    with b4:
-        df_now = _ensure_df(storage_key)
-        if not df_now.empty:
-            st.download_button("⬇️ CSV 내보내기", data=df_now.to_csv(index=False).encode("utf-8"),
-                               file_name="antipyretic_log_kst.csv")
-
-    df = _ensure_df(storage_key)
-    if df.empty:
-        st.info("아직 기록이 없습니다. 상단에서 용량을 확인하고 '기록' 버튼을 눌러 추가하세요.")
-    else:
-        st.dataframe(df, use_container_width=True, height=240)
-    return df
+    st.session_state["care_log"][uid] = care
