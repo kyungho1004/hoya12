@@ -80,20 +80,20 @@ def nickname_pin():
     if nkey:
         idx = _load_profiles_index()
         if not p2 or len(p2) != 4:
-            st.warning("PIN(4자리 숫자)을 입력하세요."); st.stop()
+            st.warning("PIN(4자리 숫자)을 입력하세요."); st.toast("PIN 4자리 필요", icon="⚠️"); st.stop()
         rec = idx.get(nkey)
         if rec:
             if rec.get("pin") == p2:
                 st.session_state["user_key"] = rec.get("uid")
-                st.caption("등록된 별명으로 로그인되었습니다.")
+                st.caption("등록된 별명으로 로그인되었습니다."); st.toast("로그인 완료", icon="✅")
             else:
-                st.warning("이미 사용 중인 별명입니다. 기존 PIN이 필요합니다."); st.stop()
+                st.warning("이미 사용 중인 별명입니다. 기존 PIN이 필요합니다."); st.toast("별명 중복 차단", icon="⚠️"); st.stop()
         else:
             uid = _make_uid(n, p2)
             idx[nkey] = {"uid": uid, "pin": p2, "created_ts": int(_time.time())}
             _save_profiles_index(idx)
             st.session_state["user_key"] = uid
-            st.caption("새 별명으로 등록되었습니다.")
+            st.caption("새 별명으로 등록되었습니다."); st.toast("등록 완료", icon="✅")
     # --- /AUTO ---
     return n, p2, key
 # ---------- 스케줄 ----------
