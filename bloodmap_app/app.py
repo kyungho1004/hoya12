@@ -321,7 +321,7 @@ except Exception as e:
 
 with st.sidebar:
     st.markdown("### 🔄 로그 복구")
-    if st.button("소아/과거 케어로그 복구", key="btn_recover_legacy"):
+    if st.button("소아/과거 케어로그 복구", key=f"btn_recover_legacy_{uid}"):
         try:
             migrated, found_files, merged_count = migrate_legacy_carelog_if_needed(uid)
             if migrated:
@@ -341,7 +341,7 @@ except Exception as e:
 
 with st.sidebar:
     st.markdown("### 🔄 로그 복구")
-    if st.button("소아/과거 케어로그 복구", key="btn_recover_legacy"):
+    if st.button("소아/과거 케어로그 복구", key=f"btn_recover_legacy_{uid}"):
         try:
             migrated, found_files, merged_count = migrate_legacy_carelog_if_needed(uid)
             if migrated:
