@@ -2,7 +2,7 @@ import time as _time
 import hashlib
 import json
 import os
-
+os.environ["BLOODMAP_DATA_DIR"] = "/mount/src/hoya12/bloodmap_app/data"
 
 # --- AUTO: nickname/PIN uniqueness helpers ---
 def _profiles_index_path():
