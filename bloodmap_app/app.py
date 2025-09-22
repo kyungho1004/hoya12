@@ -1,3 +1,66 @@
+import time as _time
+import hashlib
+import json
+import os
+
+
+# --- AUTO: nickname/PIN uniqueness helpers ---
+def _profiles_index_path():
+    return "/mnt/data/profile/index.json"
+
+def _load_profiles_index():
+    pth = _profiles_index_path()
+    if os.path.exists(pth):
+        try:
+            with open(pth, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+def _save_profiles_index(d: dict):
+    try:
+        os.makedirs("/mnt/data/profile", exist_ok=True)
+        with open(_profiles_index_path(), "w", encoding="utf-8") as f:
+            json.dump(d, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+def _norm_nick(s: str) -> str:
+    return (s or "").strip().lower()
+
+def _make_uid(nick: str, pin: str) -> str:
+    seed = f"{_norm_nick(nick)}|{(pin or '').strip()}"
+    return hashlib.sha256(seed.encode("utf-8")).hexdigest()[:12]
+
+def validate_or_register_user(nickname: str, pin: str):
+    """Return (ok:bool, msg:str, uid:str|None). Enforce unique nickname.
+    - If nickname exists:
+        - Same PIN -> ok=True (login), return existing uid
+        - Different PIN -> ok=False, block
+    - If new nickname:
+        - Require 4-digit PIN; create uid and save index
+    """
+    idx = _load_profiles_index()
+    nkey = _norm_nick(nickname)
+    pin = (pin or '').strip()
+    if not nkey:
+        return False, "별명을 입력하세요.", None
+    if not pin.isdigit() or len(pin) != 4:
+        return False, "PIN(4자리 숫자)을 입력하세요.", None
+
+    rec = idx.get(nkey)
+    if rec:
+        if rec.get("pin") == pin:
+            return True, "등록된 별명으로 로그인되었습니다.", rec.get("uid")
+        else:
+            return False, "이미 사용 중인 별명입니다. 기존 PIN이 필요합니다.", None
+    else:
+        uid = _make_uid(nickname, pin)
+        idx[nkey] = {"uid": uid, "pin": pin, "created_ts": int(_time.time())}
+        _save_profiles_index(idx)
+        return True, "새 별명으로 등록되었습니다.", uid
+# --- /AUTO ---
 
 # -*- coding: utf-8 -*-
 import streamlit as st
