@@ -488,7 +488,7 @@ if apap_cau: st.warning(apap_cau)
 
 # 최근 24h 케어로그 요약
 if care_24h:
-    st.markdown("#### 🗒️ 최근 24h 로그")
+    st.markdown(f"#### 🗒️ 최근 24h 로그 — {nick} ({uid})")
     for e in sorted(care_24h, key=lambda x: x["ts"]):
         if e["type"]=="fever":
             st.write(f"- {e['ts']} · 발열 {e.get('temp')}℃")
@@ -499,15 +499,22 @@ if care_24h:
 
     # Export buttons
     ics_data = build_ics_for_next_doses(apap_next, ibu_next)
-    st.download_button("📅 다음 3회 복용 일정 (.ics)", key="dl_ics", data=ics_data, file_name=f"next_doses_{uid}.ics")
+    st.download_button("📅 다음 3회 복용 일정 (.ics)", key="dl_ics", data=ics_data, file_name=f"next_doses_{nick or uid}.ics")
     # TXT/PDF export for care log (24h)
-    log_lines = ["케어로그(최근 24h)"] + [f"- {e.get('ts')} · {e.get('type')}" + (f" {e.get('temp')}℃" if e.get('type')=='fever' else (f" {e.get('mg')} mg" if e.get('type') in ('apap','ibu') else "")) for e in sorted(care_24h, key=lambda x: x['ts'])]
+    log_lines = ["케어로그(최근 24h) — " + (nick or uid)] + [
+        (
+            f"- {e['ts']} · 발열 {e.get('temp')}℃" if e.get("type")=="fever" else
+            f"- {e['ts']} · {e.get('type').upper()} {e.get('mg')} mg" if e.get("type") in ("apap","ibu") else
+            f"- {e['ts']} · " + ({"vomit":"구토","diarrhea":"설사"}.get(e.get("type"), e.get("type")) + (f" ({e.get('kind')})" if e.get("kind") else ""))
+        )
+        for e in sorted(care_24h, key=lambda x: x["ts"])
+    ]
     log_txt = "\n".join(log_lines)
-    st.download_button("⬇️ 케어로그 TXT", key="dl_carelog_txt", data=log_txt, file_name=f"carelog_24h_{uid}.txt")
+    st.download_button("⬇️ 케어로그 TXT", key="dl_carelog_txt", data=log_txt, file_name=f"carelog_24h_{nick or uid}.txt")
     try:
         from pdf_export import export_md_to_pdf
         log_pdf = export_md_to_pdf("\n".join(["# 케어로그(24h)"] + log_lines))
-        st.download_button("⬇️ 케어로그 PDF", key="dl_carelog_pdf", data=log_pdf, file_name=f"carelog_24h_{uid}.pdf", mime="application/pdf")
+        st.download_button("⬇️ 케어로그 PDF", key="dl_carelog_pdf", data=log_pdf, file_name=f"carelog_24h_{nick or uid}.pdf", mime="application/pdf")
     except Exception as e:
         st.caption(f"케어로그 PDF 오류: {e}")
 
