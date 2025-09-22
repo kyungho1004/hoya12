@@ -205,6 +205,20 @@ def render_emergency_banners(labs, care_entries):
 
 
 # -------- 약물 선택 유틸 --------
+
+# -------- 진단 기반 약물 추천(default) --------
+def _get_auto_med_defaults(group, dx, db):
+    """onco_map.auto_recs_by_dx 사용해 코드 리스트 튜플 반환: (chemo, targeted, abx)"""
+    try:
+        recs = auto_recs_by_dx(group, dx, db)
+        # 기대 형태: {"chemo":[codes], "targeted":[codes], "immuno":[codes], "abx":[codes]}
+        ch = list(recs.get("chemo") or [])
+        tg = list((recs.get("targeted") or []) + (recs.get("immuno") or []))
+        ab = list(recs.get("abx") or [])
+        return ch, tg, ab
+    except Exception:
+        return [], [], []
+
 def _drug_choices(db, keys):
     """DRUG_DB에서 주어진 키 리스트를 합쳐 (code, label_ko) 목록 생성"""
     out = []
@@ -645,6 +659,23 @@ if mode == "암":
     # 항암제/표적·면역, 항생제 선택 (한글 병기)
     st.markdown("### 1-2) 약물 선택")
     chemo_choices = _drug_choices(DRUG_DB, ["chemo"])
+
+    # 진단 기반 추천 불러오기
+    d_ch, d_tg, d_ab = _get_auto_med_defaults(group, dx, DRUG_DB)
+
+    # 표시 문자열로 매핑 (code — label)
+    def _opt_string(choices, codes):
+        label_by_code = {c:l for c,l in choices}
+        return [f"{c} — {label_by_code.get(c, c)}" for c in codes if c in label_by_code]
+
+    # dx 변경 시 한 번만 기본값 주입
+    last_dx_key = f"last_dx_for_drugs_{uid}"
+    if st.session_state.get(last_dx_key) != f"{group}::{dx}":
+        st.session_state[last_dx_key] = f"{group}::{dx}"
+        st.session_state[f"drug_chemo_{uid}"] = _opt_string(chemo_choices, d_ch)
+        st.session_state[f"drug_tgt_{uid}"]   = _opt_string(tgt_choices, d_tg)
+        st.session_state[f"drug_abx_{uid}"]   = _opt_string(abx_choices, d_ab)
+
     tgt_choices   = _drug_choices(DRUG_DB, ["targeted","immuno"])
     abx_choices   = _drug_choices(DRUG_DB, ["abx"])
     sel_chemo = _multiselect_labeled("항암제(세포독성)", chemo_choices, key=f"drug_chemo_{uid}")
