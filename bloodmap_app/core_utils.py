@@ -3,6 +3,47 @@ import streamlit as st
 import pandas as pd
 from datetime import date, datetime, timedelta
 
+
+# ---------- 프로필/계정 유틸 ----------
+import os, json, time, hashlib
+
+PROFILE_DIR = "/mnt/data/profile"
+PROFILE_INDEX = os.path.join(PROFILE_DIR, "index.json")
+
+def _ensure_dirs():
+    try:
+        os.makedirs(PROFILE_DIR, exist_ok=True)
+    except Exception:
+        pass
+
+def _norm_nick(n: str) -> str:
+    s = (n or "").strip().lower()
+    # 공백/특수문자 제거, 한글/영문/숫자만 남김
+    keep = []
+    for ch in s:
+        if ch.isalnum() or ('\uac00' <= ch <= '\ud7a3'):
+            keep.append(ch)
+    return "".join(keep)
+
+def _load_profiles_index() -> dict:
+    _ensure_dirs()
+    try:
+        with open(PROFILE_INDEX, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def _save_profiles_index(idx: dict) -> None:
+    _ensure_dirs()
+    tmp = PROFILE_INDEX + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(idx or {}, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, PROFILE_INDEX)
+
+def _make_uid(nickname: str, pin4: str) -> str:
+    raw = f"{(nickname or '').strip()}::{pin4}::{time.time()}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
 # ---------- 숫자/포맷 유틸 ----------
 def clean_num(s):
     if s is None: return None
@@ -33,8 +74,9 @@ def rr_thr_by_age_m(m):
     return 30
 
 # ---------- 닉네임/PIN ----------
+
 def nickname_pin():
-    # 2:1:1 레이아웃으로 별명 / PIN / 저장 버튼 한 줄 배치
+    # 별명/PIN/저장 버튼 한 줄 배치
     c1, c2, c3 = st.columns([2, 1, 1])
     with c1:
         n = st.text_input("별명", placeholder="예: 은서엄마", key="nickname_field")
@@ -44,33 +86,33 @@ def nickname_pin():
         save_clicked = st.button("저장", use_container_width=True, type="primary")
         st.caption(" ")
 
-    # 항상 key는 구성(그래프 CSV 파일명 등 다른 곳에서 사용 가능)
+    # 항상 숫자 4자리로 정규화 프리뷰
     p2 = "".join(ch for ch in (p or "") if ch.isdigit())[:4]
+    if p and p2 != p:
+        st.warning("PIN은 숫자 4자리만 허용됩니다.")
+        try: st.toast("PIN 4자리 필요", icon="⚠️")
+        except Exception: pass
+
+    # key는 별명#PIN(프리뷰) 형태로 유지(기존 호환)
     key = (n.strip()+"#"+p2) if (n and p2) else (n or "guest")
     st.session_state["key"] = key
 
-    # 저장 버튼 눌렀을 때만 검증/등록/로그인 실행
+    # 저장 눌렀을 때만 검증/등록/로그인
     if save_clicked:
-        if p and p2 != p:
-            st.warning("PIN은 숫자 4자리만 허용됩니다.")
-            try: st.toast("PIN 4자리 필요", icon="⚠️")
-            except Exception: pass
-            st.stop()
-
         nkey = _norm_nick(n)
         if not nkey:
             st.warning("별명을 입력하세요.")
             try: st.toast("별명 필요", icon="⚠️")
             except Exception: pass
             st.stop()
+        if not p2 or len(p2) != 4:
+            st.warning("PIN(4자리 숫자)을 입력하세요.")
+            st.stop()
 
         idx = _load_profiles_index()
-        idx = _migrate_composite_keys(idx) if ' _migrate_composite_keys' in globals() else idx
         rec = idx.get(nkey)
 
-        if rec:  # 기존 별명 → PIN 확인
-            if not p2 or len(p2) != 4:
-                st.warning("PIN(4자리 숫자)을 입력하세요."); st.stop()
+        if rec:  # 기존 별명
             if rec.get("pin") == p2:
                 uid = rec.get("uid")
                 st.session_state["user_key"] = uid
@@ -82,11 +124,9 @@ def nickname_pin():
                 try: st.toast("잘못된 PIN", icon="❌")
                 except Exception: pass
                 st.stop()
-        else:    # 새 별명 → 등록
-            if not p2 or len(p2) != 4:
-                st.warning("PIN(4자리 숫자)을 입력하세요."); st.stop()
+        else:     # 새 별명 등록 (별명은 유일)
             uid = _make_uid(n, p2)
-            idx[nkey] = {"uid": uid, "pin": p2, "nickname": n, "created_ts": int(_time.time())}
+            idx[nkey] = {"uid": uid, "pin": p2, "nickname": n, "created_ts": int(time.time())}
             _save_profiles_index(idx)
             st.session_state["user_key"] = uid
             st.caption(f"새 별명으로 등록되었습니다. UID: **{uid}**")
@@ -94,6 +134,7 @@ def nickname_pin():
             except Exception: pass
 
     return n, p2, key
+
 # ---------- 스케줄 ----------
 def schedule_block():
     st.markdown("#### 📅 항암 스케줄(간단)")
