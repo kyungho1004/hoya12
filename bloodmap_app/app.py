@@ -53,6 +53,94 @@ def _data_root() -> str:
 def _data_path(*parts) -> str:
     return os.path.join(_data_root(), *parts)
 
+# ---- Legacy carelog migration helpers ----
+def _legacy_carelog_paths(uid: str) -> list:
+    # Known legacy locations to search
+    cands = [
+        f"/mnt/data/care_log/{uid}.json",                   # original location
+        f"/mnt/data/care_log/{uid}.log.json",               # some variants
+        f"/mnt/data/care_log/{uid}_peds.json",              # pediatric mode legacy
+        f"/tmp/bloodmap_data/care_log/{uid}.json",          # tmp fallback
+        f"/tmp/bloodmap_data/care_log/{uid}_peds.json",
+    ]
+    # also wildcard: any file that contains the nick regardless of pin
+    try:
+        nick_only = (uid.split("_")[0] if "_" in uid else uid)
+        legacy_dir = "/mnt/data/care_log"
+        if os.path.isdir(legacy_dir):
+            for fn in os.listdir(legacy_dir):
+                if nick_only and nick_only in fn and fn.endswith(".json"):
+                    cands.append(os.path.join(legacy_dir, fn))
+    except Exception:
+        pass
+    # dedupe while preserving order
+    out, seen = [], set()
+    for p in cands:
+        if p and p not in seen:
+            out.append(p); seen.add(p)
+    return out
+
+def _read_json_silent(path: str):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+def _merge_carelogs(*logs_lists):
+    # flatten + dedupe by (ts,type,mg,temp)
+    items = []
+    seen = set()
+    for logs in logs_lists:
+        if not isinstance(logs, list): 
+            continue
+        for e in logs:
+            if not isinstance(e, dict): 
+                continue
+            key = (e.get("ts"), e.get("type"), e.get("mg"), e.get("temp"))
+            if key in seen: 
+                continue
+            seen.add(key)
+            items.append(e)
+    # sort by ts if possible
+    def _key(e):
+        return str(e.get("ts") or "")
+    items.sort(key=_key)
+    return items
+
+def migrate_legacy_carelog_if_needed(uid: str) -> tuple[bool,int,list]:
+    """
+    Returns: (migrated: bool, found_files: int, merged_count: int)
+    """
+    # current
+    cur = load_carelog(uid)
+    if cur: 
+        return False, 0, len(cur)
+    paths = _legacy_carelog_paths(uid)
+    merged = []
+    found = 0
+    for p in paths:
+        data = _read_json_silent(p)
+        if not data: 
+            continue
+        found += 1
+        # legacy might be dict with keys: {uid:[...]} or {"peds":[...]}
+        if isinstance(data, dict):
+            # try common keys
+            for k in [uid, "peds", "소아", "child", "kids", "carelog", "log", "logs"]:
+                if k in data and isinstance(data[k], list):
+                    merged = _merge_carelogs(merged, data[k])
+            # or flatten values
+            for v in data.values():
+                if isinstance(v, list):
+                    merged = _merge_carelogs(merged, v)
+        elif isinstance(data, list):
+            merged = _merge_carelogs(merged, data)
+    if merged:
+        save_carelog(uid, merged)
+        return True, found, len(merged)
+    return False, found, 0
+
 # ---- Disk I/O helpers ----
 import json, os
 def _profile_path(uid:str): return _data_path("profile", f"{uid}.json")
@@ -220,6 +308,49 @@ if st.button("📈 피수치 저장/추가"):
 # 긴급 배너
 care_entries = st.session_state.get("care_log", {}).get(uid)
 if care_entries is None:
+    care_entries = load_carelog(uid)
+    st.session_state.setdefault("care_log", {})
+    st.session_state["care_log"][uid] = care_entries
+# --- Auto-migrate legacy carelog if current is empty
+try:
+    migrated, found_files, merged_count = migrate_legacy_carelog_if_needed(uid)
+    if migrated:
+        st.success(f"소아/과거 케어로그 자동 복구: {merged_count}건 (원본 {found_files}개 기준)")
+except Exception as e:
+    st.caption(f"로그 복구 스킵: {e}")
+
+with st.sidebar:
+    st.markdown("### 🔄 로그 복구")
+    if st.button("소아/과거 케어로그 복구"):
+        try:
+            migrated, found_files, merged_count = migrate_legacy_carelog_if_needed(uid)
+            if migrated:
+                st.success(f"복구 완료: {merged_count}건 (원본 {found_files}개)")
+            else:
+                st.info("복구할 로그가 없거나 이미 최신 경로에 있습니다.")
+        except Exception as e:
+            st.error(f"복구 중 오류: {e}")
+
+# --- Auto-migrate legacy carelog if current is empty
+try:
+    migrated, found_files, merged_count = migrate_legacy_carelog_if_needed(uid)
+    if migrated:
+        st.success(f"소아/과거 케어로그 자동 복구: {merged_count}건 (원본 {found_files}개 기준)")
+except Exception as e:
+    st.caption(f"로그 복구 스킵: {e}")
+
+with st.sidebar:
+    st.markdown("### 🔄 로그 복구")
+    if st.button("소아/과거 케어로그 복구"):
+        try:
+            migrated, found_files, merged_count = migrate_legacy_carelog_if_needed(uid)
+            if migrated:
+                st.success(f"복구 완료: {merged_count}건 (원본 {found_files}개)")
+            else:
+                st.info("복구할 로그가 없거나 이미 최신 경로에 있습니다.")
+        except Exception as e:
+            st.error(f"복구 중 오류: {e}")
+
     care_entries = load_carelog(uid)
     st.session_state.setdefault("care_log", {})
     st.session_state["care_log"][uid] = care_entries
