@@ -55,25 +55,46 @@ def check_pin(uid:str, pin:str)->bool:
     except Exception:
         return True
 
+
 def render_profile_box(uid:str):
     st.markdown("### 👤 프로필 / PIN")
     with st.expander("프로필 열기/저장", expanded=False):
-        age_y = st.number_input("나이(세)", min_value=0, step=1, value=st.session_state.get("age_y", 30), key=f"age_{uid}")
-        sex = st.selectbox("성별", ["남","여"], key=f"sex_{uid}")
-        height_cm = st.number_input("키(cm)", min_value=0.0, step=0.1, value=170.0, key=f"h_{uid}")
-        weight = st.number_input("체중(kg)", min_value=0.0, step=0.1, value=60.0, key=f"w_{uid}")
-        syrup_apap = st.text_input("APAP 시럽 농도(예: 160 mg/5mL)", value="160/5", key=f"sap_{uid}")
-        syrup_ibu = st.text_input("IBU 시럽 농도(예: 100 mg/5mL)", value="100/5", key=f"sib_{uid}")
+        # 위젯 키와 기본값을 동일 키로 맞춥니다.
+        age_default = st.session_state.get(f"age_{uid}", 30)
+        sex_default = st.session_state.get(f"sex_{uid}", "남")
+        h_default   = st.session_state.get(f"h_{uid}", 170.0)
+        w_default   = st.session_state.get(f"w_{uid}", 60.0)
+
+        age_y = st.number_input("나이(세)", min_value=0, step=1, value=age_default, key=f"age_{uid}")
+        sex = st.selectbox("성별", ["남","여"], index=(0 if sex_default=="남" else 1), key=f"sex_{uid}")
+        height_cm = st.number_input("키(cm)", min_value=0.0, step=0.1, value=h_default, key=f"h_{uid}")
+        weight = st.number_input("체중(kg)", min_value=0.0, step=0.1, value=w_default, key=f"w_{uid}")
+        syrup_apap = st.text_input("APAP 시럽 농도(예: 160 mg/5mL)", value=st.session_state.get(f"sap_{uid}", "160/5"), key=f"sap_{uid}")
+        syrup_ibu = st.text_input("IBU 시럽 농도(예: 100 mg/5mL)", value=st.session_state.get(f"sib_{uid}", "100/5"), key=f"sib_{uid}")
         if st.button("💾 프로필 저장", key=f"save_prof_{uid}"):
-            save_profile(uid, {"age":age_y,"sex":sex,"height_cm":height_cm,"weight":weight,
-                               "syrup_apap":syrup_apap,"syrup_ibu":syrup_ibu})
+            save_profile(uid, {"age":st.session_state.get(f"age_{uid}",30),
+                               "sex":st.session_state.get(f"sex_{uid}","남"),
+                               "height_cm":st.session_state.get(f"h_{uid}",170.0),
+                               "weight":st.session_state.get(f"w_{uid}",60.0),
+                               "syrup_apap":st.session_state.get(f"sap_{uid}","160/5"),
+                               "syrup_ibu":st.session_state.get(f"sib_{uid}","100/5")})
             st.success("프로필 저장됨")
         if st.button("📥 프로필 불러오기", key=f"load_prof_{uid}"):
             p=load_profile(uid)
             if p:
-                st.session_state[f"age_{uid}"]=p.get("age",30); st.session_state[f"sex_{uid}"]=p.get("sex","남")
-                st.session_state[f"h_{uid}"]=p.get("height_cm",170.0); st.session_state[f"w_{uid}"]=p.get("weight",60.0)
-            st.success("프로필 불러옴")
+                st.session_state[f"age_{uid}"]=p.get("age",30)
+                st.session_state[f"sex_{uid}"]=p.get("sex","남")
+                st.session_state[f"h_{uid}"]=p.get("height_cm",170.0)
+                st.session_state[f"w_{uid}"]=p.get("weight",60.0)
+                st.session_state[f"sap_{uid}"]=p.get("syrup_apap","160/5")
+                st.session_state[f"sib_{uid}"]=p.get("syrup_ibu","100/5")
+                st.success("프로필 불러옴")
+                try:
+                    st.rerun()
+                except Exception:
+                    pass
+            else:
+                st.info("저장된 프로필이 없습니다.")
     with st.expander("PIN 설정/검증", expanded=False):
         pin_set = st.text_input("새 PIN(4-6자리)", type="password", key=f"pinset_{uid}")
         pin_chk = st.text_input("열람 PIN 입력", type="password", key=f"pinchk_{uid}")
@@ -87,7 +108,6 @@ def render_profile_box(uid:str):
         with c2:
             if st.button("✅ PIN 확인", key=f"checkpin_{uid}"):
                 st.success("통과") if check_pin(uid, pin_chk) else st.error("PIN 불일치")
-
 # -------------- 케어로그 (안전 파서) --------------
 def _carelog_path(uid): 
     p=os.path.join(_data_root(),"care_log",f"{uid}.json"); os.makedirs(os.path.dirname(p), exist_ok=True); return p
