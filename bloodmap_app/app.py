@@ -589,47 +589,47 @@ def _metrics_today_totals():
 # === /AUTO ===
 
 
-        opts = get_adult_options()
-        eye_opts = opts.get("눈꼽", ["없음","맑음","노랑-농성","가려움 동반","한쪽","양쪽"])
+opts = get_adult_options()
+eye_opts = opts.get("눈꼽", ["없음","맑음","노랑-농성","가려움 동반","한쪽","양쪽"])
 
-        c1,c2,c3,c4,c5,c6 = st.columns(6)
-        with c1: nasal = st.selectbox("콧물", opts["콧물"])
-        with c2: cough = st.selectbox("기침", opts["기침"])
-        with c3: diarrhea = st.selectbox("설사(횟수/일)", opts["설사"])
-        with c4: vomit = st.selectbox("구토(횟수/일)", ["없음","1~3회","4~6회","7회 이상"])
-        with c5: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1, value=0.0)
-        with c6: eye = st.selectbox("눈꼽", eye_opts)
+c1,c2,c3,c4,c5,c6 = st.columns(6)
+with c1: nasal = st.selectbox("콧물", opts["콧물"])
+with c2: cough = st.selectbox("기침", opts["기침"])
+with c3: diarrhea = st.selectbox("설사(횟수/일)", opts["설사"])
+with c4: vomit = st.selectbox("구토(횟수/일)", ["없음","1~3회","4~6회","7회 이상"])
+with c5: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1, value=0.0)
+with c6: eye = st.selectbox("눈꼽", eye_opts)
 
-        comorb = st.multiselect("주의 대상", ["임신 가능성","간질환 병력","신질환 병력","위장관 궤양/출혈력","항응고제 복용","고령(65+)"])
+comorb = st.multiselect("주의 대상", ["임신 가능성","간질환 병력","신질환 병력","위장관 궤양/출혈력","항응고제 복용","고령(65+)"])
 
-        fever_cat = _fever_bucket_from_temp(temp)
-        symptoms = build_peds_symptoms(
-            nasal=locals().get('nasal'),
-            cough=locals().get('cough'),
-            diarrhea=locals().get('diarrhea'),
-            vomit=locals().get('vomit'),
-            days_since_onset=locals().get('days_since_onset'),
-            temp=locals().get('temp'),
-            fever_cat=locals().get('fever_cat'),
-            eye=locals().get('eye'),
-        )
+fever_cat = _fever_bucket_from_temp(temp)
+symptoms = build_peds_symptoms(
+    nasal=locals().get('nasal'),
+    cough=locals().get('cough'),
+    diarrhea=locals().get('diarrhea'),
+    vomit=locals().get('vomit'),
+    days_since_onset=locals().get('days_since_onset'),
+    temp=locals().get('temp'),
+    fever_cat=locals().get('fever_cat'),
+    eye=locals().get('eye'),
+)
 
-        preds = predict_from_symptoms(symptoms, temp, comorb)
-        st.markdown("#### 🤖 증상 기반 자동 추정")
-        render_predictions(preds, show_copy=True)
+preds = predict_from_symptoms(symptoms, temp, comorb)
+st.markdown("#### 🤖 증상 기반 자동 추정")
+render_predictions(preds, show_copy=True)
 
-        triage = triage_advise(temp, comorb)
-        st.info(triage)
+triage = triage_advise(temp, comorb)
+st.info(triage)
 
-        diet_lines = _adult_diet_fallback(symptoms)
+diet_lines = _adult_diet_fallback(symptoms)
 
-        if st.button("🔎 해석하기", key="analyze_daily_adult"):
-            st.session_state["analyzed"] = True
-            st.session_state["analysis_ctx"] = {
-                "mode":"일상","who":"성인","symptoms":symptoms,
-                "temp":temp,"comorb":comorb,"preds":preds,"triage":triage,
-                "days_since_onset": days_since_onset, "diet_lines": diet_lines
-            }
+if st.button("🔎 해석하기", key="analyze_daily_adult"):
+    st.session_state["analyzed"] = True
+    st.session_state["analysis_ctx"] = {
+        "mode":"일상","who":"성인","symptoms":symptoms,
+        "temp":temp,"comorb":comorb,"preds":preds,"triage":triage,
+        "days_since_onset": days_since_onset, "diet_lines": diet_lines
+    }
 
 # ---------------- 소아(질환) 모드 ----------------
 else:
