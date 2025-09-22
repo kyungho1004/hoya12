@@ -1,0 +1,17 @@
+# --- (special_tests.py) cardio 섹션 내부 추가/수정 부분 ---
+# 기존 cardio 블록 상단 입력들 아래에 Myoglobin 입력 2줄 추가
+m1, m2 = st.columns(2)
+with m1: myo = _num(st.text_input("Myoglobin (마이오글로빈, ng/mL 또는 µg/L)", placeholder="예: 45"))
+with m2: myo_uln = _num(st.text_input("ULN for Myoglobin (정상상한, ng/mL)", placeholder="예: 70"))
+
+# 해석 로직(트로포닌 아래에 추가)
+if myo is not None and myo_uln is not None and myo_uln > 0:
+    ratio = myo / myo_uln
+    if ratio >= 3:
+        _emit(lines, "risk", f"Myoglobin {myo} (ULN×{ratio:.1f}) → 급성 근손상/심근손상 가능(비특이). CK·Troponin/임상과 함께 해석.")
+    elif ratio >= 1:
+        _emit(lines, "warn", f"Myoglobin {myo} ≥ ULN → 근육 손상 가능(운동/외상/신부전 영향 가능). CK·Troponin 동반 확인.")
+    else:
+        _emit(lines, "ok", f"Myoglobin {myo} < ULN")
+elif myo is not None and myo_uln is None:
+    _emit(lines, None, "Myoglobin ULN을 입력하면 해석이 더 정확합니다.")

@@ -1,0 +1,14 @@
+{
+  "lab_diet.py": {
+    "size": 4897,
+    "sha256": "f24866ac81f5b9aa6128316e71afd429ab6a3bcc8c05b7d794e78abe2570aa5f"
+  },
+  "app_patches.txt": {
+    "size": 5186,
+    "sha256": "319e50704feac53b067876a19e3bfc14e19bfda94325cc10440d5555e9992513"
+  },
+  "special_tests_patch.txt": {
+    "size": 1065,
+    "sha256": "610fdef6d808eaef4775eb5fe1f3dbcc317a8c0fd6b10aa4fb98222336b20741"
+  }
+}

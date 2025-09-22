@@ -1,0 +1,150 @@
+# ===== PATCH: imports & setup =====
+import os, json, uuid
+
+# Ensure required dirs exist
+for _p in ["/mnt/data/bloodmap_graph", "/mnt/data/care_log", "/mnt/data/profile", "/mnt/data/metrics"]:
+    try:
+        os.makedirs(_p, exist_ok=True)
+    except Exception:
+        pass
+
+
+# ===== PATCH: visit metrics =====
+def _metrics_path() -> str:
+    return "/mnt/data/metrics/visits.json"
+
+def _load_metrics() -> dict:
+    path = _metrics_path()
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+def _save_metrics(d: dict) -> None:
+    try:
+        with open(_metrics_path(), "w", encoding="utf-8") as f:
+            json.dump(d, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+def update_visit_counters():
+    import datetime as _dt
+    st.session_state.setdefault("_client_uuid", str(uuid.uuid4()))
+    uid = st.session_state["_client_uuid"]
+    today = _dt.date.today().isoformat()
+    data = _load_metrics() or {}
+    by_date = data.setdefault("by_date", {})
+    cum = data.setdefault("cumulative", {"unique": 0, "visits": 0, "uuids": []})
+
+    # today
+    td = by_date.setdefault(today, {"unique": 0, "visits": 0, "uuids": []})
+    td["visits"] += 1
+    if uid not in td["uuids"]:
+        td["uuids"].append(uid)
+        td["unique"] += 1
+
+    # cumulative
+    data["cumulative"]["visits"] += 1
+    if uid not in cum["uuids"]:
+        cum["uuids"].append(uid)
+        cum["unique"] += 1
+
+    _save_metrics(data)
+    return td["unique"], td["visits"], cum["unique"], cum["visits"]
+
+# Call early to record a visit and render sidebar stats
+tu, tv, cu, cv = update_visit_counters()
+with st.sidebar:
+    st.markdown("### 👥 방문자 통계")
+    st.metric("오늘(고유)", tu)
+    st.metric("오늘(방문)", tv)
+    st.metric("누적 고유", cu)
+    st.metric("총 방문수", cv)
+
+
+# ===== PATCH: eGFR helpers =====
+def egfr_ckd_epi_2021(scr_mgdl: float, age_years: float, sex: str) -> float|None:
+    try:
+        scr = float(scr_mgdl)
+        age = float(age_years)
+        sex = (sex or "").strip().lower()
+        kappa = 0.7 if sex.startswith("f") or "여" in sex else 0.9
+        alpha = -0.241 if kappa == 0.7 else -0.302
+        min_ratio = min(scr / kappa, 1.0) ** alpha
+        max_ratio = max(scr / kappa, 1.0) ** -1.200
+        sex_coef = 1.012 if kappa == 0.7 else 1.0
+        egfr = 142.0 * min_ratio * max_ratio * (0.9938 ** age) * sex_coef
+        return round(egfr, 1)
+    except Exception:
+        return None
+
+def egfr_schwartz_bedside(scr_mgdl: float, height_cm: float) -> float|None:
+    try:
+        scr = float(scr_mgdl); h = float(height_cm)
+        if scr <= 0 or h <= 0: return None
+        return round(0.413 * h / scr, 1)
+    except Exception:
+        return None
+
+def egfr_auto(scr: float|None, age_years: float|None, sex: str|None, height_cm: float|None):
+    if scr is None: return None, ""
+    if age_years is not None and age_years < 18 and height_cm:
+        val = egfr_schwartz_bedside(scr, height_cm)
+        return val, "Schwartz(소아)"
+    if age_years is not None and sex:
+        val = egfr_ckd_epi_2021(scr, age_years, sex)
+        return val, "CKD‑EPI 2021(성인)"
+    return None, ""
+
+
+# ===== PATCH: persisted graph CSV helpers =====
+def _graph_csv_path(uid: str) -> str:
+    return f"/mnt/data/bloodmap_graph/{uid}.labs.csv"
+
+def load_persisted_graph(uid: str):
+    \"\"\"Load graph CSV into session (if exists).\"\"\"
+    try:
+        path = _graph_csv_path(uid)
+        if os.path.exists(path):
+            import pandas as pd
+            df = pd.read_csv(path)
+            st.session_state.setdefault("lab_hist", {})[uid] = df
+    except Exception:
+        pass
+
+def save_persisted_graph(uid: str, df):
+    try:
+        df.to_csv(_graph_csv_path(uid), index=False)
+    except Exception:
+        pass
+
+
+# ===== PATCH: helper to render lab table with Δ and eGFR =====
+def render_labs_with_delta_and_egfr(labs: dict, labels_map: dict, dfh, egfr_value: float|None, egfr_label: str):
+    import pandas as _pd
+    rows = []
+    prev_map = {}
+    if dfh is not None and hasattr(dfh, "empty") and not dfh.empty:
+        last = dfh.iloc[-1].to_dict()
+        # reverse map label -> code
+        for code, label in (labels_map or {}).items():
+            if label in last:
+                try:
+                    prev_map[code] = float(last.get(label)) if last.get(label) not in [None, ""] else None
+                except Exception:
+                    prev_map[code] = None
+    for code, cur in (labs or {}).items():
+        prev = prev_map.get(code)
+        if cur is not None and prev is not None:
+            delta = round(float(cur) - float(prev), 2)
+        else:
+            delta = None
+        rows.append({\"항목\": code, \"현재\": cur, \"Δ(최근 저장값 대비)\": delta})
+    if egfr_value is not None:
+        rows.append({\"항목\": f\"eGFR ({egfr_label})\", \"현재\": egfr_value, \"Δ(최근 저장값 대비)\": None})
+    dfshow = _pd.DataFrame(rows)
+    import streamlit as st
+    st.dataframe(dfshow, use_container_width=True, height=300)
