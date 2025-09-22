@@ -58,8 +58,21 @@ def check_pin(uid:str, pin:str)->bool:
 
 def render_profile_box(uid:str):
     st.markdown("### 👤 프로필 / PIN")
+
+    # 불러오기 트리거가 걸려 있으면 먼저 세션에 주입하고 재시작
+    trig_key = f"__load_prof_trig_{uid}"
+    if st.session_state.get(trig_key):
+        p = load_profile(uid) or {}
+        st.session_state[f"age_{uid}"] = int(p.get("age", 30) or 30)
+        st.session_state[f"sex_{uid}"] = p.get("sex", "남")
+        st.session_state[f"h_{uid}"]   = float(p.get("height_cm", 170.0) or 170.0)
+        st.session_state[f"w_{uid}"]   = float(p.get("weight", 60.0) or 60.0)
+        st.session_state[f"sap_{uid}"] = str(p.get("syrup_apap", "160/5"))
+        st.session_state[f"sib_{uid}"] = str(p.get("syrup_ibu", "100/5"))
+        st.session_state[trig_key] = False
+        st.rerun()
+
     with st.expander("프로필 열기/저장", expanded=False):
-        # 위젯 키와 기본값을 동일 키로 맞춥니다.
         age_default = st.session_state.get(f"age_{uid}", 30)
         sex_default = st.session_state.get(f"sex_{uid}", "남")
         h_default   = st.session_state.get(f"h_{uid}", 170.0)
@@ -71,30 +84,21 @@ def render_profile_box(uid:str):
         weight = st.number_input("체중(kg)", min_value=0.0, step=0.1, value=w_default, key=f"w_{uid}")
         syrup_apap = st.text_input("APAP 시럽 농도(예: 160 mg/5mL)", value=st.session_state.get(f"sap_{uid}", "160/5"), key=f"sap_{uid}")
         syrup_ibu = st.text_input("IBU 시럽 농도(예: 100 mg/5mL)", value=st.session_state.get(f"sib_{uid}", "100/5"), key=f"sib_{uid}")
-        if st.button("💾 프로필 저장", key=f"save_prof_{uid}"):
-            save_profile(uid, {"age":st.session_state.get(f"age_{uid}",30),
-                               "sex":st.session_state.get(f"sex_{uid}","남"),
-                               "height_cm":st.session_state.get(f"h_{uid}",170.0),
-                               "weight":st.session_state.get(f"w_{uid}",60.0),
-                               "syrup_apap":st.session_state.get(f"sap_{uid}","160/5"),
-                               "syrup_ibu":st.session_state.get(f"sib_{uid}","100/5")})
-            st.success("프로필 저장됨")
-        if st.button("📥 프로필 불러오기", key=f"load_prof_{uid}"):
-            p=load_profile(uid)
-            if p:
-                st.session_state[f"age_{uid}"]=p.get("age",30)
-                st.session_state[f"sex_{uid}"]=p.get("sex","남")
-                st.session_state[f"h_{uid}"]=p.get("height_cm",170.0)
-                st.session_state[f"w_{uid}"]=p.get("weight",60.0)
-                st.session_state[f"sap_{uid}"]=p.get("syrup_apap","160/5")
-                st.session_state[f"sib_{uid}"]=p.get("syrup_ibu","100/5")
-                st.success("프로필 불러옴")
-                try:
-                    st.rerun()
-                except Exception:
-                    pass
-            else:
-                st.info("저장된 프로필이 없습니다.")
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("💾 프로필 저장", key=f"save_prof_{uid}"):
+                save_profile(uid, {"age":st.session_state.get(f"age_{uid}",30),
+                                   "sex":st.session_state.get(f"sex_{uid}","남"),
+                                   "height_cm":st.session_state.get(f"h_{uid}",170.0),
+                                   "weight":st.session_state.get(f"w_{uid}",60.0),
+                                   "syrup_apap":st.session_state.get(f"sap_{uid}","160/5"),
+                                   "syrup_ibu":st.session_state.get(f"sib_{uid}","100/5")})
+                st.success("프로필 저장됨")
+        with c2:
+            if st.button("📥 프로필 불러오기", key=f"load_prof_{uid}"):
+                st.session_state[trig_key] = True
+                st.stop()  # 즉시 종료 → 다음 run에서 위 트리거 처리
+
     with st.expander("PIN 설정/검증", expanded=False):
         pin_set = st.text_input("새 PIN(4-6자리)", type="password", key=f"pinset_{uid}")
         pin_chk = st.text_input("열람 PIN 입력", type="password", key=f"pinchk_{uid}")
@@ -108,46 +112,7 @@ def render_profile_box(uid:str):
         with c2:
             if st.button("✅ PIN 확인", key=f"checkpin_{uid}"):
                 st.success("통과") if check_pin(uid, pin_chk) else st.error("PIN 불일치")
-# -------------- 케어로그 (안전 파서) --------------
-def _carelog_path(uid): 
-    p=os.path.join(_data_root(),"care_log",f"{uid}.json"); os.makedirs(os.path.dirname(p), exist_ok=True); return p
-def carelog_load(uid):
-    try: return json.load(open(_carelog_path(uid),"r",encoding="utf-8"))
-    except Exception: return []
-def carelog_save(uid, data):
-    tmp=_carelog_path(uid)+".tmp"; json.dump(data, open(tmp,"w",encoding="utf-8"), ensure_ascii=False, indent=2); os.replace(tmp,_carelog_path(uid))
-def carelog_add(uid, e): d=carelog_load(uid); d.append(e); carelog_save(uid,d)
-def _safe_hours(win, default=24):
-    try:
-        if isinstance(win,(int,float)): return max(1,int(win))
-        s=str(win or default).lower().replace("h",""); return max(1,int(float(s)))
-    except Exception: return default
-def _parse_ts(ts):
-    if not ts: return datetime.now(KST)
-    try:
-        dt = datetime.fromisoformat(ts)
-    except Exception:
-        try: dt = datetime.strptime(ts[:19], "%Y-%m-%dT%H:%M:%S")
-        except Exception: return datetime.now(KST)
-    if dt.tzinfo is None: dt = dt.replace(tzinfo=KST)
-    return dt.astimezone(KST)
 
-def analyze_symptoms(entries):
-    em, gen = [], []
-    kinds = [e.get("kind") for e in entries if e.get("type") in ("vomit","diarrhea")]
-    has_green_vomit = any(k and "초록" in k for k in kinds)
-    has_bloody = any(k and ("혈변" in k or "검은" in k or "녹색혈변" in k) for k in kinds)
-    fevers = [float(e.get("temp") or 0) for e in entries if e.get("type")=="fever"]
-    has_high_fever = any(t >= 39.0 for t in fevers)
-    vomit_ct = sum(1 for e in entries if e.get("type")=="vomit")
-    diarr_ct = sum(1 for e in entries if e.get("type")=="diarrhea")
-    if has_bloody: em.append("혈변/검은변/녹색혈변")
-    if has_green_vomit: em.append("초록(담즙) 구토")
-    if vomit_ct >= 3: em.append("2시간 내 구토 ≥3회")
-    if diarr_ct >= 6: em.append("24시간 설사 ≥6회")
-    if has_high_fever: em.append("고열 ≥39.0℃")
-    gen = ["혈변/검은변","초록 구토","의식저하/경련/호흡곤란","6시간 무뇨·중증 탈수","고열 지속","심한 복통/팽만/무기력"]
-    return em, gen
 
 def render_carelog(uid, nick, win=24):
     st.markdown("### 🗒️ 케어로그")
@@ -529,6 +494,16 @@ if mode == "암":
     def _opt_string(choices, codes):
         label_by_code = {c:l for c,l in choices}
         return [f"{c} — {label_by_code.get(c, c)}" for c in codes if c in label_by_code]
+
+    freeze_auto = st.toggle("진단 변경 시 자동 추천 적용", value=True, key=f"freeze_auto_{uid}")
+    # dx 변경 감지 후에만 기본값 주입 (freeze_auto가 True일 때만)
+    last_dx_key = f"last_dx_for_drugs_{uid}"
+    cur_sig = f"{group}::{dx}"
+    if freeze_auto and st.session_state.get(last_dx_key) != cur_sig:
+        st.session_state[last_dx_key] = cur_sig
+        st.session_state[f"drug_chemo_{uid}"] = _opt_string(chemo_choices, d_ch)
+        st.session_state[f"drug_tgt_{uid}"]   = _opt_string(tgt_choices, d_tg)
+        st.session_state[f"drug_abx_{uid}"]   = _opt_string(abx_choices, d_ab)
 
     try:
         recs = auto_recs_by_dx(group, dx, DRUG_DB)
