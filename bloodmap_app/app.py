@@ -272,7 +272,7 @@ def load_last_row(uid):
 
 # -------- 특수검사 렌더링(안전 필터) --------
 def render_special_tests(labs: dict):
-    st.subheader("🧬 특수검사")
+    st.subheader("🧬 특수검사 (토글로 입력)")
     lines = []
     # Myoglobin rule (no ULN known): only hard cut
     try:
@@ -389,6 +389,17 @@ def dense_diet_guides(labs, heme_flag=False):
 # ---------------- 단위 선택 + 입력 ----------------
 def labs_input_with_units(uid, cols_per_row=1):
     st.markdown("### 2) 피수치 입력 + 단위 가드")
+
+    # 특수검사 토글/선택
+    sp_enable = st.toggle("🧬 특수검사 입력 켜기", value=False, key=f"sp_enable_{uid}")
+    sp_candidates = [("Myoglobin","Myoglobin(근육)"), ("CK","CK(크레아틴키나제)"), ("CKMB","CK-MB"),
+                     ("Troponin","Troponin"), ("PT","PT(초)"), ("aPTT","aPTT(초)"), ("INR","INR"), ("D-Dimer","D-Dimer")]
+    if sp_enable:
+        sel = st.multiselect("추가할 특수검사 항목", [c[0] for c in sp_candidates],
+                             default=[c[0] for c in sp_candidates], key=f"sp_sel_{uid}")
+    else:
+        sel = []
+
     # code, label
     LABS = [
         ("WBC","WBC(백혈구)"), ("Hb","Hb(혈색소)"), ("PLT","PLT(혈소판)"), ("ANC","ANC"),
@@ -396,12 +407,13 @@ def labs_input_with_units(uid, cols_per_row=1):
         ("Glu","Glu(혈당)"), ("AST","AST(간수치)"), ("ALT","ALT(간수치)"),
         ("Cr","Cr(크레아티닌)"), ("CRP","CRP(C-반응단백)"), ("Cl","Cl(염소)"),
         ("UA","UA(요산)"), ("T.B","T.B(총빌리루빈)"), ("P","P(인)"),
-        # --- 특수검사 입력 ---
-        ("Myoglobin","Myoglobin(근육)"), ("CK","CK(크레아틴키나제)"), ("CKMB","CK-MB"), ("Troponin","Troponin"),
-        ("PT","PT(초)"), ("aPTT","aPTT(초)"), ("INR","INR"), ("D-Dimer","D-Dimer") ,
         ("CR","CR(별칭/이전 표기)")
     ]
     unit_opts = {"Glu":"mg/dL","P":"mg/dL","Ca":"mg/dL","Cr":"mg/dL"}
+    # 선택된 특수검사 항목을 동적으로 추가
+    if sp_enable and sel:
+        label_map = {k:v for k,v in sp_candidates}
+        LABS = LABS + [(k, label_map.get(k, k)) for k in sel]
     vals = {}
     for i,(code,label) in enumerate(LABS):
         if cols_per_row==1:
