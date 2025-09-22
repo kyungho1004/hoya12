@@ -286,7 +286,7 @@ sp_lines = special_tests_ui()
 # 저장/그래프 CSV
 st.markdown("#### 💾 저장/그래프")
 when = st.date_input("측정일", value=date.today())
-if st.button("📈 피수치 저장/추가"):
+if st.button("📈 피수치 저장/추가", key="btn_save_graph"):
     import os, csv
     path = _data_path("bloodmap_graph", f"{uid}.labs.csv")
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -321,7 +321,7 @@ except Exception as e:
 
 with st.sidebar:
     st.markdown("### 🔄 로그 복구")
-    if st.button("소아/과거 케어로그 복구"):
+    if st.button("소아/과거 케어로그 복구", key="btn_recover_legacy"):
         try:
             migrated, found_files, merged_count = migrate_legacy_carelog_if_needed(uid)
             if migrated:
@@ -341,7 +341,7 @@ except Exception as e:
 
 with st.sidebar:
     st.markdown("### 🔄 로그 복구")
-    if st.button("소아/과거 케어로그 복구"):
+    if st.button("소아/과거 케어로그 복구", key="btn_recover_legacy"):
         try:
             migrated, found_files, merged_count = migrate_legacy_carelog_if_needed(uid)
             if migrated:
@@ -376,16 +376,16 @@ def _add_log(entry):
 
 c1,c2,c3,c4,c5 = st.columns(5)
 with c1:
-    if st.button("발열 기록 +"):
+    if st.button("발열 기록 +", key="btn_add_fever"):
         t = st.number_input("현재 체온(℃)", min_value=35.0, step=0.1, value=38.0, key="temp_add")
         _add_log({"type":"fever","temp":t,"ts": now.isoformat()})
         st.success("발열 기록됨.")
 with c2:
-    if st.button("구토 +"):
+    if st.button("구토 +", key="btn_add_vomit"):
         _add_log({"type":"vomit","ts": now.isoformat(), "note": ""})
         st.success("구토 기록됨.")
 with c3:
-    if st.button("설사 +"):
+    if st.button("설사 +", key="btn_add_diarrhea"):
         _add_log({"type":"diarrhea","ts": now.isoformat(), "note": ""})
         st.success("설사 기록됨.")
 with c4:
@@ -407,7 +407,7 @@ ibu_block = block_ibu_reason(labs, egfr)
 
 d1,d2 = st.columns(2)
 with d1:
-    if st.button("APAP 투여 기록"):
+    if st.button("APAP 투여 기록", key="btn_log_apap"):
         if apap_mg <= 0:
             st.warning("용량을 입력하세요.")
         elif apap_next and now < apap_next:
@@ -418,7 +418,7 @@ with d1:
             _add_log({"type":"apap","mg": apap_mg, "ts": now.isoformat()})
             st.success("APAP 기록됨.")
 with d2:
-    if st.button("IBU 투여 기록"):
+    if st.button("IBU 투여 기록", key="btn_log_ibu"):
         if ibu_block:
             st.error(ibu_block)
         elif ibu_mg <= 0:
@@ -448,15 +448,15 @@ if care_24h:
 
     # Export buttons
     ics_data = build_ics_for_next_doses(apap_next, ibu_next)
-    st.download_button("📅 다음 3회 복용 일정 (.ics)", data=ics_data, file_name="next_doses.ics")
+    st.download_button("📅 다음 3회 복용 일정 (.ics)", key="dl_ics", data=ics_data, file_name="next_doses.ics")
     # TXT/PDF export for care log (24h)
     log_lines = ["케어로그(최근 24h)"] + [f"- {e.get('ts')} · {e.get('type')}" + (f" {e.get('temp')}℃" if e.get('type')=='fever' else (f" {e.get('mg')} mg" if e.get('type') in ('apap','ibu') else "")) for e in sorted(care_24h, key=lambda x: x['ts'])]
     log_txt = "\n".join(log_lines)
-    st.download_button("⬇️ 케어로그 TXT", data=log_txt, file_name="carelog_24h.txt")
+    st.download_button("⬇️ 케어로그 TXT", key="dl_carelog_txt", data=log_txt, file_name="carelog_24h.txt")
     try:
         from pdf_export import export_md_to_pdf
         log_pdf = export_md_to_pdf("\n".join(["# 케어로그(24h)"] + log_lines))
-        st.download_button("⬇️ 케어로그 PDF", data=log_pdf, file_name="carelog_24h.pdf", mime="application/pdf")
+        st.download_button("⬇️ 케어로그 PDF", key="dl_carelog_pdf", data=log_pdf, file_name="carelog_24h.pdf", mime="application/pdf")
     except Exception as e:
         st.caption(f"케어로그 PDF 오류: {e}")
 
@@ -566,10 +566,10 @@ if results_only_after_analyze(st):
     md = title + "\n".join(body) + footer
     txt = md.replace("# ","").replace("## ","")
 
-    st.download_button("⬇️ Markdown (.md)", data=md, file_name="BloodMap_Report.md")
-    st.download_button("⬇️ 텍스트 (.txt)", data=txt, file_name="BloodMap_Report.txt")
+    st.download_button("⬇️ Markdown (.md)", key="dl_md", data=md, file_name="BloodMap_Report.md")
+    st.download_button("⬇️ 텍스트 (.txt)", key="dl_txt", data=txt, file_name="BloodMap_Report.txt")
     try:
         pdf_bytes = export_md_to_pdf(md)
-        st.download_button("⬇️ PDF (.pdf)", data=pdf_bytes, file_name="BloodMap_Report.pdf", mime="application/pdf")
+        st.download_button("⬇️ PDF (.pdf)", key="dl_pdf", data=pdf_bytes, file_name="BloodMap_Report.pdf", mime="application/pdf")
     except Exception as e:
         st.caption(f"PDF 변환 중 오류: {e}")
