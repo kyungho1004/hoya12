@@ -203,6 +203,61 @@ def render_emergency_banners(labs, care_entries):
     if isinstance(na,(int,float)) and (na < 125 or na > 155): st.error("🚨 전해질 경보: Na <125 또는 >155")
     if isinstance(k,(int,float)) and k >= 6.0: st.error("🚨 전해질 경보: K ≥ 6.0")
 
+
+# -------- 약물 선택 유틸 --------
+def _drug_choices(db, keys):
+    """DRUG_DB에서 주어진 키 리스트를 합쳐 (code, label_ko) 목록 생성"""
+    out = []
+    try:
+        for k in keys:
+            group = (db or {}).get(k, {})
+            if isinstance(group, dict):
+                for code, meta in group.items():
+                    # display_label이 있으면 사용(한글 병기)
+                    try:
+                        label = display_label(code, meta)
+                    except Exception:
+                        label = meta.get("ko") or meta.get("name") or code
+                    out.append((code, label))
+            elif isinstance(group, list):
+                for item in group:
+                    code = item.get("code") if isinstance(item, dict) else str(item)
+                    label = item.get("ko") if isinstance(item, dict) else code
+                    out.append((code, label))
+    except Exception:
+        pass
+    # 중복 제거 + 라벨 정렬
+    seen=set(); uniq=[]
+    for code,label in out:
+        if code in seen: continue
+        seen.add(code); uniq.append((code,label))
+    return sorted(uniq, key=lambda x: x[1])
+
+def _multiselect_labeled(label, choices, key):
+    """[(code,label)] → 멀티셀렉트, 반환은 code 리스트"""
+    opts = [f"{c} — {l}" for c,l in choices]
+    sel = st.multiselect(label, opts, key=key)
+    picked = []
+    for s in sel:
+        code = s.split(" — ",1)[0]
+        picked.append(code)
+    return picked
+
+def _label_list(codes, db):
+    """코드 리스트 → 한글 병기 문자열 리스트"""
+    out=[]
+    for c in codes or []:
+        try:
+            meta = None
+            for g in ["chemo","targeted","immuno","abx"]:
+                if c in (db.get(g, {}) or {}):
+                    meta = db[g][c]; break
+            label = display_label(c, meta) if meta is not None else c
+        except Exception:
+            label = c
+        out.append(label)
+    return out
+
 # -------- eGFR 계산 --------
 def egfr_calculate(age_y, sex, scr_mgdl, height_cm=None):
     if scr_mgdl is None:
@@ -408,8 +463,11 @@ def labs_input_with_units(uid, cols_per_row=1):
     unit_opts = {"Glu":"mg/dL","P":"mg/dL","Ca":"mg/dL","Cr":"mg/dL"}
     vals = {}
 
-    def _field(label, code):
-        vals[code] = clean_num(st.text_input(label, key=f"lab_{code}_{uid}"))
+    def _field(label, code, text_ok=False):
+        if text_ok:
+            vals[code] = st.text_input(label, key=f"lab_{code}_{uid}")
+        else:
+            vals[code] = clean_num(st.text_input(label, key=f"lab_{code}_{uid}"))
         if code in ("Glu","P","Ca","Cr"):
             unit_opts[code] = st.selectbox(f"{code} 단위", ["mg/dL","mmol/L"] if code in ("Glu","P","Ca") else ["mg/dL","μmol/L"], key=f"unit_{code}_{uid}")
 
@@ -455,15 +513,15 @@ def labs_input_with_units(uid, cols_per_row=1):
 
     if tg_urine:
         with st.expander("🥤 뇨검사", expanded=True):
-            _field("요비중(SG)", "U_SG")
-            _field("요 pH", "U_pH")
-            _field("요단백(정성)", "U_PRO")
-            _field("요당(정성)", "U_GLU")
-            _field("요케톤(정성)", "U_KET")
-            _field("요잠혈(정성)", "U_BLD")
-            _field("아질산염(Nitrite)", "U_NIT")
-            _field("백혈구 에스터레이스", "U_LEU")
-            _field("알부민/크레아티닌비(ACR, mg/g)", "U_ACR")
+            _field("요비중(SG)", "U_SG", text_ok=True)
+            _field("요 pH", "U_pH", text_ok=True)
+            _field("요단백(정성)", "U_PRO", text_ok=True)
+            _field("요당(정성)", "U_GLU", text_ok=True)
+            _field("요케톤(정성)", "U_KET", text_ok=True)
+            _field("요잠혈(정성)", "U_BLD", text_ok=True)
+            _field("아질산염(Nitrite)", "U_NIT", text_ok=True)
+            _field("백혈구 에스터레이스", "U_LEU", text_ok=True)
+            _field("알부민/크레아티닌비(ACR, mg/g)", "U_ACR", text_ok=True)
 
     if tg_lipid:
         with st.expander("🥑 지질/콜레스테롤", expanded=True):
@@ -497,6 +555,13 @@ def labs_input_with_units(uid, cols_per_row=1):
     if memo:
         st.caption("단위 변환 적용: " + " · ".join(memo))
 
+
+    # 뇨검사 정성 결과 표기 규칙: '+' 입력 시 '++'로 출력
+    for k in ["U_PRO","U_GLU","U_KET","U_BLD","U_NIT","U_LEU"]:
+        v = converted.get(k)
+        if isinstance(v, str):
+            if v.strip() == "+":
+                converted[k] = "++"
     # 파생값: Non-HDL
     try:
         tc = float(converted.get("TC")) if converted.get("TC") is not None else None
@@ -576,6 +641,17 @@ if mode == "암":
     show_lab_summary(uid, labs, prof)
     sp_lines = render_special_tests(labs)
 
+
+    # 항암제/표적·면역, 항생제 선택 (한글 병기)
+    st.markdown("### 1-2) 약물 선택")
+    chemo_choices = _drug_choices(DRUG_DB, ["chemo"])
+    tgt_choices   = _drug_choices(DRUG_DB, ["targeted","immuno"])
+    abx_choices   = _drug_choices(DRUG_DB, ["abx"])
+    sel_chemo = _multiselect_labeled("항암제(세포독성)", chemo_choices, key=f"drug_chemo_{uid}")
+    sel_tgt   = _multiselect_labeled("표적·면역", tgt_choices, key=f"drug_tgt_{uid}")
+    sel_abx   = _multiselect_labeled("항생제", abx_choices, key=f"drug_abx_{uid}")
+    st.caption("선택됨: " + " / ".join(_label_list(sel_chemo+sel_tgt+sel_abx, DRUG_DB)) if (sel_chemo or sel_tgt or sel_abx) else "—")
+
     # 저장/그래프 CSV
     st.markdown("#### 💾 저장/그래프 CSV")
     when = st.date_input("측정일", value=date.today(), key=f"when_{uid}")
@@ -627,13 +703,28 @@ if mode == "암":
     st.subheader("🍽️ 식이가이드")
     diet_lines = dense_diet_guides(labs or {}, heme_flag=(group=="혈액암")); [st.write("- "+L) for L in diet_lines]
 
+    # 💊 선택 약물 (한글 병기) + 부작용 요약
+    if sel_chemo or sel_tgt or sel_abx:
+        st.subheader("💊 선택 약물")
+        if sel_chemo: st.write("항암제: " + " · ".join(_label_list(sel_chemo, DRUG_DB)))
+        if sel_tgt:   st.write("표적·면역: " + " · ".join(_label_list(sel_tgt, DRUG_DB)))
+        if sel_abx:   st.write("항생제: " + " · ".join(_label_list(sel_abx, DRUG_DB)))
+        try:
+            alerts = collect_top_ae_alerts(sel_chemo + sel_tgt + sel_abx, db=DRUG_DB)
+            if alerts: st.error("\\n".join(alerts))
+            st.caption("※ 상세 부작용은 보고서 또는 아래 리스트에서 확인")
+            render_adverse_effects(st, sel_chemo + sel_tgt + sel_abx, DRUG_DB)
+        except Exception as e:
+            st.caption(f"부작용 요약 오류: {e}")
+
+
     # 해석/보고서
     if st.button("🔎 해석하기", key=f"analyze_cancer_{uid}"):
         st.session_state["analyzed"] = True
         st.session_state["analysis_ctx"] = {
             "mode":"암","group":group,"dx":dx,"dx_label": dx_display(group, dx),
             "labs": labs, "diet_lines": diet_lines, "special_tests": sp_lines,
-            "user_chemo": [], "user_targeted": [], "user_abx": [],
+            "user_chemo": sel_chemo, "user_targeted": sel_tgt, "user_abx": sel_abx,
             "care_lines": care_lines if place_carelog_under_special else [],
             "triage_high": analyze_symptoms(care_entries)[0] if place_carelog_under_special else [],
         }
@@ -740,6 +831,15 @@ def export_report(ctx: dict):
     if ctx.get("care_lines"): body.append("\n## 🗒️ 최근 24h 케어로그\n" + "\n".join(ctx["care_lines"]))
     if ctx.get("diet_lines"): body.append("\n## 🍽️ 식이가이드\n" + "\n".join(f"- {x}" for x in ctx["diet_lines"]))
     if ctx.get("special_tests"): body.append("\n## 🧬 특수검사\n" + "\n".join(f"- {x}" for x in ctx["special_tests"]))
+    # 💊 약물 선택(한글 병기)
+    ch = _label_list(ctx.get("user_chemo") or [], DRUG_DB)
+    tg = _label_list(ctx.get("user_targeted") or [], DRUG_DB)
+    ab = _label_list(ctx.get("user_abx") or [], DRUG_DB)
+    if ch or tg or ab:
+        body.append("\n## 💊 선택 약물\n")
+        if ch: body.append("- 항암제: " + " · ".join(ch))
+        if tg: body.append("- 표적·면역: " + " · ".join(tg))
+        if ab: body.append("- 항생제: " + " · ".join(ab))
     if ctx.get("labs"):
         labs = ctx["labs"].copy()
         if "CR" in labs and "Cr" not in labs: labs["Cr"] = labs["CR"]
