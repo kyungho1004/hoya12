@@ -152,3 +152,49 @@ def schedule_block():
     df = st.session_state.get("schedules", {}).get(st.session_state.get("key","guest"))
     if isinstance(df, pd.DataFrame) and not df.empty:
         st.dataframe(df, use_container_width=True, height=180)
+
+
+
+# === OVERRIDE: robust profile save path & helpers ===
+try:
+    import os, json, hashlib, time as _time, tempfile
+    # Resolve profile index path with env overrides
+    BASE_DATA_DIR = os.environ.get("BLOODMAP_DATA_DIR", "/mnt/data")
+    PROFILE_INDEX = os.environ.get(
+        "BLOODMAP_PROFILE_INDEX",
+        os.path.join(BASE_DATA_DIR, "profile", "index.json")
+    )
+
+    def _ensure_dirs_for(path: str):
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+        except Exception:
+            pass
+
+    def _save_profiles_index(idx: dict) -> None:
+        # primary path
+        target = PROFILE_INDEX
+        _ensure_dirs_for(target)
+        tmp = target + ".tmp"
+        try:
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(idx or {}, f, ensure_ascii=False, indent=2)
+            os.replace(tmp, target)
+            return
+        except Exception:
+            # fallback to app dir
+            try:
+                app_dir = os.path.dirname(__file__)
+                fallback = os.path.join(app_dir, "profile", "index.json")
+                _ensure_dirs_for(fallback)
+                tmp2 = fallback + ".tmp"
+                with open(tmp2, "w", encoding="utf-8") as f:
+                    json.dump(idx or {}, f, ensure_ascii=False, indent=2)
+                os.replace(tmp2, fallback)
+                globals()["PROFILE_INDEX"] = fallback
+                return
+            except Exception:
+                pass
+except Exception:
+    pass
+# === /OVERRIDE ===
