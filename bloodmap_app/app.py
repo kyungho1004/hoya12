@@ -13,7 +13,6 @@ from pdf_export import export_md_to_pdf
 from peds_rules import predict_from_symptoms as peds_predict, triage_advise as peds_triage
 from adult_rules import predict_from_symptoms as adult_predict, triage_advise as adult_triage, get_adult_options
 from peds_profiles import get_symptom_options
-from special_tests import interpret_special_tests  # optional if available
 
 # Fix modules
 from carelog_utils import carelog_add, carelog_load, format_care_lines, render_carelog as render_carelog_ui
