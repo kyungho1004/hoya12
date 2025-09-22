@@ -148,6 +148,27 @@ if "_profile_load" not in globals():
             pass
 # === /AUTO ===
 
+# === AUTO: eGFR helpers guard ===
+if "_egfr_ckdepi_2021" not in globals():
+    def _egfr_ckdepi_2021(scr_mgdl: float, age: float, is_female: bool):
+        if scr_mgdl is None or age is None: return None
+        kappa = 0.7 if is_female else 0.9
+        alpha = -0.241 if is_female else -0.302
+        scr_k = (scr_mgdl or 0) / kappa
+        try:
+            return 142 * (min(scr_k, 1)**alpha) * (max(scr_k, 1)**-1.200) * (0.9938**(age or 0)) * (1.012 if is_female else 1.0)
+        except Exception:
+            return None
+if "_egfr_schwartz_2009" not in globals():
+    def _egfr_schwartz_2009(height_cm: float, scr_mgdl: float):
+        try:
+            if not height_cm or not scr_mgdl: return None
+            return 0.413 * (height_cm) / scr_mgdl
+        except Exception:
+            return None
+# === /AUTO ===
+
+
 
 
 # === AUTO: eGFR UI under nickname ===
@@ -168,6 +189,25 @@ with c4:
                                   value=float(_prof_cache.get("egfr_height") or 0.0))
 with c5:
     st.caption("성인: CKD‑EPI 2021, 소아: Schwartz")
+
+
+# --- AUTO+: try auto-fill Cr from user's latest labs CSV ---
+_uid = st.session_state.get("user_key")
+col_af1, col_af2 = st.columns([1,3])
+if col_af1.button("최근 검사값 불러오기", use_container_width=True):
+    _cr_val, _cr_date = _labs_fetch_latest_cr(_uid)
+    if _cr_val is not None:
+        egfr_scr = float(_cr_val)
+        st.session_state["egfr_scr_autofill"] = egfr_scr
+        st.success(f"최근 SCr 자동 입력: {egfr_scr:.2f} mg/dL" + (f" ({_cr_date})" if _cr_date else ""))
+    else:
+        st.warning("최근 검사 CSV에서 크레아티닌을 찾지 못했어요. 피수치 CSV 컬럼명이 'Cr/Creatinine'인지 확인해주세요.")
+if "egfr_scr_autofill" in st.session_state and (not egfr_scr or egfr_scr == 0.0):
+    egfr_scr = float(st.session_state["egfr_scr_autofill"])
+if not egfr_scr:
+    st.caption("ℹ️ eGFR은 혈청 크레아티닌(SCr)이 필요해요. '최근 검사값 불러오기'를 눌러 자동 채우거나, 검사 결과지의 Cr(mg/dL)을 입력해 주세요.")
+# --- /AUTO+ ---
+
 is_child = (egfr_age or 0) < 18
 if is_child:
     egfr_val = _egfr_schwartz_2009(egfr_height or 0, egfr_scr or 0)
@@ -531,6 +571,58 @@ import os as _os, json as _json, datetime as _dt, uuid as _uuid
 
 # === AUTO: eGFR helpers & profile IO ===
 import os as _os, json as _json, math as _math
+
+
+# === AUTO: labs auto-fetch helper ===
+import csv as _csv, os as _os
+def _labs_fetch_latest_cr(uid: str|None):
+    """Return (value_mgdl, date_string) for latest serum creatinine from the user's labs CSV if available."""
+    if not uid:
+        return None, None
+    p = f"/mnt/data/bloodmap_graph/{uid}.labs.csv"
+    if not _os.path.exists(p):
+        return None, None
+    try:
+        with open(p, "r", encoding="utf-8") as f:
+            reader = list(_csv.DictReader(f))
+    except Exception:
+        return None, None
+    if not reader:
+        return None, None
+    cand = ["cr", "creatinine", "scr", "serum creatinine", "creat"]
+    headers = [h for h in reader[0].keys()]
+    pick_col = None
+    for h in headers:
+        hnorm = (h or "").lower()
+        hnorm = hnorm.replace("(mg/dl)", "").replace(" ", "").replace("_","")
+        for c in cand:
+            if c.replace(" ","") in hnorm:
+                pick_col = h
+                break
+        if pick_col:
+            break
+    if not pick_col:
+        return None, None
+    date_col = None
+    for h in headers:
+        hl = (h or "").lower()
+        if "date" in hl or "when" in hl or "일시" in hl or "날짜" in hl:
+            date_col = h
+            break
+    for row in reversed(reader):
+        raw = row.get(pick_col, "").strip()
+        if not raw:
+            continue
+        try:
+            val = float(str(raw).replace(",",""))
+        except Exception:
+            continue
+        ds = str(row.get(date_col, "")).strip() if date_col else ""
+        return val, ds
+    return None, None
+# === /AUTO ===
+
+
 def _norm_nick(n: str) -> str:
     n = (n or "").strip().lower()
     return "".join(ch for ch in n if ch.isalnum() or ch in ("_", "-"))
