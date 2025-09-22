@@ -1,60 +1,3 @@
-# --- AUTO: visit metrics ---
-def _metrics_path() -> str:
-    return "/mnt/data/metrics/visits.json"
-
-def _load_metrics() -> dict:
-    path = _metrics_path()
-    if os.path.exists(path):
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return {}
-    return {}
-
-def _save_metrics(d: dict) -> None:
-    try:
-        with open(_metrics_path(), "w", encoding="utf-8") as f:
-            json.dump(d, f, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
-
-def update_visit_counters():
-    import datetime as _dt
-    st.session_state.setdefault("_client_uuid", str(uuid.uuid4()))
-    uid = st.session_state["_client_uuid"]
-    today = _dt.date.today().isoformat()
-    data = _load_metrics() or {}
-    by_date = data.setdefault("by_date", {})
-    cum = data.setdefault("cumulative", {"unique": 0, "visits": 0, "uuids": []})
-
-    td = by_date.setdefault(today, {"unique": 0, "visits": 0, "uuids": []})
-    td["visits"] += 1
-    if uid not in td["uuids"]:
-        td["uuids"].append(uid)
-        td["unique"] += 1
-
-    data["cumulative"]["visits"] += 1
-    if uid not in cum["uuids"]:
-        cum["uuids"].append(uid)
-        cum["unique"] += 1
-
-    _save_metrics(data)
-    return td["unique"], td["visits"], cum["unique"], cum["visits"]
-# --- /AUTO ---
-
-
-import os
-import json
-import uuid
-
-# --- AUTO: ensure data directories exist ---
-for _p in ["/mnt/data/bloodmap_graph", "/mnt/data/care_log", "/mnt/data/profile", "/mnt/data/metrics"]:
-    try:
-        os.makedirs(_p, exist_ok=True)
-    except Exception:
-        pass
-# --- /AUTO ---
 
 # -*- coding: utf-8 -*-
 import streamlit as st
@@ -148,20 +91,19 @@ ensure_onco_drug_db(DRUG_DB)
 ONCO_MAP = build_onco_map()
 
 st.set_page_config(page_title="BloodMap — 피수치가이드", page_icon="🩸", layout="centered")
-
-
-# --- AUTO: sidebar visitor stats ---
-try:
-    tu, tv, cu, cv = update_visit_counters()
-    with st.sidebar:
-        st.markdown("### 👥 방문자 통계")
-        st.metric("오늘(고유)", tu)
-        st.metric("오늘(방문)", tv)
-        st.metric("누적 고유", cu)
-        st.metric("총 방문수", cv)
-except Exception as _e:
-    pass
+# --- AUTO: eGFR small UI (fallback under page title) ---
+with st.expander("🧮 eGFR 계산(선택)"):
+    c_e1, c_e2, c_e3, c_e4 = st.columns(4)
+    with c_e1:
+        egfr_age = st.number_input("나이(년)", min_value=0, step=1, value=0, key="egfr_age")
+    with c_e2:
+        egfr_sex = st.selectbox("성별", ["", "남성", "여성"], index=0, key="egfr_sex")
+    with c_e3:
+        egfr_height = st.number_input("키(cm, 소아)", min_value=0.0, step=0.1, value=0.0, key="egfr_height")
+    with c_e4:
+        st.caption("Cr가 입력되면 eGFR이 결과 표에 함께 표시됩니다.")
 # --- /AUTO ---
+
 st.title("BloodMap — 피수치가이드")
 
 st.info(
@@ -362,6 +304,74 @@ if mode == "암":
     labs = {code: clean_num(st.text_input(label, placeholder="예: 4500")) for code, label in LABS_ORDER}
 
     # 특수검사
+    # --- AUTO: GI/FEVER tools right under Special Tests ---
+    st.markdown("#### 🚽 설사 / 🤮 구토 / 🌡️ 해열제")
+    c_d1, c_d2 = st.columns([2,1])
+    with c_d1:
+        diarrhea_type = st.selectbox(
+            "설사(구분표)",
+            ["", "노란색 설사", "진한 노란색 설사", "거품 설사", "녹색 설사", "녹색 혈변", "혈변", "검은색 변"],
+            index=0,
+            help="참고용 간단 분류입니다. 정확한 진단은 의료진 판단에 따릅니다."
+        )
+    with c_d2:
+        diarrhea_freq = st.number_input("설사 횟수(회/일)", min_value=0, step=1, value=0)
+
+    c_v1, c_v2 = st.columns([2,1])
+    with c_v1:
+        vomit_type = st.selectbox(
+            "구토(구분)",
+            ["", "흰색/묽음", "노란색/담즙", "초록색/담즙", "혈성 의심"],
+            index=0
+        )
+    with c_v2:
+        vomit_freq = st.number_input("구토 횟수(회/일)", min_value=0, step=1, value=0)
+
+    st.caption("자가관리 참고용입니다. 🚨 탈수/고열/혈변·혈성 구토 시 즉시 병원에 연락.")
+
+    st.markdown("##### 🌡️ 해열제 자동 계산(체중 기반)")
+    c_w1, c_w2, c_w3 = st.columns(3)
+    with c_w1:
+        body_weight = st.number_input("체중(kg)", min_value=0.0, step=0.1, value=0.0, key="antipy_weight")
+    with c_w2:
+        age_years = st.number_input("나이(년)", min_value=0, step=1, value=0, key="antipy_age")
+    with c_w3:
+        fever_temp = st.number_input("체온(℃)", min_value=0.0, step=0.1, value=0.0, key="antipy_temp")
+
+    def _dose_apap(weight):
+        if not weight or weight <= 0: return None
+        low = round(10 * weight); high = round(15 * weight)
+        return low, high
+
+    def _dose_ibu(weight, age):
+        if not weight or weight <= 0: return None
+        if age is not None and age < 0.5:
+            return None
+        dose = round(10 * weight)
+        return dose
+
+    apap = _dose_apap(body_weight)
+    ibu  = _dose_ibu(body_weight, age_years)
+
+    colA, colB = st.columns(2)
+    with colA:
+        st.subheader("APAP(아세트아미노펜)")
+        if apap:
+            st.write(f"권장 1회 용량: **{apap[0]}–{apap[1]} mg** (4–6시간 간격)")
+            st.caption("하루 총량: 소아 60–75 mg/kg/day, 성인 보수적 3,000 mg/day 이하 권장. 간질환/과음 시 의료진 상의.")
+        else:
+            st.caption("체중을 입력하면 용량이 계산됩니다.")
+    with colB:
+        st.subheader("IBU(이부프로펜)")
+        if ibu:
+            st.write(f"권장 1회 용량: **{ibu} mg** (6–8시간 간격)")
+            st.caption("6개월 미만 영아 금기. 위장관/신장질환·탈수 시 복용 전 의료진 상의.")
+        else:
+            st.caption("체중/나이를 입력하면 용량이 계산됩니다.")
+
+    st.caption("같은 성분 중복(복합감기약 포함) 주의 — 마지막 복용 후 최소 간격: APAP ≥4h, IBU ≥6h. 하루 총량 초과 금지.")
+    # --- /AUTO ---
+
     from special_tests import special_tests_ui
     sp_lines = special_tests_ui()
     lines_blocks = []
@@ -706,103 +716,3 @@ if results_only_after_analyze(st):
     st.caption("본 도구는 참고용입니다. 의료진의 진단/치료를 대체하지 않습니다.")
     st.caption("문의/버그 제보: [피수치 가이드 공식카페](https://cafe.naver.com/bloodmap)")
     st.stop()
-
-
-# --- AUTO: eGFR helpers ---
-def egfr_ckd_epi_2021(scr_mgdl: float, age_years: float, sex: str) -> float|None:
-    try:
-        scr = float(scr_mgdl)
-        age = float(age_years)
-        sex = (sex or "").strip().lower()
-        kappa = 0.7 if sex.startswith("f") or "여" in sex else 0.9
-        alpha = -0.241 if kappa == 0.7 else -0.302
-        min_ratio = min(scr / kappa, 1.0) ** alpha
-        max_ratio = max(scr / kappa, 1.0) ** -1.200
-        sex_coef = 1.012 if kappa == 0.7 else 1.0
-        egfr = 142.0 * min_ratio * max_ratio * (0.9938 ** age) * sex_coef
-        return round(egfr, 1)
-    except Exception:
-        return None
-
-def egfr_schwartz_bedside(scr_mgdl: float, height_cm: float) -> float|None:
-    try:
-        scr = float(scr_mgdl); h = float(height_cm)
-        if scr <= 0 or h <= 0: return None
-        return round(0.413 * h / scr, 1)
-    except Exception:
-        return None
-
-def egfr_auto(scr: float|None, age_years: float|None, sex: str|None, height_cm: float|None):
-    if scr is None: return None, ""
-    if age_years is not None and age_years < 18 and height_cm:
-        val = egfr_schwartz_bedside(scr, height_cm)
-        return val, "Schwartz(소아)"
-    if age_years is not None and sex:
-        val = egfr_ckd_epi_2021(scr, age_years, sex)
-        return val, "CKD‑EPI 2021(성인)"
-    return None, ""
-# --- /AUTO ---
-
-
-
-# --- AUTO: graph CSV persist helpers ---
-def _graph_csv_path(uid: str) -> str:
-    return f"/mnt/data/bloodmap_graph/{uid}.labs.csv"
-
-def load_persisted_graph(uid: str):
-    try:
-        path = _graph_csv_path(uid)
-        if os.path.exists(path):
-            import pandas as pd
-            df = pd.read_csv(path)
-            st.session_state.setdefault("lab_hist", {})[uid] = df
-    except Exception:
-        pass
-
-def save_persisted_graph(uid: str, df):
-    try:
-        df.to_csv(_graph_csv_path(uid), index=False)
-    except Exception:
-        pass
-# --- /AUTO ---
-
-
-
-# --- AUTO: render Δ + eGFR table ---
-def render_labs_with_delta_and_egfr(labs: dict, labels_map: dict, dfh, egfr_value: float|None, egfr_label: str):
-    import pandas as _pd
-    rows = []
-    prev_map = {}
-    if dfh is not None and hasattr(dfh, "empty") and not dfh.empty:
-        last = dfh.iloc[-1].to_dict()
-        for code, label in (labels_map or {}).items():
-            if label in last:
-                try:
-                    prev_map[code] = float(last.get(label)) if last.get(label) not in [None, ""] else None
-                except Exception:
-                    prev_map[code] = None
-    for code, cur in (labs or {}).items():
-        prev = prev_map.get(code)
-        if cur is not None and prev is not None:
-            delta = round(float(cur) - float(prev), 2)
-        else:
-            delta = None
-        rows.append({"항목": code, "현재": cur, "Δ(최근 저장값 대비)": delta})
-    if egfr_value is not None:
-        rows.append({"항목": f"eGFR ({egfr_label})", "현재": egfr_value, "Δ(최근 저장값 대비)": None})
-    dfshow = _pd.DataFrame(rows)
-    st.dataframe(dfshow, use_container_width=True, height=300)
-# --- /AUTO ---
-
-
-
-# --- AUTO: optional eGFR small UI (safe-append) ---
-try:
-    st.markdown("#### 🧮 eGFR 계산(선택)")
-    c_e1, c_e2, c_e3 = st.columns(3)
-    with c_e1: egfr_age = st.number_input("나이(년)", min_value=0, step=1, value=0)
-    with c_e2: egfr_sex = st.selectbox("성별", ["", "남성", "여성"], index=0)
-    with c_e3: egfr_height = st.number_input("키(cm, 소아)", min_value=0.0, step=0.1, value=0.0)
-except Exception:
-    egfr_age = None; egfr_sex = ""; egfr_height = None
-# --- /AUTO ---
