@@ -507,7 +507,7 @@ elif mode == "일상":
         with c3: diarrhea = st.selectbox("설사(횟수/일)", opts["설사"])
         with c4: vomit = st.selectbox("구토(횟수/일)", ["없음","1~2회","3~4회","4~6회","7회 이상"])
         with c5: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1, value=0.0)
-        with c6: eye = st.selectbox("눈꼽", eye_opts, key="adult_eye")
+        with c6: eye = st.selectbox("눈꼽", eye_opts, key="adult_main_eye")
 
         age_m = st.number_input("나이(개월)", min_value=0, step=1)
         weight = st.number_input("체중(kg)", min_value=0.0, step=0.1)
@@ -811,7 +811,7 @@ with c2: cough = st.selectbox("기침", opts["기침"])
 with c3: diarrhea = st.selectbox("설사(횟수/일)", opts["설사"])
 with c4: vomit = st.selectbox("구토(횟수/일)", ["없음","1~3회","4~6회","7회 이상"])
 with c5: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1, value=0.0)
-with c6: eye = st.selectbox("눈꼽", eye_opts, key="adult_eye")
+with c6: eye = st.selectbox("눈꼽", eye_opts, key="adult_main_eye")
 
 comorb = st.multiselect("주의 대상", ["임신 가능성","간질환 병력","신질환 병력","위장관 궤양/출혈력","항응고제 복용","고령(65+)"])
 
@@ -861,7 +861,7 @@ else:
     with c2: cough = st.selectbox("기침", opts.get("기침", ["없음","조금","보통","심함"]))
     with c3: diarrhea = st.selectbox("설사(횟수/일)", opts.get("설사", ["없음","1~2회","3~4회","5~6회"]))
     with c4: vomit = st.selectbox("구토(횟수/일)", ["없음","1~2회","3~4회","4~6회","7회 이상"])
-    with c5: eye = st.selectbox("눈꼽", eye_opts, key="adult_eye")
+    with c5: eye = st.selectbox("눈꼽", eye_opts, key="adult_main_eye")
     with c6: symptom_days = st.number_input("**증상일수**(일)", min_value=0, step=1, value=0)
 
     apap_ml, _ = acetaminophen_ml(age_m, weight or None)
