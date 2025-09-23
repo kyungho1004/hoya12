@@ -106,6 +106,28 @@ st.info(
 st.markdown("문의/버그 제보: **[피수치 가이드 공식카페](https://cafe.naver.com/bloodmap)**")
 
 nick, pin, key = nickname_pin()
+
+# === AUTO: nickname/pin explicit save ===
+import datetime as _dt
+c_np1, c_np2, c_np3 = st.columns([1,1,2])
+with c_np1:
+    st.caption("별명과 핀을 프로필에 저장해 두면 다른 섹션에서도 자동으로 불러옵니다.")
+with c_np2:
+    if st.button("📝 별명/핀 저장", use_container_width=True):
+        _prof = _profile_load(nick or "")
+        _prof.update({
+            "nickname": nick or "",
+            "pin_hint": (pin[:1] + "***") if pin else "",
+            "user_key": key or st.session_state.get("user_key"),
+            "saved_at": _dt.datetime.now().isoformat(timespec="minutes"),
+        })
+        _profile_save(nick or "", _prof)
+        st.success(f"프로필 저장 완료: {_profile_path(nick or '')}")
+with c_np3:
+    st.caption("/mnt/data/profile 폴더에 {별명}.json 파일이 생성됩니다.")
+# === /AUTO ===
+
+
 st.divider()
 has_key = bool(nick and pin and len(pin) == 4)
 
@@ -415,6 +437,39 @@ elif mode == "일상":
 
     else:  # 성인
         from adult_rules import predict_from_symptoms, triage_advise, get_adult_options
+
+
+# === AUTO: profile helpers (guaranteed) ===
+import os as _os, json as _json
+def _norm_nick(n: str) -> str:
+    n = (n or "").strip().lower()
+    return "".join(ch for ch in n if ch.isalnum() or ch in ("_", "-"))
+def _profile_dir():
+    base = "/mnt/data/profile"
+    try: _os.makedirs(base, exist_ok=True)
+    except Exception: pass
+    return base
+def _profile_path(nick: str) -> str:
+    return f"{_profile_dir()}/{_norm_nick(nick)}.json"
+def _profile_load(nick: str) -> dict:
+    p = _profile_path(nick)
+    try:
+        with open(p, "r", encoding="utf-8") as f:
+            return _json.load(f)
+    except Exception:
+        return {}
+def _profile_save(nick: str, data: dict):
+    p = _profile_path(nick)
+    tmp = p + ".tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            _json.dump(data, f, ensure_ascii=False, indent=2)
+        _os.replace(tmp, p)
+    except Exception:
+        pass
+# === /AUTO ===
+
+
         opts = get_adult_options()
         eye_opts = opts.get("눈꼽", ["없음","맑음","노랑-농성","가려움 동반","한쪽","양쪽"])
 
