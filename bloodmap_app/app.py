@@ -411,11 +411,11 @@ elif mode == "일상":
         with c2: cough = st.selectbox("기침", opts["기침"])
         with c3: diarrhea = st.selectbox("설사(횟수/일)", opts["설사"])
         with c4: vomit = st.selectbox("구토(횟수/일)", ["없음","1~2회","3~4회","4~6회","7회 이상"])
-        with c5: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1, value=0.0, key="daily_child_temp__adult__auto")
+        with c5: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1, value=0.0, key=_k("daily_child_temp__daily_adult_temp__temp_auto"))
         with c6: eye = st.selectbox("눈꼽", eye_opts)
 
-        age_m = st.number_input("나이(개월)", min_value=0, step=1)
-        weight = st.number_input("체중(kg)", min_value=0.0, step=0.1)
+        age_m = st.number_input("나이(개월)", min_value=0, step=1, key=_k("daily_age_m"))
+        weight = st.number_input("체중(kg)", min_value=0.0, step=0.1, key=_k("daily_weight_kg"))
 
         apap_ml, _ = acetaminophen_ml(age_m, weight or None)
         ibu_ml,  _ = ibuprofen_ml(age_m, weight or None)
@@ -443,7 +443,7 @@ elif mode == "일상":
             cough=locals().get('cough'),
             diarrhea=locals().get('diarrhea'),
             vomit=locals().get('vomit'),
-            days_since_onset=locals().get('days_since_onset'),
+            days_since_onset=locals().get('symptom_days'),
             temp=locals().get('temp'),
             fever_cat=locals().get('fever_cat'),
             eye=locals().get('eye'),
@@ -490,7 +490,7 @@ elif mode == "일상":
             cough=locals().get('cough'),
             diarrhea=locals().get('diarrhea'),
             vomit=locals().get('vomit'),
-            days_since_onset=locals().get('days_since_onset'),
+            days_since_onset=locals().get('symptom_days'),
             temp=locals().get('temp'),
             fever_cat=locals().get('fever_cat'),
             eye=locals().get('eye'),
@@ -517,9 +517,9 @@ elif mode == "일상":
 ctop = st.columns(4)
 with ctop[0]: disease = st.selectbox("소아 질환", ["로타","독감","RSV","아데노","마이코","수족구","편도염","코로나","중이염"], index=0)
 st.caption(short_caption(disease))
-with ctop[1]: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1, value=0.0, key="peds_disease_temp__auto")
-with ctop[2]: age_m = st.number_input("나이(개월)", min_value=0, step=1)
-with ctop[3]: weight = st.number_input("체중(kg)", min_value=0.0, step=0.1)
+with ctop[1]: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1, key=_k("peds_disease_temp__temp_auto"))
+with ctop[2]: age_m = st.number_input("나이(개월)", min_value=0, step=1, key=_k("peds_age_m"))
+with ctop[3]: weight = st.number_input("체중(kg)", min_value=0.0, step=0.1, key=_k("peds_weight_kg"))
 
 opts = get_symptom_options(disease)
 eye_opts = opts.get("눈꼽", ["없음","맑음","노랑-농성","가려움 동반","한쪽","양쪽"])
@@ -549,7 +549,7 @@ symptoms = build_peds_symptoms(
         cough=locals().get('cough'),
         diarrhea=locals().get('diarrhea'),
         vomit=locals().get('vomit'),
-        days_since_onset=locals().get('days_since_onset'),
+        days_since_onset=locals().get('symptom_days'),
         temp=locals().get('temp'),
         fever_cat=locals().get('fever_cat'),
         eye=locals().get('eye'),
