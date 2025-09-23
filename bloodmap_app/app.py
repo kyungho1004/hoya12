@@ -1,4 +1,35 @@
 
+# === AUTO: profile helpers (guaranteed) ===
+import os as _os, json as _json
+def _norm_nick(n: str) -> str:
+    n = (n or "").strip().lower()
+    return "".join(ch for ch in n if ch.isalnum() or ch in ("_", "-"))
+def _profile_dir():
+    base = "/mnt/data/profile"
+    try: _os.makedirs(base, exist_ok=True)
+    except Exception: pass
+    return base
+def _profile_path(nick: str) -> str:
+    return f"{_profile_dir()}/{_norm_nick(nick)}.json"
+def _profile_load(nick: str) -> dict:
+    p = _profile_path(nick)
+    try:
+        with open(p, "r", encoding="utf-8") as f:
+            return _json.load(f)
+    except Exception:
+        return {}
+def _profile_save(nick: str, data: dict):
+    p = _profile_path(nick)
+    tmp = p + ".tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            _json.dump(data, f, ensure_ascii=False, indent=2)
+        _os.replace(tmp, p)
+    except Exception:
+        pass
+# === /AUTO ===
+
+
 # -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
@@ -438,36 +469,6 @@ elif mode == "일상":
     else:  # 성인
         from adult_rules import predict_from_symptoms, triage_advise, get_adult_options
 
-
-# === AUTO: profile helpers (guaranteed) ===
-import os as _os, json as _json
-def _norm_nick(n: str) -> str:
-    n = (n or "").strip().lower()
-    return "".join(ch for ch in n if ch.isalnum() or ch in ("_", "-"))
-def _profile_dir():
-    base = "/mnt/data/profile"
-    try: _os.makedirs(base, exist_ok=True)
-    except Exception: pass
-    return base
-def _profile_path(nick: str) -> str:
-    return f"{_profile_dir()}/{_norm_nick(nick)}.json"
-def _profile_load(nick: str) -> dict:
-    p = _profile_path(nick)
-    try:
-        with open(p, "r", encoding="utf-8") as f:
-            return _json.load(f)
-    except Exception:
-        return {}
-def _profile_save(nick: str, data: dict):
-    p = _profile_path(nick)
-    tmp = p + ".tmp"
-    try:
-        with open(tmp, "w", encoding="utf-8") as f:
-            _json.dump(data, f, ensure_ascii=False, indent=2)
-        _os.replace(tmp, p)
-    except Exception:
-        pass
-# === /AUTO ===
 
 
         opts = get_adult_options()
