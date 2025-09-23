@@ -1,4 +1,35 @@
 
+# === AUTO: profile helpers (guaranteed) ===
+import os as _os, json as _json
+def _norm_nick(n: str) -> str:
+    n = (n or "").strip().lower()
+    return "".join(ch for ch in n if ch.isalnum() or ch in ("_", "-"))
+def _profile_dir():
+    base = "/mnt/data/profile"
+    try: _os.makedirs(base, exist_ok=True)
+    except Exception: pass
+    return base
+def _profile_path(nick: str) -> str:
+    return f"{_profile_dir()}/{_norm_nick(nick)}.json"
+def _profile_load(nick: str) -> dict:
+    p = _profile_path(nick)
+    try:
+        with open(p, "r", encoding="utf-8") as f:
+            return _json.load(f)
+    except Exception:
+        return {}
+def _profile_save(nick: str, data: dict):
+    p = _profile_path(nick)
+    tmp = p + ".tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            _json.dump(data, f, ensure_ascii=False, indent=2)
+        _os.replace(tmp, p)
+    except Exception:
+        pass
+# === /AUTO ===
+
+
 # -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
@@ -93,6 +124,11 @@ ONCO_MAP = build_onco_map()
 st.set_page_config(page_title="BloodMap — 피수치가이드", page_icon="🩸", layout="centered")
 st.title("BloodMap — 피수치가이드")
 
+# ---- widget key helper (avoid DuplicateElementId) ----
+def _k(name: str) -> str:
+    return f"{st.session_state.get('key','guest')}::" + name
+
+
 st.info(
     "이 앱은 의료행위가 아니며, **참고용**입니다. 진단·치료를 **대체하지 않습니다**.\n"
     "약 변경/복용 중단 등은 반드시 주치의와 상의하세요.\n"
@@ -101,6 +137,28 @@ st.info(
 st.markdown("문의/버그 제보: **[피수치 가이드 공식카페](https://cafe.naver.com/bloodmap)**")
 
 nick, pin, key = nickname_pin()
+
+# === AUTO: nickname/pin explicit save ===
+import datetime as _dt
+c_np1, c_np2, c_np3 = st.columns([1,1,2])
+with c_np1:
+    st.caption("별명과 핀을 프로필에 저장해 두면 다른 섹션에서도 자동으로 불러옵니다.")
+with c_np2:
+    if st.button("📝 별명/핀 저장", use_container_width=True):
+        _prof = _profile_load(nick or "")
+        _prof.update({
+            "nickname": nick or "",
+            "pin_hint": (pin[:1] + "***") if pin else "",
+            "user_key": key or st.session_state.get("user_key"),
+            "saved_at": _dt.datetime.now().isoformat(timespec="minutes"),
+        })
+        _profile_save(nick or "", _prof)
+        st.success(f"프로필 저장 완료: {_profile_path(nick or '')}")
+with c_np3:
+    st.caption("/mnt/data/profile 폴더에 {별명}.json 파일이 생성됩니다.")
+# === /AUTO ===
+
+
 st.divider()
 has_key = bool(nick and pin and len(pin) == 4)
 
@@ -353,7 +411,7 @@ elif mode == "일상":
         with c2: cough = st.selectbox("기침", opts["기침"])
         with c3: diarrhea = st.selectbox("설사(횟수/일)", opts["설사"])
         with c4: vomit = st.selectbox("구토(횟수/일)", ["없음","1~2회","3~4회","4~6회","7회 이상"])
-        with c5: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1, value=0.0)
+        with c5: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1, value=0.0, key=_k("daily_child_temp", key=_k("daily_adult_temp", _k("temp_auto"))))
         with c6: eye = st.selectbox("눈꼽", eye_opts)
 
         age_m = st.number_input("나이(개월)", min_value=0, step=1)
@@ -410,6 +468,9 @@ elif mode == "일상":
 
     else:  # 성인
         from adult_rules import predict_from_symptoms, triage_advise, get_adult_options
+
+
+
         opts = get_adult_options()
         eye_opts = opts.get("눈꼽", ["없음","맑음","노랑-농성","가려움 동반","한쪽","양쪽"])
 
@@ -418,7 +479,7 @@ elif mode == "일상":
         with c2: cough = st.selectbox("기침", opts["기침"])
         with c3: diarrhea = st.selectbox("설사(횟수/일)", opts["설사"])
         with c4: vomit = st.selectbox("구토(횟수/일)", ["없음","1~3회","4~6회","7회 이상"])
-        with c5: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1, value=0.0)
+        with c5: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1, value=0.0, key=_k("temp_auto"))
         with c6: eye = st.selectbox("눈꼽", eye_opts)
 
         comorb = st.multiselect("주의 대상", ["임신 가능성","간질환 병력","신질환 병력","위장관 궤양/출혈력","항응고제 복용","고령(65+)"])
@@ -453,58 +514,56 @@ elif mode == "일상":
             }
 
 # ---------------- 소아(질환) 모드 ----------------
-else:
-    ctop = st.columns(4)
-    with ctop[0]: disease = st.selectbox("소아 질환", ["로타","독감","RSV","아데노","마이코","수족구","편도염","코로나","중이염"], index=0)
-    st.caption(short_caption(disease))
-    with ctop[1]: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1)
-    with ctop[2]: age_m = st.number_input("나이(개월)", min_value=0, step=1)
-    with ctop[3]: weight = st.number_input("체중(kg)", min_value=0.0, step=0.1)
+ctop = st.columns(4)
+with ctop[0]: disease = st.selectbox("소아 질환", ["로타","독감","RSV","아데노","마이코","수족구","편도염","코로나","중이염"], index=0)
+st.caption(short_caption(disease))
+with ctop[1]: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1, key=_k("peds_disease_temp", _k("temp_auto")))
+with ctop[2]: age_m = st.number_input("나이(개월)", min_value=0, step=1)
+with ctop[3]: weight = st.number_input("체중(kg)", min_value=0.0, step=0.1)
 
-    opts = get_symptom_options(disease)
-    eye_opts = opts.get("눈꼽", ["없음","맑음","노랑-농성","가려움 동반","한쪽","양쪽"])
-    st.markdown("### 증상 체크")
-    c1,c2,c3,c4,c5,c6 = st.columns(6)
-    with c1: nasal = st.selectbox("콧물", opts.get("콧물", ["없음","투명","흰색","누런","피섞임"]))
-    with c2: cough = st.selectbox("기침", opts.get("기침", ["없음","조금","보통","심함"]))
-    with c3: diarrhea = st.selectbox("설사(횟수/일)", opts.get("설사", ["없음","1~2회","3~4회","5~6회"]))
-    with c4: vomit = st.selectbox("구토(횟수/일)", ["없음","1~2회","3~4회","4~6회","7회 이상"])
-    with c5: eye = st.selectbox("눈꼽", eye_opts)
-    with c6: days_since_onset = st.number_input("**증상일수**(일)", min_value=0, step=1, value=0)
+opts = get_symptom_options(disease)
+eye_opts = opts.get("눈꼽", ["없음","맑음","노랑-농성","가려움 동반","한쪽","양쪽"])
+st.markdown("### 증상 체크")
+c1,c2,c3,c4,c5,c6 = st.columns(6)
+with c1: nasal = st.selectbox("콧물", opts.get("콧물", ["없음","투명","흰색","누런","피섞임"]))
+with c2: cough = st.selectbox("기침", opts.get("기침", ["없음","조금","보통","심함"]))
+with c3: diarrhea = st.selectbox("설사(횟수/일)", opts.get("설사", ["없음","1~2회","3~4회","5~6회"]))
+with c4: vomit = st.selectbox("구토(횟수/일)", ["없음","1~2회","3~4회","4~6회","7회 이상"])
+with c5: eye = st.selectbox("눈꼽", eye_opts)
+with c6: symptom_days = st.number_input("**증상일수**(일)", min_value=0, step=1, value=0)
 
-    apap_ml, _ = acetaminophen_ml(age_m, weight or None)
-    ibu_ml,  _ = ibuprofen_ml(age_m, weight or None)
-    dc = st.columns(2)
-    with dc[0]:
-        st.metric("아세트아미노펜 시럽 (평균 1회분)", f"{apap_ml} ml")
-        st.caption("간격 **4~6시간**, 하루 최대 4회(성분별 중복 금지)")
-    with dc[1]:
-        st.metric("이부프로펜 시럽 (평균 1회분)", f"{ibu_ml} ml")
-        st.caption("간격 **6~8시간**, 위장 자극 시 음식과 함께")
-    st.warning("이 용량 정보는 **참고용**입니다. 반드시 **주치의와 상담**하십시오.")
+apap_ml, _ = acetaminophen_ml(age_m, weight or None)
+ibu_ml,  _ = ibuprofen_ml(age_m, weight or None)
+dc = st.columns(2)
+with dc[0]:
+    st.metric("아세트아미노펜 시럽 (평균 1회분)", f"{apap_ml} ml")
+    st.caption("간격 **4~6시간**, 하루 최대 4회(성분별 중복 금지)")
+with dc[1]:
+    st.metric("이부프로펜 시럽 (평균 1회분)", f"{ibu_ml} ml")
+    st.caption("간격 **6~8시간**, 위장 자극 시 음식과 함께")
+st.warning("이 용량 정보는 **참고용**입니다. 반드시 **주치의와 상담**하십시오.")
 
-    fever_cat = _fever_bucket_from_temp(temp)
-    symptoms = build_peds_symptoms(
-            nasal=locals().get('nasal'),
-            cough=locals().get('cough'),
-            diarrhea=locals().get('diarrhea'),
-            vomit=locals().get('vomit'),
-            days_since_onset=locals().get('days_since_onset'),
-            temp=locals().get('temp'),
-            fever_cat=locals().get('fever_cat'),
-            eye=locals().get('eye'),
-        )
+fever_cat = _fever_bucket_from_temp(temp)
+symptoms = build_peds_symptoms(
+        nasal=locals().get('nasal'),
+        cough=locals().get('cough'),
+        diarrhea=locals().get('diarrhea'),
+        vomit=locals().get('vomit'),
+        days_since_onset=locals().get('days_since_onset'),
+        temp=locals().get('temp'),
+        fever_cat=locals().get('fever_cat'),
+        eye=locals().get('eye'),
+    )
 
-    if st.button("🔎 해석하기", key="analyze_peds"):
-        st.session_state["analyzed"] = True
-        st.session_state["analysis_ctx"] = {
-            "mode":"소아", "disease": disease,
-            "symptoms": symptoms,
-            "temp": temp, "age_m": age_m, "weight": weight or None,
-            "days_since_onset": days_since_onset,
-            "apap_ml": apap_ml, "ibu_ml": ibu_ml, "vals": {},
-            "diet_lines": _peds_diet_fallback(symptoms, disease=disease)
-        }
+if st.button("🔎 해석하기", key="analyze_peds"):
+    st.session_state["analyzed"] = True
+    st.session_state["analysis_ctx"] = {
+        "mode":"소아", "disease": disease,
+        "symptoms": symptoms,
+        "temp": temp, "age_m": age_m, "weight": weight or None,
+        "apap_ml": apap_ml, "ibu_ml": ibu_ml, "vals": {},
+        "diet_lines": _peds_diet_fallback(symptoms, disease=disease)
+    }
 
 # ---------------- 결과 게이트 ----------------
 if results_only_after_analyze(st):
@@ -569,9 +628,6 @@ if results_only_after_analyze(st):
         if ctx.get("temp") is not None:
             st.caption(f"체온: {ctx['temp']} ℃")
 
-        
-        if ctx.get("days_since_onset") is not None:
-            st.caption(f"증상일수: {ctx['days_since_onset']}일")
         preds = ctx.get("preds") or []
         if preds:
             st.subheader("🤖 증상 기반 자동 추정")
