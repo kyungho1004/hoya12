@@ -1,4 +1,20 @@
 
+
+# === AUTO: widget key helpers ===
+def _k(name: str) -> str:
+    import streamlit as st, uuid as _uuid
+    if "_session_id" not in st.session_state:
+        st.session_state["_session_id"] = _uuid.uuid4().hex[:8]
+    return f"{name}_{st.session_state['_session_id']}"
+
+def _k2(name: str) -> str:
+    # Stable (session-salted) keys so state persists; base names must be unique per widget.
+    import streamlit as st, uuid as _uuid
+    if "_session_id" not in st.session_state:
+        st.session_state["_session_id"] = _uuid.uuid4().hex[:8]
+    return f"{name}_{st.session_state['_session_id']}"
+# === /AUTO ===
+
 # === AUTO: profile helpers (guaranteed) ===
 import os as _os, json as _json
 def _norm_nick(n: str) -> str:
