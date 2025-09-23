@@ -517,7 +517,8 @@ elif mode == "일상":
 ctop = st.columns(4)
 with ctop[0]: disease = st.selectbox("소아 질환", ["로타","독감","RSV","아데노","마이코","수족구","편도염","코로나","중이염"], index=0)
 st.caption(short_caption(disease))
-with ctop[1]: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1, key=_k("peds_disease_temp", _k("temp_auto")))
+with ctop[1]:
+    temp = st.number_input("체온(℃)", min_value=0.0, step=0.1, value=0.0, key="peds_disease_temp")
 with ctop[2]: age_m = st.number_input("나이(개월)", min_value=0, step=1)
 with ctop[3]: weight = st.number_input("체중(kg)", min_value=0.0, step=0.1)
 
