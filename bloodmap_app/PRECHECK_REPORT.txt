@@ -1,0 +1,48 @@
+== Syntax check ==
+[OK] app.py
+[OK] streamlit_app.py
+[OK] branding.py
+[OK] pdf_export.py
+[OK] peds_dose.py
+[OK] peds_profiles.py
+[OK] special_tests.py
+[OK] adult_rules.py
+[OK] onco_map.py
+[OK] ui_results.py
+[OK] drug_db.py
+[OK] core_utils.py
+[OK] lab_diet.py
+
+== Entry order check (run->main->entry) ==
+[OK] sequence run->main->entry present
+
+== Required UI sections in Fallback ==
+[OK] ① 암 선택
+[OK] ② 항암제 선택
+[OK] ③ 항생제 선택
+[OK] ④ 피수치 입력
+[OK] ANC 기반 식이가이드
+[OK] 해석하기
+
+== No steppers (number_input) in Fallback ==
+[OK] No number_input usage
+
+== Widget key lint (streamlit_app.py) ==
+[FAIL] Missing key= in st.text_input(...)
+[FAIL] Missing key= in st.selectbox(...)
+[FAIL] Missing key= in st.text_input(...)
+[FAIL] Missing key= in st.text_input(...)
+[FAIL] Missing key= in st.text_input(...)
+[FAIL] Missing key= in st.text_input(...)
+[FAIL] Missing key= in st.text_input(...)
+[FAIL] Missing key= in st.text_input(...)
+[FAIL] Missing key= in st.text_input(...)
+[FAIL] Missing key= in st.text_input(...)
+[FAIL] Missing key= in st.text_input(...)
+[FAIL] Missing key= in st.text_input(...)
+[FAIL] Missing key= in st.text_input(...)
+[FAIL] Missing key= in st.text_input(...)
+[FAIL] Missing key= in st.download_button(...)
+
+== OVERALL ==
+FAIL
