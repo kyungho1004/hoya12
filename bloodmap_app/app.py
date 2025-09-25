@@ -116,23 +116,6 @@ st.markdown("문의/버그 제보: **[피수치 가이드 공식카페](https://
 nick, pin, key = nickname_pin()
 st.divider()
 has_key = bool(nick and pin and len(pin) == 4)
-
-# === eGFR (CKD-EPI 2009) metric block ===
-try:
-    from core_utils import egfr_ckd_epi_2009
-    _labs = locals().get("labs") or globals().get("labs")
-    _cr = None
-    if isinstance(_labs, dict):
-        _cr = _labs.get("Cr") or _labs.get("creatinine") or _labs.get("CRE") or _labs.get("cr")
-    sex_for_gfr = st.selectbox("성별(egfr)", ["여","남"], index=0, key=wkey("egfr_sex"))
-    age_for_gfr = st.number_input("나이(세, egfr)", min_value=1, max_value=110, step=1, value=40, key=wkey("egfr_age"))
-    _egfr_val = egfr_ckd_epi_2009(_cr, int(age_for_gfr), sex_for_gfr)
-    if _egfr_val is not None:
-        st.metric("eGFR (CKD-EPI 2009)", f"{_egfr_val} mL/min/1.73㎡")
-except Exception:
-    pass
-
-
 # ---------------- 유틸 ----------------
 def _fever_bucket_from_temp(temp: float|None) -> str:
     if temp is None: return ""
@@ -674,6 +657,22 @@ def wkey(name: str) -> str:
         return f"{mode_now}:{who}:{name}"
     except Exception:
         return name
+
+# === eGFR (CKD-EPI 2009) metric block ===
+try:
+    from core_utils import egfr_ckd_epi_2009
+    _labs = locals().get("labs") or globals().get("labs")
+    _cr = None
+    if isinstance(_labs, dict):
+        _cr = _labs.get("Cr") or _labs.get("creatinine") or _labs.get("CRE") or _labs.get("cr")
+    sex_for_gfr = st.selectbox("성별(egfr)", ["여","남"], index=0, key=wkey("egfr_sex"))
+    age_for_gfr = st.number_input("나이(세, egfr)", min_value=1, max_value=110, step=1, value=40, key=wkey("egfr_age"))
+    _egfr_val = egfr_ckd_epi_2009(_cr, int(age_for_gfr), sex_for_gfr)
+    if _egfr_val is not None:
+        st.metric("eGFR (CKD-EPI 2009)", f"{_egfr_val} mL/min/1.73㎡")
+except Exception:
+    pass
+
 
 
 def save_labs_csv(df, key: str):
