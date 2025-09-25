@@ -20,6 +20,25 @@ st.title("Bloodmap (Minimal)")
 render_deploy_banner("https://bloodmap.streamlit.app/", "제작: Hoya/GPT · 자문: Hoya/GPT")
 
 # -------- Helpers --------
+
+# -------- CSS: hide number spinners (±) --------
+def _hide_number_spinners():
+    import streamlit as _st  # alias to avoid shadow
+    _st.markdown(
+        """
+<style>
+/* hide number spinners */
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button{
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type=number]{
+  -moz-appearance: textfield;
+}
+</style>
+""", unsafe_allow_html=True)
+
 def wkey(name:str)->str:
     who = st.session_state.get("key","guest")
     return f"{who}:{name}"
@@ -137,19 +156,28 @@ with t_labs:
         for r in rows[-5:]:
             st.write(r)
 
+
 with t_dx:
     st.subheader("암 선택")
-    grp_tabs = st.tabs(list(GROUPS.keys()))
-    for i,(g, lst) in enumerate(GROUPS.items()):
-        with grp_tabs[i]:
-            labels = [enko(en,ko) for en,ko in lst]
-            sel = st.selectbox("진단명을 선택하세요", labels, key=wkey(f"dx_sel_{i}"))
-            en_dx, ko_dx = lst[labels.index(sel)]
-            if st.button("선택 저장", key=wkey(f"dx_save_{i}")):
-                st.session_state["dx_en"] = en_dx
-                st.session_state["dx_ko"] = ko_dx
-                st.success(f"저장됨: {enko(en_dx, ko_dx)}")
-
+    # 한 줄 선택창: 모든 카테고리를 한 Selectbox로
+    joined = []
+    for G, lst in GROUPS.items():
+        for en, ko in lst:
+            joined.append((f"{G} | {enko(en, ko)}", en, ko))
+    labels = [lab for lab, _, _ in joined]
+    sel = st.selectbox("진단명을 한 번에 선택", labels, key=wkey("dx_one_select"))
+    _, en_dx, ko_dx = next(x for x in joined if x[0]==sel)
+    colA, colB = st.columns([1,1])
+    with colA:
+        if st.button("선택 저장", key=wkey("dx_save_one")):
+            st.session_state["dx_en"] = en_dx
+            st.session_state["dx_ko"] = ko_dx
+            st.success(f"저장됨: {enko(en_dx, ko_dx)}")
+    with colB:
+        if st.button("초기화", key=wkey("dx_clear")):
+            st.session_state.pop("dx_en", None)
+            st.session_state.pop("dx_ko", None)
+            st.info("진단 선택이 초기화되었습니다.")
 with t_chemo:
     st.subheader("항암제")
     en_dx = st.session_state.get("dx_en")
