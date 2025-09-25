@@ -1,0 +1,48 @@
+--- app.py
++++ app.py
+@@ -24,7 +24,7 @@
+ 
+ # ---- Page setup ----
+ st.set_page_config(page_title="Bloodmap", layout="wide")
+-st.title("Bloodmap — Rebuilt")
++st.title("Bloodmap")
+ render_deploy_banner("https://bloodmap.streamlit.app/", "제작: Hoya/GPT · 자문: Hoya/GPT")
+ 
+ # ---- Style (optional) ----
+@@ -92,6 +92,8 @@
+ 
+ with tab_home:
+     st.success("앱이 재구성되어 정상 동작 중입니다.")
++    if False:
++    # 개발용 점검 패널 비활성화
+     with st.expander("모듈 임포트 상태"):
+         import importlib
+         for mod in ["core_utils","drug_db","onco_map","ui_results","lab_diet","peds_profiles","peds_dose","adult_rules","special_tests","pdf_export"]:
+@@ -103,7 +105,7 @@
+ 
+ with tab_labs:
+     st.subheader("기본 수치 입력")
+-    c1, c2, c3, c4 = st.columns(4)
++    c1, c2, c3, c4, c5 = st.columns(5)
+     with c1:
+         sex = st.selectbox("성별", ["여","남"], key=wkey("sex"))
+     with c2:
+@@ -111,14 +113,17 @@
+     with c3:
+         cr = st.number_input("Cr (mg/dL)", min_value=0.0, step=0.1, value=0.8, key=wkey("cr"))
+     with c4:
++        weight = st.number_input("체중(kg)", min_value=0.0, step=0.5, value=0.0, key=wkey("wt"))
++    with c5:
+         today = st.date_input("측정일", value=_dt.date.today(), key=wkey("date"))
++    st.caption("※ 참고: CKD-EPI 2009 eGFR 계산에는 체중이 직접적으로 사용되지 않습니다.")
+     # eGFR
+     egfr = egfr_fn(cr, int(age), sex)
+     if egfr is not None:
+         st.metric("eGFR (CKD-EPI 2009)", f"{egfr} mL/min/1.73㎡")
+     # Dataframe preview + save
+     if pd is not None:
+-        df = pd.DataFrame([{"date": str(today), "sex": sex, "age": int(age), "Cr(mg/dL)": cr, "eGFR": egfr}])
++        df = pd.DataFrame([{"date": str(today), "sex": sex, "age": int(age), "weight(kg)": weight, "Cr(mg/dL)": cr, "eGFR": egfr}])
+         st.dataframe(df, use_container_width=True)
+         if st.button("📁 외부 저장(.csv)", key=wkey("save_csv_btn")):
+             save_labs_csv(df, st.session_state.get("key","guest"))
