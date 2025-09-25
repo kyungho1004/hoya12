@@ -1,7 +1,4 @@
-# Write an extended prune script that also cleans folders like data/, fonts/, pages/, utils/
-from pathlib import Path
-
-script = r"""#!/usr/bin/env bash
+#!/usr/bin/env bash
 # prune_plus.sh — extended cleaner for folders and files
 # Usage:
 #   DRY_RUN=1 bash prune_plus.sh   # preview
@@ -89,8 +86,3 @@ fi
 
 echo "=== Done ==="
 ls -al
-"""
-
-path = Path("/mnt/data/prune_plus.sh")
-path.write_text(script, encoding="utf-8")
-print(str(path))
