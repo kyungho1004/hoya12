@@ -260,6 +260,7 @@ with t_abx:
         st.session_state["abx_list"] = picked_keys
         st.success("저장됨. '보고서'에서 확인")
 
+
 with t_labs:
     st.subheader("피수치 입력")
     col1,col2,col3,col4,col5 = st.columns(5)
@@ -277,34 +278,78 @@ with t_labs:
     egfr = egfr_2009(cr, int(age), sex)
     st.metric("eGFR (CKD-EPI 2009)", f"{egfr} mL/min/1.73㎡")
 
+    # Mobile-first: simple vs full
+    simple_mode = st.toggle("간단 모드(핵심만 보기)", value=True, key=wkey("simple_mode"))
     st.markdown("**필요한 것만 입력하세요(빈칸 허용).** 입력한 수치만 해석에 사용합니다.")
-    r1 = st.columns(7)
-    with r1[0]: Alb = st.text_input("Alb (g/dL)", key=wkey("Alb"))
-    with r1[1]: K   = st.text_input("K (mmol/L)", key=wkey("K"))
-    with r1[2]: Hb  = st.text_input("Hb (g/dL)", key=wkey("Hb"))
-    with r1[3]: Na  = st.text_input("Na (mmol/L)", key=wkey("Na"))
-    with r1[4]: Ca  = st.text_input("Ca (mg/dL)", key=wkey("Ca"))
-    with r1[5]: Glu = st.text_input("Glucose (mg/dL)", key=wkey("Glu"))
-    with r1[6]: UA  = st.text_input("Uric acid (mg/dL)", key=wkey("UA"))
 
-    r2 = st.columns(7)
-    with r2[0]: AST = st.text_input("AST (U/L)", key=wkey("AST"))
-    with r2[1]: ALT = st.text_input("ALT (U/L)", key=wkey("ALT"))
-    with r2[2]: BUN = st.text_input("BUN (mg/dL)", key=wkey("BUN"))
-    with r2[3]: CRP = st.text_input("CRP (mg/L)", key=wkey("CRP"))
-    with r2[4]: ANC = st.text_input("ANC (/µL)", key=wkey("ANC"))
-    with r2[5]: PLT = st.text_input("PLT (×10³/µL)", key=wkey("PLT"))
-    with r2[6]:    _ = st.empty()
+    def N(label, key):
+        return st.text_input(label, key=wkey(key))
+
+    # --- Essentials (3-cols per row → 모바일에서 1열 스택)
+    r1 = st.columns(3)
+    with r1[0]: WBC = N("WBC (/µL)", "WBC")
+    with r1[1]: Hb  = N("Hb (g/dL)", "Hb")
+    with r1[2]: PLT = N("PLT (×10³/µL)", "PLT")
+
+    r2 = st.columns(3)
+    with r2[0]: ANC = N("ANC (/µL)", "ANC")
+    with r2[1]: CRP = N("CRP (mg/L)", "CRP")
+    with r2[2]: Alb = N("Alb (g/dL)", "Alb")
+
+    r3 = st.columns(3)
+    with r3[0]: Na  = N("Na (mmol/L)", "Na")
+    with r3[1]: K   = N("K (mmol/L)", "K")
+    with r3[2]: Ca  = N("Ca (mg/dL)", "Ca")
+
+    r4 = st.columns(3)
+    with r4[0]: Glu = N("Glucose (mg/dL)", "Glu")
+    with r4[1]: AST = N("AST (U/L)", "AST")
+    with r4[2]: ALT = N("ALT (U/L)", "ALT")
+
+    # --- Advanced set (hidden in simple mode)
+    if not simple_mode:
+        r5 = st.columns(3)
+        with r5[0]: P   = N("Phosphate, P (mg/dL)", "P")
+        with r5[1]: Mg  = N("Magnesium, Mg (mg/dL)", "Mg")
+        with r5[2]: Cl  = N("Chloride, Cl (mmol/L)", "Cl")
+
+        r6 = st.columns(3)
+        with r6[0]: TBil = N("Total bilirubin (mg/dL)", "TBil")
+        with r6[1]: LDH  = N("LDH (U/L)", "LDH")
+        with r6[2]: UA   = N("Uric acid (mg/dL)", "UA")
+
+        r7 = st.columns(3)
+        with r7[0]: ESR  = N("ESR (mm/hr)", "ESR")
+        with r7[1]: Fer  = N("Ferritin (ng/mL)", "Ferritin")
+        with r7[2]: INR  = N("INR", "INR")
+    else:
+        P=Mg=Cl=TBil=LDH=UA=ESR=Fer=INR=None
 
     # Save row (only provided fields)
     st.session_state.setdefault("lab_rows", [])
     if st.button("➕ 현재 값 추가", key=wkey("add_row")):
+        def _num(s):
+            try:
+                if s is None: return None
+                if isinstance(s, (int,float)): return float(s)
+                txt = str(s).strip().replace(",", "")
+                if txt == "": return None
+                return float(txt)
+            except Exception:
+                return None
+
         lab = {
             "date": str(day), "sex": sex, "age": int(age), "weight(kg)": wt,
             "Cr(mg/dL)": cr, "eGFR": egfr,
-            "Alb": _num(Alb), "K": _num(K), "Hb": _num(Hb), "Na": _num(Na),
-            "Ca": _num(Ca), "Glu": _num(Glu), "UA": _num(UA), "AST": _num(AST),
-            "ALT": _num(ALT), "BUN": _num(BUN), "CRP": _num(CRP), "ANC": _num(ANC), "PLT": _num(PLT)
+            # Essentials
+            "WBC": _num(WBC), "Hb": _num(Hb), "PLT": _num(PLT),
+            "ANC": _num(ANC), "CRP": _num(CRP), "Alb": _num(Alb),
+            "Na": _num(Na), "K": _num(K), "Ca": _num(Ca),
+            "Glu": _num(Glu), "AST": _num(AST), "ALT": _num(ALT),
+            # Advanced
+            "P": _num(P), "Mg": _num(Mg), "Cl": _num(Cl),
+            "TBil": _num(TBil), "LDH": _num(LDH), "UA": _num(UA),
+            "ESR": _num(ESR), "Ferritin": _num(Fer), "INR": _num(INR),
         }
         st.session_state["lab_rows"].append(lab)
         st.success("추가되었습니다.")
@@ -313,7 +358,6 @@ with t_labs:
         st.write("최근 입력:")
         for r in rows[-5:]:
             st.write({k:v for k,v in r.items() if v not in (None, "")})
-
 with t_special:
     st.subheader("특수검사")
     if special_tests_ui:
@@ -353,7 +397,7 @@ with t_report:
         if rows:
             latest = rows[-1]
             heme_flag = "혈액암" in (dx_group or "")
-            labs_for_diet = {k: latest.get(k) for k in ["Alb","K","Hb","Na","Ca","Glu","AST","ALT","Cr(mg/dL)","BUN","UA","CRP","ANC","PLT"]}
+            labs_for_diet = {k: latest.get(k) for k in ["Alb","K","Hb","Na","Ca","Glu","AST","ALT","Cr(mg/dL)","BUN","UA","CRP","ANC","PLT","WBC","P","Mg","Cl","TBil","LDH","ESR","Ferritin","INR"]}
             # lab_diet expects keys Alb,K,Hb,Na,Ca,Glu,AST,ALT,Cr,BUN,UA,CRP,ANC,PLT
             labs_for_diet["Cr"] = latest.get("Cr(mg/dL)")
             guide = lab_diet_guides(labs_for_diet, heme_flag=heme_flag)
@@ -400,7 +444,7 @@ with t_report:
             lines.append("")
             lines.append("## 최근 검사 (최대 5개)")
             # Only include provided fields
-            head = ["date","sex","age","weight(kg)","Cr(mg/dL)","eGFR","Alb","K","Hb","Na","Ca","Glu","AST","ALT","BUN","UA","CRP","ANC","PLT"]
+            head = ["date","sex","age","weight(kg)","Cr(mg/dL)","eGFR","WBC","Hb","PLT","ANC","CRP","Alb","Na","K","Ca","Glu","AST","ALT","BUN","P","Mg","Cl","TBil","LDH","UA","ESR","Ferritin","INR"]
             show = [h for h in head if any((r.get(h) not in (None,"")) for r in rows[-5:])]
             lines.append("| " + " | ".join(show) + " |")
             lines.append("|" + "|".join(["---"]*len(show)) + "|")
