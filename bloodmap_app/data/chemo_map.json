@@ -1,0 +1,98 @@
+{
+  "Acute Lymphoblastic Leukemia (ALL)": [
+    "6-Mercaptopurine (메르캅토퓨린)",
+    "Methotrexate (메토트렉세이트)",
+    "Cytarabine/Ara-C (시타라빈)",
+    "Vincristine (빈크리스틴)"
+  ],
+  "Acute Promyelocytic Leukemia (APL)": [
+    "ATRA (트레티노인/베사노이드)",
+    "Arsenic Trioxide (아르세닉 트리옥사이드)",
+    "Methotrexate (메토트렉세이트)",
+    "6-Mercaptopurine (메르캅토퓨린)"
+  ],
+  "Acute Myeloid Leukemia (AML)": [
+    "Cytarabine/Ara-C (시타라빈)",
+    "Daunorubicin (다우노루비신)",
+    "Idarubicin (이다루비신)"
+  ],
+  "Chronic Myeloid Leukemia (CML)": [
+    "Imatinib (이마티닙)",
+    "Dasatinib (다사티닙)",
+    "Nilotinib (닐로티닙)"
+  ],
+  "Hodgkin Lymphoma": [
+    "ABVD (도옥소루비신/블레오마이신/빈블라스틴/다카바진)"
+  ],
+  "Diffuse Large B-cell Lymphoma (DLBCL)": [
+    "R-CHOP (리툭시맙+CHOP)",
+    "R-EPOCH (리툭시맙+EPOCH)",
+    "Polatuzumab-based (폴라투주맙 조합)"
+  ],
+  "Burkitt Lymphoma": [
+    "CODOX-M/IVAC (코독스-엠/아이백)"
+  ],
+  "T-lymphoblastic Lymphoma (T-LBL)": [
+    "ALL-like Protocols (ALL 유사 프로토콜)"
+  ],
+  "Anaplastic Large Cell Lymphoma (ALCL)": [
+    "CHOP-like (CHOP 유사)",
+    "Brentuximab Vedotin (브렌툭시맵 베도틴)"
+  ],
+  "Primary Mediastinal B-cell Lymphoma (PMBCL)": [
+    "DA-R-EPOCH (용량조절형 R-EPOCH)"
+  ],
+  "Peripheral T-cell Lymphoma (PTCL)": [
+    "CHOP-like (CHOP 유사)",
+    "Pralatrexate (프랄라트렉세이트)"
+  ],
+  "Wilms Tumor": [
+    "Vincristine (빈크리스틴)",
+    "Dactinomycin (닥티노마이신)",
+    "Doxorubicin (독소루비신)"
+  ],
+  "Neuroblastoma": [
+    "Cyclophosphamide (사이클로포스파마이드)",
+    "Topotecan (토포테칸)",
+    "Cisplatin (시스플라틴)",
+    "Etoposide (에토포사이드)"
+  ],
+  "Hepatoblastoma": [
+    "Cisplatin (시스플라틴)",
+    "Doxorubicin (독소루비신)"
+  ],
+  "Retinoblastoma": [
+    "Carboplatin (카보플라틴)",
+    "Etoposide (에토포사이드)",
+    "Vincristine (빈크리스틴)"
+  ],
+  "Germ Cell Tumor": [
+    "BEP (블레오마이신/에토포사이드/시스플라틴)"
+  ],
+  "Medulloblastoma": [
+    "Cisplatin (시스플라틴)",
+    "Vincristine (빈크리스틴)",
+    "Cyclophosphamide (사이클로포스파마이드)"
+  ],
+  "Craniopharyngioma": [
+    "Interferon-α (인터페론 알파)",
+    "BRAF/MEK inhibitors (BRAF/MEK 억제제)"
+  ],
+  "Osteosarcoma": [
+    "MAP (메토트렉세이트/독소루비신/시스플라틴)"
+  ],
+  "Ewing Sarcoma": [
+    "VDC/IE (빈크리스틴/독소루비신/사이클로포스파마이드 + 이포스파마이드/에토포사이드)"
+  ],
+  "Rhabdomyosarcoma": [
+    "VAC (빈크리스틴/액티노마이신 D/사이클로포스파마이드)"
+  ],
+  "Langerhans Cell Histiocytosis (LCH)": [
+    "Vinblastine (빈블라스틴)",
+    "Prednisone (프레드니손)"
+  ],
+  "Juvenile Myelomonocytic Leukemia (JMML)": [
+    "Azacitidine (아자시티딘)",
+    "Stem cell transplant (조혈모세포 이식)"
+  ]
+}

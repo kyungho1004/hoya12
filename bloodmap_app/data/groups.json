@@ -1,0 +1,124 @@
+{
+  "🩸 혈액암 (Leukemia)": [
+    [
+      "Acute Lymphoblastic Leukemia (ALL)",
+      "급성 림프모구 백혈병"
+    ],
+    [
+      "Acute Myeloid Leukemia (AML)",
+      "급성 골수성 백혈병"
+    ],
+    [
+      "Acute Promyelocytic Leukemia (APL)",
+      "급성 전골수성 백혈병"
+    ],
+    [
+      "Chronic Myeloid Leukemia (CML)",
+      "만성 골수성 백혈병"
+    ],
+    [
+      "Other Leukemias",
+      "기타 백혈병"
+    ]
+  ],
+  "🧬 림프종 (Lymphoma)": [
+    [
+      "Hodgkin Lymphoma",
+      "호지킨 림프종"
+    ],
+    [
+      "Diffuse Large B-cell Lymphoma (DLBCL)",
+      "미만성 거대 B세포 림프종"
+    ],
+    [
+      "Burkitt Lymphoma",
+      "버킷 림프종"
+    ],
+    [
+      "T-lymphoblastic Lymphoma (T-LBL)",
+      "T-림프모구 림프종"
+    ],
+    [
+      "Anaplastic Large Cell Lymphoma (ALCL)",
+      "역형성 대세포 림프종"
+    ],
+    [
+      "Primary Mediastinal B-cell Lymphoma (PMBCL)",
+      "원발성 종격동 B세포 림프종"
+    ],
+    [
+      "Peripheral T-cell Lymphoma (PTCL)",
+      "말초 T세포 림프종"
+    ],
+    [
+      "Other NHL",
+      "기타 비호지킨 림프종"
+    ]
+  ],
+  "🧠 고형암 (Solid Tumors)": [
+    [
+      "Wilms Tumor",
+      "윌름스 종양(신장)"
+    ],
+    [
+      "Neuroblastoma",
+      "신경모세포종"
+    ],
+    [
+      "Hepatoblastoma",
+      "간모세포종"
+    ],
+    [
+      "Retinoblastoma",
+      "망막모세포종"
+    ],
+    [
+      "Germ Cell Tumor",
+      "생식세포 종양"
+    ],
+    [
+      "Medulloblastoma",
+      "수모세포종(소뇌)"
+    ],
+    [
+      "Craniopharyngioma",
+      "두개인두종"
+    ],
+    [
+      "Other Solid Tumors",
+      "기타 고형 종양"
+    ]
+  ],
+  "🦴 육종 (Sarcoma)": [
+    [
+      "Osteosarcoma",
+      "골육종"
+    ],
+    [
+      "Ewing Sarcoma",
+      "유잉육종"
+    ],
+    [
+      "Rhabdomyosarcoma",
+      "횡문근육종"
+    ],
+    [
+      "Other Sarcomas",
+      "기타 연부조직/골 육종"
+    ]
+  ],
+  "🧩 희귀암 및 기타": [
+    [
+      "Langerhans Cell Histiocytosis (LCH)",
+      "랜게르한스세포 조직구증"
+    ],
+    [
+      "Juvenile Myelomonocytic Leukemia (JMML)",
+      "소아 골수단핵구성 백혈병"
+    ],
+    [
+      "Other Rare",
+      "기타 희귀 아형"
+    ]
+  ]
+}
