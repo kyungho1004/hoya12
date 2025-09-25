@@ -13,6 +13,17 @@ from peds_profiles import get_symptom_options
 from peds_dose import acetaminophen_ml, ibuprofen_ml
 from pdf_export import export_md_to_pdf
 
+try:
+    # Case 1: flat files (branding.py beside app.py)
+    from branding import render_deploy_banner  # type: ignore
+except Exception:
+    try:
+        # Case 2: package layout (this file in a package directory)
+        from .branding import render_deploy_banner  # type: ignore
+    except Exception:
+        # Fallback: no-op to prevent NameError; keeps app running
+        def render_deploy_banner(*args, **kwargs):
+            return None
 
 # 세션 플래그(중복 방지)
 if "summary_line_shown" not in st.session_state:
