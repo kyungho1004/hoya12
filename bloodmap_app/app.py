@@ -92,6 +92,8 @@ ONCO_MAP = build_onco_map()
 
 st.set_page_config(page_title="BloodMap — 피수치가이드", page_icon="🩸", layout="centered")
 st.title("BloodMap — 피수치가이드")
+render_deploy_banner("https://bloodmap.streamlit.app/", "제작: Hoya/GPT · 자문: Hoya/GPT")
+
 
 st.info(
     "이 앱은 의료행위가 아니며, **참고용**입니다. 진단·치료를 **대체하지 않습니다**.\n"
@@ -352,8 +354,8 @@ elif mode == "일상":
         with c1: nasal = st.selectbox("콧물", opts["콧물"])
         with c2: cough = st.selectbox("기침", opts["기침"])
         with c3: diarrhea = st.selectbox("설사(횟수/일)", opts["설사"])
-        with c4: vomit = st.selectbox("구토(횟수/일)", ["없음","1~2회","3~4회","4~6회","7회 이상"], key="daily_child_vomit")
-        with c5: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1, value=0.0, key="daily_child_temp")
+        with c4: vomit = st.selectbox("구토(횟수/일)", ["없음","1~2회","3~4회","4~6회","7회 이상"])
+        with c5: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1, value=0.0)
         with c6: eye = st.selectbox("눈꼽", eye_opts)
 
         age_m = st.number_input("나이(개월)", min_value=0, step=1)
@@ -417,8 +419,8 @@ elif mode == "일상":
         with c1: nasal = st.selectbox("콧물", opts["콧물"])
         with c2: cough = st.selectbox("기침", opts["기침"])
         with c3: diarrhea = st.selectbox("설사(횟수/일)", opts["설사"])
-        with c4: vomit = st.selectbox("구토(횟수/일)", ["없음","1~3회","4~6회","7회 이상"], key="daily_adult_vomit")
-        with c5: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1, value=0.0, key="daily_adult_temp")
+        with c4: vomit = st.selectbox("구토(횟수/일)", ["없음","1~3회","4~6회","7회 이상"])
+        with c5: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1, value=0.0)
         with c6: eye = st.selectbox("눈꼽", eye_opts)
 
         comorb = st.multiselect("주의 대상", ["임신 가능성","간질환 병력","신질환 병력","위장관 궤양/출혈력","항응고제 복용","고령(65+)"])
@@ -457,7 +459,7 @@ else:
     ctop = st.columns(4)
     with ctop[0]: disease = st.selectbox("소아 질환", ["로타","독감","RSV","아데노","마이코","수족구","편도염","코로나","중이염"], index=0)
     st.caption(short_caption(disease))
-    with ctop[1]: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1, key="peds_disease_temp")
+    with ctop[1]: temp = st.number_input("체온(℃)", min_value=0.0, step=0.1)
     with ctop[2]: age_m = st.number_input("나이(개월)", min_value=0, step=1)
     with ctop[3]: weight = st.number_input("체중(kg)", min_value=0.0, step=0.1)
 
@@ -468,7 +470,7 @@ else:
     with c1: nasal = st.selectbox("콧물", opts.get("콧물", ["없음","투명","흰색","누런","피섞임"]))
     with c2: cough = st.selectbox("기침", opts.get("기침", ["없음","조금","보통","심함"]))
     with c3: diarrhea = st.selectbox("설사(횟수/일)", opts.get("설사", ["없음","1~2회","3~4회","5~6회"]))
-    with c4: vomit = st.selectbox("구토(횟수/일)", ["없음","1~2회","3~4회","4~6회","7회 이상"], key="peds_disease_vomit")
+    with c4: vomit = st.selectbox("구토(횟수/일)", ["없음","1~2회","3~4회","4~6회","7회 이상"])
     with c5: eye = st.selectbox("눈꼽", eye_opts)
     with c6: symptom_days = st.number_input("**증상일수**(일)", min_value=0, step=1, value=0)
 
@@ -635,3 +637,48 @@ if results_only_after_analyze(st):
     st.caption("본 도구는 참고용입니다. 의료진의 진단/치료를 대체하지 않습니다.")
     st.caption("문의/버그 제보: [피수치 가이드 공식카페](https://cafe.naver.com/bloodmap)")
     st.stop()
+from branding import render_deploy_banner
+
+
+def wkey(name: str) -> str:
+    try:
+        who = st.session_state.get("key", "guest")
+        mode_now = st.session_state.get("mode", "unknown")
+        return f"{mode_now}:{who}:{name}"
+    except Exception:
+        return name
+
+
+
+# === eGFR (CKD-EPI 2009) metric block ===
+try:
+    from core_utils import egfr_ckd_epi_2009
+    _labs = locals().get("labs") or globals().get("labs")
+    _cr = None
+    if isinstance(_labs, dict):
+        _cr = _labs.get("Cr") or _labs.get("creatinine") or _labs.get("CRE") or _labs.get("cr")
+    sex_for_gfr = st.selectbox("성별(egfr)", ["여","남"], index=0, key=wkey("egfr_sex"))
+    age_for_gfr = st.number_input("나이(세, egfr)", min_value=1, max_value=110, step=1, value=40, key=wkey("egfr_age"))
+    _egfr_val = egfr_ckd_epi_2009(_cr, int(age_for_gfr), sex_for_gfr)
+    if _egfr_val is not None:
+        st.metric("eGFR (CKD-EPI 2009)", f"{_egfr_val} mL/min/1.73㎡")
+except Exception:
+    pass
+
+
+def save_labs_csv(df, key: str):
+    try:
+        import os
+        save_dir = "/mnt/data/bloodmap_graph"
+        os.makedirs(save_dir, exist_ok=True)
+        csv_path = os.path.join(save_dir, f"{key}.labs.csv")
+        df.to_csv(csv_path, index=False, encoding="utf-8")
+        st.caption(f"외부 저장 완료: {csv_path}")
+    except Exception as _sv_err:
+        st.warning("외부 저장 실패: " + str(_sv_err))
+
+
+def init_care_log(user_key: str):
+    st.session_state.setdefault("care_log", {})
+    st.session_state["care_log"].setdefault(user_key, [])
+    return st.session_state["care_log"][user_key]
