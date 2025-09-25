@@ -13,17 +13,6 @@ from peds_profiles import get_symptom_options
 from peds_dose import acetaminophen_ml, ibuprofen_ml
 from pdf_export import export_md_to_pdf
 
-try:
-    # Case 1: flat files (branding.py beside app.py)
-    from branding import render_deploy_banner  # type: ignore
-except Exception:
-    try:
-        # Case 2: package layout (this file in a package directory)
-        from .branding import render_deploy_banner  # type: ignore
-    except Exception:
-        # Fallback: no-op to prevent NameError; keeps app running
-        def render_deploy_banner(*args, **kwargs):
-            return None
 
 # 세션 플래그(중복 방지)
 if "summary_line_shown" not in st.session_state:
@@ -103,8 +92,6 @@ ONCO_MAP = build_onco_map()
 
 st.set_page_config(page_title="BloodMap — 피수치가이드", page_icon="🩸", layout="centered")
 st.title("BloodMap — 피수치가이드")
-render_deploy_banner("https://bloodmap.streamlit.app/", "제작: Hoya/GPT · 자문: Hoya/GPT")
-
 
 st.info(
     "이 앱은 의료행위가 아니며, **참고용**입니다. 진단·치료를 **대체하지 않습니다**.\n"
@@ -116,6 +103,7 @@ st.markdown("문의/버그 제보: **[피수치 가이드 공식카페](https://
 nick, pin, key = nickname_pin()
 st.divider()
 has_key = bool(nick and pin and len(pin) == 4)
+
 # ---------------- 유틸 ----------------
 def _fever_bucket_from_temp(temp: float|None) -> str:
     if temp is None: return ""
@@ -647,47 +635,3 @@ if results_only_after_analyze(st):
     st.caption("본 도구는 참고용입니다. 의료진의 진단/치료를 대체하지 않습니다.")
     st.caption("문의/버그 제보: [피수치 가이드 공식카페](https://cafe.naver.com/bloodmap)")
     st.stop()
-from branding import render_deploy_banner
-
-
-def wkey(name: str) -> str:
-    try:
-        who = st.session_state.get("key", "guest")
-        mode_now = st.session_state.get("mode", "unknown")
-        return f"{mode_now}:{who}:{name}"
-    except Exception:
-        return name
-
-# === eGFR (CKD-EPI 2009) metric block ===
-try:
-    from core_utils import egfr_ckd_epi_2009
-    _labs = locals().get("labs") or globals().get("labs")
-    _cr = None
-    if isinstance(_labs, dict):
-        _cr = _labs.get("Cr") or _labs.get("creatinine") or _labs.get("CRE") or _labs.get("cr")
-    sex_for_gfr = st.selectbox("성별(egfr)", ["여","남"], index=0, key=wkey("egfr_sex"))
-    age_for_gfr = st.number_input("나이(세, egfr)", min_value=1, max_value=110, step=1, value=40, key=wkey("egfr_age"))
-    _egfr_val = egfr_ckd_epi_2009(_cr, int(age_for_gfr), sex_for_gfr)
-    if _egfr_val is not None:
-        st.metric("eGFR (CKD-EPI 2009)", f"{_egfr_val} mL/min/1.73㎡")
-except Exception:
-    pass
-
-
-
-def save_labs_csv(df, key: str):
-    try:
-        import os
-        save_dir = "/mnt/data/bloodmap_graph"
-        os.makedirs(save_dir, exist_ok=True)
-        csv_path = os.path.join(save_dir, f"{key}.labs.csv")
-        df.to_csv(csv_path, index=False, encoding="utf-8")
-        st.caption(f"외부 저장 완료: {csv_path}")
-    except Exception as _sv_err:
-        st.warning("외부 저장 실패: " + str(_sv_err))
-
-
-def init_care_log(user_key: str):
-    st.session_state.setdefault("care_log", {})
-    st.session_state["care_log"].setdefault(user_key, [])
-    return st.session_state["care_log"][user_key]

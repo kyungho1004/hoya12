@@ -60,23 +60,3 @@ def schedule_block():
     df = st.session_state.get("schedules", {}).get(st.session_state.get("key","guest"))
     if isinstance(df, pd.DataFrame) and not df.empty:
         st.dataframe(df, use_container_width=True, height=180)
-
-
-def egfr_ckd_epi_2009(scr_mgdl: float, age_y: int, sex: str) -> float | None:
-    """
-    CKD-EPI 2009 creatinine equation (race-free). sex: "여" or "남".
-    Returns mL/min/1.73m^2 rounded to 1 decimal, or None if inputs invalid.
-    """
-    try:
-        if scr_mgdl is None or age_y is None:
-            return None
-        sex_female = (sex == "여")
-        k = 0.7 if sex_female else 0.9
-        a = -0.329 if sex_female else -0.411
-        min_cr = min(scr_mgdl / k, 1)
-        max_cr = max(scr_mgdl / k, 1)
-        sex_fac = 1.018 if sex_female else 1.0
-        val = 141 * (min_cr ** a) * (max_cr ** -1.209) * (0.993 ** int(age_y)) * sex_fac
-        return round(val, 1)
-    except Exception:
-        return None
