@@ -1,17 +1,19 @@
-# app.py — Bloodmap split tabs (암 선택/항암제/피수치/특수검사)
+# app.py — Split tabs (hardened): safe GROUPS/CHEMO loading & fallback tabs
 import datetime as _dt
 import os as _os, json as _json, typing as _t
+from pathlib import Path
 import streamlit as st
 
 # ---------- Safe banner import ----------
+def _noop(*a, **k): 
+    return None
 try:
     from branding import render_deploy_banner  # flat
 except Exception:
     try:
         from .branding import render_deploy_banner  # package
     except Exception:
-        def render_deploy_banner(*args, **kwargs):
-            return None
+        render_deploy_banner = _noop
 
 # ---------- Optional pandas ----------
 try:
@@ -29,21 +31,43 @@ def wkey(name: str) -> str:
     who = st.session_state.get("key", "guest")
     mode_now = st.session_state.get("mode", "main")
     k = f"{mode_now}:{who}:{name}"
-    _KEY_REG.add(k)
-    return k
+    _KEY_REG.add(k); return k
 def enko(en: str, ko: str) -> str:
     return f"{en} / {ko}" if ko else en
 
-# Load external data
-DATA_DIR = "/mnt/data/data"
-def _load_json(path, fallback): 
-    try:
-        with open(path,"r",encoding="utf-8") as f: return _json.load(f)
-    except Exception: return fallback
-GROUPS = _load_json(f"{DATA_DIR}/groups.json", {})
-CHEMO_MAP = _load_json(f"{DATA_DIR}/chemo_map.json", {})
+# ---------- Load external data safely ----------
+def _load_json_try(paths, fallback):
+    for p in paths:
+        try:
+            with open(p, "r", encoding="utf-8") as f:
+                return _json.load(f)
+        except Exception:
+            continue
+    return fallback
 
-# eGFR CKD-EPI 2009
+BASE_DIR = Path(__file__).parent
+GROUPS = _load_json_try([
+    str(BASE_DIR / "data/groups.json"),
+    "/mnt/data/data/groups.json",
+], {})
+CHEMO_MAP = _load_json_try([
+    str(BASE_DIR / "data/chemo_map.json"),
+    "/mnt/data/data/chemo_map.json",
+], {})
+
+# Fallback if missing/empty
+if not isinstance(GROUPS, dict) or not GROUPS or not any(GROUPS.values()):
+    GROUPS = {
+        "🩸 혈액암 (Leukemia)": [
+            ["Acute Lymphoblastic Leukemia (ALL)", "급성 림프모구 백혈병"],
+            ["Acute Myeloid Leukemia (AML)", "급성 골수성 백혈병"],
+        ]
+    }
+    st.warning("data/groups.json 을 찾지 못해 임시 진단 목록으로 표시합니다.")
+if not isinstance(CHEMO_MAP, dict):
+    CHEMO_MAP = {}
+
+# ---------- eGFR CKD-EPI 2009 ----------
 def _egfr_local(scr_mgdl: float, age_y: int, sex: str) -> _t.Optional[float]:
     try:
         sex_f = (sex == "여")
@@ -68,9 +92,8 @@ with st.sidebar:
     st.session_state["mode"] = st.radio("모드", ["일반", "암", "소아"], index=1, key=wkey("mode_sel"))
 
 # ---------- Tabs ----------
-t_home, t_labs, t_dx_only, t_chemo, t_special, t_guard, t_report = st.tabs(
-    ["🏠 홈","🧪 피수치","🧬 암 선택","💊 항암제","🔬 특수검사","🛡 가드레일","📄 보고서"]
-)
+tab_labels = ["🏠 홈","🧪 피수치","🧬 암 선택","💊 항암제","🔬 특수검사","🛡 가드레일","📄 보고서"]
+t_home, t_labs, t_dx_only, t_chemo, t_special, t_guard, t_report = st.tabs(tab_labels)
 
 with t_home:
     st.success("필요한 항목이 탭으로 분리되었습니다: 피수치 · 암 선택 · 항암제 · 특수검사 · 가드레일 · 보고서")
@@ -92,7 +115,8 @@ with t_labs:
     if egfr is not None:
         st.metric("eGFR (CKD-EPI 2009)", f"{egfr} mL/min/1.73㎡")
         st.session_state["_last_egfr"] = egfr
-    if pd is not None:
+    try:
+        import pandas as pd
         row = {"date": str(today), "sex": sex, "age": int(age), "weight(kg)": weight, "Cr(mg/dL)": cr, "eGFR": egfr}
         st.session_state.setdefault("lab_rows", [])
         if st.button("➕ 현재 값 추가", key=wkey("add_row")):
@@ -106,20 +130,26 @@ with t_labs:
                 df.to_csv(path, index=False, encoding="utf-8"); st.caption(f"외부 저장: {path}")
             except Exception as e:
                 st.warning("CSV 저장 실패: "+str(e))
+    except Exception:
+        st.info("pandas 미탑재: 표/CSV 저장 기능 비활성화")
 
 with t_dx_only:
     st.subheader("암 선택 (Diagnosis)")
-    tabs = st.tabs(list(GROUPS.keys()))
-    for i,(grp, dx_list) in enumerate(GROUPS.items()):
-        with tabs[i]:
-            labels = [enko(en, ko) for en,ko in dx_list]
-            sel = st.selectbox("진단명을 선택하세요", labels, key=wkey(f"dx_sel_{i}"))
-            idx = labels.index(sel)
-            en_dx, ko_dx = dx_list[idx]
-            if st.button("선택 저장", key=wkey(f"dx_save_{i}")):
-                st.session_state["selected_dx_en"] = en_dx
-                st.session_state["selected_dx_ko"] = ko_dx
-                st.success(f"선택됨: {enko(en_dx, ko_dx)}")
+    grp_names = list(GROUPS.keys())
+    if not grp_names:
+        st.warning("진단 그룹 데이터가 없습니다. data/groups.json을 배치하세요.")
+    else:
+        tabs = st.tabs(grp_names)
+        for i,(grp, dx_list) in enumerate(GROUPS.items()):
+            with tabs[i]:
+                labels = [enko(en, ko) for en,ko in dx_list]
+                sel = st.selectbox("진단명을 선택하세요", labels, key=wkey(f"dx_sel_{i}"))
+                idx = labels.index(sel)
+                en_dx, ko_dx = dx_list[idx]
+                if st.button("선택 저장", key=wkey(f"dx_save_{i}")):
+                    st.session_state["selected_dx_en"] = en_dx
+                    st.session_state["selected_dx_ko"] = ko_dx
+                    st.success(f"선택됨: {enko(en_dx, ko_dx)}")
 
 with t_chemo:
     st.subheader("항암제 (Chemo)")
@@ -139,7 +169,6 @@ with t_chemo:
                 if x not in seen: seen.add(x); merged.append(x)
             picked = merged
         if st.button("항암제 선택 저장", key=wkey("chemo_save")):
-            st.session_state["report_group"] = "—"
             st.session_state["report_dx_en"] = en_dx
             st.session_state["report_dx_ko"] = ko_dx
             st.session_state["report_meds"] = picked
@@ -151,18 +180,16 @@ with t_special:
         from special_tests import render_special_tests  # expecting a function
         render_special_tests(st, key_prefix=wkey("special"))  # type: ignore
     except Exception:
-        st.info("특수검사 모듈이 없거나 호환되지 않습니다. special_tests.py의 render_special_tests(st, key_prefix=...) 함수를 제공하면 자동 표시됩니다.")
+        st.info("special_tests.py 의 render_special_tests(st, key_prefix=...) 함수를 제공하면 자동 표시됩니다.")
 
 with t_guard:
-    st.subheader("가드레일 (APAP/IBU)")
-    # 간단 버전: 총량/쿨다운만
+    st.subheader("가드레일 (APAP/IBU) — 간단 버전")
     from datetime import datetime as _dtpy
     try:
         from pytz import timezone
         def _now_kst(): return _dtpy.now(timezone("Asia/Seoul"))
     except Exception:
         def _now_kst(): return _dtpy.now()
-
     st.session_state.setdefault("care_log", {}).setdefault(st.session_state.get("key","guest"), [])
     log = st.session_state["care_log"][st.session_state.get("key","guest")]
     c1,c2 = st.columns(2)
@@ -195,7 +222,7 @@ with t_report:
         if egfr is not None: lines.append(f"**최근 eGFR**: {egfr} mL/min/1.73㎡")
         lines.append("")
         lines.append("## 항암제 요약")
-        if meds: 
+        if meds:
             for m in meds: lines.append(f"- {m}")
         else:
             lines.append("- (선택 항암제 없음)")
