@@ -142,7 +142,8 @@ with t_labs:
 
     col1,col2,col3,col4,col5 = st.columns(5)
     with col1: sex = st.selectbox("성별", ["여","남"], key=wkey("sex"))
-    with col2: age = int(_num("나이(세)", "age", "40")) if _num("나이(세)", "age", "40") else 0
+    with col2: age__val = _num("나이(세)", "age", "40")
+    age = int(age__val) if age__val else 0
     with col3: wt  = _num("체중(kg)", "wt", "0")
     with col4: cr  = _num("Cr (mg/dL)", "cr", "0.8")
     with col5: day = st.date_input("측정일", value=_dt.date.today(), key=wkey("date"))
