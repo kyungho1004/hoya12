@@ -2,6 +2,13 @@
 import datetime as _dt
 import streamlit as st
 
+# diet
+try:
+    from lab_diet import lab_diet_guides
+except Exception:
+    def lab_diet_guides(labs, heme_flag=False):
+        return []
+
 # -------- Safe banner (no-op if missing) --------
 try:
     from branding import render_deploy_banner
@@ -79,6 +86,28 @@ with t_home:
 
 with t_labs:
     st.subheader("피수치 입력")
+    st.markdown("### 기본 혈액검사")
+    c1,c2,c3,c4,c5 = st.columns(5)
+    with c1: WBC = st.number_input("WBC (10^3/µL)", 0.0, 500.0, 0.0, 0.1, key=wkey("wbc"))
+    with c2: Hb  = st.number_input("Hb (g/dL)", 0.0, 25.0, 0.0, 0.1, key=wkey("hb"))
+    with c3: PLT = st.number_input("PLT (10^3/µL)", 0.0, 1000.0, 0.0, 1.0, key=wkey("plt"))
+    with c4: CRP = st.number_input("CRP (mg/dL)", 0.0, 50.0, 0.0, 0.1, key=wkey("crp"))
+    with c5: ANC = st.number_input("ANC (cells/µL)", 0.0, 10000.0, 0.0, 10.0, key=wkey("anc"))
+    st.markdown("### 전해질/영양")
+    d1,d2,d3,d4,d5 = st.columns(5)
+    with d1: Na = st.number_input("Na (mEq/L)", 0.0, 200.0, 0.0, 0.5, key=wkey("na"))
+    with d2: K  = st.number_input("K (mEq/L)", 0.0, 10.0, 0.0, 0.1, key=wkey("k"))
+    with d3: Alb = st.number_input("Albumin (g/dL)", 0.0, 6.0, 0.0, 0.1, key=wkey("alb"))
+    with d4: Ca  = st.number_input("Calcium (mg/dL)", 0.0, 20.0, 0.0, 0.1, key=wkey("ca"))
+    with d5: Glu = st.number_input("Glucose (mg/dL)", 0.0, 600.0, 0.0, 1.0, key=wkey("glu"))
+    st.markdown("### 간/신장/염증")
+    e1,e2,e3,e4,e5 = st.columns(5)
+    with e1: AST = st.number_input("AST (U/L)", 0.0, 2000.0, 0.0, 1.0, key=wkey("ast"))
+    with e2: ALT = st.number_input("ALT (U/L)", 0.0, 2000.0, 0.0, 1.0, key=wkey("alt"))
+    with e3: BUN = st.number_input("BUN (mg/dL)", 0.0, 300.0, 0.0, 1.0, key=wkey("bun"))
+    with e4: UA  = st.number_input("Uric Acid (mg/dL)", 0.0, 30.0, 0.0, 0.1, key=wkey("ua"))
+    with e5: pass
+
     col1,col2,col3,col4,col5 = st.columns(5)
     with col1: sex = st.selectbox("성별", ["여","남"], key=wkey("sex"))
     with col2: age = st.number_input("나이(세)", 1, 110, 40, key=wkey("age"))
@@ -95,7 +124,13 @@ with t_labs:
     # simple rows w/o pandas
     st.session_state.setdefault("lab_rows", [])
     if st.button("➕ 현재 값 추가", key=wkey("add_row")):
-        st.session_state["lab_rows"].append({"date":str(day),"sex":sex,"age":int(age),"weight(kg)":wt,"Cr(mg/dL)":cr,"eGFR":egfr})
+        st.session_state["lab_rows"].append({
+            "date": str(day), "sex": sex, "age": int(age), "weight(kg)": wt,
+            "Cr(mg/dL)": cr, "eGFR": egfr,
+            "WBC": WBC, "Hb": Hb, "PLT": PLT, "CRP": CRP, "ANC": ANC,
+            "Na": Na, "K": K, "Alb": Alb, "Ca": Ca, "Glu": Glu,
+            "AST": AST, "ALT": ALT, "BUN": BUN, "UA": UA
+        })
     rows = st.session_state["lab_rows"]
     if rows:
         st.write("최근 입력:")
@@ -168,6 +203,26 @@ with t_report:
         lines.append("|" + "|".join(["---"]*len(head)) + "|")
         for r in rows[-5:]:
             lines.append("| " + " | ".join(str(r.get(k,'')) for k in head) + " |")
+    # Diet guide based on latest row
+    if rows:
+        _last = rows[-1]
+        labs = {"Alb":_last.get("Alb"), "K":_last.get("K"), "Hb":_last.get("Hb"),
+                "Na":_last.get("Na"), "Ca":_last.get("Ca"), "Glu":_last.get("Glu"),
+                "Cr":_last.get("Cr(mg/dL)"), "BUN":_last.get("BUN"), "AST":_last.get("AST"),
+                "ALT":_last.get("ALT"), "UA":_last.get("UA"), "CRP":_last.get("CRP"),
+                "ANC":_last.get("ANC"), "PLT":_last.get("PLT")}
+        heme_flag = False
+        _dxen = st.session_state.get("dx_en","") or ""
+        if any(x in _dxen for x in ["Leukemia","Lymphoma","Myeloma"]):
+            heme_flag = True
+        guides = lab_diet_guides(labs, heme_flag=heme_flag)
+        if guides:
+            lines.append("")
+            lines.append("## 식이가이드(피수치 기반)")
+            for g in guides:
+                lines.append(f"- {g}")
+            lines.append("")
+
     if any(spec.values()):
         lines.append("")
         lines.append("## 특수검사")
