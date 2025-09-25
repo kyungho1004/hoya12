@@ -1,4 +1,0 @@
-
-# 올바른 들여쓰기 예시 (with 다음 줄은 4칸 들여쓰기)
-with st.expander("⏱️ 해열제 스케줄표", expanded=False):
-    render_antipyretic_schedule_ui(storage_key="sched_generic")
