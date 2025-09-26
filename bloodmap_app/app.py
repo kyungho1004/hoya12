@@ -1,5 +1,5 @@
 
-# app_master4.py — Bloodmap (MASTER++++)
+# app_master5.py — Bloodmap (MASTER+++++ with pathsafe)
 import os, json, time, hashlib, importlib.util
 import datetime as _dt
 import pandas as pd
@@ -42,43 +42,34 @@ def _load_special_tests():
             return None
 STMOD = _load_special_tests()
 
-st.set_page_config(page_title="Bloodmap (MASTER++++)", layout="wide")
-st.title("Bloodmap (MASTER++++)")
+# ---------- Paths via pathsafe ----------
+try:
+    from pathsafe import resolve_data_dirs, safe_json_read, safe_json_write
+except Exception:
+    # Fallbacks (shouldn't trigger if pathsafe.py is present)
+    def resolve_data_dirs():
+        base = "/mnt/data"
+        SAVE_DIR = os.path.join(base, "bloodmap_graph")
+        CARE_DIR = os.path.join(base, "care_log")
+        PROF_DIR = os.path.join(base, "profile")
+        MET_DIR  = os.path.join(base, "metrics")
+        for d in (SAVE_DIR, CARE_DIR, PROF_DIR, MET_DIR): os.makedirs(d, exist_ok=True)
+        return SAVE_DIR, CARE_DIR, PROF_DIR, MET_DIR
+    def safe_json_read(path, default):
+        try:
+            with open(path,"r",encoding="utf-8") as f: return json.load(f)
+        except Exception: return default
+    def safe_json_write(path, data):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path,"w",encoding="utf-8") as f: json.dump(data, f, ensure_ascii=False)
+
+SAVE_DIR, CARE_DIR, PROF_DIR, MET_DIR = resolve_data_dirs()
+
+st.set_page_config(page_title="Bloodmap (MASTER+++++)", layout="wide")
+st.title("Bloodmap (MASTER+++++)")
 render_deploy_banner("https://bloodmap.streamlit.app/", "제작: Hoya/GPT · 자문: Hoya/GPT")
 
-
-# ===== Storage path resolver (portable) =====
-import os, tempfile, pathlib as _pl
-
-def _pick_base_dir() -> str:
-    # Priority: env → /mnt/data → /mount/data → ~/.local/share/bloodmap → ./data → temp
-    candidates = []
-    env = os.environ.get("BLOODMAP_DATA_DIR")
-    if env: candidates.append(env)
-    candidates += ["/mnt/data", "/mount/data",
-                   str(_pl.Path.home()/".local/share/bloodmap"),
-                   str(_pl.Path.cwd()/ "data"),
-                   str(_pl.Path(tempfile.gettempdir())/ "bloodmap")]
-    for base in candidates:
-        try:
-            _pl.Path(base).mkdir(parents=True, exist_ok=True)
-            testfile = _pl.Path(base)/".write_test"
-            with open(testfile, "w") as f: f.write("ok")
-            testfile.unlink(missing_ok=True)
-            return base
-        except Exception:
-            continue
-    # Last resort: current dir (might be read-only)
-    return str(_pl.Path.cwd())
-
-BLOODMAP_BASE = _pick_base_dir()
-def bloodmap_path(*parts:str) -> str:
-    p = _pl.Path(BLOODMAP_BASE).joinpath(*parts)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    return str(p)
-
-
-# ---------- Helpers & Paths ----------
+# ---------- Helpers ----------
 def wkey(name:str)->str:
     who = st.session_state.get("key","guest")
     return f"{who}:{name}"
@@ -88,11 +79,6 @@ def enko(en:str, ko:str)->str:
 
 def _now_kst_str():
     return _dt.datetime.now().strftime("%Y-%m-%d %H:%M")
-
-SAVE_DIR = bloodmap_path("bloodmap_graph")
-CARE_DIR = bloodmap_path("care_log")
-PROF_DIR = bloodmap_path("profile")
-MET_DIR  = bloodmap_path("metrics")
 
 # ---------- Sidebar (프로필 + PIN + 방문자 통계 + 단위 가드) ----------
 with st.sidebar:
@@ -110,7 +96,7 @@ with st.sidebar:
             if st.button("PIN 설정", key=wkey("btn_setpin")):
                 if new_pin and new_pin.isdigit() and 4 <= len(new_pin) <= 6:
                     h = hashlib.sha256(new_pin.encode()).hexdigest()
-                    json.dump({"hash":h}, open(pin_path,"w"))
+                    safe_json_write(pin_path, {"hash":h})
                     st.success("PIN 설정 완료")
                 else:
                     st.error("4~6자리 숫자만 허용")
@@ -120,7 +106,7 @@ with st.sidebar:
             chk_pin = st.text_input("PIN 확인", type="password", key=wkey("chkpin"))
             ok = False
             try:
-                saved = json.load(open(pin_path,"r")).get("hash","")
+                saved = safe_json_read(pin_path, {}).get("hash","")
                 ok = (hashlib.sha256(chk_pin.encode()).hexdigest()==saved)
             except Exception:
                 pass
@@ -132,16 +118,13 @@ with st.sidebar:
     unit_cr = st.selectbox("Cr 입력 단위", ["mg/dL","μmol/L"], key=wkey("unit_cr"))
     st.caption("※ μmol/L 입력 시 자동으로 mg/dL로 변환되어 계산됩니다. (mg/dL = μmol/L ÷ 88.4)")
 
-    # 방문자 통계
+    # 방문자 통계 (pathsafe 사용)
     met_path = os.path.join(MET_DIR, "visits.json")
-    try:
-        D = json.load(open(met_path,"r",encoding="utf-8"))
-    except Exception:
-        D = {"unique":[], "visits":[]}
+    D = safe_json_read(met_path, {"unique":[], "visits":[]})
     if uid not in D["unique"]:
         D["unique"].append(uid)
     D["visits"].append({"uid": uid, "ts": int(time.time())})
-    json.dump(D, open(met_path,"w",encoding="utf-8"), ensure_ascii=False)
+    safe_json_write(met_path, D)
     today = _dt.datetime.now().strftime("%Y-%m-%d")
     today_count = sum(1 for v in D["visits"] if _dt.datetime.fromtimestamp(v["ts"]).strftime("%Y-%m-%d")==today)
     st.caption(f"👥 오늘: {today_count} · 누적 고유: {len(D['unique'])} · 총 방문: {len(D['visits'])}")
@@ -257,18 +240,15 @@ with t_labs:
         tmax = st.number_input("최근 24h 최고 체온(℃)", 35.0, 42.0, 37.0, 0.1, key=wkey("mfval"))
         if tmax >= 38.0 and ANC < 500: show_fn = True
     else:
-        # care_log 확인
         try:
-            clog = json.load(open(os.path.join(CARE_DIR, f"{uid}.json"),"r",encoding="utf-8"))
+            clog = safe_json_read(os.path.join(CARE_DIR, f"{uid}.json"), [])
             now = time.time()
             recent_fever = any((x.get("kind")=="fever" and (now - x.get("ts",0) <= 24*3600)) for x in clog)
             if recent_fever and ANC < 500: show_fn = True
         except Exception:
             pass
-
     if show_fn:
         st.error("🚨 지난 24h 발열 + ANC<500 → **FN 의심: 즉시 진료 권고**")
-
     if Na < 125 or Na > 155 or K >= 6.0:
         st.error("🚨 전해질 위기치: Na<125 또는 >155, K≥6.0 → **즉시 평가 권고**")
 
@@ -291,22 +271,18 @@ def _care_path(uid:str)->str:
     return os.path.join(CARE_DIR, f"{uid}.json")
 
 def _load_log(uid:str):
-    p = _care_path(uid)
-    try: return json.load(open(p,"r",encoding="utf-8"))
-    except: return []
+    return safe_json_read(_care_path(uid), [])
 
 def _save_log(uid:str, L):
-    json.dump(L, open(_care_path(uid),"w",encoding="utf-8"), ensure_ascii=False)
+    safe_json_write(_care_path(uid), L)
 
-def _ics_event(summary:str, dt: _dt.datetime, duration_min:int=0)->str:
-    # Minimal single-event ICS
+def _ics_event(summary:str, dt: _dt.datetime)->str:
     dtstart = dt.strftime("%Y%m%dT%H%M%S")
     ics = [
         "BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Bloodmap//KST//KR","CALSCALE:GREGORIAN",
         "BEGIN:VEVENT",
         f"UID:{int(time.time())}@bloodmap",
-        f"DTSTAMP:{dtstart}",
-        f"DTSTART:{dtstart}",
+        f"DTSTAMP:{dtstart}", f"DTSTART:{dtstart}",
         f"SUMMARY:{summary}",
         "END:VEVENT","END:VCALENDAR"
     ]
@@ -337,27 +313,17 @@ with t_chemo:
     st.subheader("해열제 가드레일(APAP/IBU)")
     uid = st.session_state.get("key","guest").strip() or "guest"
 
-    # PIN 보호: PIN 설정되어 있고 잠금 해제 안 됐다면 차단
-    pin_path = os.path.join(PROF_DIR, f"{uid}.pin")
-    if os.path.exists(pin_path) and not st.session_state.get("pin_ok", False):
+    # PIN 보호
+    if os.path.exists(os.path.join(PROF_DIR, f"{uid}.pin")) and not st.session_state.get("pin_ok", False):
         st.warning("🔒 PIN 해제 필요: 해열제 기록·케어로그 접근이 잠겨 있습니다.")
     else:
         log = _load_log(uid)
         now = time.time()
         def total_24h(drug):
-            mg = 0.0
-            for x in log:
-                if x.get("drug")==drug and (now - x.get("ts",0) <= 24*3600):
-                    mg += float(x.get("dose_mg", 0))
-            return mg
+            return sum(float(x.get("dose_mg",0)) for x in log if x.get("drug")==drug and (now - x.get("ts",0) <= 24*3600))
         def last_ts(drug):
-            ts = 0
-            for x in log:
-                if x.get("drug")==drug:
-                    ts = max(ts, x.get("ts",0))
-            return ts
+            return max([x.get("ts",0) for x in log if x.get("drug")==drug] or [0])
 
-        # 입력 보조(체중/시럽 농도)
         cc1,cc2,cc3 = st.columns(3)
         with cc1: syrup = st.selectbox("시럽 농도", ["없음/정제","APAP 160 mg/5mL","IBU 100 mg/5mL"], key=wkey("syrup"))
         with cc2: dose_ml = st.number_input("투여량(mL)", 0.0, 100.0, 0.0, 0.5, key=wkey("dose_ml"))
@@ -368,68 +334,46 @@ with t_chemo:
             if "100 mg/5mL" in syrup and drug=="IBU":  return dose_ml * (100.0/5.0)
             return 0.0
 
-        # 규칙
         wt = st.session_state.get("weight(kg)", 0.0) or st.session_state.get(wkey("wt"), 0.0)
         try: wt = float(wt)
         except: wt = 0.0
-        apap_daily_max = max(75.0*wt, 0.0)
-        ibu_daily_max  = max(30.0*wt, 0.0)
-        if wt >= 40:
-            apap_daily_max = min(apap_daily_max, 4000.0)
-            ibu_daily_max  = min(ibu_daily_max, 1200.0)
+        apap_daily_max = min(max(75.0*wt,0.0), 4000.0 if wt>=40 else 1e9)
+        ibu_daily_max  = min(max(30.0*wt,0.0), 1200.0 if wt>=40 else 1e9)
 
-        cool_apap = 4*3600
-        cool_ibu  = 6*3600
-        last_apap = last_ts("APAP")
-        last_ibu  = last_ts("IBU")
+        cool_apap = 4*3600; cool_ibu  = 6*3600
+        last_apap = last_ts("APAP"); last_ibu = last_ts("IBU")
         can_apap  = (time.time() - last_apap) >= cool_apap
         can_ibu   = (time.time() - last_ibu) >= cool_ibu
 
-        # PLT / eGFR
         plt_input = st.number_input("최근 혈소판(PLT, x10^3/µL)", 0, 1000, value=200, key=wkey("plt_v"))
-        last_egfr = None
-        if st.session_state.get("lab_rows"):
-            try: last_egfr = st.session_state["lab_rows"][-1].get("eGFR")
-            except: pass
-        if last_egfr is None: last_egfr = 100.0
-        if last_egfr < 60:
-            st.warning("eGFR<60: IBU 사용 시 **신장 기능 주의**")
+        last_egfr = rows[-1].get("eGFR") if rows else 100.0
+        if last_egfr < 60: st.warning("eGFR<60: IBU 사용 시 **신장 기능 주의**")
 
-        # 24h 요약 표시
         colsum1, colsum2 = st.columns(2)
-        with colsum1:
-            st.info(f"APAP 24h 합계: {total_24h('APAP'):.0f} mg / 한도 {apap_daily_max:.0f} mg")
-        with colsum2:
-            st.info(f"IBU  24h 합계: {total_24h('IBU'):.0f} mg / 한도 {ibu_daily_max:.0f} mg")
+        with colsum1: st.info(f"APAP 24h 합계: {total_24h('APAP'):.0f} mg / 한도 {apap_daily_max:.0f} mg")
+        with colsum2: st.info(f"IBU  24h 합계: {total_24h('IBU'):.0f} mg / 한도 {ibu_daily_max:.0f} mg")
 
-        # 버튼 + 기록
         colA, colB = st.columns(2)
         with colA:
             dose_apap = calc_mg("APAP")
             disabledA = (dose_apap<=0 or not can_apap or (total_24h('APAP')+dose_apap>apap_daily_max))
-            clickedA = st.button(f"APAP 기록(+{dose_apap:.0f} mg)", key=wkey("btn_apap"), disabled=disabledA, help="쿨다운 4h, 24h 총량 한도 적용")
-            if clickedA:
+            if st.button(f"APAP 기록(+{dose_apap:.0f} mg)", key=wkey("btn_apap"), disabled=disabledA):
                 if not can_apap: st.error("APAP 쿨다운 미충족(마지막 복용 후 4시간 필요)")
                 elif total_24h('APAP')+dose_apap>apap_daily_max: st.error("APAP 24시간 총량 초과 — 기록 차단")
                 else:
                     log.append({"ts": time.time(), "kind":"antipyretic", "drug":"APAP", "dose_mg": dose_apap, "KST": _now_kst_str()})
-                    _save_log(uid, log)
-                    st.success("APAP 기록됨")
+                    _save_log(uid, log); st.success("APAP 기록됨")
         with colB:
-            dose_ibu = calc_mg("IBU")
-            plt_block = plt_input < 50
+            dose_ibu = calc_mg("IBU"); plt_block = plt_input < 50
             disabledB = (dose_ibu<=0 or not can_ibu or (total_24h('IBU')+dose_ibu>ibu_daily_max) or plt_block)
-            clickedB = st.button(f"IBU 기록(+{dose_ibu:.0f} mg)", key=wkey("btn_ibu"), disabled=disabledB, help="쿨다운 6h, 24h 총량, PLT<50k 차단")
-            if clickedB:
+            if st.button(f"IBU 기록(+{dose_ibu:.0f} mg)", key=wkey("btn_ibu"), disabled=disabledB):
                 if plt_block: st.error("IBU 차단: PLT < 50k")
                 elif not can_ibu: st.error("IBU 쿨다운 미충족(마지막 복용 후 6시간 필요)")
                 elif total_24h('IBU')+dose_ibu>ibu_daily_max: st.error("IBU 24시간 총량 초과 — 기록 차단")
                 else:
                     log.append({"ts": time.time(), "kind":"antipyretic", "drug":"IBU", "dose_mg": dose_ibu, "KST": _now_kst_str()})
-                    _save_log(uid, log)
-                    st.success("IBU 기록됨")
+                    _save_log(uid, log); st.success("IBU 기록됨")
 
-        # 다음 복용 .ics 내보내기
         next_apap = _dt.datetime.now() if last_apap==0 else _dt.datetime.fromtimestamp(last_apap) + _dt.timedelta(seconds=cool_apap)
         next_ibu  = _dt.datetime.now() if last_ibu==0  else _dt.datetime.fromtimestamp(last_ibu)  + _dt.timedelta(seconds=cool_ibu)
         apap_ics = _ics_event("다음 APAP 복용 가능", next_apap)
@@ -464,7 +408,7 @@ with t_peds:
     else: st.info("입력값이 기준에 해당하지 않습니다. 추가 증상/경과를 확인하세요.")
     st.caption("※ 이 해석은 참고용이며, 정확한 진단은 의료진의 판단에 따릅니다.")
 
-# ---------- CSV/엑셀 가져오기 (PIN 보호) ----------
+# ---------- CSV/엑셀 가져오기 (PIN 보호 + pathsafe 저장) ----------
 with t_import:
     st.subheader("CSV/엑셀 가져오기 (PIN 보호)")
     uid = st.session_state.get("key","guest").strip() or "guest"
@@ -506,26 +450,18 @@ with t_report:
 
     # 24h antipyretic summary
     uid = st.session_state.get("key","guest").strip() or "guest"
-    def _load_log(uid:str):
-        p = os.path.join(CARE_DIR, f"{uid}.json")
-        try: return json.load(open(p,"r",encoding="utf-8"))
-        except: return []
-    log = _load_log(uid)
+    log = safe_json_read(os.path.join(CARE_DIR, f"{uid}.json"), [])
     now = time.time()
     def total_24h(drug):
-        mg = 0.0
-        for x in log:
-            if x.get("drug")==drug and (now - x.get("ts",0) <= 24*3600):
-                mg += float(x.get("dose_mg", 0))
-        return mg
+        return sum(float(x.get("dose_mg",0)) for x in log if x.get("drug")==drug and (now - x.get("ts",0) <= 24*3600))
 
-    # 위험 배너 판정 재사용
+    # 위험 배너 판정
     Na = rows[-1].get("Na") if rows else None
     K  = rows[-1].get("K")  if rows else None
     ANC = rows[-1].get("ANC") if rows else None
     fn_flag = False
     try:
-        clog = json.load(open(os.path.join(CARE_DIR, f"{uid}.json"),"r",encoding="utf-8"))
+        clog = safe_json_read(os.path.join(CARE_DIR, f"{uid}.json"), [])
         recent_fever = any((x.get("kind")=="fever" and (now - x.get("ts",0) <= 24*3600)) for x in clog)
         if recent_fever and (ANC is not None and ANC < 500):
             fn_flag = True
@@ -582,12 +518,11 @@ with t_report:
         for r in rows[-5:]:
             lines.append("| " + " | ".join(str(r.get(k,'')) for k in head) + " |")
 
-    # 24h 해열제 요약(문서 반영)
-    apap_sum = total_24h('APAP'); ibu_sum = total_24h('IBU')
+    # 24h 해열제 요약
     lines.append("")
     lines.append("## 최근 24h 해열제 요약")
-    lines.append(f"- APAP 합계: {apap_sum:.0f} mg")
-    lines.append(f"- IBU  합계: {ibu_sum:.0f} mg")
+    lines.append(f"- APAP 합계: {total_24h('APAP'):.0f} mg")
+    lines.append(f"- IBU  합계: {total_24h('IBU'):.0f} mg")
 
     # 특수검사
     if spec_lines:
