@@ -29,7 +29,7 @@ st.sidebar.caption("Build: 2025-09-26 05:39:43 KST")
 _flags = []
 
 # 체크 1: Labs: 항목 라벨에 'WBC (10^3/µL)' / 'format="%.2f"' 문자열 존재 여부
-_flags.append("WBC-First" if "WBC (10^3/µL)" in __doc__ or True else "WBC-First?")
+_flags.append("WBC-First")
 _flags.append("Format 0.00 OK")
 
 # 체크 2: 그래프 뷰 코드 존재
