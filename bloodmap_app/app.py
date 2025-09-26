@@ -55,6 +55,63 @@ def eval_safety(latest_lab: dict, care_log: list):
             pass
     return alerts
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # ---- Build / Patch status panel ----
 st.sidebar.markdown("---")
 st.set_page_config(page_title="Bloodmap (Minimal)", layout="wide")
@@ -589,5 +646,4 @@ if rows:
         if warns:
             st.warning("\n".join(["🚨 피수치 경고"] + [f"- {w}" for w in warns]))
 
-# ---- Safety Flow ----
-    return alerts
+
