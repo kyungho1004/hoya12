@@ -295,24 +295,26 @@ with t_chemo:
             st.session_state["chemo_keys"] = picked_keys
             st.success("저장됨. 홈/보고서에서 확인")
 
-# ====== PEDS (scoring + antipyretic dosing) ======
+
+# ====== PEDS (SYMPTOM-BASED scoring + antipyretic dosing) ======
 with t_peds:
-    st.subheader("소아 증상 분류(점수 기반) + 해열제 계산")
-    disease = st.selectbox("의심 질환(선택 시 기본 옵션 자동 세팅)", ["장염","로타","노로","RSV","독감","상기도염","아데노","마이코","수족구","편도염","코로나","중이염"], key=wkey("peds_dx"))
-    opts = get_symptom_options(disease)
+    st.subheader("소아 증상 입력 → 점수 기반 병명 추정 + 해열제 계산")
+    st.caption("질병을 미리 고르지 않습니다. 증상만 선택하면 자동으로 점수화해 상위 의심 질환군을 보여줍니다.")
+
+    # 증상 입력 (고정 옵션)
     c1,c2,c3,c4,c5 = st.columns(5)
-    with c1: nasal = st.selectbox("콧물", opts.get("콧물", ["없음","투명","진득","누런"]), key=wkey("p_nasal"))
-    with c2: cough = st.selectbox("기침", opts.get("기침", ["없음","조금","보통","심함"]), key=wkey("p_cough"))
-    with c3: stool = st.selectbox("설사", opts.get("설사", ["없음","1~2회","3~4회","5~6회","7회 이상"]), key=wkey("p_stool"))
-    with c4: fever = st.selectbox("발열", opts.get("발열", ["없음","37~37.5 (미열)","37.5~38","38~38.5","38.5~39","39 이상"]), key=wkey("p_fever"))
-    with c5: eye   = st.selectbox("눈꼽", opts.get("눈꼽", ["없음","맑음","노랑-농성","양쪽"]), key=wkey("p_eye"))
+    with c1: nasal = st.selectbox("콧물", ["없음","투명","진득","누런"], key=wkey("p_nasal"))
+    with c2: cough = st.selectbox("기침", ["없음","조금","보통","심함"], key=wkey("p_cough"))
+    with c3: stool = st.selectbox("설사", ["없음","1~2회","3~4회","5~6회","7회 이상"], key=wkey("p_stool"))
+    with c4: fever = st.selectbox("발열", ["없음","37~37.5 (미열)","37.5~38","38~38.5","38.5~39","39 이상"], key=wkey("p_fever"))
+    with c5: eye   = st.selectbox("눈꼽", ["없음","맑음","노랑-농성","양쪽"], key=wkey("p_eye"))
 
     d1,d2,d3 = st.columns(3)
     with d1: oliguria = st.checkbox("소변량 급감", key=wkey("p_oliguria"))
     with d2: persistent_vomit = st.checkbox("지속 구토(>6시간)", key=wkey("p_pvomit"))
     with d3: petechiae = st.checkbox("점상출혈", key=wkey("p_petechiae"))
 
-    # Scoring
+    # 점수 계산
     score = {"장염 의심":0, "상기도/독감 계열":0, "결막염 의심":0, "탈수/신장 문제":0, "출혈성 경향":0}
     if stool in ["3~4회","5~6회","7회 이상"]:
         score["장염 의심"] += {"3~4회":40,"5~6회":55,"7회 이상":70}[stool]
@@ -324,14 +326,13 @@ with t_peds:
         score["결막염 의심"] += 30
     if oliguria:
         score["탈수/신장 문제"] += 40
-        score["장염 의심"] += 10  # 동반 가중치
+        score["장염 의심"] += 10
     if persistent_vomit:
         score["장염 의심"] += 25
         score["탈수/신장 문제"] += 15
     if petechiae:
         score["출혈성 경향"] += 60
 
-    # Sort and display
     ordered = sorted(score.items(), key=lambda x: x[1], reverse=True)
     st.write("• " + " / ".join([f"{k}: {v}" for k,v in ordered]))
     top = ordered[0][0] if ordered else "(없음)"
@@ -349,7 +350,7 @@ with t_peds:
     if advice:
         st.info(" / ".join(advice))
 
-    # Antipyretic dosing
+    # 해열제 계산기
     st.markdown("---")
     st.subheader("해열제 계산기")
     wcol1,wcol2,wcol3 = st.columns([2,1,2])
@@ -360,6 +361,13 @@ with t_peds:
         wt_val = float(str(wt).strip()) if wt else None
     except Exception:
         wt_val = None
+
+    # 내부 계산 함수는 이전 버전에서 가져옴
+    try:
+        from peds_dose import acetaminophen_ml, ibuprofen_ml
+    except Exception:
+        def acetaminophen_ml(*a, **k): return (0.0, 0.0)
+        def ibuprofen_ml(*a, **k): return (0.0, 0.0)
 
     ap_ml_1, ap_ml_max = (0.0, 0.0)
     ib_ml_1, ib_ml_max = (0.0, 0.0)
@@ -380,8 +388,8 @@ with t_peds:
         st.metric("IBU 1회량(ml)", f"{ib_ml_1:.1f}" if ib_ml_1 else "—")
         st.metric("IBU 24h 최대(ml)", f"{ib_ml_max:.0f}" if ib_ml_max else "—")
     st.caption("쿨다운: APAP ≥4시간, IBU ≥6시간. 중복 복용 주의.")
-
 # ====== SPECIAL ======
+
 with t_special:
     try:
         from special_tests import special_tests_ui
