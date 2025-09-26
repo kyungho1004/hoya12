@@ -1,6 +1,8 @@
 # app.py — Minimal, always-on inputs (Labs, Diagnosis, Chemo, Special Tests)
 import datetime as _dt
 import streamlit as st
+from peds_profiles import get_symptom_options
+from peds_dose import acetaminophen_ml, ibuprofen_ml, estimate_weight_from_age_months
 from special_tests import special_tests_ui
 import json
 import pytz
@@ -15,6 +17,90 @@ except Exception:
 
 st.set_page_config(page_title="Bloodmap (Minimal)", layout="wide")
 st.title("Bloodmap (Minimal)")
+
+# ---- Lab normals/thresholds ----
+NORMALS = {
+    "WBC": (4.0, 10.0, "10^3/µL"),
+    "Hb": (12.0, 16.0, "g/dL"),
+    "PLT": (150.0, 400.0, "10^3/µL"),
+    "ANC": (1_500.0, 8_000.0, "/µL"),
+    "Na": (135.0, 145.0, "mmol/L"),
+    "K": (3.5, 5.1, "mmol/L"),
+    "Ca": (8.5, 10.5, "mg/dL"),
+    "P": (2.5, 4.5, "mg/dL"),
+    "Alb": (3.5, 5.2, "g/dL"),
+    "Glu": (70.0, 140.0, "mg/dL"),
+    "T.P": (6.4, 8.3, "g/dL"),
+    "AST": (0.0, 40.0, "U/L"),
+    "ALP": (40.0, 130.0, "U/L"),
+    "CRP": (0.0, 0.5, "mg/dL"),
+    "UA": (3.5, 7.2, "mg/dL"),
+    "T.b": (0.2, 1.2, "mg/dL"),
+    "Cr(mg/dL)": (0.6, 1.3, "mg/dL"),
+}
+
+# Severity thresholds for quick banners (subset)
+THRESH = {
+    "ANC_critical": 500,
+    "Na_low": 130,
+    "Na_high": 150,
+    "K_low": 3.0,
+    "K_high": 6.0,
+    "Hb_low": 7.0,
+    "PLT_low": 20.0,
+    "Ca_low": 7.0,
+    "Glu_high": 300.0,
+    "CRP_high": 10.0,
+}
+
+def lab_badge(name:str, value):
+    lo, hi, unit = NORMALS.get(name, (None, None, ""))
+    if value is None:
+        return ""
+    try:
+        v = float(value)
+    except Exception:
+        return ""
+    if lo is not None and hi is not None:
+        if v < lo:
+            return f"🟡 {v} {unit} (low {lo}-{hi})"
+        if v > hi:
+            return f"🟡 {v} {unit} (high {lo}-{hi})"
+        return f"🟢 {v} {unit} (normal {lo}-{hi})"
+    return f"{v} {unit}"
+
+def lab_warnings(row: dict):
+    warns = []
+    anc = row.get("ANC")
+    if anc is not None and float(anc) < THRESH["ANC_critical"]:
+        warns.append(f"ANC {anc} /µL < {THRESH['ANC_critical']} → 🚨 강한 감염위험")
+    na = row.get("Na")
+    if na is not None:
+        if float(na) < THRESH["Na_low"]:
+            warns.append(f"Na {na} mmol/L < {THRESH['Na_low']} → 🚨 저나트륨")
+        if float(na) > THRESH["Na_high"]:
+            warns.append(f"Na {na} mmol/L > {THRESH['Na_high']} → 🚨 고나트륨")
+    k = row.get("K")
+    if k is not None:
+        if float(k) < THRESH["K_low"] or float(k) > THRESH["K_high"]:
+            warns.append(f"K {k} mmol/L 경계( {THRESH['K_low']}–{THRESH['K_high']} )")
+    hb = row.get("Hb")
+    if hb is not None and float(hb) < THRESH["Hb_low"]:
+        warns.append(f"Hb {hb} g/dL < {THRESH['Hb_low']} → 수혈 고려")
+    plt = row.get("PLT")
+    if plt is not None and float(plt) < THRESH["PLT_low"]:
+        warns.append(f"PLT {plt}k/µL < {THRESH['PLT_low']} → 출혈주의")
+    ca = row.get("Ca")
+    if ca is not None and float(ca) < THRESH["Ca_low"]:
+        warns.append(f"Ca {ca} mg/dL < {THRESH['Ca_low']} → 경련/부정맥 위험")
+    glu = row.get("Glu")
+    if glu is not None and float(glu) > THRESH["Glu_high"]:
+        warns.append(f"Glu {glu} mg/dL > {THRESH['Glu_high']} → 고혈당")
+    crp = row.get("CRP")
+    if crp is not None and float(crp) > THRESH["CRP_high"]:
+        warns.append(f"CRP {crp} mg/dL > {THRESH['CRP_high']} → 염증/감염 의심")
+    return warns
+
 render_deploy_banner("https://bloodmap.streamlit.app/", "제작: Hoya/GPT · 자문: Hoya/GPT")
 
 
@@ -144,29 +230,77 @@ def enko(en:str, ko:str)->str:
     return f"{en} / {ko}" if ko else en
 
 # -------- Inline defaults (no external files) --------
+
 GROUPS = {
-    "🩸 혈액암 (Leukemia)": [
-        ("Acute Lymphoblastic Leukemia (ALL)", "급성 림프모구 백혈병"),
-        ("Acute Myeloid Leukemia (AML)", "급성 골수성 백혈병"),
-        ("Acute Promyelocytic Leukemia (APL)", "급성 전골수성 백혈병"),
-        ("Chronic Myeloid Leukemia (CML)", "만성 골수성 백혈병"),
+    "🩸 혈액암 (Leukemia/MDS/MPN)": [
+        ("ALL (B/T)", "급성 림프모구 백혈병"),
+        ("AML", "급성 골수성 백혈병"),
+        ("APL", "급성 전골수성 백혈병"),
+        ("CML", "만성 골수성 백혈병"),
+        ("CLL", "만성 림프구성 백혈병"),
+        ("Hairy Cell Leukemia", "털세포 백혈병"),
+        ("MDS", "골수형성이상증후군"),
+        ("MPN (PV/ET/PMF)", "골수증식성 종양"),
     ],
     "🧬 림프종 (Lymphoma)": [
-        ("Hodgkin Lymphoma", "호지킨 림프종"),
-        ("Diffuse Large B-cell Lymphoma (DLBCL)", "미만성 거대 B세포 림프종"),
-        ("Burkitt Lymphoma", "버킷 림프종"),
+        ("DLBCL", "미만성 거대 B세포 림프종"),
+        ("FL", "여포성 림프종"),
+        ("MCL", "외투세포 림프종"),
+        ("MZL", "변연부 림프종"),
+        ("Burkitt", "버킷 림프종"),
+        ("Hodgkin", "호지킨 림프종"),
+        ("PTCL/NOS", "말초 T세포 림프종"),
+        ("ALCL", "역형성 대세포 림프종"),
+        ("NK/T", "NK/T 세포 림프종"),
+        ("Primary CNS Lymphoma", "원발성 CNS 림프종"),
+        ("Waldenström", "월덴스트롬 거대글로불린혈증")
     ],
     "🧠 고형암 (Solid Tumors)": [
-        ("Wilms Tumor", "윌름스 종양(신장)"),
-        ("Neuroblastoma", "신경모세포종"),
+        ("Breast", "유방암"),
+        ("NSCLC", "폐암-비소세포"),
+        ("SCLC", "폐암-소세포"),
+        ("Colorectal", "대장암"),
+        ("Gastric", "위암"),
+        ("Pancreas", "췌장암"),
+        ("HCC", "간세포암"),
+        ("Cholangiocarcinoma", "담관암"),
+        ("Biliary", "담도암"),
+        ("Esophageal", "식도암"),
+        ("Head & Neck", "두경부암"),
+        ("Thyroid", "갑상선암"),
+        ("RCC", "신장암"),
+        ("Urothelial/Bladder", "요로상피/방광암"),
+        ("Prostate", "전립선암"),
+        ("Ovary", "난소암"),
+        ("Cervix", "자궁경부암"),
+        ("Endometrium", "자궁내막암"),
+        ("Testicular GCT", "고환 생식세포종양"),
+        ("NET", "신경내분비종양"),
+        ("Melanoma", "흑색종"),
+        ("Merkel", "메르켈세포암")
     ],
     "🦴 육종 (Sarcoma)": [
+        ("UPS", "미분화 다형성 육종"),
+        ("LMS", "평활근육종"),
+        ("Liposarcoma", "지방육종"),
+        ("Synovial Sarcoma", "활막육종"),
+        ("Rhabdomyosarcoma", "횡문근육종"),
+        ("GIST", "위장관기질종양"),
+        ("Angiosarcoma", "혈관육종"),
+        ("Ewing", "유잉육종"),
         ("Osteosarcoma", "골육종"),
-        ("Ewing Sarcoma", "유잉육종"),
+        ("Chondrosarcoma", "연골육종"),
+        ("DFSP", "피부섬유육종")
     ],
-    "🧩 희귀암 및 기타": [
-        ("Langerhans Cell Histiocytosis (LCH)", "랜게르한스세포 조직구증"),
-        ("Juvenile Myelomonocytic Leukemia (JMML)", "소아 골수단핵구성 백혈병"),
+    "🧩 희귀/소아": [
+        ("Wilms", "윌름스 종양"),
+        ("Neuroblastoma", "신경모세포종"),
+        ("Medulloblastoma", "수모세포종"),
+        ("Ependymoma", "상의세포종"),
+        ("Retinoblastoma", "망막모세포종"),
+        ("Hepatoblastoma", "간모세포종"),
+        ("LCH", "랜게르한스세포 조직구증"),
+        ("JMML", "소아 골수단핵구성 백혈병")
     ],
 }
 CHEMO_MAP = {
@@ -194,13 +328,12 @@ with st.sidebar:
     st.caption("좌측 프로필은 저장/CSV 경로 키로 쓰입니다.")
 
 # -------- Tabs --------
-t_home, t_labs, t_dx, t_chemo, t_special, t_care, t_report = st.tabs(
-    ["🏠 홈","🧪 피수치 입력","🧬 암 선택","💊 항암제","🔬 특수검사","🩺 케어로그","📄 보고서"]
-)
+t_home, t_labs, t_dx, t_chemo, t_special, t_peds, t_care, t_report = st.tabs(
+    ["🏠 홈","🧪 피수치 입력","🧬 암 선택","💊 항암제","🔬 특수검사","👶 소아","🩺 케어로그","📄 보고서"]
 
+)
 with t_home:
     st.info("각 탭에 기본 입력창이 항상 표시됩니다. 외부 파일 없어도 작동합니다.")
-
 with t_labs:
     st.subheader("피수치 입력")
     col1,col2,col3,col4,col5 = st.columns(5)
@@ -216,32 +349,69 @@ with t_labs:
         return round(141*(mn**a)*(mx**-1.209)*(0.993**age)*sex_fac,1)
     egfr = egfr_2009(cr, int(age), sex)
     st.metric("eGFR (CKD-EPI 2009)", f"{egfr} mL/min/1.73㎡")
-    up = st.file_uploader("파일에서 불러오기(CSV)", type=["csv"], key=wkey("csv_up"))
-    if up is not None:
-        try:
-            import pandas as pd
-            df = pd.read_csv(up)
-            st.session_state["lab_rows"] = df.to_dict(orient="records")
-            st.success("CSV 불러오기 완료")
-        except Exception as e:
-            st.error(f"CSV 파싱 오류: {e}")
 
-    # simple rows w/o pandas
-    st.session_state.setdefault("lab_rows", [])
-    if st.button("➕ 현재 값 추가", key=wkey("add_row")):
-        st.session_state["lab_rows"].append({"date":str(day),"sex":sex,"age":int(age),"weight(kg)":wt,"Cr(mg/dL)":cr,"eGFR":egfr})
-        try:
-            import os
-            import pandas as pd
-            os.makedirs("/mnt/data/bloodmap_graph", exist_ok=True)
-            pd.DataFrame(st.session_state["lab_rows"]).to_csv("/mnt/data/bloodmap_graph/default.labs.csv", index=False)
-        except Exception:
-            pass
-    rows = st.session_state["lab_rows"]
-    if rows:
-        st.write("최근 입력:")
-        for r in rows[-5:]:
-            st.write(r)
+# 핵심 수치 입력 (보고서/식이가이드/경보에 사용)
+colA,colB,colC,colD,colE,colF,colG,colH = st.columns(8)
+with colA: anc = st.number_input("ANC (/µL)", 0, 500000, 0, step=100, key=wkey("anc"))
+with colB: hb  = st.number_input("Hb (g/dL)", 0.0, 25.0, 0.0, 0.1, key=wkey("hb"))
+with colC: plt = st.number_input("PLT (10^3/µL)", 0, 1000, 0, step=1, key=wkey("plt"))
+with colD: crp = st.number_input("CRP (mg/dL)", 0.0, 50.0, 0.0, 0.1, key=wkey("crp"))
+with colE: alb = st.number_input("Albumin (g/dL)", 0.0, 6.0, 0.0, 0.1, key=wkey("alb"))
+with colF: k   = st.number_input("K (mmol/L)", 0.0, 10.0, 0.0, 0.1, key=wkey("k"))
+with colG: na  = st.number_input("Na (mmol/L)", 0.0, 200.0, 0.0, 1.0, key=wkey("na"))
+with colH: ca  = st.number_input("Ca (mg/dL)", 0.0, 20.0, 0.0, 0.1, key=wkey("ca"))
+
+# 정상범위 안내
+st.caption("정상범위 예시 — WBC 4.0–10.0k/µL, Hb 12–16 g/dL, PLT 150–400k/µL, Na 135–145, K 3.5–5.1, Ca 8.5–10.5, Alb 3.5–5.2, AST 0–40 U/L, ALP 40–130 U/L, CRP 0–0.5 mg/dL, UA 3.5–7.2 mg/dL, T.b 0.2–1.2 mg/dL")
+
+
+# 추가 핵심 수치
+c1,c2,c3,c4 = st.columns(4)
+with c1: wbc = st.number_input("WBC (10^3/µL)", 0.0, 500.0, 0.0, 0.1, key=wkey("wbc"))
+with c2: glu = st.number_input("Glu (mg/dL)", 0.0, 1000.0, 0.0, 1.0, key=wkey("glu"))
+with c3: tp  = st.number_input("T.P (g/dL)", 0.0, 12.0, 0.0, 0.1, key=wkey("tp"))
+with c4: p   = st.number_input("P (mg/dL)", 0.0, 20.0, 0.0, 0.1, key=wkey("p"))
+
+d1,d2,d3,d4 = st.columns(4)
+with d1: ast_v = st.number_input("AST (U/L)", 0.0, 5000.0, 0.0, 1.0, key=wkey("ast"))
+with d2: alp = st.number_input("ALP (U/L)", 0.0, 5000.0, 0.0, 1.0, key=wkey("alp"))
+with d3: ua  = st.number_input("UA (mg/dL)", 0.0, 30.0, 0.0, 0.1, key=wkey("ua"))
+with d4: tb  = st.number_input("T.b (mg/dL)", 0.0, 30.0, 0.0, 0.1, key=wkey("tb"))
+
+
+# CSV 불러오기
+up = st.file_uploader("파일에서 불러오기(CSV)", type=["csv"], key=wkey("csv_up"))
+if up is not None:
+    try:
+        import pandas as pd
+        df = pd.read_csv(up)
+        st.session_state["lab_rows"] = df.to_dict(orient="records")
+        st.success("CSV 불러오기 완료")
+    except Exception as e:
+        st.error(f"CSV 파싱 오류: {e}")
+
+# 행 추가
+st.session_state.setdefault("lab_rows", [])
+if st.button("➕ 현재 값 추가", key=wkey("add_row")):
+    st.session_state["lab_rows"].append({
+        "date": str(day),
+        "sex": sex, "age": int(age), "weight(kg)": wt,
+        "Cr(mg/dL)": cr, "eGFR": egfr,
+        "ANC": anc, "Hb": hb, "PLT": plt, "CRP": crp, "Alb": alb, "K": k, "Na": na, "Ca": ca, "WBC": wbc, "Glu": glu, "T.P": tp, "P": p, "AST": ast_v, "ALP": alp, "UA": ua, "T.b": tb
+    })
+    # 외부 저장
+    try:
+        import os, pandas as pd
+        os.makedirs("/mnt/data/bloodmap_graph", exist_ok=True)
+        pd.DataFrame(st.session_state["lab_rows"]).to_csv("/mnt/data/bloodmap_graph/default.labs.csv", index=False)
+    except Exception:
+        pass
+
+rows = st.session_state["lab_rows"]
+if rows:
+    st.write("최근 입력:")
+    for r in rows[-5:]:
+        st.write(r)
 
 with t_dx:
     st.subheader("암 선택")
@@ -280,55 +450,69 @@ with t_chemo:
 with t_special:
     spec_lines = special_tests_ui()
 
-with t_care:
-    st.subheader('케어로그')
-    risk_banner()
-    med_guard_apap_ibu_ui(st.session_state.get('wt', 0.0))
 
-    st.subheader("특수검사")
-    # Always show basic fields so it's never empty
-    a,b,c = st.columns(3)
-    sp1 = a.text_input("유전자/표지자 (예: BCR-ABL1)", key=wkey("spec_gene"))
-    sp2 = b.text_input("이미징/기타 (예: PET/CT 결과)", key=wkey("spec_img"))
-    sp3 = c.text_input("기타 메모", key=wkey("spec_note"))
-    st.session_state["special"] = {"gene":sp1,"image":sp2,"note":sp3}
 
-with t_report:
-    st.subheader("보고서 (.md)")
-    if st.button("🏥 ER 원페이지 PDF", key=wkey("btn_erpdf")):
-        md_tmp = "# 응급 안내 (요약)\n- 응급 신호: 고열 ≥39℃, 호흡곤란, 지속 구토·설사, 출혈 지속\n- 자가대처: 해열제 쿨다운 준수(APAP 4h/IBU 6h), 수분 보충\n- 즉시 병원가기: 의식저하/경련/혈압저하/혈변·흑변\n- 준비물: 최근 24h 투약기록, 최근 검사표, 알레르기 정보\n"
-        pdf_bytes = export_md_to_pdf(md_tmp)
-        st.download_button("⬇️ ER_Pamphlet.pdf", data=pdf_bytes, file_name="ER_Pamphlet.pdf", mime="application/pdf", key=wkey("dl_erpdf"))
-    dx = enko(st.session_state.get("dx_en",""), st.session_state.get("dx_ko",""))
-    meds = st.session_state.get("chemo_list", [])
-    rows = st.session_state.get("lab_rows", [])
-    spec = st.session_state.get("special", {})
-    lines = []
-    lines.append("# Bloodmap Report")
-    lines.append(f"**진단명**: {dx if dx.strip() else '(미선택)'}")
+with t_peds:
+    st.subheader("소아 패널")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        age_years = st.number_input("나이(년)", 0.0, 18.0, 3.0, 0.5, key=wkey("p_agey"))
+    with col2:
+        age_months_extra = st.number_input("추가 개월", 0, 11, 0, key=wkey("p_agem"))
+    with col3:
+        wt_input = st.number_input("체중(kg) (선택)", 0.0, 150.0, 0.0, 0.1, key=wkey("p_wt"))
+    age_months = int(age_years*12) + int(age_months_extra)
+    est_wt = estimate_weight_from_age_months(age_months)
+    weight = wt_input if wt_input > 0 else est_wt
+    st.caption(f"추정 체중: {est_wt:.1f} kg (미입력 시 적용)")
+
+    # 해열제 1회 권장량 (시럽 기준)
+    apap_ml, used_w = acetaminophen_ml(age_months, wt_input if wt_input>0 else None)
+    ibu_ml, _       = ibuprofen_ml(age_months, wt_input if wt_input>0 else None)
+    st.metric("아세트아미노펜 1회량", f"{apap_ml} mL (기준체중 {used_w} kg)")
+    st.metric("이부프로펜 1회량", f"{ibu_ml} mL (기준체중 {used_w} kg)")
+    st.caption("참고: 시럽 농도 기준 — APAP 160mg/5mL, IBU 100mg/5mL · APAP 12.5mg/kg, IBU 7.5mg/kg")
+
+    # 증상 프로파일
+    disease = st.selectbox("질환(의심)", ["", "독감", "RSV", "상기도염", "아데노", "마이코", "수족구", "편도염", "코로나", "중이염"], index=0, key=wkey("p_dis"))
+    opts = get_symptom_options(disease or "_default")
+    sel = {}
+    cols = st.columns(3)
+    idx = 0
+    for k, arr in opts.items():
+        with cols[idx%3]:
+            sel[k] = st.selectbox(k, arr, key=wkey("p_"+k))
+        idx += 1
+
+    # 요약 만들기 (보고서에 포함)
+    peds_
+lines = []
+lines.append("# Bloodmap Report")
+lines.append(f"**진단명**: {dx if dx.strip() else '(미선택)'}")
+lines.append("")
+warns = lab_warnings(labs_latest) if labs_latest else []
+if warns:
+    lines.append("## 피수치 경보")
+    for w in warns:
+        lines.append(f"- {w}")
     lines.append("")
-    lines.append("## 항암제 요약")
-    if meds:
-        for m in meds: lines.append(f"- {m}")
-    else:
-        lines.append("- (없음)")
-    if rows:
-        lines.append("")
-        lines.append("## 최근 검사 (최대 5개)")
-        head = ["date","sex","age","weight(kg)","Cr(mg/dL)","eGFR"]
-        lines.append("| " + " | ".join(head) + " |")
-        lines.append("|" + "|".join(["---"]*len(head)) + "|")
-        for r in rows[-5:]:
-            lines.append("| " + " | ".join(str(r.get(k,'')) for k in head) + " |")
-    if False and any(spec.values()):
-        lines.append("")
-        lines.append("## 특수검사")
-        if spec.get("gene"):  lines.append(f"- 유전자/표지자: {spec['gene']}")
-        if spec.get("image"): lines.append(f"- 이미징/기타: {spec['image']}")
-        if spec.get("note"):  lines.append(f"- 메모: {spec['note']}")
+# 소아 요약
+if 'peds_lines' in st.session_state and st.session_state['peds_lines']:
+    lines.append("## 소아 요약")
+    for s in st.session_state['peds_lines']:
+        lines.append(f"- {s}")
     lines.append("")
-    lines.append(f"_생성 시각: {_dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}_")
-    md = "\n".join(lines)
-    st.code(md, language="markdown")
-    st.download_button("💾 보고서 .md 다운로드", data=md.encode("utf-8"),
-                       file_name="bloodmap_report.md", mime="text/markdown", key=wkey("dl_md"))
+lines.append("## 항암제 요약")
+if meds:
+    for m in meds:
+        lines.append(f"- {m}")
+else:
+    lines.append("- (없음)")
+if rows:
+    lines.append("")
+    lines.append("## 최근 검사 (최대 5개)")
+    head = ["date","sex","age","weight(kg)","Cr(mg/dL)","eGFR"]
+    lines.append("| " + " | ".join(head) + " |")
+    lines.append("|" + "|".join(["---"]*len(head)) + "|")
+    for r in rows[-5:]:
+        lines.append("| " + " | ".join(str(r.get(k,'')) for k in head) + " |")
