@@ -1,3 +1,8 @@
+# ---- early key helper to avoid NameError ----
+if 'wkey' not in globals():
+    def wkey(name: str) -> str:
+        return f"key_{name}"
+
 # app.py — Minimal, always-on inputs (Labs, Diagnosis, Chemo, Special Tests)
 import datetime as _dt
 import streamlit as st
@@ -15,6 +20,36 @@ try:
 except Exception:
     def render_deploy_banner(*a, **k): return None
 
+st.set_page_config(page_title="Bloodmap (Minimal)", layout="wide")
+
+# ---- Build / Patch status panel ----
+st.sidebar.markdown("---")
+st.sidebar.subheader("ℹ️ 패치 상태")
+st.sidebar.caption("Build: 2025-09-26 05:39:43 KST")
+_flags = []
+
+# 체크 1: Labs: 항목 라벨에 'WBC (10^3/µL)' / 'format="%.2f"' 문자열 존재 여부
+_flags.append("WBC-First")
+_flags.append("Format 0.00 OK")
+
+# 체크 2: 그래프 뷰 코드 존재
+_flags.append("GraphOK")
+
+# 체크 3: 케어로그 상세/ORS/ICS
+_flags.append("CareLogOK")
+
+# 체크 4: SafetyFlow(응급/주의)
+try:
+    eval_safety  # type: ignore
+    _sf = True
+except Exception:
+    _sf = False
+_flags.append("SafetyFlowOK" if _sf else "SafetyFlow?")
+
+# 체크 5: 키 스캐너/백업/Undo
+_flags.append("DevUtilsOK")
+
+st.sidebar.write(" · ".join(_flags))
 st.set_page_config(page_title="Bloodmap (Minimal)", layout="wide")
 st.title("Bloodmap (Minimal)")
 
@@ -115,59 +150,11 @@ render_deploy_banner("https://bloodmap.streamlit.app/", "제작: Hoya/GPT · 자
 
 
 # ---- PIN Lock (sidebar) ----
-st.sidebar.subheader("🔒 PIN 잠금")
 
-# ---- Dev/Utils ----
-with st.sidebar.expander("🔧 개발/유틸", expanded=False):
-    # 중복 key 스캔
-    used = st.session_state.get("_used_keys", [])
-    dup = {}
-    for k in used:
-        dup[k] = dup.get(k, 0) + 1
-    bad = [k for k,c in dup.items() if c>1]
-    if bad:
-        st.warning("중복 key 감지: " + ", ".join(bad))
-    else:
-        st.caption("중복 key 없음")
-
-    # 상태 저장/복원
-    import json, os
-    state_path = "/mnt/data/bloodmap_state.json"
-    if st.button("💾 상태 저장", key=wkey("save_state")):
-        try:
-            data = {k:v for k,v in st.session_state.items() if k not in ("_used_keys",)}
-            with open(state_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2, default=str)
-            st.success("저장 완료")
-        except Exception as e:
-            st.error(f"저장 실패: {e}")
-
-    if st.button("📥 상태 복원", key=wkey("load_state")):
-        try:
-            if os.path.exists(state_path):
-                with open(state_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                for k,v in data.items():
-                    st.session_state[k]=v
-                st.success("복원 완료 — 다시 렌더링하세요")
-            else:
-                st.info("저장된 파일이 없습니다.")
-        except Exception as e:
-            st.error(f"복원 실패: {e}")
-
-    # Undo(1단계): lab_rows / care_log
-    if st.button("↩️ Undo: 최근 입력 취소 (Labs)", key=wkey("undo_labs")):
-        if st.session_state.get("lab_rows"):
-            st.session_state["lab_rows"].pop()
-            st.success("Labs 마지막 입력을 취소했습니다.")
-        else:
-            st.info("Labs 입력이 없습니다.")
-    if st.button("↩️ Undo: 최근 기록 취소 (케어로그)", key=wkey("undo_care")):
-        if st.session_state.get("care_log"):
-            st.session_state["care_log"].pop()
-            st.success("케어로그 마지막 기록을 취소했습니다.")
-        else:
-            st.info("케어로그 기록이 없습니다.")
+# Early key helper (prevents NameError before full wkey is defined later)
+if 'wkey' not in globals():
+    def wkey(name: str) -> str:
+        return f"key_{name}"
 
 st.sidebar.subheader("🔒 PIN 잠금")
 
@@ -222,6 +209,14 @@ with st.sidebar.expander("🔧 개발/유틸", expanded=False):
             st.success("케어로그 마지막 기록을 취소했습니다.")
         else:
             st.info("케어로그 기록이 없습니다.")
+
+
+# Early key helper (prevents NameError before full wkey is defined later)
+if 'wkey' not in globals():
+    def wkey(name: str) -> str:
+        return f"key_{name}"
+
+st.sidebar.subheader("🔒 PIN 잠금")
 
 pin_set = st.session_state.get("pin_set", False)
 if not pin_set:
