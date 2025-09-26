@@ -195,80 +195,72 @@ with t_home:
 
 # ---------- Labs + FN/전해질 배너 ----------
 
+
 with t_labs:
     st.subheader("피수치 입력")
-    # --- 기본 인구학/Cr 입력(단위 가드 반영) ---
-    c1,c2,c3,c4,c5 = st.columns(5)
-    with c1: sex = st.selectbox("성별", ["여","남"], key=wkey("sex"))
-    with c2: age = st.number_input("나이(세)", 0, 110, 40, key=wkey("age"))
-    with c3: wt  = st.number_input("체중(kg)", 0.0, 300.0, 0.0, 0.5, key=wkey("wt"))
+    def _num(label:str, default:float, key:str, fmt:str="{:.2f}"):
+        s = st.text_input(label, value=(fmt.format(default) if default is not None else ""), key=key)
+        try:
+            return float(s.strip())
+        except Exception:
+            return default
+    dem1, dem2, dem3, dem4 = st.columns(4)
+    with dem1: sex = st.selectbox("성별", ["여","남"], key=wkey("sex"))
+    with dem2: age = st.number_input("나이(세)", 0, 110, 40, key=wkey("age"))
+    with dem3: wt  = _num("체중(kg)", 0.0, wkey("wt"), "{:.1f}")
+    with dem4: day = st.date_input("측정일", value=_dt.date.today(), key=wkey("date"))
 
-    # Creatinine with unit guard (sidebar toggle exists in v4_fix? guard local fallback)
+    r1c1, r1c2, r1c3 = st.columns(3)
+    with r1c1: WBC = _num("WBC (10^3/µL)", 6.0, wkey("WBC"))
+    with r1c2: Hb  = _num("Hb (g/dL)", 12.5, wkey("Hb"))
+    with r1c3: PLT = _num("PLT (10^3/µL)", 250.0, wkey("PLT"))
+
+    r2c1, r2c2, r2c3 = st.columns(3)
+    with r2c1: CRP = _num("CRP (mg/dL)", 0.2, wkey("CRP"))
+    with r2c2: Na  = _num("Na (mEq/L)", 140.0, wkey("Na"))
+    with r2c3: K   = _num("K (mEq/L)", 4.0, wkey("K"))
+
+    r3c1, r3c2, r3c3 = st.columns(3)
+    with r3c1:
+        p_unit = st.selectbox("P 단위", ["mg/dL","mmol/L"], index=0, key=wkey("p_unit"))
+        P_in = _num("P", 3.5, wkey("P_in"))
+        P = round(P_in*3.1,2) if p_unit=="mmol/L" else P_in
+        if p_unit=="mmol/L": st.caption(f"자동 변환 → {P} mg/dL")
+    with r3c2: Alb = _num("Albumin (g/dL)", 4.0, wkey("Alb"))
+    with r3c3:
+        g_unit = st.selectbox("Glucose 단위", ["mg/dL","mmol/L"], index=0, key=wkey("glu_unit"))
+        Glu_in = _num("Glucose", 95.0, wkey("glu_in"))
+        Glucose = round(Glu_in*18.0,1) if g_unit=="mmol/L" else Glu_in
+        if g_unit=="mmol/L": st.caption(f"자동 변환 → {Glucose} mg/dL")
+
+    r4c1, r4c2, r4c3 = st.columns(3)
+    with r4c1:
+        ca_unit = st.selectbox("Calcium 단위", ["mg/dL","mmol/L"], index=0, key=wkey("ca_unit"))
+        Ca_in = _num("Calcium", 9.2, wkey("Ca_in"))
+        Ca = round(Ca_in*4.0,2) if ca_unit=="mmol/L" else Ca_in
+        if ca_unit=="mmol/L": st.caption(f"자동 변환 → {Ca} mg/dL")
+    with r4c2: AST = _num("AST (U/L)", 28.0, wkey("AST"), "{:.0f}")
+    with r4c3: ALT = _num("ALT (U/L)", 30.0, wkey("ALT"), "{:.0f}")
+
     unit_cr = st.session_state.get(wkey("unit_cr")) or st.session_state.get("unit_cr") or "mg/dL"
     if unit_cr == "μmol/L":
-        cr_umol = st.number_input("Cr (μmol/L)", 0.0, 1768.0, 70.0, 1.0, key=wkey("cr_umol"))
+        cr_umol = _num("Cr (μmol/L)", 70.0, wkey("cr_umol"), "{:.0f}")
         cr = round(cr_umol / 88.4, 3)
         st.caption(f"자동 변환 → Cr {cr} mg/dL")
     else:
-        cr  = st.number_input("Cr (mg/dL)", 0.0, 20.0, 0.8, 0.1, key=wkey("cr_mgdl"))
+        cr = _num("Cr (mg/dL)", 0.8, wkey("cr_mgdl"), "{:.2f}")
 
-    with c5: day = st.date_input("측정일", value=_dt.date.today(), key=wkey("date"))
+    ANC = _num("ANC (절대호중구, /µL)", 1500.0, wkey("ANC"), "{:.0f}")
 
-    # --- 전해질/혈구/간/당/단백 패널 ---
-    e1,e2,e3 = st.columns(3)
-    with e1:
-        Na = st.number_input("Na (mEq/L)", 100.0, 180.0, 140.0, 0.1, key=wkey("Na"))
-        K  = st.number_input("K (mEq/L)", 2.0, 10.0, 4.0, 0.1, key=wkey("K"))
-        Alb = st.number_input("Albumin (g/dL)", 1.0, 6.0, 4.0, 0.1, key=wkey("Alb"))
-    with e2:
-        # Glucose unit guard
-        g_unit = st.selectbox("Glucose 단위", ["mg/dL","mmol/L"], index=0, key=wkey("glu_unit"))
-        if g_unit == "mmol/L":
-            glu_mmol = st.number_input("Glucose (mmol/L)", 0.0, 50.0, 5.5, 0.1, key=wkey("glu_mmol"))
-            Glucose = round(glu_mmol * 18.0, 1)  # to mg/dL
-            st.caption(f"자동 변환 → {Glucose} mg/dL")
-        else:
-            Glucose = st.number_input("Glucose (mg/dL)", 0.0, 1000.0, 95.0, 1.0, key=wkey("glu_mg"))
-        # Phosphate unit guard
-        p_unit = st.selectbox("P 단위", ["mg/dL","mmol/L"], index=0, key=wkey("p_unit"))
-        if p_unit == "mmol/L":
-            p_mmol = st.number_input("P (mmol/L)", 0.0, 5.0, 1.2, 0.1, key=wkey("p_mmol"))
-            P = round(p_mmol * 3.1, 2)  # to mg/dL
-            st.caption(f"자동 변환 → {P} mg/dL")
-        else:
-            P = st.number_input("P (mg/dL)", 0.0, 20.0, 3.5, 0.1, key=wkey("p_mg"))
-    with e3:
-        # Calcium unit guard (+ corrected Ca)
-        ca_unit = st.selectbox("Calcium 단위", ["mg/dL","mmol/L"], index=0, key=wkey("ca_unit"))
-        if ca_unit == "mmol/L":
-            ca_mmol = st.number_input("Calcium (mmol/L)", 0.0, 5.0, 2.3, 0.01, key=wkey("ca_mmol"))
-            Ca = round(ca_mmol * 4.0, 2)  # approx factor 4.0
-            st.caption(f"자동 변환 → {Ca} mg/dL")
-        else:
-            Ca = st.number_input("Calcium (mg/dL)", 0.0, 20.0, 9.2, 0.1, key=wkey("ca_mg"))
-        AST = st.number_input("AST (U/L)", 0.0, 10000.0, 28.0, 1.0, key=wkey("AST"))
-        ALT = st.number_input("ALT (U/L)", 0.0, 10000.0, 30.0, 1.0, key=wkey("ALT"))
-
-    b1,b2,b3 = st.columns(3)
-    with b1:
-        WBC = st.number_input("WBC (10^3/µL)", 0.0, 500.0, 6.0, 0.1, key=wkey("WBC"))
-    with b2:
-        Hb = st.number_input("Hb (g/dL)", 0.0, 30.0, 12.5, 0.1, key=wkey("Hb"))
-    with b3:
-        PLT = st.number_input("PLT (10^3/µL)", 0.0, 2000.0, 250.0, 1.0, key=wkey("PLT"))
-    CRP = st.number_input("CRP (mg/dL)", 0.0, 50.0, 0.2, 0.1, key=wkey("CRP"))
-
-    # eGFR — CKD-EPI 2021 (adult) / Schwartz (peds)
     is_peds = int(age) < 18
     if is_peds:
-        ht = st.number_input("키(cm)", 40.0, 220.0, 120.0, 0.5, key=wkey("height"))
+        ht = _num("키(cm)", 120.0, wkey("height"), "{:.1f}")
         egfr = egfr_schwartz_peds(cr, float(ht))
         st.metric("eGFR (Schwartz, 소아)", f"{egfr} mL/min/1.73㎡")
     else:
         egfr = egfr_ckd_epi_2021(cr, int(age), sex == "여")
         st.metric("eGFR (CKD-EPI 2021)", f"{egfr} mL/min/1.73㎡")
 
-    # 보정 칼슘
     Ca_corr = None
     try:
         Ca_corr = round(Ca + 0.8*(4.0 - Alb), 2)
@@ -276,18 +268,15 @@ with t_labs:
     except Exception:
         pass
 
-    # 기록 버튼 → CSV 보존
     st.session_state.setdefault("lab_rows", [])
     if st.button("➕ 현재 값 추가", key=wkey("add_row")):
         st.session_state["lab_rows"].append({
-            "date": str(day),
-            "sex": sex, "age": int(age), "weight(kg)": wt,
-            "Cr(mg/dL)": cr, "eGFR": egfr, "Na": Na, "K": K, "P(mg/dL)": P,
-            "Alb(g/dL)": Alb, "Ca(mg/dL)": Ca, "Ca_corr(mg/dL)": Ca_corr,
-            "AST": AST, "ALT": ALT, "Glucose(mg/dL)": Glucose,
-            "WBC(1e3/uL)": WBC, "Hb(g/dL)": Hb, "PLT(1e3/uL)": PLT, "CRP(mg/dL)": CRP, "ANC": int(st.session_state.get(wkey("ANC"), 1500))
+            "date": str(day),"sex": sex,"age": int(age),"weight(kg)": wt,
+            "Cr(mg/dL)": cr,"eGFR": egfr,"Na": Na,"K": K,"P(mg/dL)": P,
+            "Alb(g/dL)": Alb,"Ca(mg/dL)": Ca,"Ca_corr(mg/dL)": Ca_corr,
+            "AST": AST,"ALT": ALT,"Glucose(mg/dL)": Glucose,
+            "WBC(1e3/uL)": WBC,"Hb(g/dL)": Hb,"PLT(1e3/uL)": PLT,"CRP(mg/dL)": CRP,"ANC": int(ANC)
         })
-        # Persist
         uid = st.session_state.get("key","guest").strip() or "guest"
         csv_path = os.path.join(SAVE_DIR, f"{uid}.labs.csv")
         import pandas as _pd
@@ -298,7 +287,6 @@ with t_labs:
             _df.to_csv(csv_path, index=False)
 
     rows = st.session_state["lab_rows"]
-    # Δ 표시
     if rows:
         import pandas as _pd
         df = _pd.DataFrame(rows)
@@ -307,55 +295,11 @@ with t_labs:
                 return fmt.format(float(df[col].iloc[-1]) - float(df[col].iloc[-2]))
             except Exception:
                 return ""
-        st.caption(f"Δ eGFR: {delta('eGFR', '{:+.1f}')} · Δ Cr: {delta('Cr(mg/dL)')} · Δ Na: {delta('Na')} · Δ K: {delta('K')}")
+        st.caption(f"Δ eGFR: {delta('eGFR','{:+.1f}')} · Δ Cr: {delta('Cr(mg/dL)')} · Δ Na: {delta('Na')} · Δ K: {delta('K')}")
 
-    # --- 핵심 패널 요약 테이블 (아이콘/색상) ---
-    def flag(val, lo, hi, unit=""):
-        try:
-            v = float(val)
-        except Exception:
-            return "⚪", f"{val}{unit}"
-        if v < lo:  return "🔴", f"{v}{unit}"
-        if v > hi:  return "🔴", f"{v}{unit}"
-        mid_margin = (hi-lo)*0.1
-        if v < lo+mid_margin or v > hi-mid_margin:
-            return "🟡", f"{v}{unit}"
-        return "🟢", f"{v}{unit}"
-
-    # 단순 성인 레퍼런스 (프로젝트 표준과 맞추기 쉽게 구성)
-    refs = {
-        "Na": (135, 145), "K": (3.5, 5.1), "P(mg/dL)": (2.5, 4.5), "Alb(g/dL)": (3.5, 5.0),
-        "Ca(mg/dL)": (8.6, 10.2), "AST": (0, 40), "ALT": (0, 41), "Glucose(mg/dL)": (70, 140),
-        "Cr(mg/dL)": (0.6, 1.2), "WBC(1e3/uL)": (4.0, 11.0), "Hb(g/dL)": (11.5, 17.5),
-        "PLT(1e3/uL)": (150, 450), "CRP(mg/dL)": (0, 0.5), "ANC": (1500, 8000)
-    }
-    latest = {}
-    if rows:
-        latest = rows[-1]
-        st.markdown("#### 핵심 패널 요약")
-        data = []
-        order = ["Na","K","P(mg/dL)","Alb(g/dL)","Ca(mg/dL)","AST","ALT","Glucose(mg/dL)","Cr(mg/dL)","WBC(1e3/uL)","Hb(g/dL)","PLT(1e3/uL)","CRP(mg/dL)","ANC"]
-        names = {"Na":"Na","K":"K","P(mg/dL)":"P","Alb(g/dL)":"Albumin","Ca(mg/dL)":"Ca","AST":"AST","ALT":"ALT","Glucose(mg/dL)":"Glucose","Cr(mg/dL)":"Cr","WBC(1e3/uL)":"WBC","Hb(g/dL)":"Hb","PLT(1e3/uL)":"PLT","CRP(mg/dL)":"CRP","ANC":"ANC"}
-        for k in order:
-            lo,hi = refs[k]
-            icon, txt = flag(latest.get(k), lo, hi)
-            data.append(f"{names[k]} {txt} {icon}")
-        st.write(", ".join(data))
-
-    # 🚨 FN/전해질 응급 배너 (재사용)
-    show_fn = False
-    # care_log 기반은 Report/chemo에서 활용, 여기선 현재 입력값으로 판정
-    if latest:
-        try:
-            if float(latest.get("ANC", 1500)) < 500:
-                # care log 발열 여부는 별도 배너에서 확인
-                pass
-        except Exception:
-            pass
     if Na < 125 or Na > 155 or K >= 6.0:
         st.error("🚨 전해질 위기치: Na<125 또는 >155, K≥6.0 → **즉시 평가 권고**")
 
-# ---------- Diagnosis ----------
 with t_dx:
     st.subheader("암 선택")
     grp_tabs = st.tabs(list(GROUPS.keys()))
