@@ -1,6 +1,7 @@
 # app.py — Minimal, always-on inputs (Labs, Diagnosis, Chemo, Special Tests)
 import datetime as _dt
 import streamlit as st
+from special_tests import special_tests_ui
 import json
 import pytz
 from pdf_export import export_md_to_pdf
@@ -277,7 +278,7 @@ with t_chemo:
             st.success("저장됨. '보고서'에서 확인")
 
 with t_special:
-    pass
+    spec_lines = special_tests_ui()
 
 with t_care:
     st.subheader('케어로그')
@@ -319,7 +320,7 @@ with t_report:
         lines.append("|" + "|".join(["---"]*len(head)) + "|")
         for r in rows[-5:]:
             lines.append("| " + " | ".join(str(r.get(k,'')) for k in head) + " |")
-    if any(spec.values()):
+    if False and any(spec.values()):
         lines.append("")
         lines.append("## 특수검사")
         if spec.get("gene"):  lines.append(f"- 유전자/표지자: {spec['gene']}")
