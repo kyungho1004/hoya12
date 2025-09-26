@@ -1,5 +1,5 @@
 
-# app.py — Bloodmap (v6.2: labs removed, labels-only order + Korean labels)
+# app.py — Bloodmap (v6.3: PEDS symptom scoring + antipyretic dosing)
 import datetime as _dt
 import streamlit as st
 
@@ -34,6 +34,12 @@ try:
     from lab_diet import lab_diet_guides
 except Exception:
     def lab_diet_guides(labs, heme_flag=False): return []
+
+try:
+    from peds_dose import acetaminophen_ml, ibuprofen_ml
+except Exception:
+    def acetaminophen_ml(*a, **k): return (0.0, 0.0)
+    def ibuprofen_ml(*a, **k): return (0.0, 0.0)
 
 try:
     from peds_profiles import get_symptom_options
@@ -127,6 +133,12 @@ def emergency_level(labs: dict, temp_c, hr, symptoms: dict) -> tuple[str, list[s
         risk += 2; alerts.append("호흡곤란")
     if symptoms.get("confusion"):
         risk += 3; alerts.append("의식저하/혼돈")
+    if symptoms.get("oliguria"):
+        risk += 2; alerts.append("소변량 급감(탈수/신장 문제 의심)")
+    if symptoms.get("persistent_vomit"):
+        risk += 2; alerts.append("지속 구토")
+    if symptoms.get("petechiae"):
+        risk += 2; alerts.append("점상출혈")
 
     if risk >= 5: return "🚨 응급", alerts
     if risk >= 2: return "🟧 주의", alerts
@@ -166,9 +178,14 @@ with t_home:
     with c4: chest_pain = st.checkbox("흉통", key=wkey("sym_chest"))
     with c5: dyspnea = st.checkbox("호흡곤란", key=wkey("sym_dyspnea"))
     with c6: confusion = st.checkbox("의식저하", key=wkey("sym_confusion"))
+    d1,d2,d3 = st.columns(3)
+    with d1: oliguria = st.checkbox("소변량 급감", key=wkey("sym_oliguria"))
+    with d2: persistent_vomit = st.checkbox("지속 구토", key=wkey("sym_pvomit"))
+    with d3: petechiae = st.checkbox("점상출혈", key=wkey("sym_petechiae"))
 
     sym = dict(hematuria=hematuria, melena=melena, hematochezia=hematochezia,
-               chest_pain=chest_pain, dyspnea=dyspnea, confusion=confusion)
+               chest_pain=chest_pain, dyspnea=dyspnea, confusion=confusion,
+               oliguria=oliguria, persistent_vomit=persistent_vomit, petechiae=petechiae)
 
     level, reasons = emergency_level(labs, temp, hr, sym)
     if level.startswith("🚨"):
@@ -186,38 +203,49 @@ with t_home:
         for a in (top_alerts or []):
             st.error(a)
 
-# ====== LABS: labels only (no inputs) ======
+
+# ====== LABS: inputs (requested order, with Korean labels) ======
 with t_labs:
-    st.subheader("피수치 목록 (입력 없음)")
-    st.caption("요청에 따라 수치 입력을 제거했습니다. 항목은 보기용으로만 표시됩니다.")
+    st.subheader("피수치 입력 (요청 순서) — ± 버튼 없이 직접 숫자 입력")
+    st.caption("표기 예: 4.5 / 135 / 0.8  (숫자와 소수점만 입력)")
+
+    # helper re-declare (in case)
+    def _parse_float(txt):
+        if txt is None: return None
+        s = str(txt).strip().replace(",", "")
+        if s == "": return None
+        try:
+            return float(s)
+        except Exception:
+            return None
+    def float_input(label:str, key:str, placeholder:str=""):
+        val = st.text_input(label, value=str(st.session_state.get(key, "")), key=key, placeholder=placeholder)
+        return _parse_float(val)
+
     order = [
-        ("WBC", "백혈구"),
-        ("Hb", "혈색소"),
-        ("PLT", "혈소판"),
-        ("ANC", "절대호중구"),
-        ("Ca", "칼슘"),
-        ("P", "인(Phosphorus)"),
-        ("Na", "나트륨"),
-        ("Alb", "알부민"),
-        ("Glu", "혈당"),
-        ("T.P", "총단백"),
-        ("AST", "AST"),
-        ("ALT", "ALT"),
-        ("CRP", "CRP"),
-        ("Cr", "크레아티닌"),
-        ("T.B", "총빌리루빈"),
-        ("BUN", "BUN")
+        ("WBC","백혈구"), ("Ca","칼슘"), ("Glu","혈당"), ("CRP","CRP"),
+        ("Hb","혈색소"), ("P","인(Phosphorus)"), ("T.P","총단백"), ("Cr","크레아티닌"),
+        ("PLT","혈소판"), ("Na","나트륨"), ("AST","AST"), ("T.B","총빌리루빈"),
+        ("ANC","절대호중구"), ("Alb","알부민"), ("ALT","ALT"), ("BUN","BUN")
     ]
-    c1, c2, c3, c4 = st.columns(4)
+
+    # layout: 4 columns grid
+    cols = st.columns(4)
+    values = {}
     for idx, (abbr, kor) in enumerate(order):
-        col = [c1, c2, c3, c4][idx % 4]
+        col = cols[idx % 4]
         with col:
-            st.markdown(f"**{abbr}** — {kor}")
+            values[abbr] = float_input(f"{abbr} — {kor}", key=wkey(abbr))
 
-    # 빈 사전 유지(응급도 계산에서 수치 영향 제거)
-    st.session_state["labs_dict"] = {}
+    # Save to session
+    labs_dict = st.session_state.get("labs_dict", {})
+    for k,v in values.items():
+        labs_dict[k] = v
+    st.session_state["labs_dict"] = labs_dict
 
-# ====== DX ======
+    # ANC badge if available
+    st.markdown(f"**ANC 분류:** {{anc_band(values.get('ANC'))}}")
+
 with t_dx:
     st.subheader("암 선택")
     groups = list(ONCO.keys())
@@ -267,34 +295,91 @@ with t_chemo:
             st.session_state["chemo_keys"] = picked_keys
             st.success("저장됨. 홈/보고서에서 확인")
 
-# ====== PEDS ======
+# ====== PEDS (scoring + antipyretic dosing) ======
 with t_peds:
-    st.subheader("소아 증상 분류(간단)")
+    st.subheader("소아 증상 분류(점수 기반) + 해열제 계산")
     disease = st.selectbox("의심 질환(선택 시 기본 옵션 자동 세팅)", ["장염","로타","노로","RSV","독감","상기도염","아데노","마이코","수족구","편도염","코로나","중이염"], key=wkey("peds_dx"))
     opts = get_symptom_options(disease)
     c1,c2,c3,c4,c5 = st.columns(5)
-    with c1: nasal = st.selectbox("콧물", opts.get("콧물", ["없음","투명"]), key=wkey("p_nasal"))
-    with c2: cough = st.selectbox("기침", opts.get("기침", ["없음","조금"]), key=wkey("p_cough"))
-    with c3: stool = st.selectbox("설사", opts.get("설사", ["없음","1~2회","3~4회"]), key=wkey("p_stool"))
-    with c4: fever = st.selectbox("발열", opts.get("발열", ["없음","37~37.5 (미열)","37.5~38 (병원 내원 권장)","38.5~39 (병원/응급실)"]), key=wkey("p_fever"))
-    with c5: eye   = st.selectbox("눈꼽", opts.get("눈꼽", ["없음","맑음","노랑-농성"]), key=wkey("p_eye"))
+    with c1: nasal = st.selectbox("콧물", opts.get("콧물", ["없음","투명","진득","누런"]), key=wkey("p_nasal"))
+    with c2: cough = st.selectbox("기침", opts.get("기침", ["없음","조금","보통","심함"]), key=wkey("p_cough"))
+    with c3: stool = st.selectbox("설사", opts.get("설사", ["없음","1~2회","3~4회","5~6회","7회 이상"]), key=wkey("p_stool"))
+    with c4: fever = st.selectbox("발열", opts.get("발열", ["없음","37~37.5 (미열)","37.5~38","38~38.5","38.5~39","39 이상"]), key=wkey("p_fever"))
+    with c5: eye   = st.selectbox("눈꼽", opts.get("눈꼽", ["없음","맑음","노랑-농성","양쪽"]), key=wkey("p_eye"))
 
-    score = {"장염 의심":0, "상기도/독감 계열":0, "결막염 의심":0}
-    if stool in ["3~4회","5~6회"]:
-        score["장염 의심"] += 40
-    if "38.5" in fever:
-        score["상기도/독감 계열"] += 20
+    d1,d2,d3 = st.columns(3)
+    with d1: oliguria = st.checkbox("소변량 급감", key=wkey("p_oliguria"))
+    with d2: persistent_vomit = st.checkbox("지속 구토(>6시간)", key=wkey("p_pvomit"))
+    with d3: petechiae = st.checkbox("점상출혈", key=wkey("p_petechiae"))
+
+    # Scoring
+    score = {"장염 의심":0, "상기도/독감 계열":0, "결막염 의심":0, "탈수/신장 문제":0, "출혈성 경향":0}
+    if stool in ["3~4회","5~6회","7회 이상"]:
+        score["장염 의심"] += {"3~4회":40,"5~6회":55,"7회 이상":70}[stool]
+    if "38.5" in fever or "39" in fever:
+        score["상기도/독감 계열"] += 25
     if cough in ["보통","심함","조금"]:
         score["상기도/독감 계열"] += 20
-    if eye in ["노랑-농성","한쪽","양쪽"]:
-        score["결막염 의심"] += 25
-    tips = []
-    if score["장염 의심"] >= 40: tips.append("ORS 수분 보충, 탈수 징후 관찰")
-    if score["상기도/독감 계열"] >= 20: tips.append("해열 간격 지키기(APAP≥4h, IBU≥6h)")
-    if score["결막염 의심"] >= 25: tips.append("눈 위생, 분비물 제거, 병원 상담 고려")
-    st.write("• " + " / ".join([f"{k}: {v}" for k,v in score.items()]))
-    if tips:
-        st.info(" / ".join(tips))
+    if eye in ["노랑-농성","양쪽"]:
+        score["결막염 의심"] += 30
+    if oliguria:
+        score["탈수/신장 문제"] += 40
+        score["장염 의심"] += 10  # 동반 가중치
+    if persistent_vomit:
+        score["장염 의심"] += 25
+        score["탈수/신장 문제"] += 15
+    if petechiae:
+        score["출혈성 경향"] += 60
+
+    # Sort and display
+    ordered = sorted(score.items(), key=lambda x: x[1], reverse=True)
+    st.write("• " + " / ".join([f"{k}: {v}" for k,v in ordered]))
+    top = ordered[0][0] if ordered else "(없음)"
+    advice = []
+    if top == "장염 의심":
+        advice.append("ORS로 수분 보충, 소변량 관찰")
+    if top == "상기도/독감 계열":
+        advice.append("해열제 간격 준수(APAP≥4h, IBU≥6h)")
+    if top == "결막염 의심":
+        advice.append("눈 위생, 분비물 제거, 병원 상담 고려")
+    if top == "탈수/신장 문제":
+        advice.append("즉시 수분 보충, 소변량/활력 징후 확인, 필요시 병원")
+    if top == "출혈성 경향":
+        advice.append("점상출혈/혈변 동반 시 즉시 병원")
+    if advice:
+        st.info(" / ".join(advice))
+
+    # Antipyretic dosing
+    st.markdown("---")
+    st.subheader("해열제 계산기")
+    wcol1,wcol2,wcol3 = st.columns([2,1,2])
+    with wcol1:
+        wt = st.text_input("체중(kg)", value=st.session_state.get(wkey("wt_peds"), ""), key=wkey("wt_peds"), placeholder="예: 12.5")
+    wt_val = None
+    try:
+        wt_val = float(str(wt).strip()) if wt else None
+    except Exception:
+        wt_val = None
+
+    ap_ml_1, ap_ml_max = (0.0, 0.0)
+    ib_ml_1, ib_ml_max = (0.0, 0.0)
+    if wt_val:
+        try:
+            ap_ml_1, ap_ml_max = acetaminophen_ml(wt_val)
+        except Exception:
+            ap_ml_1, ap_ml_max = (0.0, 0.0)
+        try:
+            ib_ml_1, ib_ml_max = ibuprofen_ml(wt_val)
+        except Exception:
+            ib_ml_1, ib_ml_max = (0.0, 0.0)
+
+    with wcol2:
+        st.metric("APAP 1회량(ml)", f"{ap_ml_1:.1f}" if ap_ml_1 else "—")
+        st.metric("APAP 24h 최대(ml)", f"{ap_ml_max:.0f}" if ap_ml_max else "—")
+    with wcol3:
+        st.metric("IBU 1회량(ml)", f"{ib_ml_1:.1f}" if ib_ml_1 else "—")
+        st.metric("IBU 24h 최대(ml)", f"{ib_ml_max:.0f}" if ib_ml_max else "—")
+    st.caption("쿨다운: APAP ≥4시간, IBU ≥6시간. 중복 복용 주의.")
 
 # ====== SPECIAL ======
 with t_special:
@@ -330,22 +415,11 @@ with t_report:
     # 항목 목록만 출력
     lines.append("")
     lines.append("## 피수치 항목(보기용)")
-    lines.append("- WBC — 백혈구")
-    lines.append("- Hb — 혈색소")
-    lines.append("- PLT — 혈소판")
-    lines.append("- ANC — 절대호중구")
-    lines.append("- Ca — 칼슘")
-    lines.append("- P — 인(Phosphorus)")
-    lines.append("- Na — 나트륨")
-    lines.append("- Alb — 알부민")
-    lines.append("- Glu — 혈당")
-    lines.append("- T.P — 총단백")
-    lines.append("- AST — AST")
-    lines.append("- ALT — ALT")
-    lines.append("- CRP — CRP")
-    lines.append("- Cr — 크레아티닌")
-    lines.append("- T.B — 총빌리루빈")
-    lines.append("- BUN — BUN")
+    for abbr, kor in [("WBC","백혈구"),("Hb","혈색소"),("PLT","혈소판"),("ANC","절대호중구"),
+                      ("Ca","칼슘"),("P","인"),("Na","나트륨"),("Alb","알부민"),("Glu","혈당"),
+                      ("T.P","총단백"),("AST","AST"),("ALT","ALT"),("CRP","CRP"),
+                      ("Cr","크레아티닌"),("T.B","총빌리루빈"),("BUN","BUN")]:
+        lines.append(f"- {abbr} — {kor}")
 
     if ae_top:
         lines.append("")
