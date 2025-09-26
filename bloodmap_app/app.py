@@ -15,8 +15,7 @@ try:
 except Exception:
     def render_deploy_banner(*a, **k): return None
 
-st.set_page_configst.set_page_config(page_title="Bloodmap (Minimal)", layout="wide")
-
+st.set_page_config(page_title="Bloodmap (Minimal)", layout="wide")
 st.title("Bloodmap (Minimal)")
 
 # ---- Lab normals/thresholds ----
