@@ -46,6 +46,38 @@ st.set_page_config(page_title="Bloodmap (MASTER++++)", layout="wide")
 st.title("Bloodmap (MASTER++++)")
 render_deploy_banner("https://bloodmap.streamlit.app/", "제작: Hoya/GPT · 자문: Hoya/GPT")
 
+
+# ===== Storage path resolver (portable) =====
+import os, tempfile, pathlib as _pl
+
+def _pick_base_dir() -> str:
+    # Priority: env → /mnt/data → /mount/data → ~/.local/share/bloodmap → ./data → temp
+    candidates = []
+    env = os.environ.get("BLOODMAP_DATA_DIR")
+    if env: candidates.append(env)
+    candidates += ["/mnt/data", "/mount/data",
+                   str(_pl.Path.home()/".local/share/bloodmap"),
+                   str(_pl.Path.cwd()/ "data"),
+                   str(_pl.Path(tempfile.gettempdir())/ "bloodmap")]
+    for base in candidates:
+        try:
+            _pl.Path(base).mkdir(parents=True, exist_ok=True)
+            testfile = _pl.Path(base)/".write_test"
+            with open(testfile, "w") as f: f.write("ok")
+            testfile.unlink(missing_ok=True)
+            return base
+        except Exception:
+            continue
+    # Last resort: current dir (might be read-only)
+    return str(_pl.Path.cwd())
+
+BLOODMAP_BASE = _pick_base_dir()
+def bloodmap_path(*parts:str) -> str:
+    p = _pl.Path(BLOODMAP_BASE).joinpath(*parts)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    return str(p)
+
+
 # ---------- Helpers & Paths ----------
 def wkey(name:str)->str:
     who = st.session_state.get("key","guest")
@@ -57,14 +89,10 @@ def enko(en:str, ko:str)->str:
 def _now_kst_str():
     return _dt.datetime.now().strftime("%Y-%m-%d %H:%M")
 
-SAVE_DIR = "/mnt/data/bloodmap_graph"
-CARE_DIR = "/mnt/data/care_log"
-PROF_DIR = "/mnt/data/profile"
-MET_DIR  = "/mnt/data/metrics"
-os.makedirs(SAVE_DIR, exist_ok=True)
-os.makedirs(CARE_DIR, exist_ok=True)
-os.makedirs(PROF_DIR, exist_ok=True)
-os.makedirs(MET_DIR,  exist_ok=True)
+SAVE_DIR = bloodmap_path("bloodmap_graph")
+CARE_DIR = bloodmap_path("care_log")
+PROF_DIR = bloodmap_path("profile")
+MET_DIR  = bloodmap_path("metrics")
 
 # ---------- Sidebar (프로필 + PIN + 방문자 통계 + 단위 가드) ----------
 with st.sidebar:
