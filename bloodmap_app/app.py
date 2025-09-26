@@ -1,6 +1,5 @@
 
-# app.py — Bloodmap (Enhanced v6 patch)
-import os
+# app.py — Bloodmap (Enhanced v6.1: no steppers, symptoms-based emergency)
 import datetime as _dt
 import streamlit as st
 
@@ -58,24 +57,42 @@ st.caption("※ 모든 날짜/시간/스케줄 표기는 한국시간(Asia/Seoul
 ensure_onco_drug_db(DRUG_DB)  # DRUG_DB 채우기
 ONCO = build_onco_map()
 
+# ====== UI helpers (no steppers) ======
 def wkey(name:str)->str:
     who = st.session_state.get("key","guest")
     return f"{who}:{name}"
 
-# ====== Sidebar: 프로필 & 오늘 체온/응급도 빠른 입력 ======
-with st.sidebar:
-    st.header("프로필")
-    st.session_state["key"] = st.text_input("별명#PIN", value=st.session_state.get("key","guest"), key=wkey("user_key"))
-    st.caption("좌측 프로필은 저장/CSV 경로 키로 쓰입니다.")
-    temp = st.number_input("현재 체온(℃)", 34.0, 42.5, 36.8, 0.1, key=wkey("cur_temp"))
-    hr   = st.number_input("심박수(bpm)", 0, 250, 0, 1, key=wkey("cur_hr"))
-    sbp  = st.number_input("수축혈압(mmHg)", 0, 280, 0, 1, key=wkey("cur_sbp"))
+def _parse_float(txt):
+    if txt is None: return None
+    s = str(txt).strip().replace(",", "")
+    if s == "": return None
+    try:
+        return float(s)
+    except Exception:
+        return None
+
+def float_input(label:str, key:str, placeholder:str="0.00", value=None):
+    txt_default = "" if value is None else (str(value) if isinstance(value,(int,float)) else str(value))
+    txt = st.text_input(label, value=st.session_state.get(key, txt_default), key=key, placeholder=placeholder)
+    return _parse_float(txt)
+
+def int_input(label:str, key:str, placeholder:str="0", value=None):
+    v = float_input(label, key, placeholder, value)
+    if v is None: return None
+    try:
+        return int(v)
+    except Exception:
+        return None
 
 # ====== Helpers ======
 def egfr_2009(cr_mgdl:float, age:int, sex:str):
+    if cr_mgdl is None: return None
     sex_f = (sex=="여"); k = 0.7 if sex_f else 0.9; a = -0.329 if sex_f else -0.411
     mn = min(cr_mgdl/k,1); mx = max(cr_mgdl/k,1); sex_fac = 1.018 if sex_f else 1.0
-    return round(141*(mn**a)*(mx**-1.209)*(0.993**age)*sex_fac,1)
+    try:
+        return round(141*(mn**a)*(mx**-1.209)*(0.993**age)*sex_fac,1)
+    except Exception:
+        return None
 
 def anc_band(anc: float) -> str:
     if anc is None:
@@ -89,24 +106,20 @@ def anc_band(anc: float) -> str:
     if anc < 1500: return "🟡 경도 호중구감소(1000~1499)"
     return "🟢 정상(≥1500)"
 
-def emergency_level(labs: dict, temp_c: float, hr:int, sbp:int) -> tuple[str, list[str]]:
-    # 규칙 기반 응급도
+def emergency_level(labs: dict, temp_c, hr, symptoms: dict) -> tuple[str, list[str]]:
+    # 규칙 기반 응급도 (혈압 제거, 증상 가중치 추가)
     anc = labs.get("ANC")
     plt = labs.get("PLT")
     crp = labs.get("CRP")
     hb  = labs.get("Hb")
     alerts = []
 
-    try: t = float(temp_c)
-    except: t = 0.0
-    try: a = float(anc) if anc is not None else None
-    except: a = None
-    try: p = float(plt) if plt is not None else None
-    except: p = None
-    try: c = float(crp) if crp is not None else None
-    except: c = None
-    try: h = float(hb) if hb is not None else None
-    except: h = None
+    t = temp_c if isinstance(temp_c,(int,float)) else _parse_float(temp_c)
+    a = anc if isinstance(anc,(int,float)) else _parse_float(anc)
+    p = plt if isinstance(plt,(int,float)) else _parse_float(plt)
+    c = crp if isinstance(crp,(int,float)) else _parse_float(crp)
+    h = hb  if isinstance(hb,(int,float)) else _parse_float(hb)
+    heart = hr if isinstance(hr,(int,float)) else _parse_float(hr)
 
     risk = 0
     if a is not None and a < 500:
@@ -114,9 +127,9 @@ def emergency_level(labs: dict, temp_c: float, hr:int, sbp:int) -> tuple[str, li
     elif a is not None and a < 1000:
         risk += 2; alerts.append("ANC 500~999: 감염 주의")
 
-    if t >= 38.5:
+    if t is not None and t >= 38.5:
         risk += 2; alerts.append("고열(≥38.5℃)")
-    elif t >= 38.0:
+    elif t is not None and t >= 38.0:
         risk += 1; alerts.append("발열(38.0~38.4℃)")
 
     if p is not None and p < 20000:
@@ -126,31 +139,74 @@ def emergency_level(labs: dict, temp_c: float, hr:int, sbp:int) -> tuple[str, li
     if c is not None and c >= 10:
         risk += 1; alerts.append("CRP 높음(≥10)")
 
-    if sbp and sbp < 90:
-        risk += 2; alerts.append("저혈압")
-    if hr and hr > 130:
+    if heart and heart > 130:
         risk += 1; alerts.append("빈맥")
 
-    if risk >= 4: return "🚨 응급", alerts
+    # symptom-driven boosts
+    if symptoms.get("hematuria"):  # 혈뇨
+        risk += 1; alerts.append("혈뇨")
+    if symptoms.get("melena"):     # 흑색변
+        risk += 2; alerts.append("흑색변(상부위장관 출혈 의심)")
+    if symptoms.get("hematochezia"):  # 혈변
+        risk += 2; alerts.append("혈변(하부위장관 출혈 의심)")
+    if symptoms.get("chest_pain"):
+        risk += 2; alerts.append("흉통")
+    if symptoms.get("dyspnea"):
+        risk += 2; alerts.append("호흡곤란")
+    if symptoms.get("confusion"):
+        risk += 3; alerts.append("의식저하/혼돈")
+
+    if risk >= 5: return "🚨 응급", alerts
     if risk >= 2: return "🟧 주의", alerts
     return "🟢 안심", alerts
+
+# ====== Sidebar: 프로필 & 오늘 체온/심박(혈압 제거) ======
+with st.sidebar:
+    st.header("프로필")
+    st.session_state["key"] = st.text_input("별명#PIN", value=st.session_state.get("key","guest"), key=wkey("user_key"))
+    st.caption("좌측 프로필은 저장/CSV 경로 키로 쓰입니다.")
+    temp = float_input("현재 체온(℃)", key=wkey("cur_temp"), placeholder="36.8")
+    hr   = int_input("심박수(bpm)", key=wkey("cur_hr"), placeholder="0")
 
 # ====== Tabs ======
 t_home, t_labs, t_dx, t_chemo, t_peds, t_special, t_report = st.tabs(
     ["🏠 홈","🧪 피수치 입력","🧬 암 선택","💊 항암제","👶 소아 증상","🔬 특수검사","📄 보고서"]
 )
 
-# ====== HOME: 응급도 상시 표시 ======
+# ====== HOME ======
 with t_home:
-    st.subheader("응급도(실시간)")
+    st.subheader("요약")
     labs = st.session_state.get("labs_dict", {})
-    level, reasons = emergency_level(labs, st.session_state.get(wkey("cur_temp")), st.session_state.get(wkey("cur_hr")), st.session_state.get(wkey("cur_sbp")))
-    if level.startswith("🚨"):
-        st.error(level + " — " + " · ".join(reasons))
-    elif level.startswith("🟧"):
-        st.warning(level + " — " + " · ".join(reasons))
+    # 상단에는 간단 상태만
+    level_tmp, reasons_tmp = emergency_level(labs, temp, hr, {})
+    if level_tmp.startswith("🚨"):
+        st.error("현재 상태: " + level_tmp)
+    elif level_tmp.startswith("🟧"):
+        st.warning("현재 상태: " + level_tmp)
     else:
-        st.info(level + (" — " + " · ".join(reasons) if reasons else ""))
+        st.info("현재 상태: " + level_tmp)
+
+    st.markdown("---")
+    st.subheader("응급도 체크(증상 기반)")
+    c1,c2,c3,c4,c5,c6 = st.columns(6)
+    with c1: hematuria = st.checkbox("혈뇨", key=wkey("sym_hematuria"))
+    with c2: melena = st.checkbox("흑색변", key=wkey("sym_melena"))
+    with c3: hematochezia = st.checkbox("혈변", key=wkey("sym_hematochezia"))
+    with c4: chest_pain = st.checkbox("흉통", key=wkey("sym_chest"))
+    with c5: dyspnea = st.checkbox("호흡곤란", key=wkey("sym_dyspnea"))
+    with c6: confusion = st.checkbox("의식저하", key=wkey("sym_confusion"))
+
+    sym = dict(hematuria=hematuria, melena=melena, hematochezia=hematochezia,
+               chest_pain=chest_pain, dyspnea=dyspnea, confusion=confusion)
+
+    level, reasons = emergency_level(labs, temp, hr, sym)
+    if level.startswith("🚨"):
+        st.error("응급도: " + level + " — " + " · ".join(reasons))
+    elif level.startswith("🟧"):
+        st.warning("응급도: " + level + " — " + " · ".join(reasons))
+    else:
+        st.info("응급도: " + level + (" — " + " · ".join(reasons) if reasons else ""))
+
     # Top AE alerts from current chemo list
     meds = st.session_state.get("chemo_keys", [])
     if meds:
@@ -159,51 +215,44 @@ with t_home:
         for a in (top_alerts or []):
             st.error(a)
 
-# ====== LABS: Full inputs + eGFR + Diet guide ======
+# ====== LABS (no steppers) ======
 with t_labs:
     st.subheader("피수치 입력")
-    # row 1: identity
     c1,c2,c3,c4,c5 = st.columns(5)
     with c1: sex = st.selectbox("성별", ["여","남"], key=wkey("sex"))
-    with c2: age = st.number_input("나이(세)", 1, 110, 40, key=wkey("age"))
-    with c3: wt  = st.number_input("체중(kg)", 0.0, 300.0, 0.0, 0.5, key=wkey("wt"))
-    with c4: cr  = st.number_input("Cr (mg/dL)", 0.0, 20.0, 0.8, 0.1, key=wkey("cr"))
+    with c2: age = int_input("나이(세)", key=wkey("age"), placeholder="40", value=40)
+    with c3: wt  = float_input("체중(kg)", key=wkey("wt"), placeholder="0.0")
+    with c4: cr  = float_input("Cr (mg/dL)", key=wkey("cr"), placeholder="0.8", value=0.8)
     with c5: day = st.date_input("측정일", value=_dt.date.today(), key=wkey("date"))
 
-    egfr = egfr_2009(cr, int(age), sex)
-    st.metric("eGFR (CKD-EPI 2009)", f"{egfr} mL/min/1.73㎡")
+    egfr = egfr_2009(cr, int(age or 0), sex)
+    st.metric("eGFR (CKD-EPI 2009)", f"{egfr} mL/min/1.73㎡" if egfr is not None else "—")
 
-    # row 2: 핵심 CBC/염증
     r1 = st.columns(6)
-    with r1[0]: WBC = st.number_input("WBC (×10⁹/L)", 0.0, 300.0, 0.0, 0.1, key=wkey("WBC"))
-    with r1[1]: ANC = st.number_input("ANC (절대호중구, /µL)", 0.0, 20000.0, 0.0, 100.0, key=wkey("ANC"))
-    with r1[2]: Hb  = st.number_input("Hb (g/dL)", 0.0, 25.0, 0.0, 0.1, key=wkey("Hb"))
-    with r1[3]: PLT = st.number_input("PLT (×10³/µL)", 0.0, 1000.0, 0.0, 1.0, key=wkey("PLT"))
-    with r1[4]: CRP = st.number_input("CRP (mg/L)", 0.0, 500.0, 0.0, 0.5, key=wkey("CRP"))
-    with r1[5]: Glu = st.number_input("Glucose (mg/dL)", 0.0, 1000.0, 0.0, 1.0, key=wkey("Glu"))
+    with r1[0]: WBC = float_input("WBC (×10⁹/L)", key=wkey("WBC"))
+    with r1[1]: ANC = float_input("ANC (절대호중구, /µL)", key=wkey("ANC"))
+    with r1[2]: Hb  = float_input("Hb (g/dL)", key=wkey("Hb"))
+    with r1[3]: PLT = float_input("PLT (×10³/µL)", key=wkey("PLT"))
+    with r1[4]: CRP = float_input("CRP (mg/L)", key=wkey("CRP"))
+    with r1[5]: Glu = float_input("Glucose (mg/dL)", key=wkey("Glu"))
 
-    # row 3: 전해질/간/요산/알부민/칼슘
     r2 = st.columns(6)
-    with r2[0]: Na  = st.number_input("Na (mmol/L)", 0.0, 200.0, 0.0, 0.5, key=wkey("Na"))
-    with r2[1]: K   = st.number_input("K (mmol/L)", 0.0, 10.0, 0.0, 0.1, key=wkey("K"))
-    with r2[2]: Alb = st.number_input("Albumin (g/dL)", 0.0, 6.0, 0.0, 0.1, key=wkey("Alb"))
-    with r2[3]: Ca  = st.number_input("Calcium (mg/dL)", 0.0, 20.0, 0.0, 0.1, key=wkey("Ca"))
-    with r2[4]: AST = st.number_input("AST (U/L)", 0.0, 2000.0, 0.0, 1.0, key=wkey("AST"))
-    with r2[5]: ALT = st.number_input("ALT (U/L)", 0.0, 2000.0, 0.0, 1.0, key=wkey("ALT"))
-    UA = st.number_input("Uric Acid (mg/dL)", 0.0, 30.0, 0.0, 0.1, key=wkey("UA"))
+    with r2[0]: Na  = float_input("Na (mmol/L)", key=wkey("Na"))
+    with r2[1]: K   = float_input("K (mmol/L)", key=wkey("K"))
+    with r2[2]: Alb = float_input("Albumin (g/dL)", key=wkey("Alb"))
+    with r2[3]: Ca  = float_input("Calcium (mg/dL)", key=wkey("Ca"))
+    with r2[4]: AST = float_input("AST (U/L)", key=wkey("AST"))
+    with r2[5]: ALT = float_input("ALT (U/L)", key=wkey("ALT"))
+    UA = float_input("Uric Acid (mg/dL)", key=wkey("UA"))
 
-    # Save labs in session
     labs_dict = {
-        "sex": sex, "age": int(age), "weight": wt, "date": str(day),
+        "sex": sex, "age": int(age or 0), "weight": wt, "date": str(day),
         "Cr": cr, "eGFR": egfr, "WBC": WBC, "ANC": ANC, "Hb": Hb, "PLT": PLT,
         "CRP": CRP, "Glu": Glu, "Na": Na, "K": K, "Alb": Alb, "Ca": Ca, "AST": AST, "ALT": ALT, "UA": UA
     }
     st.session_state["labs_dict"] = labs_dict
-
-    # ANC 세분화 배지
     st.markdown(f"**ANC 분류:** {anc_band(ANC)}")
 
-    # 식이가이드 (전체 출력, heme_flag는 선택된 그룹이 혈액암일 때)
     current_group = st.session_state.get("onco_group", "")
     heme_flag = True if current_group == "혈액암" else False
     diets = lab_diet_guides(labs_dict, heme_flag=heme_flag)
@@ -212,7 +261,7 @@ with t_labs:
         for line in diets:
             st.write("- " + line)
 
-# ====== DX: 온코 그룹/암종 전체 맵 ======
+# ====== DX ======
 with t_dx:
     st.subheader("암 선택")
     groups = list(ONCO.keys())
@@ -236,7 +285,7 @@ with t_dx:
                     st.session_state["onco_group"] = g
                     st.success(f"저장됨: {sel}")
 
-# ====== CHEMO: 진단 기반 자동 추천 + 사용자 추가 ======
+# ====== CHEMO ======
 with t_chemo:
     st.subheader("항암제")
     dx = st.session_state.get("dx_raw")
@@ -262,7 +311,7 @@ with t_chemo:
             st.session_state["chemo_keys"] = picked_keys
             st.success("저장됨. 홈/보고서에서 확인")
 
-# ====== PEDS: 소아 증상 세분화 ======
+# ====== PEDS ======
 with t_peds:
     st.subheader("소아 증상 분류(간단)")
     disease = st.selectbox("의심 질환(선택 시 기본 옵션 자동 세팅)", ["장염","로타","노로","RSV","독감","상기도염","아데노","마이코","수족구","편도염","코로나","중이염"], key=wkey("peds_dx"))
@@ -274,7 +323,7 @@ with t_peds:
     with c4: fever = st.selectbox("발열", opts.get("발열", ["없음","37~37.5 (미열)","37.5~38 (병원 내원 권장)","38.5~39 (병원/응급실)"]), key=wkey("p_fever"))
     with c5: eye   = st.selectbox("눈꼽", opts.get("눈꼽", ["없음","맑음","노랑-농성"]), key=wkey("p_eye"))
 
-    # 간단 규칙: 장염/호흡기/결막염 범주로 Top 메시지
+    # 간단 규칙
     score = {"장염 의심":0, "상기도/독감 계열":0, "결막염 의심":0}
     if stool in ["3~4회","5~6회"]:
         score["장염 의심"] += 40
@@ -292,7 +341,7 @@ with t_peds:
     if tips:
         st.info(" / ".join(tips))
 
-# ====== SPECIAL: 기존 모듈 그대로 사용(있으면) ======
+# ====== SPECIAL ======
 with t_special:
     try:
         from special_tests import special_tests_ui
