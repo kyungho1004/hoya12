@@ -101,6 +101,16 @@ def lab_warnings(row: dict):
         warns.append(f"CRP {crp} mg/dL > {THRESH['CRP_high']} → 염증/감염 의심")
     return warns
 
+
+
+# ---- Home selector helpers ----
+def _flatten_groups(groups_dict):
+    items = []
+    for big, arr in groups_dict.items():
+        for code, name in arr:
+            items.append(f"{code} · {name}")
+    return items
+
 render_deploy_banner("https://bloodmap.streamlit.app/", "제작: Hoya/GPT · 자문: Hoya/GPT")
 
 
@@ -333,7 +343,43 @@ t_home, t_labs, t_dx, t_chemo, t_special, t_peds, t_care, t_report = st.tabs(
 
 )
 with t_home:
-    st.info("각 탭에 기본 입력창이 항상 표시됩니다. 외부 파일 없어도 작동합니다.")
+
+    # 🧭 모드 선택 (화면 단순화)
+    mode = st.radio("모드 선택", ["성인(일반)", "소아"], key=wkey("home_mode"), horizontal=True)
+    st.session_state["mode"] = "peds" if mode == "소아" else "adult"
+    if st.session_state["mode"] == "adult":
+        st.caption("간단 모드: 여기서 암을 선택하면 다른 탭도 해당 선택에 맞춰 요약만 보여줘요.")
+        adult_list = _flatten_groups(GROUPS)
+        sel = st.selectbox("암 선택 (성인)", ["(선택)"] + adult_list, key=wkey("home_adult_dx"))
+        if sel and sel != "(선택)":
+            code = sel.split(" · ")[0]
+            st.session_state["dx"] = code
+            st.success(f"진단 선택됨: {sel} — 보고서/요약에 반영됩니다.")
+    else:
+        st.caption("소아 모드: 소아 패널을 간결하게 사용합니다. (상세는 '👶 소아' 탭)")
+        disease = st.selectbox("소아 질환(의심)", ["", "독감", "RSV", "상기도염", "아데노", "마이코", "수족구", "편도염", "코로나", "중이염"], index=0, key=wkey("home_peds_dx"))
+        if disease:
+            st.session_state["dx"] = f"Peds-{disease}"
+            st.success(f"소아 질환 선택됨: {disease} — 보고서/요약에 반영됩니다.")
+
+# 🧭 모드 선택 (화면 단순화)
+mode = st.radio("모드 선택", ["성인(일반)", "소아"], key=wkey("home_mode"), horizontal=True)
+st.session_state["mode"] = "peds" if mode == "소아" else "adult"
+if st.session_state["mode"] == "adult":
+    st.caption("간단 모드: 여기서 암을 선택하면 다른 탭도 해당 선택에 맞춰 요약만 보여줘요.")
+    adult_list = _flatten_groups(GROUPS)
+    sel = st.selectbox("암 선택 (성인)", ["(선택)"] + adult_list, key=wkey("home_adult_dx"))
+    if sel and sel != "(선택)":
+        code = sel.split(" · ")[0]
+        st.session_state["dx"] = code
+        st.success(f"진단 선택됨: {sel} — 보고서/요약에 반영됩니다.")
+else:
+    st.caption("소아 모드: 소아 패널을 간결하게 사용합니다. (상세는 '👶 소아' 탭)")
+    disease = st.selectbox("소아 질환(의심)", ["", "독감", "RSV", "상기도염", "아데노", "마이코", "수족구", "편도염", "코로나", "중이염"], index=0, key=wkey("home_peds_dx"))
+    if disease:
+        st.session_state["dx"] = f"Peds-{disease}"
+        st.success(f"소아 질환 선택됨: {disease} — 보고서/요약에 반영됩니다.")
+
 with t_labs:
     st.subheader("피수치 입력")
     col1,col2,col3,col4,col5 = st.columns(5)
@@ -414,6 +460,8 @@ if rows:
         st.write(r)
 
 with t_dx:
+    if st.session_state.get('mode')=='peds':
+        st.info('소아 모드에서는 성인 암 선택을 숨깁니다. 홈에서 성인 모드로 전환하세요.'); st.stop()
     st.subheader("암 선택")
     grp_tabs = st.tabs(list(GROUPS.keys()))
     for i,(g, lst) in enumerate(GROUPS.items()):
@@ -427,6 +475,8 @@ with t_dx:
                 st.success(f"저장됨: {enko(en_dx, ko_dx)}")
 
 with t_chemo:
+    if st.session_state.get('mode')=='peds':
+        st.info('소아 모드에서는 성인 항암제 탭을 최소화합니다. 홈에서 성인 모드로 전환하세요.'); st.stop()
     st.subheader("항암제")
     en_dx = st.session_state.get("dx_en")
     ko_dx = st.session_state.get("dx_ko","")
@@ -448,11 +498,15 @@ with t_chemo:
             st.success("저장됨. '보고서'에서 확인")
 
 with t_special:
+    if st.session_state.get('mode')=='peds':
+        st.info('소아 모드에서는 특수검사를 최소화합니다. 필요 시 성인 모드로 전환하세요.'); st.stop()
     spec_lines = special_tests_ui()
 
 
 
 with t_peds:
+    if st.session_state.get('mode')=='adult':
+        st.info('소아 모드가 아닙니다. 홈에서 소아 모드를 선택하세요.'); st.stop()
     st.subheader("소아 패널")
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -485,7 +539,6 @@ with t_peds:
         idx += 1
 
     # 요약 만들기 (보고서에 포함)
-    peds_
 lines = []
 lines.append("# Bloodmap Report")
 lines.append(f"**진단명**: {dx if dx.strip() else '(미선택)'}")
