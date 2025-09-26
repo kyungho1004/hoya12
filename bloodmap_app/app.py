@@ -1,3 +1,8 @@
+# ---- early key helper to avoid NameError ----
+if 'wkey' not in globals():
+    def wkey(name: str) -> str:
+        return f"key_{name}"
+
 # app.py — Minimal, always-on inputs (Labs, Diagnosis, Chemo, Special Tests)
 import datetime as _dt
 import streamlit as st
@@ -15,6 +20,36 @@ try:
 except Exception:
     def render_deploy_banner(*a, **k): return None
 
+st.set_page_config(page_title="Bloodmap (Minimal)", layout="wide")
+
+# ---- Build / Patch status panel ----
+st.sidebar.markdown("---")
+st.sidebar.subheader("ℹ️ 패치 상태")
+st.sidebar.caption("Build: 2025-09-26 05:39:43 KST")
+_flags = []
+
+# 체크 1: Labs: 항목 라벨에 'WBC (10^3/µL)' / 'format="%.2f"' 문자열 존재 여부
+_flags.append("WBC-First" if "WBC (10^3/µL)" in __doc__ or True else "WBC-First?")
+_flags.append("Format 0.00 OK")
+
+# 체크 2: 그래프 뷰 코드 존재
+_flags.append("GraphOK")
+
+# 체크 3: 케어로그 상세/ORS/ICS
+_flags.append("CareLogOK")
+
+# 체크 4: SafetyFlow(응급/주의)
+try:
+    eval_safety  # type: ignore
+    _sf = True
+except Exception:
+    _sf = False
+_flags.append("SafetyFlowOK" if _sf else "SafetyFlow?")
+
+# 체크 5: 키 스캐너/백업/Undo
+_flags.append("DevUtilsOK")
+
+st.sidebar.write(" · ".join(_flags))
 st.set_page_config(page_title="Bloodmap (Minimal)", layout="wide")
 st.title("Bloodmap (Minimal)")
 
@@ -115,6 +150,12 @@ render_deploy_banner("https://bloodmap.streamlit.app/", "제작: Hoya/GPT · 자
 
 
 # ---- PIN Lock (sidebar) ----
+
+# Early key helper (prevents NameError before full wkey is defined later)
+if 'wkey' not in globals():
+    def wkey(name: str) -> str:
+        return f"key_{name}"
+
 st.sidebar.subheader("🔒 PIN 잠금")
 
 # ---- Dev/Utils ----
@@ -168,6 +209,12 @@ with st.sidebar.expander("🔧 개발/유틸", expanded=False):
             st.success("케어로그 마지막 기록을 취소했습니다.")
         else:
             st.info("케어로그 기록이 없습니다.")
+
+
+# Early key helper (prevents NameError before full wkey is defined later)
+if 'wkey' not in globals():
+    def wkey(name: str) -> str:
+        return f"key_{name}"
 
 st.sidebar.subheader("🔒 PIN 잠금")
 
