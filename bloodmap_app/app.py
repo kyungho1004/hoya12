@@ -363,23 +363,6 @@ with t_home:
             st.success(f"소아 질환 선택됨: {disease} — 보고서/요약에 반영됩니다.")
 
 # 🧭 모드 선택 (화면 단순화)
-mode = st.radio("모드 선택", ["성인(일반)", "소아"], key=wkey("home_mode"), horizontal=True)
-st.session_state["mode"] = "peds" if mode == "소아" else "adult"
-if st.session_state["mode"] == "adult":
-    st.caption("간단 모드: 여기서 암을 선택하면 다른 탭도 해당 선택에 맞춰 요약만 보여줘요.")
-    adult_list = _flatten_groups(GROUPS)
-    sel = st.selectbox("암 선택 (성인)", ["(선택)"] + adult_list, key=wkey("home_adult_dx"))
-    if sel and sel != "(선택)":
-        code = sel.split(" · ")[0]
-        st.session_state["dx"] = code
-        st.success(f"진단 선택됨: {sel} — 보고서/요약에 반영됩니다.")
-else:
-    st.caption("소아 모드: 소아 패널을 간결하게 사용합니다. (상세는 '👶 소아' 탭)")
-    disease = st.selectbox("소아 질환(의심)", ["", "독감", "RSV", "상기도염", "아데노", "마이코", "수족구", "편도염", "코로나", "중이염"], index=0, key=wkey("home_peds_dx"))
-    if disease:
-        st.session_state["dx"] = f"Peds-{disease}"
-        st.success(f"소아 질환 선택됨: {disease} — 보고서/요약에 반영됩니다.")
-
 with t_labs:
     st.subheader("피수치 입력")
     col1,col2,col3,col4,col5 = st.columns(5)
