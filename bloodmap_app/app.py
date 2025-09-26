@@ -1,9 +1,3 @@
-# ---- early key helper to avoid NameError ----
-if 'wkey' not in globals():
-    def wkey(name: str) -> str:
-        return f"key_{name}"
-
-# app.py — Minimal, always-on inputs (Labs, Diagnosis, Chemo, Special Tests)
 import datetime as _dt
 import streamlit as st
 from peds_profiles import get_symptom_options
@@ -14,80 +8,112 @@ import pytz
 from pdf_export import export_md_to_pdf
 import re
 
+st.set_page_config(page_title="Bloodmap", layout="wide")
+st.sidebar.markdown('---')
+st.sidebar.subheader('ℹ️ 패치 상태')
+st.sidebar.caption('Build: CLEANED')
+st.sidebar.write('OK')
 
-# ---- Safety Flow (early) ----
+
+def wkey(name: str) -> str:
+    """Streamlit widget key helper (single source of truth)."""
+    return f"key_{name}"
+
+
 def eval_safety(latest_lab: dict, care_log: list):
     """Return list of alerts: {'msg': str, 'level': 'danger'|'warn'}"""
     alerts = []
-    # latest temperature from care_log
     latest_temp = None
     try:
         for item in reversed(care_log or []):
-            if isinstance(item, dict) and item.get("type") == "temp":
-                latest_temp = float(item.get("value", 0) or 0)
+            if isinstance(item, dict) and item.get('type') == 'temp':
+                latest_temp = float(item.get('value', 0) or 0)
                 break
     except Exception:
         latest_temp = None
-    def add(msg, level="warn"):
-        alerts.append({"msg": msg, "level": level})
+    def add(msg, level='warn'):
+        alerts.append({'msg': msg, 'level': level})
     if isinstance(latest_lab, dict) and latest_lab:
         def fget(k, default=0.0):
             try:
                 return float(latest_lab.get(k, default) or 0.0)
             except Exception:
                 return 0.0
-        anc = fget("ANC"); k = fget("K"); na = fget("Na"); hb = fget("Hb"); plt = fget("PLT")
+        anc = fget('ANC'); k = fget('K'); na = fget('Na'); hb = fget('Hb'); plt = fget('PLT')
         if anc and latest_temp is not None and anc < 500 and latest_temp >= 38.0:
-            add("발열성 호중구감소증 의심 (ANC<500 & 발열≥38.0℃): 즉시 응급실 방문 권고", "danger")
+            add('발열성 호중구감소증 의심 (ANC<500 & 발열≥38.0℃): 즉시 응급실 방문 권고', 'danger')
         if k >= 6.0:
-            add("고칼륨혈증 (K≥6.0): 즉시 평가 필요", "danger")
+            add('고칼륨혈증 (K≥6.0): 즉시 평가 필요', 'danger')
         if na <= 130:
-            add("저나트륨혈증 (Na≤130): 중증 여부 평가", "warn")
+            add('저나트륨혈증 (Na≤130): 중증 여부 평가', 'warn')
         if hb <= 7.0:
-            add("중증 빈혈 가능 (Hb≤7.0): 수혈 고려", "warn")
+            add('중증 빈혈 가능 (Hb≤7.0): 수혈 고려', 'warn')
         try:
             if float(plt) <= 20:
-                add("출혈 위험 (PLT≤20k): 주의 및 대비", "warn")
+                add('출혈 위험 (PLT≤20k): 주의 및 대비', 'warn')
         except Exception:
             pass
     return alerts
 
-# -------- Safe banner (no-op if missing) --------
-try:
-    from branding import render_deploy_banner
-except Exception:
-    def render_deploy_banner(*a, **k): return None
 
-st.set_page_config(page_title="Bloodmap (Minimal)", layout="wide")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # ---- Build / Patch status panel ----
 st.sidebar.markdown("---")
-st.sidebar.subheader("ℹ️ 패치 상태")
-st.sidebar.caption("Build: 2025-09-26 05:39:43 KST")
-_flags = []
-
-# 체크 1: Labs: 항목 라벨에 'WBC (10^3/µL)' / 'format="%.2f"' 문자열 존재 여부
-_flags.append("WBC-First")
-_flags.append("Format 0.00 OK")
-
-# 체크 2: 그래프 뷰 코드 존재
-_flags.append("GraphOK")
-
-# 체크 3: 케어로그 상세/ORS/ICS
-_flags.append("CareLogOK")
-
-# 체크 4: SafetyFlow(응급/주의)
-try:
-    eval_safety  # type: ignore
-    _sf = True
-except Exception:
-    _sf = False
-_flags.append("OK")
-
-# 체크 5: 키 스캐너/백업/Undo
-_flags.append("DevUtilsOK")
-
-st.sidebar.write(" · ".join(_flags))
 st.set_page_config(page_title="Bloodmap (Minimal)", layout="wide")
 st.title("Bloodmap (Minimal)")
 
@@ -621,42 +647,4 @@ if rows:
             st.warning("\n".join(["🚨 피수치 경고"] + [f"- {w}" for w in warns]))
 
 # ---- Safety Flow ----
-def eval_safety(latest_lab: dict, care_log: list):
-    alerts = []
-    # Pull latest temperature if any
-    latest_temp = None
-    if care_log:
-        for item in reversed(care_log):
-            if item.get("type") == "temp":
-                latest_temp = float(item.get("value", 0))
-                break
-    def add(msg, level="warn"):
-        alerts.append({"msg": msg, "level": level})
-    if latest_lab:
-        try:
-            anc = float(latest_lab.get("ANC", 0) or 0)
-            k = float(latest_lab.get("K", 0) or 0)
-            na = float(latest_lab.get("Na", 0) or 0)
-            hb = float(latest_lab.get("Hb", 0) or 0)
-            plt = float(latest_lab.get("PLT", 0) or 0)
-        except Exception:
-            anc=k=na=hb=plt=0.0
-        # FN
-        if anc and anc < 500 and (latest_temp is not None and latest_temp >= 38.0):
-            add("발열성 호중구감소증 의심 (ANC<500 & 발열≥38.0℃): 즉시 응급실 방문 권고", "danger")
-        # Hyperkalemia
-        if k >= 6.0:
-            add("고칼륨혈증 (K≥6.0): 즉시 평가 필요", "danger")
-        # Hyponatremia
-        if na <= 130:
-            add("저나트륨혈증 (Na≤130): 중증 여부 평가", "warn")
-        # Anemia
-        if hb <= 7.0:
-            add("중증 빈혈 가능 (Hb≤7.0): 수혈 고려", "warn")
-        # Thrombocytopenia
-        try:
-            if float(plt) <= 20:
-                add("출혈 위험 (PLT≤20k): 주의 및 대비", "warn")
-        except Exception:
-            pass
     return alerts
