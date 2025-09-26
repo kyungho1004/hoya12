@@ -1,649 +1,585 @@
+
+# app_master4.py — Bloodmap (MASTER++++)
+import os, json, time, hashlib, importlib.util
 import datetime as _dt
+import pandas as pd
 import streamlit as st
-from peds_profiles import get_symptom_options
-from peds_dose import acetaminophen_ml, ibuprofen_ml, estimate_weight_from_age_months
-from special_tests import special_tests_ui
-import json
-import pytz
-from pdf_export import export_md_to_pdf
-import re
 
-st.set_page_config(page_title="Bloodmap", layout="wide")
-st.sidebar.markdown('---')
-st.sidebar.subheader('ℹ️ 패치 상태')
-st.sidebar.caption('Build: CLEANED')
-st.sidebar.write('OK')
+# ---------- Safe banner ----------
+try:
+    from branding import render_deploy_banner
+except Exception:
+    def render_deploy_banner(*a, **k): return None
 
+# ---------- eGFR utils ----------
+try:
+    from utils_egfr import egfr_ckd_epi_2021, egfr_schwartz_peds
+except Exception:
+    def egfr_ckd_epi_2021(cr_mgdl: float, age: int, sex_female: bool) -> float:
+        kappa = 0.7 if sex_female else 0.9
+        alpha = -0.241 if sex_female else -0.302
+        min_scr = min(cr_mgdl / kappa, 1.0)
+        max_scr = max(cr_mgdl / kappa, 1.0)
+        coef_sex = 1.012 if sex_female else 1.0
+        return round(142.0 * (min_scr ** alpha) * (max_scr ** -1.200) * (0.9938 ** age) * coef_sex, 1)
+    def egfr_schwartz_peds(cr_mgdl: float, height_cm: float, k: float = 0.413) -> float:
+        if cr_mgdl <= 0: return 0.0
+        return round(k * float(height_cm) / float(cr_mgdl), 1)
 
-def wkey(name: str) -> str:
-    """Streamlit widget key helper (single source of truth)."""
-    return f"key_{name}"
-
-
-def eval_safety(latest_lab: dict, care_log: list):
-    """Return list of alerts: {'msg': str, 'level': 'danger'|'warn'}"""
-    alerts = []
-    latest_temp = None
-    try:
-        for item in reversed(care_log or []):
-            if isinstance(item, dict) and item.get('type') == 'temp':
-                latest_temp = float(item.get('value', 0) or 0)
-                break
-    except Exception:
-        latest_temp = None
-    def add(msg, level='warn'):
-        alerts.append({'msg': msg, 'level': level})
-    if isinstance(latest_lab, dict) and latest_lab:
-        def fget(k, default=0.0):
-            try:
-                return float(latest_lab.get(k, default) or 0.0)
-            except Exception:
-                return 0.0
-        anc = fget('ANC'); k = fget('K'); na = fget('Na'); hb = fget('Hb'); plt = fget('PLT')
-        if anc and latest_temp is not None and anc < 500 and latest_temp >= 38.0:
-            add('발열성 호중구감소증 의심 (ANC<500 & 발열≥38.0℃): 즉시 응급실 방문 권고', 'danger')
-        if k >= 6.0:
-            add('고칼륨혈증 (K≥6.0): 즉시 평가 필요', 'danger')
-        if na <= 130:
-            add('저나트륨혈증 (Na≤130): 중증 여부 평가', 'warn')
-        if hb <= 7.0:
-            add('중증 빈혈 가능 (Hb≤7.0): 수혈 고려', 'warn')
+# ---------- Special tests loader (patched preferred) ----------
+def _load_special_tests():
+    cand = "/mnt/data/special_tests.patched.py"
+    if os.path.exists(cand):
+        spec = importlib.util.spec_from_file_location("special_tests_patched", cand)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+    else:
         try:
-            if float(plt) <= 20:
-                add('출혈 위험 (PLT≤20k): 주의 및 대비', 'warn')
+            import special_tests as mod
+            return mod
         except Exception:
-            pass
-    return alerts
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# ---- Build / Patch status panel ----
-st.sidebar.markdown("---")
-st.set_page_config(page_title="Bloodmap (Minimal)", layout="wide")
-st.title("Bloodmap (Minimal)")
-
-# ---- Lab normals/thresholds ----
-NORMALS = {
-    "WBC": (4.0, 10.0, "10^3/µL"),
-    "Hb": (12.0, 16.0, "g/dL"),
-    "PLT": (150.0, 400.0, "10^3/µL"),
-    "ANC": (1_500.0, 8_000.0, "/µL"),
-    "Na": (135.0, 145.0, "mmol/L"),
-    "K": (3.5, 5.1, "mmol/L"),
-    "Ca": (8.5, 10.5, "mg/dL"),
-    "P": (2.5, 4.5, "mg/dL"),
-    "Alb": (3.5, 5.2, "g/dL"),
-    "Glu": (70.0, 140.0, "mg/dL"),
-    "T.P": (6.4, 8.3, "g/dL"),
-    "AST": (0.0, 40.0, "U/L"),
-    "ALP": (40.0, 130.0, "U/L"),
-    "CRP": (0.0, 0.5, "mg/dL"),
-    "UA": (3.5, 7.2, "mg/dL"),
-    "T.b": (0.2, 1.2, "mg/dL"),
-    "Cr(mg/dL)": (0.6, 1.3, "mg/dL"),
-}
-
-# Severity thresholds for quick banners (subset)
-THRESH = {
-    "ANC_critical": 500,
-    "Na_low": 130,
-    "Na_high": 150,
-    "K_low": 3.0,
-    "K_high": 6.0,
-    "Hb_low": 7.0,
-    "PLT_low": 20.0,
-    "Ca_low": 7.0,
-    "Glu_high": 300.0,
-    "CRP_high": 10.0,
-}
-
-def lab_badge(name:str, value):
-    lo, hi, unit = NORMALS.get(name, (None, None, ""))
-    if value is None:
-        return ""
-    try:
-        v = float(value)
-    except Exception:
-        return ""
-    if lo is not None and hi is not None:
-        if v < lo:
-            return f"🟡 {v} {unit} (low {lo}-{hi})"
-        if v > hi:
-            return f"🟡 {v} {unit} (high {lo}-{hi})"
-        return f"🟢 {v} {unit} (normal {lo}-{hi})"
-    return f"{v} {unit}"
-
-def lab_warnings(row: dict):
-    warns = []
-    anc = row.get("ANC")
-    if anc is not None and float(anc) < THRESH["ANC_critical"]:
-        warns.append(f"ANC {anc} /µL < {THRESH['ANC_critical']} → 🚨 강한 감염위험")
-    na = row.get("Na")
-    if na is not None:
-        if float(na) < THRESH["Na_low"]:
-            warns.append(f"Na {na} mmol/L < {THRESH['Na_low']} → 🚨 저나트륨")
-        if float(na) > THRESH["Na_high"]:
-            warns.append(f"Na {na} mmol/L > {THRESH['Na_high']} → 🚨 고나트륨")
-    k = row.get("K")
-    if k is not None:
-        if float(k) < THRESH["K_low"] or float(k) > THRESH["K_high"]:
-            warns.append(f"K {k} mmol/L 경계( {THRESH['K_low']}–{THRESH['K_high']} )")
-    hb = row.get("Hb")
-    if hb is not None and float(hb) < THRESH["Hb_low"]:
-        warns.append(f"Hb {hb} g/dL < {THRESH['Hb_low']} → 수혈 고려")
-    plt = row.get("PLT")
-    if plt is not None and float(plt) < THRESH["PLT_low"]:
-        warns.append(f"PLT {plt}k/µL < {THRESH['PLT_low']} → 출혈주의")
-    ca = row.get("Ca")
-    if ca is not None and float(ca) < THRESH["Ca_low"]:
-        warns.append(f"Ca {ca} mg/dL < {THRESH['Ca_low']} → 경련/부정맥 위험")
-    glu = row.get("Glu")
-    if glu is not None and float(glu) > THRESH["Glu_high"]:
-        warns.append(f"Glu {glu} mg/dL > {THRESH['Glu_high']} → 고혈당")
-    crp = row.get("CRP")
-    if crp is not None and float(crp) > THRESH["CRP_high"]:
-        warns.append(f"CRP {crp} mg/dL > {THRESH['CRP_high']} → 염증/감염 의심")
-    return warns
-
-
-
-# ---- Home selector helpers ----
-def _flatten_groups(groups_dict):
-    items = []
-    for big, arr in groups_dict.items():
-        for code, name in arr:
-            items.append(f"{code} · {name}")
-    return items
-
+            return None
+STMOD = _load_special_tests()
+
+st.set_page_config(page_title="Bloodmap (MASTER++++)", layout="wide")
+st.title("Bloodmap (MASTER++++)")
 render_deploy_banner("https://bloodmap.streamlit.app/", "제작: Hoya/GPT · 자문: Hoya/GPT")
 
-
-# ---- PIN Lock (sidebar) ----
-
-# Early key helper (prevents NameError before full wkey is defined later)
-if 'wkey' not in globals():
-    def wkey(name: str) -> str:
-        return f"key_{name}"
-
-st.sidebar.subheader("🔒 PIN 잠금")
-
-# ---- Dev/Utils ----
-with st.sidebar.expander("🔧 개발/유틸", expanded=False):
-    # 중복 key 스캔
-    used = st.session_state.get("_used_keys", [])
-    dup = {}
-    for k in used:
-        dup[k] = dup.get(k, 0) + 1
-    bad = [k for k,c in dup.items() if c>1]
-    if bad:
-        st.warning("중복 key 감지: " + ", ".join(bad))
-    else:
-        st.caption("중복 key 없음")
-
-    # 상태 저장/복원
-    import json, os
-    state_path = "/mnt/data/bloodmap_state.json"
-    if st.button("💾 상태 저장", key=wkey("save_state")):
-        try:
-            data = {k:v for k,v in st.session_state.items() if k not in ("_used_keys",)}
-            with open(state_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2, default=str)
-            st.success("저장 완료")
-        except Exception as e:
-            st.error(f"저장 실패: {e}")
-
-    if st.button("📥 상태 복원", key=wkey("load_state")):
-        try:
-            if os.path.exists(state_path):
-                with open(state_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                for k,v in data.items():
-                    st.session_state[k]=v
-                st.success("복원 완료 — 다시 렌더링하세요")
-            else:
-                st.info("저장된 파일이 없습니다.")
-        except Exception as e:
-            st.error(f"복원 실패: {e}")
-
-    # Undo(1단계): lab_rows / care_log
-    if st.button("↩️ Undo: 최근 입력 취소 (Labs)", key=wkey("undo_labs")):
-        if st.session_state.get("lab_rows"):
-            st.session_state["lab_rows"].pop()
-            st.success("Labs 마지막 입력을 취소했습니다.")
-        else:
-            st.info("Labs 입력이 없습니다.")
-    if st.button("↩️ Undo: 최근 기록 취소 (케어로그)", key=wkey("undo_care")):
-        if st.session_state.get("care_log"):
-            st.session_state["care_log"].pop()
-            st.success("케어로그 마지막 기록을 취소했습니다.")
-        else:
-            st.info("케어로그 기록이 없습니다.")
-
-
-# Early key helper (prevents NameError before full wkey is defined later)
-if 'wkey' not in globals():
-    def wkey(name: str) -> str:
-        return f"key_{name}"
-
-st.sidebar.subheader("🔒 PIN 잠금")
-
-pin_set = st.session_state.get("pin_set", False)
-if not pin_set:
-    new_pin = st.sidebar.text_input("새 PIN 설정 (4~8자리)", type="password", key="pin_new")
-    if new_pin and 4 <= len(new_pin) <= 8:
-        st.session_state["pin_hash"] = new_pin
-        st.session_state["pin_set"] = True
-        st.sidebar.success("PIN 설정 완료")
-else:
-    trial = st.sidebar.text_input("PIN 입력해 잠금 해제", type="password", key="pin_try")
-    st.session_state["pin_ok"] = (trial == st.session_state.get("pin_hash"))
-    if st.session_state.get("pin_ok"):
-        st.sidebar.success("잠금 해제됨")
-    else:
-        st.sidebar.info("일부 민감 탭은 PIN 필요")
-# ---- Helpers ----
-
-def wkey(name:str)->str:
-    key = f"key_{name}"
-    try:
-        st.session_state.setdefault("_used_keys", [])
-        st.session_state["_used_keys"].append(key)
-    except Exception:
-        pass
-    return key
-
-
-from datetime import datetime, timedelta
-KST = pytz.timezone("Asia/Seoul")
-
-def now_kst():
-    return datetime.now(KST)
-
-def _ics_event(title, start_dt, minutes=0):
-    dt_str = start_dt.strftime("%Y%m%dT%H%M%S")
-    return ("BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\n"
-            f"SUMMARY:{title}\nDTSTART:{dt_str}\nEND:VEVENT\nEND:VCALENDAR")
-
-def _get_log():
-    return st.session_state.setdefault("care_log", [])
-
-def _save_log_disk():
-    try:
-        import os, json
-        os.makedirs("/mnt/data/care_log", exist_ok=True)
-        with open("/mnt/data/care_log/default.json","w",encoding="utf-8") as f:
-            json.dump(_get_log(), f, ensure_ascii=False, indent=2, default=str)
-    except Exception:
-        pass
-
-def add_med_record(kind:str, name:str, dose_mg:float):
-    rec = {"ts": now_kst().strftime("%Y-%m-%d %H:%M:%S"), "kind":kind, "name":name, "dose_mg":dose_mg}
-    _get_log().append(rec); _save_log_disk()
-
-def last_intake_minutes(name:str):
-    tslist = []
-    for r in _get_log()[::-1]:
-        if r.get("name")==name:
-            try:
-                ts = KST.localize(datetime.strptime(r["ts"], "%Y-%m-%d %H:%M:%S"))
-            except Exception:
-                continue
-            tslist.append(ts)
-    if not tslist: return None
-    return (now_kst() - tslist[0]).total_seconds() / 60.0
-
-def total_last24_mg(name_set:set):
-    total=0.0
-    for r in _get_log():
-        try:
-            t = KST.localize(datetime.strptime(r["ts"], "%Y-%m-%d %H:%M:%S"))
-        except Exception:
-            continue
-        if (now_kst()-t) <= timedelta(hours=24) and r.get("name") in name_set:
-            total += float(r.get("dose_mg") or 0)
-    return total
-
-def med_guard_apap_ibu_ui(weight_kg: float):
-    st.subheader("해열제 가드레일(APAP/IBU)")
-    col1,col2,col3 = st.columns(3)
-    with col1:
-        apap = st.number_input("Acetaminophen 복용량 (mg)", 0, 2000, 0, 50, key=wkey("apap"))
-        if st.button("기록(APAP)", key=wkey("btn_apap")) and apap>0:
-            add_med_record("antipyretic","APAP", apap)
-    with col2:
-        ibu  = st.number_input("Ibuprofen 복용량 (mg)", 0, 1600, 0, 50, key=wkey("ibu"))
-        if st.button("기록(IBU)", key=wkey("btn_ibu")) and ibu>0:
-            add_med_record("antipyretic","IBU", ibu)
-    with col3:
-        if st.button("24h 요약 .ics 내보내기", key=wkey("ics_btn")):
-            nxt = now_kst() + timedelta(hours=4)
-            st.download_button("⬇️ .ics 저장", data=_ics_event("다음 복용 가능 시각(APAP 기준)", nxt).encode("utf-8"),
-                               file_name="next_dose_apap.ics", mime="text/calendar", key=wkey("dl_ics"))
-    apap_cd_min = 240
-    ibu_cd_min  = 360
-    wt = weight_kg or 0.0
-    apap_max24 = min(4000.0, 60.0*wt if wt>0 else 4000.0)
-    ibu_max24  = min(1200.0, 30.0*wt if wt>0 else 1200.0)
-    apap_24 = total_last24_mg({"APAP"})
-    ibu_24  = total_last24_mg({"IBU"})
-    apap_last = last_intake_minutes("APAP")
-    ibu_last  = last_intake_minutes("IBU")
-    if apap_last is not None and apap_last < apap_cd_min:
-        st.error(f"APAP 쿨다운 미충족: {int(apap_cd_min - apap_last)}분 남음")
-    if ibu_last is not None and ibu_last < ibu_cd_min:
-        st.error(f"IBU 쿨다운 미충족: {int(ibu_cd_min - ibu_last)}분 남음")
-    if apap_24 > apap_max24:
-        st.error(f"APAP 24시간 한도 초과: {apap_24:.0f}mg / 허용 {apap_max24:.0f}mg")
-    else:
-        st.caption(f"APAP 24h 합계 {apap_24:.0f}mg / 허용 {apap_max24:.0f}mg")
-    if ibu_24 > ibu_max24:
-        st.error(f"IBU 24시간 한도 초과: {ibu_24:.0f}mg / 허용 {ibu_max24:.0f}mg")
-    else:
-        st.caption(f"IBU 24h 합계 {ibu_24:.0f}mg / 허용 {ibu_max24:.0f}mg")
-
-def risk_banner():
-    apap_cd_min = 240; ibu_cd_min = 360
-    apap_last = last_intake_minutes("APAP"); ibu_last = last_intake_minutes("IBU")
-    apap_over = total_last24_mg({"APAP"}) > min(4000.0, 60.0*(st.session_state.get("wt") or 0.0))
-    ibu_over  = total_last24_mg({"IBU"})  > min(1200.0, 30.0*(st.session_state.get("wt") or 0.0))
-    if (apap_last is not None and apap_last < apap_cd_min) or (ibu_last is not None and ibu_last < ibu_cd_min) or apap_over or ibu_over:
-        st.warning("🚨 최근 투약 관련 주의 필요: 쿨다운 미충족 또는 24시간 합계 초과 가능")
-
-
-# -------- Helpers --------
+# ---------- Helpers & Paths ----------
 def wkey(name:str)->str:
     who = st.session_state.get("key","guest")
     return f"{who}:{name}"
+
 def enko(en:str, ko:str)->str:
     return f"{en} / {ko}" if ko else en
 
-# -------- Inline defaults (no external files) --------
+def _now_kst_str():
+    return _dt.datetime.now().strftime("%Y-%m-%d %H:%M")
 
+SAVE_DIR = "/mnt/data/bloodmap_graph"
+CARE_DIR = "/mnt/data/care_log"
+PROF_DIR = "/mnt/data/profile"
+MET_DIR  = "/mnt/data/metrics"
+os.makedirs(SAVE_DIR, exist_ok=True)
+os.makedirs(CARE_DIR, exist_ok=True)
+os.makedirs(PROF_DIR, exist_ok=True)
+os.makedirs(MET_DIR,  exist_ok=True)
+
+# ---------- Sidebar (프로필 + PIN + 방문자 통계 + 단위 가드) ----------
+with st.sidebar:
+    st.header("프로필")
+    st.session_state["key"] = st.text_input("별명#PIN 키", value=st.session_state.get("key","guest"), key=wkey("user_key"))
+    uid = st.session_state["key"].strip() or "guest"
+    st.caption("별명은 저장/CSV 경로 키로 쓰입니다.")
+
+    # PIN 잠금
+    pin_path = os.path.join(PROF_DIR, f"{uid}.pin")
+    pin_set = os.path.exists(pin_path)
+    with st.expander("🔒 PIN 잠금", expanded=False):
+        if not pin_set:
+            new_pin = st.text_input("새 PIN (4~6자리)", type="password", key=wkey("setpin"))
+            if st.button("PIN 설정", key=wkey("btn_setpin")):
+                if new_pin and new_pin.isdigit() and 4 <= len(new_pin) <= 6:
+                    h = hashlib.sha256(new_pin.encode()).hexdigest()
+                    json.dump({"hash":h}, open(pin_path,"w"))
+                    st.success("PIN 설정 완료")
+                else:
+                    st.error("4~6자리 숫자만 허용")
+            st.caption("※ PIN 미설정 상태에서는 가드 없이 사용됩니다.")
+            st.session_state["pin_ok"] = True  # 미설정 시 기본 허용
+        else:
+            chk_pin = st.text_input("PIN 확인", type="password", key=wkey("chkpin"))
+            ok = False
+            try:
+                saved = json.load(open(pin_path,"r")).get("hash","")
+                ok = (hashlib.sha256(chk_pin.encode()).hexdigest()==saved)
+            except Exception:
+                pass
+            st.session_state["pin_ok"] = ok
+            st.caption("잠금 해제 상태: " + ("✅" if ok else "🔒"))
+
+    # 단위 가드 토글
+    st.subheader("단위 가드")
+    unit_cr = st.selectbox("Cr 입력 단위", ["mg/dL","μmol/L"], key=wkey("unit_cr"))
+    st.caption("※ μmol/L 입력 시 자동으로 mg/dL로 변환되어 계산됩니다. (mg/dL = μmol/L ÷ 88.4)")
+
+    # 방문자 통계
+    met_path = os.path.join(MET_DIR, "visits.json")
+    try:
+        D = json.load(open(met_path,"r",encoding="utf-8"))
+    except Exception:
+        D = {"unique":[], "visits":[]}
+    if uid not in D["unique"]:
+        D["unique"].append(uid)
+    D["visits"].append({"uid": uid, "ts": int(time.time())})
+    json.dump(D, open(met_path,"w",encoding="utf-8"), ensure_ascii=False)
+    today = _dt.datetime.now().strftime("%Y-%m-%d")
+    today_count = sum(1 for v in D["visits"] if _dt.datetime.fromtimestamp(v["ts"]).strftime("%Y-%m-%d")==today)
+    st.caption(f"👥 오늘: {today_count} · 누적 고유: {len(D['unique'])} · 총 방문: {len(D['visits'])}")
+
+# ---------- Groups / Chemo ----------
 GROUPS = {
-    "🩸 혈액암 (Leukemia/MDS/MPN)": [
-        ("ALL (B/T)", "급성 림프모구 백혈병"),
-        ("AML", "급성 골수성 백혈병"),
-        ("APL", "급성 전골수성 백혈병"),
-        ("CML", "만성 골수성 백혈병"),
-        ("CLL", "만성 림프구성 백혈병"),
-        ("Hairy Cell Leukemia", "털세포 백혈병"),
-        ("MDS", "골수형성이상증후군"),
-        ("MPN (PV/ET/PMF)", "골수증식성 종양"),
+    "🩸 혈액암 (Leukemia)": [
+        ("Acute Lymphoblastic Leukemia (ALL)", "급성 림프모구 백혈병"),
+        ("Acute Myeloid Leukemia (AML)", "급성 골수성 백혈병"),
+        ("Acute Promyelocytic Leukemia (APL)", "급성 전골수성 백혈병"),
+        ("Chronic Myeloid Leukemia (CML)", "만성 골수성 백혈병"),
     ],
     "🧬 림프종 (Lymphoma)": [
-        ("DLBCL", "미만성 거대 B세포 림프종"),
-        ("FL", "여포성 림프종"),
-        ("MCL", "외투세포 림프종"),
-        ("MZL", "변연부 림프종"),
-        ("Burkitt", "버킷 림프종"),
-        ("Hodgkin", "호지킨 림프종"),
-        ("PTCL/NOS", "말초 T세포 림프종"),
-        ("ALCL", "역형성 대세포 림프종"),
-        ("NK/T", "NK/T 세포 림프종"),
-        ("Primary CNS Lymphoma", "원발성 CNS 림프종"),
-        ("Waldenström", "월덴스트롬 거대글로불린혈증")
+        ("Hodgkin Lymphoma", "호지킨 림프종"),
+        ("Diffuse Large B-cell Lymphoma (DLBCL)", "미만성 거대 B세포 림프종"),
+        ("Burkitt Lymphoma", "버킷 림프종"),
+        ("T-cell Lymphoma", "T세포 림프종"),
     ],
-    "🧠 고형암 (Solid Tumors)": [
-        ("Breast", "유방암"),
-        ("NSCLC", "폐암-비소세포"),
-        ("SCLC", "폐암-소세포"),
-        ("Colorectal", "대장암"),
-        ("Gastric", "위암"),
-        ("Pancreas", "췌장암"),
-        ("HCC", "간세포암"),
-        ("Cholangiocarcinoma", "담관암"),
-        ("Biliary", "담도암"),
-        ("Esophageal", "식도암"),
-        ("Head & Neck", "두경부암"),
-        ("Thyroid", "갑상선암"),
-        ("RCC", "신장암"),
-        ("Urothelial/Bladder", "요로상피/방광암"),
-        ("Prostate", "전립선암"),
-        ("Ovary", "난소암"),
-        ("Cervix", "자궁경부암"),
-        ("Endometrium", "자궁내막암"),
-        ("Testicular GCT", "고환 생식세포종양"),
-        ("NET", "신경내분비종양"),
-        ("Melanoma", "흑색종"),
-        ("Merkel", "메르켈세포암")
+    "🏥 고형암 (Solid Tumors)": [
+        ("Neuroblastoma", "신경아세포종"),
+        ("Wilms Tumor (Nephroblastoma)", "윌름스 종양"),
+        ("Hepatoblastoma", "간모세포종"),
+        ("Medulloblastoma", "수모세포종"),
+        ("Retinoblastoma", "망막아세포종"),
     ],
     "🦴 육종 (Sarcoma)": [
-        ("UPS", "미분화 다형성 육종"),
-        ("LMS", "평활근육종"),
-        ("Liposarcoma", "지방육종"),
-        ("Synovial Sarcoma", "활막육종"),
-        ("Rhabdomyosarcoma", "횡문근육종"),
-        ("GIST", "위장관기질종양"),
-        ("Angiosarcoma", "혈관육종"),
-        ("Ewing", "유잉육종"),
         ("Osteosarcoma", "골육종"),
-        ("Chondrosarcoma", "연골육종"),
-        ("DFSP", "피부섬유육종")
-    ],
-    "🧩 희귀/소아": [
-        ("Wilms", "윌름스 종양"),
-        ("Neuroblastoma", "신경모세포종"),
-        ("Medulloblastoma", "수모세포종"),
-        ("Ependymoma", "상의세포종"),
-        ("Retinoblastoma", "망막모세포종"),
-        ("Hepatoblastoma", "간모세포종"),
-        ("LCH", "랜게르한스세포 조직구증"),
-        ("JMML", "소아 골수단핵구성 백혈병")
+        ("Ewing Sarcoma", "유잉 육종"),
+        ("Rhabdomyosarcoma", "횡문근육종"),
+        ("Synovial Sarcoma", "윤활막육종"),
     ],
 }
 CHEMO_MAP = {
-    "Acute Lymphoblastic Leukemia (ALL)": [
-        "6-Mercaptopurine (메르캅토퓨린)","Methotrexate (메토트렉세이트)","Cytarabine/Ara-C (시타라빈)","Vincristine (빈크리스틴)"],
-    "Acute Promyelocytic Leukemia (APL)": [
-        "ATRA (트레티노인/베사노이드)","Arsenic Trioxide (아르세닉 트리옥사이드)","MTX (메토트렉세이트)","6-MP (메르캅토퓨린)"],
-    "Acute Myeloid Leukemia (AML)": [
-        "Ara-C (시타라빈)","Daunorubicin (다우노루비신)","Idarubicin (이다루비신)"],
-    "Chronic Myeloid Leukemia (CML)": [
-        "Imatinib (이마티닙)","Dasatinib (다사티닙)","Nilotinib (닐로티닙)"],
-    "Diffuse Large B-cell Lymphoma (DLBCL)": ["R-CHOP","R-EPOCH","Polatuzumab combos"],
-    "Burkitt Lymphoma": ["CODOX-M/IVAC"],
-    "Hodgkin Lymphoma": ["ABVD"],
-    "Wilms Tumor": ["Vincristine","Dactinomycin","Doxorubicin"],
+    "Acute Lymphoblastic Leukemia (ALL)": ["6-Mercaptopurine (6-MP)","Methotrexate (MTX)","Prednisone","Vincristine"],
+    "Acute Myeloid Leukemia (AML)": ["Cytarabine (Ara-C)","Daunorubicin","Idarubicin","Etoposide"],
+    "Acute Promyelocytic Leukemia (APL)": ["ATRA (Tretinoin, 베사노이드)","Arsenic Trioxide","MTX","6-MP"],
+    "Chronic Myeloid Leukemia (CML)": ["Imatinib","Dasatinib","Nilotinib"],
     "Neuroblastoma": ["Cyclophosphamide","Topotecan","Cisplatin","Etoposide"],
+    "Wilms Tumor (Nephroblastoma)": ["Vincristine","Dactinomycin","Doxorubicin"],
     "Osteosarcoma": ["MAP"], "Ewing Sarcoma": ["VDC/IE"],
-    "LCH": ["Vinblastine","Prednisone"], "JMML": ["Azacitidine","SCT"],
+    "Hodgkin Lymphoma": ["ABVD"], "Diffuse Large B-cell Lymphoma (DLBCL)": ["R-CHOP"],
 }
 
-# -------- Sidebar (always visible) --------
-with st.sidebar:
-    st.header("프로필")
-    st.session_state["key"] = st.text_input("별명#PIN", value=st.session_state.get("key","guest"), key=wkey("user_key"))
-    st.caption("좌측 프로필은 저장/CSV 경로 키로 쓰입니다.")
-
-# -------- Tabs --------
-t_home, t_labs, t_dx, t_chemo, t_special, t_peds, t_care, t_report = st.tabs(
-    ["🏠 홈","🧪 피수치 입력","🧬 암 선택","💊 항암제","🔬 특수검사","👶 소아","🩺 케어로그","📄 보고서"]
-
+# ---------- Tabs ----------
+t_home, t_labs, t_dx, t_chemo, t_special, t_peds, t_import, t_report = st.tabs(
+    ["🏠 홈","🧪 피수치 입력","🧬 암 선택","💊 항암제/해열제","🔬 특수검사","🧒 소아 추정","📥 CSV/엑셀","📄 보고서"]
 )
 
 with t_home:
-    # Safety banner (latest values)
-    latest_lab = st.session_state.get("lab_rows", [])[-1] if st.session_state.get("lab_rows") else {}
-    alerts = eval_safety(latest_lab, st.session_state.get("care_log", []))
-    if alerts:
-        for a in alerts:
-            if a["level"]=="danger":
-                st.error("🔴 " + a["msg"])
-            else:
-                st.warning("🟠 " + a["msg"])
+    st.info("각 탭에 기본 입력창이 항상 표시됩니다. 외부 파일 없어도 작동합니다.")
 
-
-    # 🧭 모드 선택 (화면 단순화)
-    mode = st.radio("모드 선택", ["성인(일반)", "소아"], key=wkey("home_mode"), horizontal=True)
-    st.session_state["mode"] = "peds" if mode == "소아" else "adult"
-    if st.session_state["mode"] == "adult":
-        st.caption("간단 모드: 여기서 암을 선택하면 다른 탭도 해당 선택에 맞춰 요약만 보여줘요.")
-        adult_list = _flatten_groups(GROUPS)
-        sel = st.selectbox("암 선택 (성인)", ["(선택)"] + adult_list, key=wkey("home_adult_dx"))
-        if sel and sel != "(선택)":
-            code = sel.split(" · ")[0]
-            st.session_state["dx"] = code
-            st.success(f"진단 선택됨: {sel} — 보고서/요약에 반영됩니다.")
-    else:
-        st.caption("소아 모드: 소아 패널을 간결하게 사용합니다. (상세는 '👶 소아' 탭)")
-        disease = st.selectbox("소아 질환(의심)", ["", "독감", "RSV", "상기도염", "아데노", "마이코", "수족구", "편도염", "코로나", "중이염"], index=0, key=wkey("home_peds_dx"))
-        if disease:
-            st.session_state["dx"] = f"Peds-{disease}"
-            st.success(f"소아 질환 선택됨: {disease} — 보고서/요약에 반영됩니다.")
-
-# 🧭 모드 선택 (화면 단순화)
-
+# ---------- Labs + FN/전해질 배너 ----------
 with t_labs:
-    # 모드 가드
-    if st.session_state.get('mode','adult') != 'adult':
-        st.info('소아 모드에서는 피수치 입력을 간소화합니다. 홈에서 성인 모드로 전환하면 전체 항목이 표시됩니다.')
-        st.stop()
+    st.subheader("피수치 입력")
+    c1,c2,c3,c4,c5 = st.columns(5)
+    with c1: sex = st.selectbox("성별", ["여","남"], key=wkey("sex"))
+    with c2: age = st.number_input("나이(세)", 1, 110, 40, key=wkey("age"))
+    with c3: wt  = st.number_input("체중(kg)", 0.0, 300.0, 0.0, 0.5, key=wkey("wt"))
 
-    st.subheader("🧪 피수치 입력")
+    if st.session_state.get(wkey("unit_cr")) == "μmol/L":
+        cr_umol = st.number_input("Cr (μmol/L)", 0.0, 1768.0, 70.0, 1.0, key=wkey("cr_umol"))
+        cr = round(cr_umol / 88.4, 3)
+        st.caption(f"자동 변환 → Cr {cr} mg/dL")
+    else:
+        cr  = st.number_input("Cr (mg/dL)", 0.0, 20.0, 0.8, 0.1, key=wkey("cr_mgdl"))
 
-    col1, col2, col3, col4, col5 = st.columns(5)
-    with col1: sex = st.selectbox("성별", ["여","남"], key=wkey("sex"))
-    with col2: age = st.number_input("나이(세)", 1, 110, 40, key=wkey("age"))
-    with col3: wt  = st.number_input("체중(kg)", 0.0, 300.0, 0.0, 0.5, key=wkey("wt"))
-    with col4: cr  = st.number_input("Cr (mg/dL)", 0.0, 20.0, 0.8, 0.1, key=wkey("cr"))
-    with col5: day = st.date_input("측정일", value=_dt.date.today(), key=wkey("date"))
+    with c5: day = st.date_input("측정일", value=_dt.date.today(), key=wkey("date"))
+    cNa,cK,cANC = st.columns(3)
+    with cNa: Na = st.number_input("Na (mEq/L)", 100.0, 180.0, 140.0, 0.1, key=wkey("Na"))
+    with cK:  K  = st.number_input("K (mEq/L)", 2.0, 10.0, 4.0, 0.1, key=wkey("K"))
+    with cANC: ANC = st.number_input("ANC (절대호중구, /µL)", 0, 25000, 1500, key=wkey("ANC"))
 
-    # eGFR (CKD-EPI 2009)
-    def egfr_2009(cr_mgdl:float, age:int, sex:str):
-        sex_f = (sex=="여"); k = 0.7 if sex_f else 0.9; a = -0.329 if sex_f else -0.411
-        mn = min(cr_mgdl/k,1); mx = max(cr_mgdl/k,1); sex_fac = 1.018 if sex_f else 1.0
-        return round(141*(mn**a)*(mx**-1.209)*(0.993**age)*sex_fac,1)
-    egfr = egfr_2009(cr, int(age), sex)
-    st.metric("eGFR (CKD-EPI 2009)", f"{egfr} mL/min/1.73㎡")
+    # eGFR
+    is_peds = int(age) < 18
+    if is_peds:
+        ht = st.number_input("키(cm)", 40.0, 220.0, 120.0, 0.5, key=wkey("height"))
+        egfr = egfr_schwartz_peds(cr, float(ht))
+        st.metric("eGFR (Schwartz, 소아)", f"{egfr} mL/min/1.73㎡")
+    else:
+        egfr = egfr_ckd_epi_2021(cr, int(age), sex == "여")
+        st.metric("eGFR (CKD-EPI 2021)", f"{egfr} mL/min/1.73㎡")
 
-    # 핵심 수치 입력 (WBC부터 순서 고정, 0.00 포맷)
-    r1a,r1b,r1c,r1d,r1e,r1f,r1g,r1h = st.columns(8)
-    with r1a: wbc = st.number_input("WBC (10^3/µL)", 0.0, 500.0, 0.0, 0.01, format="%.2f", key=wkey("wbc"))
-    with r1b: hb  = st.number_input("Hb (g/dL)", 0.0, 25.0, 0.0, 0.01, format="%.2f", key=wkey("hb"))
-    with r1c: plt = st.number_input("PLT (10^3/µL)", 0.0, 1000.0, 0.0, 0.01, format="%.2f", key=wkey("plt"))
-    with r1d: anc = st.number_input("ANC (/µL)", 0.0, 500000.0, 0.0, 1.0, format="%.2f", key=wkey("anc"))
-    with r1e: ca  = st.number_input("Ca (mg/dL)", 0.0, 20.0, 0.0, 0.01, format="%.2f", key=wkey("ca"))
-    with r1f: p   = st.number_input("P (mg/dL)", 0.0, 20.0, 0.0, 0.01, format="%.2f", key=wkey("p"))
-    with r1g: na  = st.number_input("Na (mmol/L)", 0.0, 200.0, 0.0, 0.01, format="%.2f", key=wkey("na"))
-    with r1h: k   = st.number_input("K (mmol/L)", 0.0, 10.0, 0.0, 0.01, format="%.2f", key=wkey("k"))
-
-    r2a,r2b,r2c,r2d,r2e,r2f,r2g,r2h = st.columns(8)
-    with r2a: alb = st.number_input("Albumin (g/dL)", 0.0, 6.0, 0.0, 0.01, format="%.2f", key=wkey("alb"))
-    with r2b: glu = st.number_input("Glu (mg/dL)", 0.0, 1000.0, 0.0, 0.01, format="%.2f", key=wkey("glu"))
-    with r2c: tp  = st.number_input("T.P (g/dL)", 0.0, 12.0, 0.0, 0.01, format="%.2f", key=wkey("tp"))
-    with r2d: ast_v = st.number_input("AST (U/L)", 0.0, 5000.0, 0.0, 1.0, format="%.2f", key=wkey("ast"))
-    with r2e: alp = st.number_input("ALP (U/L)", 0.0, 5000.0, 0.0, 1.0, format="%.2f", key=wkey("alp"))
-    with r2f: crp = st.number_input("CRP (mg/dL)", 0.0, 50.0, 0.0, 0.01, format="%.2f", key=wkey("crp"))
-    with r2g: ua  = st.number_input("UA (mg/dL)", 0.0, 30.0, 0.0, 0.01, format="%.2f", key=wkey("ua"))
-    with r2h: tb  = st.number_input("T.b (mg/dL)", 0.0, 30.0, 0.0, 0.01, format="%.2f", key=wkey("tb"))
-
-    # 정상범위 안내
-    st.caption("정상범위 예시 — WBC 4.0–10.0k/µL, Hb 12–16 g/dL, PLT 150–400k/µL, Na 135–145, K 3.5–5.1, Ca 8.5–10.5, Alb 3.5–5.2, AST 0–40 U/L, ALP 40–130 U/L, CRP 0–0.5 mg/dL, UA 3.5–7.2 mg/dL, T.b 0.2–1.2 mg/dL")
-
-    # CSV 불러오기 + 행 추가
+    # Maintain rows
     st.session_state.setdefault("lab_rows", [])
-    up = st.file_uploader("파일에서 불러오기(CSV)", type=["csv"], key=wkey("csv"))
-    if up is not None:
-        import pandas as pd, io
-        try:
-            df = pd.read_csv(io.BytesIO(up.read()))
-            st.session_state["lab_rows"] = df.to_dict(orient="records")
-            st.success("CSV 로드 완료")
-        except Exception:
-            st.warning("CSV 파싱 실패 — 컬럼 헤더 확인")
-
     if st.button("➕ 현재 값 추가", key=wkey("add_row")):
         st.session_state["lab_rows"].append({
             "date": str(day),
             "sex": sex, "age": int(age), "weight(kg)": wt,
-            "Cr(mg/dL)": cr, "eGFR": egfr,
-            "WBC": wbc, "Hb": hb, "PLT": plt, "ANC": anc,
-            "Ca": ca, "P": p, "Na": na, "K": k,
-            "Alb": alb, "Glu": glu, "T.P": tp, "AST": ast_v, "ALP": alp,
-            "CRP": crp, "UA": ua, "T.b": tb
+            "Cr(mg/dL)": cr, "eGFR": egfr, "Na": Na, "K": K, "ANC": int(ANC)
         })
+        df = pd.DataFrame(st.session_state["lab_rows"]).sort_values("date")
+        csv_path = os.path.join(SAVE_DIR, f"{st.session_state.get('key','guest')}.labs.csv")
+        df.to_csv(csv_path, index=False)
 
     rows = st.session_state["lab_rows"]
-
-rows = st.session_state["lab_rows"]
-if rows:
-    import pandas as pd
-    # 그래프 보기
-    df = pd.DataFrame(rows)
-    if not df.empty and "date" in df.columns:
-        try:
-            df["date"] = pd.to_datetime(df["date"])
-        except Exception:
-            pass
-        cols = ["WBC","Hb","PLT","ANC","Na","K","Ca","P","Alb","Glu","T.P","AST","ALP","CRP","UA","T.b"]
-        yopt = st.selectbox("그래프로 보기 (항목 선택)", [c for c in cols if c in df.columns], key=wkey("labs_plot_sel"))
-        if yopt:
-            plot_df = df[["date", yopt]].set_index("date").sort_index()
-            st.line_chart(plot_df, height=220)
+    last_egfr = rows[-1].get("eGFR") if rows else None
+    if rows:
+        df = pd.DataFrame(rows)
+        if len(df) >= 2:
+            d_egfr = float(df["eGFR"].iloc[-1]) - float(df["eGFR"].iloc[-2])
+            st.caption(f"Δ eGFR: {d_egfr:+.1f}")
+            if "Cr(mg/dL)" in df.columns:
+                d_cr = float(df["Cr(mg/dL)"].iloc[-1]) - float(df["Cr(mg/dL)"].iloc[-2])
+                st.caption(f"Δ Cr: {d_cr:+.2f} mg/dL")
         st.write("최근 입력:")
         for r in rows[-5:]:
-            line = []
-            for key in ["WBC","Hb","PLT","ANC","Na","K","Ca","P","Alb","Glu","T.P","AST","ALP","CRP","UA","T.b","Cr(mg/dL)"]:
-                if key in r:
-                    line.append(f"{key}: {lab_badge(key, r.get(key))}")
-            st.write(" · ".join(line))
-        warns = lab_warnings(rows[-1]) if rows else []
-        if warns:
-            st.warning("\n".join(["🚨 피수치 경고"] + [f"- {w}" for w in warns]))
+            st.write(r)
 
+    # 🚨 FN/전해질 응급 배너 (+ 수동 발열 인정)
+    show_fn = False
+    manual_fever = st.checkbox("최근 24h 수동 발열 입력 인정(≥38.0℃)", key=wkey("mfchk"))
+    if manual_fever:
+        tmax = st.number_input("최근 24h 최고 체온(℃)", 35.0, 42.0, 37.0, 0.1, key=wkey("mfval"))
+        if tmax >= 38.0 and ANC < 500: show_fn = True
+    else:
+        # care_log 확인
+        try:
+            clog = json.load(open(os.path.join(CARE_DIR, f"{uid}.json"),"r",encoding="utf-8"))
+            now = time.time()
+            recent_fever = any((x.get("kind")=="fever" and (now - x.get("ts",0) <= 24*3600)) for x in clog)
+            if recent_fever and ANC < 500: show_fn = True
+        except Exception:
+            pass
 
+    if show_fn:
+        st.error("🚨 지난 24h 발열 + ANC<500 → **FN 의심: 즉시 진료 권고**")
+
+    if Na < 125 or Na > 155 or K >= 6.0:
+        st.error("🚨 전해질 위기치: Na<125 또는 >155, K≥6.0 → **즉시 평가 권고**")
+
+# ---------- Diagnosis ----------
+with t_dx:
+    st.subheader("암 선택")
+    grp_tabs = st.tabs(list(GROUPS.keys()))
+    for i,(g, lst) in enumerate(GROUPS.items()):
+        with grp_tabs[i]:
+            labels = [enko(en,ko) for en,ko in lst]
+            sel = st.selectbox("진단명을 선택하세요", labels, key=wkey(f"dx_sel_{i}"))
+            en_dx, ko_dx = lst[labels.index(sel)]
+            if st.button("선택 저장", key=wkey(f"dx_save_{i}")):
+                st.session_state["dx_en"] = en_dx
+                st.session_state["dx_ko"] = ko_dx
+                st.success(f"저장됨: {enko(en_dx, ko_dx)}")
+
+# ---------- Chemo + Antipyretic Guardrails (APAP/IBU) ----------
+def _care_path(uid:str)->str:
+    return os.path.join(CARE_DIR, f"{uid}.json")
+
+def _load_log(uid:str):
+    p = _care_path(uid)
+    try: return json.load(open(p,"r",encoding="utf-8"))
+    except: return []
+
+def _save_log(uid:str, L):
+    json.dump(L, open(_care_path(uid),"w",encoding="utf-8"), ensure_ascii=False)
+
+def _ics_event(summary:str, dt: _dt.datetime, duration_min:int=0)->str:
+    # Minimal single-event ICS
+    dtstart = dt.strftime("%Y%m%dT%H%M%S")
+    ics = [
+        "BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Bloodmap//KST//KR","CALSCALE:GREGORIAN",
+        "BEGIN:VEVENT",
+        f"UID:{int(time.time())}@bloodmap",
+        f"DTSTAMP:{dtstart}",
+        f"DTSTART:{dtstart}",
+        f"SUMMARY:{summary}",
+        "END:VEVENT","END:VCALENDAR"
+    ]
+    return "\r\n".join(ics)
+
+with t_chemo:
+    st.subheader("항암제 및 해열제")
+    en_dx = st.session_state.get("dx_en")
+    ko_dx = st.session_state.get("dx_ko","")
+    if not en_dx:
+        st.info("먼저 '암 선택'에서 저장하세요.")
+    else:
+        st.write(f"현재 진단: **{enko(en_dx, ko_dx)}**")
+        suggestions = CHEMO_MAP.get(en_dx, CHEMO_MAP.get(ko_dx, []))
+        picked = st.multiselect("항암제를 선택/추가", suggestions, default=suggestions, key=wkey("chemo_ms"))
+        extra = st.text_input("추가 항암제(쉼표 구분)", key=wkey("chemo_extra"))
+        if extra.strip():
+            more = [x.strip() for x in extra.split(",") if x.strip()]
+            seen, merged = set(), []
+            for x in picked + more:
+                if x not in seen: seen.add(x); merged.append(x)
+            picked = merged
+        if st.button("항암제 저장", key=wkey("chemo_save")):
+            st.session_state["chemo_list"] = picked
+            st.success("저장됨. '보고서'에서 확인")
+
+    st.markdown("---")
+    st.subheader("해열제 가드레일(APAP/IBU)")
+    uid = st.session_state.get("key","guest").strip() or "guest"
+
+    # PIN 보호: PIN 설정되어 있고 잠금 해제 안 됐다면 차단
+    pin_path = os.path.join(PROF_DIR, f"{uid}.pin")
+    if os.path.exists(pin_path) and not st.session_state.get("pin_ok", False):
+        st.warning("🔒 PIN 해제 필요: 해열제 기록·케어로그 접근이 잠겨 있습니다.")
+    else:
+        log = _load_log(uid)
+        now = time.time()
+        def total_24h(drug):
+            mg = 0.0
+            for x in log:
+                if x.get("drug")==drug and (now - x.get("ts",0) <= 24*3600):
+                    mg += float(x.get("dose_mg", 0))
+            return mg
+        def last_ts(drug):
+            ts = 0
+            for x in log:
+                if x.get("drug")==drug:
+                    ts = max(ts, x.get("ts",0))
+            return ts
+
+        # 입력 보조(체중/시럽 농도)
+        cc1,cc2,cc3 = st.columns(3)
+        with cc1: syrup = st.selectbox("시럽 농도", ["없음/정제","APAP 160 mg/5mL","IBU 100 mg/5mL"], key=wkey("syrup"))
+        with cc2: dose_ml = st.number_input("투여량(mL)", 0.0, 100.0, 0.0, 0.5, key=wkey("dose_ml"))
+        with cc3: dose_mg_manual = st.number_input("직접 입력: 용량(mg)", 0.0, 4000.0, 0.0, 10.0, key=wkey("dose_mg_manual"))
+        def calc_mg(drug):
+            if dose_mg_manual>0: return float(dose_mg_manual)
+            if "160 mg/5mL" in syrup and drug=="APAP": return dose_ml * (160.0/5.0)
+            if "100 mg/5mL" in syrup and drug=="IBU":  return dose_ml * (100.0/5.0)
+            return 0.0
+
+        # 규칙
+        wt = st.session_state.get("weight(kg)", 0.0) or st.session_state.get(wkey("wt"), 0.0)
+        try: wt = float(wt)
+        except: wt = 0.0
+        apap_daily_max = max(75.0*wt, 0.0)
+        ibu_daily_max  = max(30.0*wt, 0.0)
+        if wt >= 40:
+            apap_daily_max = min(apap_daily_max, 4000.0)
+            ibu_daily_max  = min(ibu_daily_max, 1200.0)
+
+        cool_apap = 4*3600
+        cool_ibu  = 6*3600
+        last_apap = last_ts("APAP")
+        last_ibu  = last_ts("IBU")
+        can_apap  = (time.time() - last_apap) >= cool_apap
+        can_ibu   = (time.time() - last_ibu) >= cool_ibu
+
+        # PLT / eGFR
+        plt_input = st.number_input("최근 혈소판(PLT, x10^3/µL)", 0, 1000, value=200, key=wkey("plt_v"))
+        last_egfr = None
+        if st.session_state.get("lab_rows"):
+            try: last_egfr = st.session_state["lab_rows"][-1].get("eGFR")
+            except: pass
+        if last_egfr is None: last_egfr = 100.0
+        if last_egfr < 60:
+            st.warning("eGFR<60: IBU 사용 시 **신장 기능 주의**")
+
+        # 24h 요약 표시
+        colsum1, colsum2 = st.columns(2)
+        with colsum1:
+            st.info(f"APAP 24h 합계: {total_24h('APAP'):.0f} mg / 한도 {apap_daily_max:.0f} mg")
+        with colsum2:
+            st.info(f"IBU  24h 합계: {total_24h('IBU'):.0f} mg / 한도 {ibu_daily_max:.0f} mg")
+
+        # 버튼 + 기록
+        colA, colB = st.columns(2)
+        with colA:
+            dose_apap = calc_mg("APAP")
+            disabledA = (dose_apap<=0 or not can_apap or (total_24h('APAP')+dose_apap>apap_daily_max))
+            clickedA = st.button(f"APAP 기록(+{dose_apap:.0f} mg)", key=wkey("btn_apap"), disabled=disabledA, help="쿨다운 4h, 24h 총량 한도 적용")
+            if clickedA:
+                if not can_apap: st.error("APAP 쿨다운 미충족(마지막 복용 후 4시간 필요)")
+                elif total_24h('APAP')+dose_apap>apap_daily_max: st.error("APAP 24시간 총량 초과 — 기록 차단")
+                else:
+                    log.append({"ts": time.time(), "kind":"antipyretic", "drug":"APAP", "dose_mg": dose_apap, "KST": _now_kst_str()})
+                    _save_log(uid, log)
+                    st.success("APAP 기록됨")
+        with colB:
+            dose_ibu = calc_mg("IBU")
+            plt_block = plt_input < 50
+            disabledB = (dose_ibu<=0 or not can_ibu or (total_24h('IBU')+dose_ibu>ibu_daily_max) or plt_block)
+            clickedB = st.button(f"IBU 기록(+{dose_ibu:.0f} mg)", key=wkey("btn_ibu"), disabled=disabledB, help="쿨다운 6h, 24h 총량, PLT<50k 차단")
+            if clickedB:
+                if plt_block: st.error("IBU 차단: PLT < 50k")
+                elif not can_ibu: st.error("IBU 쿨다운 미충족(마지막 복용 후 6시간 필요)")
+                elif total_24h('IBU')+dose_ibu>ibu_daily_max: st.error("IBU 24시간 총량 초과 — 기록 차단")
+                else:
+                    log.append({"ts": time.time(), "kind":"antipyretic", "drug":"IBU", "dose_mg": dose_ibu, "KST": _now_kst_str()})
+                    _save_log(uid, log)
+                    st.success("IBU 기록됨")
+
+        # 다음 복용 .ics 내보내기
+        next_apap = _dt.datetime.now() if last_apap==0 else _dt.datetime.fromtimestamp(last_apap) + _dt.timedelta(seconds=cool_apap)
+        next_ibu  = _dt.datetime.now() if last_ibu==0  else _dt.datetime.fromtimestamp(last_ibu)  + _dt.timedelta(seconds=cool_ibu)
+        apap_ics = _ics_event("다음 APAP 복용 가능", next_apap)
+        ibu_ics  = _ics_event("다음 IBU 복용 가능",  next_ibu)
+        st.download_button("📅 다음 APAP 복용 .ics", data=apap_ics.encode("utf-8"), file_name="next_APAP.ics", mime="text/calendar", key=wkey("ics_apap"))
+        st.download_button("📅 다음 IBU 복용 .ics",  data=ibu_ics.encode("utf-8"),  file_name="next_IBU.ics",  mime="text/calendar", key=wkey("ics_ibu"))
+
+# ---------- Special Tests ----------
+with t_special:
+    st.subheader("특수검사")
+    if STMOD and hasattr(STMOD, "special_tests_ui"):
+        lines = STMOD.special_tests_ui()
+        st.session_state["special_lines"] = lines
+    else:
+        st.warning("특수검사 모듈을 불러오지 못했습니다. (patched 또는 기본 모듈 확인)")
+
+# ---------- Peds Inference ----------
+with t_peds:
+    st.subheader("소아 질병 추정(간단 판별)")
+    colA, colB, colC, colD = st.columns(4)
+    with colA: d_cnt = st.number_input("설사 횟수(24h)", 0, 30, 0, key=wkey("p_dcnt"))
+    with colB: v_cnt2h = st.number_input("구토 횟수(2h)", 0, 20, 0, key=wkey("p_v2h"))
+    with colC: fever = st.number_input("최고 체온(℃)", 35.0, 42.0, 37.0, 0.1, key=wkey("p_fever"))
+    with colD: cough = st.selectbox("기침 정도", ["없음","약간","보통","심함"], key=wkey("p_cough"))
+    sore = st.selectbox("인후통", ["없음","약간","보통","심함"], key=wkey("p_throat"))
+    likely = None; notes = []
+    if d_cnt >= 4 and fever < 38.0 and cough in ("없음","약간","보통") and sore in ("없음","약간","보통"):
+        likely = "바이러스성 장염(로타/노로/아데노40/41 등) 우선"; notes.append("수분보충(ORS 10–20 mL/kg), 구토 시 5–10 mL q5min 권장")
+    elif fever >= 38.5 and (cough == "심함" or sore == "심함"): likely = "상기도염/편도염 가능"
+    elif v_cnt2h >= 3: likely = "구토성 위장염 가능"
+    if likely: st.success(f"우선 추정: **{likely}**"); [st.caption('• '+n) for n in notes]
+    else: st.info("입력값이 기준에 해당하지 않습니다. 추가 증상/경과를 확인하세요.")
+    st.caption("※ 이 해석은 참고용이며, 정확한 진단은 의료진의 판단에 따릅니다.")
+
+# ---------- CSV/엑셀 가져오기 (PIN 보호) ----------
+with t_import:
+    st.subheader("CSV/엑셀 가져오기 (PIN 보호)")
+    uid = st.session_state.get("key","guest").strip() or "guest"
+    if os.path.exists(os.path.join(PROF_DIR, f"{uid}.pin")) and not st.session_state.get("pin_ok", False):
+        st.warning("🔒 PIN 해제 필요: CSV/엑셀 병합이 잠겨 있습니다.")
+    else:
+        csv_path = os.path.join(SAVE_DIR, f"{uid}.labs.csv")
+        up = st.file_uploader("CSV 또는 XLSX 업로드", type=["csv","xlsx"], key=wkey("uploader"))
+        if up is not None:
+            try:
+                if up.name.lower().endswith(".xlsx"): dfu = pd.read_excel(up)
+                else: dfu = pd.read_csv(up)
+                st.write("미리보기:", dfu.head())
+                std_cols = ["date","sex","age","weight(kg)","Cr(mg/dL)","eGFR","Na","K","ANC","WBC","Hb","PLT","CRP"]
+                map_sel = {}
+                for c in std_cols:
+                    map_sel[c] = st.selectbox(f"매핑: {c}", ["(없음)"] + list(dfu.columns),
+                                              index=(list(dfu.columns).index(c)+1 if c in dfu.columns else 0),
+                                              key=wkey(f"map_{c}"))
+                if st.button("병합 저장", key=wkey("merge")):
+                    out = pd.read_csv(csv_path) if os.path.exists(csv_path) else pd.DataFrame(columns=std_cols)
+                    add = pd.DataFrame({k: (dfu[v] if v!="(없음)" else None) for k,v in map_sel.items()})
+                    merged = pd.concat([out, add], ignore_index=True)
+                    if "date" in merged.columns:
+                        merged["date"] = merged["date"].astype(str)
+                        merged = merged.sort_values("date")
+                    merged.to_csv(csv_path, index=False)
+                    st.success("병합 완료 — 그래프/Δ 즉시 반영됨")
+            except Exception as e:
+                st.error(f"가져오기 실패: {e}")
+
+# ---------- Report (ER PDF에 위험 배너/24h 해열제 요약 동시 반영) ----------
+with t_report:
+    st.subheader("보고서 (.md)")
+    dx = enko(st.session_state.get("dx_en",""), st.session_state.get("dx_ko",""))
+    meds = st.session_state.get("chemo_list", [])
+    rows = st.session_state.get("lab_rows", [])
+    spec_lines = st.session_state.get("special_lines", [])
+
+    # 24h antipyretic summary
+    uid = st.session_state.get("key","guest").strip() or "guest"
+    def _load_log(uid:str):
+        p = os.path.join(CARE_DIR, f"{uid}.json")
+        try: return json.load(open(p,"r",encoding="utf-8"))
+        except: return []
+    log = _load_log(uid)
+    now = time.time()
+    def total_24h(drug):
+        mg = 0.0
+        for x in log:
+            if x.get("drug")==drug and (now - x.get("ts",0) <= 24*3600):
+                mg += float(x.get("dose_mg", 0))
+        return mg
+
+    # 위험 배너 판정 재사용
+    Na = rows[-1].get("Na") if rows else None
+    K  = rows[-1].get("K")  if rows else None
+    ANC = rows[-1].get("ANC") if rows else None
+    fn_flag = False
+    try:
+        clog = json.load(open(os.path.join(CARE_DIR, f"{uid}.json"),"r",encoding="utf-8"))
+        recent_fever = any((x.get("kind")=="fever" and (now - x.get("ts",0) <= 24*3600)) for x in clog)
+        if recent_fever and (ANC is not None and ANC < 500):
+            fn_flag = True
+    except Exception:
+        pass
+    ele_flag = False
+    if Na is not None and (Na < 125 or Na > 155): ele_flag = True
+    if K  is not None and (K >= 6.0): ele_flag = True
+
+    lines = []
+    # 응급도
+    lines.append("## 🆘 증상 기반 응급도(피수치 없이)")
+    lines += [
+        "- 혈변/검은변, 초록 구토, 2시간 구토≥3회, 24시간 설사≥6회, 고열(≥39℃)은 **즉시 평가 권고**",
+        "- 일반 응급실 기준: 의식저하/경련/호흡곤란, 6h 무뇨·중증 탈수, 심한 복통/팽만/무기력"
+    ]
+
+    # 위험 배너(문서 반영)
+    if fn_flag: lines.append("\n> 🚨 **FN 의심**: 지난 24h 발열 + ANC<500 → 즉시 진료 권고")
+    if ele_flag: lines.append("\n> 🚨 **전해질 위기치**: Na<125/>155 또는 K≥6.0 → 즉시 평가 권고")
+
+    # 선택 약물 부작용 — 요약 + 상세
+    try:
+        from ui_results import collect_top_ae_alerts, render_adverse_effects
+        picks = st.session_state.get("chemo_list", [])
+        top_alerts = collect_top_ae_alerts(picks, db=None) or []
+        if top_alerts:
+            lines.append("")
+            lines.append("## 💊 선택 약물 부작용 — 중요 경고 요약")
+            for t in top_alerts: lines.append(f"- {t}")
+        if picks:
+            lines.append("")
+            lines.append("## 💊 선택 약물 부작용 — 상세")
+            detail_md = render_adverse_effects(picks, db=None) or ""
+            if detail_md: lines.append(detail_md)
+    except Exception:
+        pass
+
+    # 진단/항암제
+    lines.append("")
+    lines.append("## 진단/항암제")
+    lines.append(f"- 진단: {dx or '(미선택)'}")
+    if meds:
+        lines.append("- 항암제:")
+        for m in meds: lines.append(f"  - {m}")
+
+    # 최근 피수치
+    if rows:
+        head = ["date","sex","age","weight(kg)","Cr(mg/dL)","eGFR","Na","K","ANC"]
+        lines.append("")
+        lines.append("## 최근 피수치(최대 5행)")
+        lines.append("| " + " | ".join(head) + " |")
+        lines.append("|" + "|".join(["---"]*len(head)) + "|")
+        for r in rows[-5:]:
+            lines.append("| " + " | ".join(str(r.get(k,'')) for k in head) + " |")
+
+    # 24h 해열제 요약(문서 반영)
+    apap_sum = total_24h('APAP'); ibu_sum = total_24h('IBU')
+    lines.append("")
+    lines.append("## 최근 24h 해열제 요약")
+    lines.append(f"- APAP 합계: {apap_sum:.0f} mg")
+    lines.append(f"- IBU  합계: {ibu_sum:.0f} mg")
+
+    # 특수검사
+    if spec_lines:
+        lines.append("")
+        lines.append("## 특수검사 요약")
+        for ln in spec_lines:
+            lines.append("- " + ln if not ln.startswith("-") else ln)
+
+    lines.append("")
+    lines.append(f"_생성 시각: {_dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}_")
+    md = "\n".join(lines)
+    st.code(md, language="markdown")
+
+    # 다운로드
+    st.download_button("💾 보고서 .md 다운로드", data=md.encode("utf-8"),
+                       file_name="bloodmap_report.md", mime="text/markdown", key=wkey("dl_md"))
+    try:
+        from pdf_export import export_md_to_pdf
+        pdf_bytes = export_md_to_pdf(md)
+        st.download_button("🖨️ ER 원페이지 PDF", data=pdf_bytes,
+                           file_name="bloodmap_ER.pdf", mime="application/pdf", key=wkey("dl_pdf"))
+    except Exception:
+        pass
