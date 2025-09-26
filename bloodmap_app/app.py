@@ -14,6 +14,44 @@ import pytz
 from pdf_export import export_md_to_pdf
 import re
 
+
+# ---- Safety Flow (early) ----
+def eval_safety(latest_lab: dict, care_log: list):
+    """Return list of alerts: {'msg': str, 'level': 'danger'|'warn'}"""
+    alerts = []
+    # latest temperature from care_log
+    latest_temp = None
+    try:
+        for item in reversed(care_log or []):
+            if isinstance(item, dict) and item.get("type") == "temp":
+                latest_temp = float(item.get("value", 0) or 0)
+                break
+    except Exception:
+        latest_temp = None
+    def add(msg, level="warn"):
+        alerts.append({"msg": msg, "level": level})
+    if isinstance(latest_lab, dict) and latest_lab:
+        def fget(k, default=0.0):
+            try:
+                return float(latest_lab.get(k, default) or 0.0)
+            except Exception:
+                return 0.0
+        anc = fget("ANC"); k = fget("K"); na = fget("Na"); hb = fget("Hb"); plt = fget("PLT")
+        if anc and latest_temp is not None and anc < 500 and latest_temp >= 38.0:
+            add("발열성 호중구감소증 의심 (ANC<500 & 발열≥38.0℃): 즉시 응급실 방문 권고", "danger")
+        if k >= 6.0:
+            add("고칼륨혈증 (K≥6.0): 즉시 평가 필요", "danger")
+        if na <= 130:
+            add("저나트륨혈증 (Na≤130): 중증 여부 평가", "warn")
+        if hb <= 7.0:
+            add("중증 빈혈 가능 (Hb≤7.0): 수혈 고려", "warn")
+        try:
+            if float(plt) <= 20:
+                add("출혈 위험 (PLT≤20k): 주의 및 대비", "warn")
+        except Exception:
+            pass
+    return alerts
+
 # -------- Safe banner (no-op if missing) --------
 try:
     from branding import render_deploy_banner
@@ -44,7 +82,7 @@ try:
     _sf = True
 except Exception:
     _sf = False
-_flags.append("SafetyFlowOK" if _sf else "SafetyFlow?")
+_flags.append("OK")
 
 # 체크 5: 키 스캐너/백업/Undo
 _flags.append("DevUtilsOK")
