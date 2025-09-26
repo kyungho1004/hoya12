@@ -116,9 +116,6 @@ render_deploy_banner("https://bloodmap.streamlit.app/", "제작: Hoya/GPT · 자
 
 # ---- PIN Lock (sidebar) ----
 st.sidebar.subheader("🔒 PIN 잠금")
-if 'wkey' not in globals():
-    def wkey(name: str) -> str:
-        return f"key_{name}"
 
 # ---- Dev/Utils ----
 with st.sidebar.expander("🔧 개발/유틸", expanded=False):
