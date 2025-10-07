@@ -479,6 +479,29 @@ with t_report:
     else:
         lines.append("- (없음)")
     lines.append("")
+    # Full AE list
+    if meds:
+        lines.append("## 항암제 부작용(전체)")
+        try:
+            ae_map = _aggregate_all_aes(meds, DRUG_DB)
+        except Exception:
+            ae_map = {}
+        if ae_map:
+            for k, arr in ae_map.items():
+                try:
+                    from drug_db import display_label
+                    nm = display_label(k, DRUG_DB)
+                except Exception:
+                    nm = k
+                lines.append(f"- {nm}")
+                for ln in arr:
+                    lines.append(f"  - {ln}")
+            lines.append("")
+        else:
+            lines.append("## 항암제 부작용(전체)")
+            lines.append("- (DB에 상세 부작용 목록 없음)")
+            lines.append("")
+
     lines.append("## 피수치 (모든 항목)")
     all_labs = [("WBC","백혈구"),("Ca","칼슘"),("Glu","혈당"),("CRP","CRP"),
                 ("Hb","혈색소"),("P","인(Phosphorus)"),("T.P","총단백"),("Cr","크레아티닌"),
