@@ -475,6 +475,7 @@ with t_special:
     except Exception:
         st.error("특수검사 모듈을 불러오지 못했습니다.")
 
+
 # ====== REPORT ======
 with t_report:
     st.subheader("보고서 (.md/.txt/.pdf) — 모든 항목 포함")
@@ -508,6 +509,14 @@ with t_report:
     lines.append("# Bloodmap Report (Full)")
     lines.append(f"_생성 시각(KST): {_dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}_")
     lines.append("")
+    # --- Dedication ---
+    lines.append("> In memory of Eunseo, a little star now shining in the sky.")
+    lines.append("> This app is made with the hope that she is no longer in pain,")
+    lines.append("> and resting peacefully in a world free from all hardships.")
+    lines.append("")
+    lines.append("---")
+    lines.append("")
+
     lines.append("## 프로필")
     lines.append(f"- 키(별명#PIN): {key_id}")
     lines.append("")
