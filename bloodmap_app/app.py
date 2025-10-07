@@ -3,6 +3,14 @@
 import datetime as _dt
 import streamlit as st
 
+# PDF export support
+try:
+    from pdf_export import export_md_to_pdf
+except Exception:
+    def export_md_to_pdf(md_text: str) -> bytes:
+        return md_text.encode('utf-8')
+
+
 # -------- Safe banner (no-op if missing) --------
 try:
     from branding import render_deploy_banner
@@ -385,10 +393,11 @@ with t_peds:
 
 # ====== SPECIAL ======
 with t_special:
-    try:
-        from special_tests import special_tests_ui
-        lines = special_tests_ui()
-        st.subheader("특수검사 해석")
+        try:
+            from special_tests import special_tests_ui
+            lines = special_tests_ui()
+            st.session_state['special_interpretations'] = lines or []
+            st.subheader("특수검사 해석")
         if lines:
             for ln in lines: st.write("- " + ln)
         else:
@@ -429,12 +438,7 @@ with t_report:
         "oliguria": sym["소변량 급감"], "persistent_vomit": sym["지속 구토"], "petechiae": sym["점상출혈"],
     })
     # Special tests interpretation (best-effort)
-    spec_lines = []
-    try:
-        from special_tests import special_tests_ui
-        spec_lines = special_tests_ui() or []
-    except Exception:
-        spec_lines = []
+    spec_lines = st.session_state.get('special_interpretations', [])
 
     # Build report lines
     lines = []
