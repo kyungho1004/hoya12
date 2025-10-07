@@ -51,7 +51,7 @@ def _fav_list():
 
 def special_tests_ui() -> List[str]:
     lines: List[str] = []
-    with st.expander("🧪 특수검사 (선택 입력)", expanded=False):
+    with st.expander("🧪 특수검사 (선택 입력)", expanded=True):
         st.caption("정성검사는 +/++/+++ , 정량검사는 숫자만 입력. ★로 즐겨찾기 고정.")
         favs = _fav_list()
         if favs:
@@ -217,22 +217,12 @@ def special_tests_ui() -> List[str]:
                 with h4: troT = _num(st.text_input("Troponin T (트로포닌 T, ng/mL)", placeholder="예: 0.005"))
                 ulnI = _num(st.text_input("ULN for Troponin I (정상상한, ng/mL)", placeholder="예: 0.04"))
                 ulnT = _num(st.text_input("ULN for Troponin T (정상상한, ng/mL)", placeholder="예: 0.014"))
-                # [NEW] Myoglobin inputs
-                myo = _num(st.text_input("Myoglobin (마이오글로빈, ng/mL)", placeholder="예: 65"))
-                myo_uln = _num(st.text_input("ULN for Myoglobin (정상상한, ng/mL)", placeholder="예: 72"))
                 if ck is not None:
                     if ck >= 5000: _emit(lines, "risk", f"CK {ck} → 횡문근융해 의심(즉시 상담)")
                     elif ck >= 1000: _emit(lines, "warn", f"CK {ck} → 근손상/운동/약물 영향 가능")
                 if ckmb is not None and ckmb >= 5: _emit(lines, "warn", f"CK-MB {ckmb} ≥ 5 → 심근 손상 지표 상승 가능")
                 if troI is not None and troI >= (ulnI if ulnI is not None else 0.04): _emit(lines, "risk", f"Troponin I {troI} ≥ ULN → 심근 손상 의심")
                 if troT is not None and troT >= (ulnT if ulnT is not None else 0.014): _emit(lines, "risk", f"Troponin T {troT} ≥ ULN → 심근 손상 의심")
-                # [NEW] Myoglobin interpretation
-                if myo is not None:
-                    thr = myo_uln if (myo_uln is not None and myo_uln > 0) else 72.0
-                    if myo >= 500:
-                        _emit(lines, "risk", f"Myoglobin {myo} ≥ 500 → 심한 근손상/횡문근융해 가능(즉시 평가)")
-                    elif myo >= thr:
-                        _emit(lines, "warn", f"Myoglobin {myo} ≥ ULN({thr}) → 근손상/초기 심근 손상 가능")
 
             elif sec_id == "hepatobiliary":
                 a1,a2 = st.columns(2)
