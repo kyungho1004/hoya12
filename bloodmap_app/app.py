@@ -1,6 +1,8 @@
 
-# app.py — Bloodmap (v7.11: syntax-clean consolidated build)
 import datetime as _dt
+import os, json, sys
+from pathlib import Path
+import importlib.util
 import streamlit as st
 
 # PDF export support
@@ -58,7 +60,6 @@ except Exception:
     def acetaminophen_ml(*a, **k): return (0.0, 0.0)
     def ibuprofen_ml(*a, **k): return (0.0, 0.0)
 
-
 # -------- Page config --------
 st.set_page_config(page_title="Bloodmap", layout="wide")
 st.title("Bloodmap")
@@ -70,6 +71,20 @@ st.markdown(
 st.markdown("---")
 render_deploy_banner("https://bloodmap.streamlit.app/", "제작: Hoya/GPT · 자문: Hoya/GPT")
 st.caption("※ 모든 날짜/시간 표기는 Asia/Seoul 기준입니다.")
+
+# Try to load style.css from the same directory as this file (not cwd)
+def _inject_style():
+    here = Path(__file__).resolve().parent
+    cand = here / "style.css"
+    if cand.exists():
+        try:
+            st.markdown(f"<style>{cand.read_text(encoding='utf-8')}</style>", unsafe_allow_html=True)
+            st.caption("style.css 적용됨")
+            return True
+        except Exception:
+            pass
+    return False
+_inject_style()
 
 # -------- Globals --------
 ensure_onco_drug_db(DRUG_DB)  # DRUG_DB 채우기 (no-op if stub)
@@ -93,7 +108,22 @@ def float_input(label:str, key:str, placeholder:str=""):
     val = st.text_input(label, value=str(st.session_state.get(key, "")), key=key, placeholder=placeholder)
     return _parse_float(val)
 
-# ====== Emergency helpers ======
+# ====== Emergency helpers + Weights ======
+DEFAULT_WEIGHTS = {
+    # labs
+    "w_anc_lt500": 1.0, "w_anc_500_999": 1.0,
+    "w_temp_38_0_38_4": 1.0, "w_temp_ge_38_5": 1.0,
+    "w_plt_lt20k": 1.0, "w_hb_lt7": 1.0, "w_crp_ge10": 1.0, "w_hr_gt130": 1.0,
+    # symptoms
+    "w_hematuria": 1.0, "w_melena": 1.0, "w_hematochezia": 1.0,
+    "w_chest_pain": 1.0, "w_dyspnea": 1.0, "w_confusion": 1.0,
+    "w_oliguria": 1.0, "w_persistent_vomit": 1.0, "w_petechiae": 1.0,
+}
+def get_weights():
+    key = st.session_state.get("key","guest#PIN")
+    store = st.session_state.setdefault("weights", {})
+    return store.setdefault(key, DEFAULT_WEIGHTS.copy())
+
 def anc_band(anc: float) -> str:
     if anc is None:
         return "(미입력)"
@@ -120,33 +150,34 @@ def emergency_level(labs: dict, temp_c, hr, symptoms: dict) -> tuple[str, list[s
     h = hb  if isinstance(hb,(int,float)) else _parse_float(hb)
     heart = hr if isinstance(hr,(int,float)) else _parse_float(hr)
 
-    risk = 0
+    W = get_weights()
+    risk = 0.0
     if a is not None and a < 500:
-        risk += 3; alerts.append("ANC<500: 발열 시 응급(FN)")
+        risk += 3 * W["w_anc_lt500"]; alerts.append("ANC<500: 발열 시 응급(FN)")
     elif a is not None and a < 1000:
-        risk += 2; alerts.append("ANC 500~999: 감염 주의")
+        risk += 2 * W["w_anc_500_999"]; alerts.append("ANC 500~999: 감염 주의")
     if t is not None and t >= 38.5:
-        risk += 2; alerts.append("고열(≥38.5℃)")
+        risk += 2 * W["w_temp_ge_38_5"]; alerts.append("고열(≥38.5℃)")
     elif t is not None and t >= 38.0:
-        risk += 1; alerts.append("발열(38.0~38.4℃)")
+        risk += 1 * W["w_temp_38_0_38_4"]; alerts.append("발열(38.0~38.4℃)")
     if p is not None and p < 20000:
-        risk += 2; alerts.append("혈소판 <20k: 출혈 위험")
+        risk += 2 * W["w_plt_lt20k"]; alerts.append("혈소판 <20k: 출혈 위험")
     if h is not None and h < 7.0:
-        risk += 1; alerts.append("중증 빈혈(Hb<7)")
+        risk += 1 * W["w_hb_lt7"]; alerts.append("중증 빈혈(Hb<7)")
     if c is not None and c >= 10:
-        risk += 1; alerts.append("CRP 높음(≥10)")
+        risk += 1 * W["w_crp_ge10"]; alerts.append("CRP 높음(≥10)")
     if heart and heart > 130:
-        risk += 1; alerts.append("빈맥")
+        risk += 1 * W["w_hr_gt130"]; alerts.append("빈맥")
 
-    if symptoms.get("hematuria"):  risk += 1; alerts.append("혈뇨")
-    if symptoms.get("melena"):     risk += 2; alerts.append("흑색변(상부위장관 출혈 의심)")
-    if symptoms.get("hematochezia"): risk += 2; alerts.append("혈변(하부위장관 출혈 의심)")
-    if symptoms.get("chest_pain"): risk += 2; alerts.append("흉통")
-    if symptoms.get("dyspnea"):    risk += 2; alerts.append("호흡곤란")
-    if symptoms.get("confusion"):  risk += 3; alerts.append("의식저하/혼돈")
-    if symptoms.get("oliguria"):   risk += 2; alerts.append("소변량 급감(탈수/신장 문제 의심)")
-    if symptoms.get("persistent_vomit"): risk += 2; alerts.append("지속 구토")
-    if symptoms.get("petechiae"):  risk += 2; alerts.append("점상출혈")
+    if symptoms.get("hematuria"):  risk += 1 * W["w_hematuria"]; alerts.append("혈뇨")
+    if symptoms.get("melena"):     risk += 2 * W["w_melena"]; alerts.append("흑색변(상부위장관 출혈 의심)")
+    if symptoms.get("hematochezia"): risk += 2 * W["w_hematochezia"]; alerts.append("혈변(하부위장관 출혈 의심)")
+    if symptoms.get("chest_pain"): risk += 2 * W["w_chest_pain"]; alerts.append("흉통")
+    if symptoms.get("dyspnea"):    risk += 2 * W["w_dyspnea"]; alerts.append("호흡곤란")
+    if symptoms.get("confusion"):  risk += 3 * W["w_confusion"]; alerts.append("의식저하/혼돈")
+    if symptoms.get("oliguria"):   risk += 2 * W["w_oliguria"]; alerts.append("소변량 급감(탈수/신장 문제 의심)")
+    if symptoms.get("persistent_vomit"): risk += 2 * W["w_persistent_vomit"]; alerts.append("지속 구토")
+    if symptoms.get("petechiae"):  risk += 2 * W["w_petechiae"]; alerts.append("점상출혈")
 
     if risk >= 5: return "🚨 응급", alerts
     if risk >= 2: return "🟧 주의", alerts
@@ -154,7 +185,6 @@ def emergency_level(labs: dict, temp_c, hr, symptoms: dict) -> tuple[str, list[s
 
 # ---- AE aggregation helper (comma/semicolon/newline aware) ----
 def _aggregate_all_aes(meds, db):
-    """Return dict[drug_key] = [AE lines], using broad set of field names."""
     result = {}
     if not isinstance(meds, (list, tuple)) or not meds:
         return result
@@ -164,10 +194,7 @@ def _aggregate_all_aes(meds, db):
         "safety","safety_profile","notes"
     ]
     for k in meds:
-        try:
-            rec = db.get(k) if isinstance(db, dict) else None
-        except Exception:
-            rec = None
+        rec = db.get(k) if isinstance(db, dict) else None
         lines = []
         if isinstance(rec, dict):
             for field in ae_fields:
@@ -187,7 +214,6 @@ def _aggregate_all_aes(meds, db):
                             q = p.strip()
                             if q: tmp.append(q)
                     lines += tmp
-        # Dedup
         seen = set(); uniq = []
         for s in lines:
             if s not in seen:
@@ -196,7 +222,36 @@ def _aggregate_all_aes(meds, db):
             result[k] = uniq
     return result
 
-# ====== Sidebar (PIN unique + vitals) ======
+# ====== LAB REFERENCE/VALIDATION ======
+LAB_REF_ADULT = {
+    "WBC": (4.0, 10.0), "Hb": (12.0, 16.0), "PLT": (150, 400),
+    "ANC": (1500, 8000), "CRP": (0.0, 5.0), "Na": (135, 145),
+    "Cr": (0.5, 1.2), "Glu": (70, 140), "Ca": (8.6, 10.2),
+    "P": (2.5, 4.5), "T.P": (6.4, 8.3), "AST": (0, 40), "ALT": (0, 41),
+    "T.B": (0.2, 1.2), "Alb": (3.5, 5.0), "BUN": (7, 20)
+}
+LAB_REF_PEDS = {
+    "WBC": (5.0, 14.0), "Hb": (11.0, 15.0), "PLT": (150, 450),
+    "ANC": (1500, 8000), "CRP": (0.0, 5.0), "Na": (135, 145),
+    "Cr": (0.2, 0.8), "Glu": (70, 140), "Ca": (8.8, 10.8),
+    "P": (4.0, 6.5), "T.P": (6.0, 8.0), "AST": (0, 50), "ALT": (0, 40),
+    "T.B": (0.2, 1.2), "Alb": (3.8, 5.4), "BUN": (5, 18)
+}
+def lab_ref(is_peds: bool):
+    return LAB_REF_PEDS if is_peds else LAB_REF_ADULT
+def lab_validate(abbr: str, val, is_peds: bool):
+    rng = lab_ref(is_peds).get(abbr)
+    if rng is None or val in (None, ""): return None
+    try:
+        v = float(val)
+    except Exception:
+        return "형식 오류"
+    lo, hi = rng
+    if v < lo: return f"⬇️ 기준치 미만({lo}~{hi})"
+    if v > hi: return f"⬆️ 기준치 초과({lo}~{hi})"
+    return "정상범위"
+
+# ====== Sidebar (PIN unique + vitals + profile save/load) ======
 with st.sidebar:
     st.header("프로필")
     raw_key = st.text_input("별명#PIN", value=st.session_state.get("key","guest#PIN"), key="user_key_raw")
@@ -217,7 +272,7 @@ t_home, t_labs, t_dx, t_chemo, t_peds, t_special, t_report = st.tabs(tab_labels)
 with t_home:
     st.subheader("요약")
     labs = st.session_state.get("labs_dict", {})
-    level_tmp, reasons_tmp = emergency_level(labs, temp, hr, {})
+    level_tmp, reasons_tmp = emergency_level(labs, st.session_state.get(wkey("cur_temp")), st.session_state.get(wkey("cur_hr")), {})
     if level_tmp.startswith("🚨"):
         st.error("현재 상태: " + level_tmp)
     elif level_tmp.startswith("🟧"):
@@ -243,7 +298,7 @@ with t_home:
                chest_pain=chest_pain, dyspnea=dyspnea, confusion=confusion,
                oliguria=oliguria, persistent_vomit=persistent_vomit, petechiae=petechiae)
 
-    level, reasons = emergency_level(labs, temp, hr, sym)
+    level, reasons = emergency_level(labs, st.session_state.get(wkey("cur_temp")), st.session_state.get(wkey("cur_hr")), sym)
     if level.startswith("🚨"):
         st.error("응급도: " + level + " — " + " · ".join(reasons))
     elif level.startswith("🟧"):
@@ -251,64 +306,41 @@ with t_home:
     else:
         st.info("응급도: " + level + (" — " + " · ".join(reasons) if reasons else ""))
 
-    # Top AE alerts + full AE list
-    meds = st.session_state.get("chemo_keys", [])
-    if meds:
-        st.markdown("**선택된 약물 응급 경고(Top)**")
-        top_alerts = collect_top_ae_alerts(meds, DRUG_DB)
-        for a in (top_alerts or []):
-            st.error(a)
-        with st.expander("💊 항암제 부작용(전체 보기)", expanded=False):
-            ae_map = _aggregate_all_aes(meds, DRUG_DB)
-            if not ae_map:
-                st.caption("선택된 약물의 상세 부작용 데이터가 DB에 없습니다.")
-            else:
-                for k, lines in ae_map.items():
-                    st.markdown(f"**{display_label(k, DRUG_DB)}**")
-                    for ln in lines:
-                        st.write("- " + ln)
-    else:
-        st.caption("선택된 항암제가 없습니다.")
-
-    # Compact labs summary
-    st.markdown("---")
-    st.markdown("**최근 피수치 요약**")
-    if labs:
-        show_keys = ["WBC","Hb","PLT","ANC","CRP","Na","Cr","Glu"]
-        line_items = []
-        for k in show_keys:
-            v = labs.get(k)
-            if v not in (None, ""):
-                line_items.append(f"{k}: {v}")
-        if line_items:
-            st.write(" / ".join(line_items))
-        else:
-            st.caption("입력된 수치가 없습니다.")
-    else:
-        st.caption("입력된 수치가 없습니다.")
-
-    # --- 환경 진단 패널 ---
-    import importlib.util, os, glob
-    with st.expander("🛠 환경 진단(모듈/파일 존재 여부)", expanded=False):
-        targets = ["pdf_export.py","special_tests.py","drug_db.py","onco_map.py","ui_results.py",
-                   "lab_diet.py","peds_dose.py","branding.py","style.css","app.py"]
+    # --- 환경 진단 패널 (module origin 기반) ---
+    import importlib
+    with st.expander("🛠 환경 진단(모듈 경로 기반)", expanded=False):
         st.write(f"cwd: {os.getcwd()}")
-        try:
-            here_files = sorted([os.path.basename(p) for p in glob.glob("*")])
-            st.write("현재 폴더 파일:", ", ".join(here_files[:200]))
-        except Exception:
-            pass
+        here = Path(__file__).resolve().parent
+        st.write(f"app dir: {here}")
+        targets = [
+            ("pdf_export","pdf_export.py"),("special_tests","special_tests.py"),
+            ("drug_db","drug_db.py"),("onco_map","onco_map.py"),
+            ("ui_results","ui_results.py"),("lab_diet","lab_diet.py"),
+            ("peds_dose","peds_dose.py"),("branding","branding.py"),
+        ]
         rows = []
-        for t in targets:
-            exists = os.path.exists(t)
-            spec = importlib.util.find_spec(t[:-3]) if t.endswith(".py") else None
-            rows.append(f"- {t}: {'✅' if exists else '❌'}  | import: {'✅' if spec else '❌'}")
+        for modname, fname in targets:
+            try:
+                spec = importlib.util.find_spec(modname)
+                ok_imp = spec is not None
+                origin = spec.origin if spec else "(not found)"
+                file_ok = Path(origin).exists() if spec and origin else False
+                rows.append(f"- {fname}: {'✅' if file_ok else '❌'} | import: {'✅' if ok_imp else '❌'} | path: {origin}")
+            except Exception as e:
+                rows.append(f"- {fname}: ❌ | import: ❌ | err: {e}")
+        css_here = (here / "style.css")
+        css_cwd  = Path(os.getcwd()) / "style.css"
+        rows.append(f"- style.css (app dir): {'✅' if css_here.exists() else '❌'} | {css_here}")
+        rows.append(f"- style.css (cwd): {'✅' if css_cwd.exists() else '❌'} | {css_cwd}")
+        app_self = Path(__file__)
+        rows.append(f"- app.py path: {app_self}")
         st.write("\n".join(rows))
 
 # ====== LABS ======
 with t_labs:
     st.subheader("피수치 입력 (요청 순서) — ± 버튼 없이 직접 숫자 입력")
     st.caption("표기 예: 4.5 / 135 / 0.8  (숫자와 소수점만 입력)")
+    use_peds = st.checkbox("소아 기준(참조범위/검증에 적용)", value=False, key=wkey("labs_use_peds"))
 
     order = [
         ("WBC","백혈구"), ("Ca","칼슘"), ("Glu","혈당"), ("CRP","CRP"),
@@ -323,6 +355,14 @@ with t_labs:
         col = cols[idx % 4]
         with col:
             values[abbr] = float_input(f"{abbr} — {kor}", key=wkey(abbr))
+            msg = lab_validate(abbr, values[abbr], use_peds)
+            if msg:
+                if msg == "정상범위":
+                    st.caption("✅ " + msg)
+                elif msg == "형식 오류":
+                    st.warning("형식 오류: 숫자만 입력", icon="⚠️")
+                else:
+                    st.warning(msg, icon="⚠️")
 
     labs_dict = st.session_state.get("labs_dict", {})
     labs_dict.update(values)
@@ -334,7 +374,9 @@ with t_labs:
     nonempty = [(abbr, labs_dict.get(abbr)) for abbr,_ in order if labs_dict.get(abbr) not in (None, "")]
     if nonempty:
         for abbr, val in nonempty:
-            st.write(f"- **{abbr}**: {val}")
+            rng = lab_ref(use_peds).get(abbr)
+            rng_txt = f" ({rng[0]}~{rng[1]})" if rng else ""
+            st.write(f"- **{abbr}**: {val}{rng_txt}")
     else:
         st.caption("아직 입력된 값이 없습니다. 위의 칸에 숫자를 입력하면 여기서 즉시 보입니다.")
 
@@ -441,31 +483,31 @@ with t_peds:
 
     st.markdown("---")
     st.subheader("해열제 계산기")
-    wcol1,wcol2,wcol3 = st.columns([2,1,2])
-    with wcol1:
-        wt = st.text_input("체중(kg)", value=st.session_state.get(wkey("wt_peds"), ""), key=wkey("wt_peds"), placeholder="예: 12.5")
-    wt_val = None
     try:
-        wt_val = float(str(wt).strip()) if wt else None
-    except Exception:
+        from peds_dose import acetaminophen_ml, ibuprofen_ml
+        wcol1,wcol2,wcol3 = st.columns([2,1,2])
+        with wcol1:
+            wt = st.text_input("체중(kg)", value=st.session_state.get(wkey("wt_peds"), ""), key=wkey("wt_peds"), placeholder="예: 12.5")
         wt_val = None
-    ap_ml_1, ap_ml_max = (0.0, 0.0); ib_ml_1, ib_ml_max = (0.0, 0.0)
-    if wt_val:
         try:
-            ap_ml_1, ap_ml_max = acetaminophen_ml(wt_val)
+            wt_val = float(str(wt).strip()) if wt else None
         except Exception:
-            ap_ml_1, ap_ml_max = (0.0, 0.0)
-        try:
-            ib_ml_1, ib_ml_max = ibuprofen_ml(wt_val)
-        except Exception:
-            ib_ml_1, ib_ml_max = (0.0, 0.0)
-    with wcol2:
-        st.metric("APAP 1회량(ml)", f"{ap_ml_1:.1f}" if ap_ml_1 else "—")
-        st.metric("APAP 24h 최대(ml)", f"{ap_ml_max:.0f}" if ap_ml_max else "—")
-    with wcol3:
-        st.metric("IBU 1회량(ml)", f"{ib_ml_1:.1f}" if ib_ml_1 else "—")
-        st.metric("IBU 24h 최대(ml)", f"{ib_ml_max:.0f}" if ib_ml_max else "—")
-    st.caption("쿨다운: APAP ≥4시간, IBU ≥6시간. 중복 복용 주의.")
+            wt_val = None
+        ap_ml_1, ap_ml_max = (0.0, 0.0); ib_ml_1, ib_ml_max = (0.0, 0.0)
+        if wt_val:
+            try: ap_ml_1, ap_ml_max = acetaminophen_ml(wt_val)
+            except Exception: ap_ml_1, ap_ml_max = (0.0, 0.0)
+            try: ib_ml_1, ib_ml_max = ibuprofen_ml(wt_val)
+            except Exception: ib_ml_1, ib_ml_max = (0.0, 0.0)
+        with wcol2:
+            st.metric("APAP 1회량(ml)", f"{ap_ml_1:.1f}" if ap_ml_1 else "—")
+            st.metric("APAP 24h 최대(ml)", f"{ap_ml_max:.0f}" if ap_ml_max else "—")
+        with wcol3:
+            st.metric("IBU 1회량(ml)", f"{ib_ml_1:.1f}" if ib_ml_1 else "—")
+            st.metric("IBU 24h 최대(ml)", f"{ib_ml_max:.0f}" if ib_ml_max else "—")
+        st.caption("쿨다운: APAP ≥4시간, IBU ≥6시간. 중복 복용 주의.")
+    except Exception:
+        st.caption("peds_dose 모듈이 없어 계산기 일부가 제한됩니다.")
 
 # ====== SPECIAL ======
 with t_special:
@@ -481,7 +523,6 @@ with t_special:
             st.info("아직 입력/선택이 없습니다. 위의 '🧪 특수검사'에서 항목을 켜고 값을 넣으면 해석이 여기에 표시됩니다.")
     except Exception:
         st.error("특수검사 모듈을 불러오지 못했습니다.")
-
 
 # ====== REPORT ======
 with t_report:
@@ -516,14 +557,13 @@ with t_report:
     lines.append("# Bloodmap Report (Full)")
     lines.append(f"_생성 시각(KST): {_dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}_")
     lines.append("")
-    # --- Dedication ---
+    # Dedication
     lines.append("> In memory of Eunseo, a little star now shining in the sky.")
     lines.append("> This app is made with the hope that she is no longer in pain,")
     lines.append("> and resting peacefully in a world free from all hardships.")
     lines.append("")
     lines.append("---")
     lines.append("")
-
     lines.append("## 프로필")
     lines.append(f"- 키(별명#PIN): {key_id}")
     lines.append("")
