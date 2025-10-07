@@ -2,17 +2,20 @@
 import streamlit as st
 import datetime as _dt
 
-st.set_page_config(page_title="Bloodmap v7.17a (Single-File Lock)", layout="wide")
-st.title("Bloodmap v7.17a (Single-File Lock)")
+# ===== Fixed Build Banner =====
+st.set_page_config(page_title="Bloodmap v7.17b (Single-File Lock)", layout="wide")
+st.title("Bloodmap v7.17b (Single-File Lock)")
+st.caption("이 버전은 외부 파일 없이 동작합니다. 탭은 항상 3개(홈/피수치/보고서)로 고정됩니다.")
 
+# Dedication
 st.markdown(
     """> In memory of Eunseo, a little star now shining in the sky.
 > This app is made with the hope that she is no longer in pain,
 > and resting peacefully in a world free from all hardships."""
 )
-st.caption("※ 외부 모듈/파일을 사용하지 않는 단일 파일 버전입니다.")
+st.markdown("---")
 
-# ---- helpers ----
+# ===== Helpers =====
 def wkey(name:str)->str:
     who = st.session_state.get("key","guest#PIN")
     return f"{who}:{name}"
@@ -29,7 +32,6 @@ def float_input(label:str, key:str, placeholder:str=""):
     return _parse_float(val)
 
 def export_md_to_pdf(md_text: str) -> bytes:
-    # 대체 PDF: 내용을 그대로 바이트로 반환 (형식은 PDF가 아니지만 다운로드 가능)
     return md_text.encode("utf-8")
 
 def ensure_unique_pin(key: str, auto_suffix: bool=True):
@@ -121,6 +123,7 @@ def lab_validate(abbr: str, val, is_peds: bool):
     if v > hi: return f"⬆️ 기준치 초과({lo}~{hi})"
     return "정상범위"
 
+# ===== Sidebar (always visible) =====
 with st.sidebar:
     st.header("프로필")
     raw_key = st.text_input("별명#PIN", st.session_state.get("key","guest#PIN"))
@@ -129,16 +132,18 @@ with st.sidebar:
     temp = st.text_input("현재 체온(℃)", value=st.session_state.get(wkey("cur_temp"), ""), key=wkey("cur_temp"))
     hr   = st.text_input("심박수(bpm)", value=st.session_state.get(wkey("cur_hr"), ""), key=wkey("cur_hr"))
 
-tab_labels = ["🏠 홈","🧪 피수치 입력","📄 보고서"]
-t_home, t_labs, t_report = st.tabs(tab_labels)
+# ===== Tabs (HARD-CODED) =====
+t_home, t_labs, t_report = st.tabs(["🏠 홈","🧪 피수치 입력","📄 보고서"])
 
+# --- HOME TAB ---
 with t_home:
-    st.subheader("응급도 요약")
+    st.subheader("응급도 요약 + Why")
     labs = st.session_state.get("labs_dict", {})
-    level_tmp, reasons_tmp, contrib_tmp = emergency_level(labs, st.session_state.get(wkey("cur_temp")), st.session_state.get(wkey("cur_hr")), {})
-    st.write("현재 상태:", level_tmp)
+    lvl0, rea0, con0 = emergency_level(labs, st.session_state.get(wkey("cur_temp")), st.session_state.get(wkey("cur_hr")), {})
+    st.write("현재 상태:", lvl0)
+    st.caption("피수치/증상 입력 시 아래 ‘응급도’가 갱신됩니다.")
 
-    st.subheader("응급도 체크(증상 기반)")
+    st.markdown("### 증상 체크")
     c1,c2,c3,c4,c5,c6 = st.columns(6)
     with c1: hematuria = st.checkbox("혈뇨", key=wkey("sym_hematuria"))
     with c2: melena = st.checkbox("흑색변", key=wkey("sym_melena"))
@@ -150,19 +155,19 @@ with t_home:
     with d1: oliguria = st.checkbox("소변량 급감", key=wkey("sym_oliguria"))
     with d2: persistent_vomit = st.checkbox("지속 구토(>6시간)", key=wkey("sym_pvomit"))
     with d3: petechiae = st.checkbox("점상출혈", key=wkey("sym_petechiae"))
+    sym = dict(hematuria=hematuria, melena=melena, hematochezia=hematochezia, chest_pain=chest_pain,
+               dyspnea=dyspnea, confusion=confusion, oliguria=oliguria, persistent_vomit=persistent_vomit, petechiae=petechiae)
 
-    sym = dict(hematuria=hematuria, melena=melena, hematochezia=hematochezia,
-               chest_pain=chest_pain, dyspnea=dyspnea, confusion=confusion,
-               oliguria=oliguria, persistent_vomit=persistent_vomit, petechiae=petechiae)
-    lvl, rea, con = emergency_level(labs, st.session_state.get(wkey("cur_temp")), st.session_state.get(wkey("cur_hr")), sym)
-    st.write("응급도:", lvl, "—", " · ".join(rea))
-    if con:
+    level, reasons, contrib = emergency_level(labs, st.session_state.get(wkey("cur_temp")), st.session_state.get(wkey("cur_hr")), sym)
+    st.write("응급도:", level, "—", " · ".join(reasons) if reasons else "(사유 없음)")
+    if contrib:
         st.markdown("**응급도 기여도(Why)**")
-        tot = sum(x["score"] for x in con) or 1.0
-        for it in sorted(con, key=lambda x:-x["score"]):
+        tot = sum(x["score"] for x in contrib) or 1.0
+        for it in sorted(contrib, key=lambda x:-x["score"]):
             pct = round(100.0*it["score"]/tot,1)
             st.write(f"- {it['factor']}: 점수 {round(it['score'],2)} (기본{it['base']}×가중치{it['weight']}, {pct}%)")
 
+# --- LABS TAB ---
 with t_labs:
     st.subheader("피수치 입력")
     use_peds = st.checkbox("소아 기준", value=False, key=wkey("labs_use_peds"))
@@ -170,8 +175,7 @@ with t_labs:
              ("Hb","혈색소"), ("P","인(Phosphorus)"), ("T.P","총단백"), ("Cr","크레아티닌"),
              ("PLT","혈소판"), ("Na","나트륨"), ("AST","AST"), ("T.B","총빌리루빈"),
              ("ANC","절대호중구"), ("Alb","알부민"), ("ALT","ALT"), ("BUN","BUN")]
-    cols = st.columns(4)
-    values = {}
+    cols = st.columns(4); values = {}
     for i,(abbr,kor) in enumerate(order):
         with cols[i%4]:
             values[abbr] = float_input(f"{abbr} — {kor}", key=wkey(abbr))
@@ -181,6 +185,7 @@ with t_labs:
     st.session_state["labs_dict"] = labs_dict
     st.markdown(f"**ANC 분류:** {anc_band(values.get('ANC'))}")
 
+# --- REPORT TAB ---
 with t_report:
     st.subheader("보고서 (.md/.txt/.pdf 대체)")
     key_id   = st.session_state.get("key","(미설정)")
