@@ -2,12 +2,10 @@
 import streamlit as st
 import datetime as _dt
 
-# ===== Fixed Build Banner =====
-st.set_page_config(page_title="Bloodmap v7.17b (Single-File Lock)", layout="wide")
-st.title("Bloodmap v7.17b (Single-File Lock)")
-st.caption("이 버전은 외부 파일 없이 동작합니다. 탭은 항상 3개(홈/피수치/보고서)로 고정됩니다.")
+st.set_page_config(page_title="Bloodmap v7.17c (Single-File Lock)", layout="wide")
+st.title("Bloodmap v7.17c (Single-File Lock)")
+st.caption("외부 파일 없이 고정 탭 4개(홈/피수치/특수검사/보고서)로 동작합니다.")
 
-# Dedication
 st.markdown(
     """> In memory of Eunseo, a little star now shining in the sky.
 > This app is made with the hope that she is no longer in pain,
@@ -123,7 +121,7 @@ def lab_validate(abbr: str, val, is_peds: bool):
     if v > hi: return f"⬆️ 기준치 초과({lo}~{hi})"
     return "정상범위"
 
-# ===== Sidebar (always visible) =====
+# ===== Sidebar =====
 with st.sidebar:
     st.header("프로필")
     raw_key = st.text_input("별명#PIN", st.session_state.get("key","guest#PIN"))
@@ -132,17 +130,15 @@ with st.sidebar:
     temp = st.text_input("현재 체온(℃)", value=st.session_state.get(wkey("cur_temp"), ""), key=wkey("cur_temp"))
     hr   = st.text_input("심박수(bpm)", value=st.session_state.get(wkey("cur_hr"), ""), key=wkey("cur_hr"))
 
-# ===== Tabs (HARD-CODED) =====
-t_home, t_labs, t_report = st.tabs(["🏠 홈","🧪 피수치 입력","📄 보고서"])
+# ===== Tabs (Hard-coded) =====
+t_home, t_labs, t_special, t_report = st.tabs(["🏠 홈","🧪 피수치 입력","🔬 특수검사","📄 보고서"])
 
-# --- HOME TAB ---
+# ---- HOME ----
 with t_home:
     st.subheader("응급도 요약 + Why")
     labs = st.session_state.get("labs_dict", {})
     lvl0, rea0, con0 = emergency_level(labs, st.session_state.get(wkey("cur_temp")), st.session_state.get(wkey("cur_hr")), {})
     st.write("현재 상태:", lvl0)
-    st.caption("피수치/증상 입력 시 아래 ‘응급도’가 갱신됩니다.")
-
     st.markdown("### 증상 체크")
     c1,c2,c3,c4,c5,c6 = st.columns(6)
     with c1: hematuria = st.checkbox("혈뇨", key=wkey("sym_hematuria"))
@@ -157,7 +153,6 @@ with t_home:
     with d3: petechiae = st.checkbox("점상출혈", key=wkey("sym_petechiae"))
     sym = dict(hematuria=hematuria, melena=melena, hematochezia=hematochezia, chest_pain=chest_pain,
                dyspnea=dyspnea, confusion=confusion, oliguria=oliguria, persistent_vomit=persistent_vomit, petechiae=petechiae)
-
     level, reasons, contrib = emergency_level(labs, st.session_state.get(wkey("cur_temp")), st.session_state.get(wkey("cur_hr")), sym)
     st.write("응급도:", level, "—", " · ".join(reasons) if reasons else "(사유 없음)")
     if contrib:
@@ -167,7 +162,7 @@ with t_home:
             pct = round(100.0*it["score"]/tot,1)
             st.write(f"- {it['factor']}: 점수 {round(it['score'],2)} (기본{it['base']}×가중치{it['weight']}, {pct}%)")
 
-# --- LABS TAB ---
+# ---- LABS ----
 with t_labs:
     st.subheader("피수치 입력")
     use_peds = st.checkbox("소아 기준", value=False, key=wkey("labs_use_peds"))
@@ -175,6 +170,37 @@ with t_labs:
              ("Hb","혈색소"), ("P","인(Phosphorus)"), ("T.P","총단백"), ("Cr","크레아티닌"),
              ("PLT","혈소판"), ("Na","나트륨"), ("AST","AST"), ("T.B","총빌리루빈"),
              ("ANC","절대호중구"), ("Alb","알부민"), ("ALT","ALT"), ("BUN","BUN")]
+    with st.expander("📋 검사값 붙여넣기(자동 인식)", expanded=False):
+        pasted = st.text_area("예: WBC: 4.5\nHb 12.3\nPLT, 200", height=120, key=wkey("labs_paste"))
+        if st.button("붙여넣기 파싱 → 적용", key=wkey("parse_paste")):
+            parsed = {}
+            if pasted:
+                for line in str(pasted).splitlines():
+                    s = line.strip()
+                    if not s: continue
+                    seps = [":", ",", "\t"]
+                    found = False
+                    for sep in seps:
+                        if sep in s:
+                            parts = [p for p in s.split(sep) if p.strip()]
+                            if len(parts) >= 2:
+                                k = parts[0].strip().upper()
+                                v = parts[1].strip()
+                                alias = {"TP":"T.P","TB":"T.B"}
+                                if k in alias: k = alias[k]
+                                parsed[k] = v; found = True; break
+                    if not found:
+                        toks = s.split()
+                        if len(toks) >= 2 and any(ch.isdigit() for ch in toks[-1]):
+                            k = toks[0].strip().upper(); v = toks[-1].strip()
+                            alias = {"TP":"T.P","TB":"T.B"}
+                            if k in alias: k = alias[k]
+                            parsed[k] = v
+            if parsed:
+                for abbr,_ in order:
+                    if abbr in parsed: st.session_state[wkey(abbr)] = parsed[abbr]
+                st.success(f"적용됨: {', '.join(list(parsed.keys())[:12])} ...")
+
     cols = st.columns(4); values = {}
     for i,(abbr,kor) in enumerate(order):
         with cols[i%4]:
@@ -185,7 +211,52 @@ with t_labs:
     st.session_state["labs_dict"] = labs_dict
     st.markdown(f"**ANC 분류:** {anc_band(values.get('ANC'))}")
 
-# --- REPORT TAB ---
+# ---- SPECIAL TESTS ----
+with t_special:
+    st.subheader("특수검사 입력 및 해석")
+    st.caption("간단 해석 규칙 기반. 임상 판단 보조용입니다.")
+    c1,c2,c3,c4 = st.columns(4)
+    with c1:
+        d_dimer = float_input("D-dimer (µg/mL)", key=wkey("sp_dd"))
+        ferritin = float_input("Ferritin (ng/mL)", key=wkey("sp_ferr"))
+        ldh = float_input("LDH (U/L)", key=wkey("sp_ldh"))
+    with c2:
+        pct = float_input("Procalcitonin (ng/mL)", key=wkey("sp_pct"))
+        troponin = float_input("Troponin I/T (ng/mL)", key=wkey("sp_trop"))
+        bnp = float_input("BNP/NT-proBNP (pg/mL)", key=wkey("sp_bnp"))
+    with c3:
+        inr = float_input("PT(INR)", key=wkey("sp_inr"))
+        aptt = float_input("aPTT (sec)", key=wkey("sp_aptt"))
+        fib = float_input("Fibrinogen (mg/dL)", key=wkey("sp_fib"))
+    with c4:
+        lact = float_input("Lactate (mmol/L)", key=wkey("sp_lact"))
+        up = float_input("Urine Protein (mg/dL)", key=wkey("sp_up"))
+        ket = float_input("Urine Ketone (mg/dL)", key=wkey("sp_ket"))
+
+    findings = []
+    if d_dimer is not None and d_dimer >= 0.5: findings.append("D-dimer 상승: 혈전/염증 의심")
+    if ferritin is not None and ferritin >= 1000: findings.append("Ferritin ≥1000: HLH/중증 염증 고려")
+    if ldh is not None and ldh > 250: findings.append("LDH 상승: 용혈/종양/염증 가능")
+    if pct is not None and pct >= 0.5: findings.append("Procalcitonin 상승: 세균성 감염 가능성↑")
+    if troponin is not None and troponin > 0.04: findings.append("Troponin 상승: 심근손상 의심")
+    if bnp is not None and bnp > 300: findings.append("BNP 상승: 심부전/용적 과부하 의심")
+    if inr is not None and inr > 1.3: findings.append("INR 연장: 응고장애/간기능 저하 고려")
+    if aptt is not None and aptt > 40: findings.append("aPTT 연장: 내인성 응고장애/헤파린 영향")
+    if fib is not None and fib < 150: findings.append("Fibrinogen 저하: DIC 가능")
+    if lact is not None and lact >= 2.0: findings.append("Lactate 상승: 저관류/패혈증 의심")
+    if up is not None and up >= 30: findings.append("소변 단백 양성: 신장질환/증가")
+    if ket is not None and ket >= 15: findings.append("소변 케톤 상승: 케톤증/탈수 가능")
+
+    st.markdown("### 해석 결과")
+    if findings:
+        for f in findings: st.write("- " + f)
+    else:
+        st.caption("입력값 기준 특이소견 없음")
+
+    # store for report
+    st.session_state["special_findings"] = findings
+
+# ---- REPORT ----
 with t_report:
     st.subheader("보고서 (.md/.txt/.pdf 대체)")
     key_id   = st.session_state.get("key","(미설정)")
@@ -193,6 +264,8 @@ with t_report:
     temp     = st.session_state.get(wkey("cur_temp"))
     hr       = st.session_state.get(wkey("cur_hr"))
     level, reasons, contrib = emergency_level(labs or {}, temp, hr, {})
+    spec_lines = st.session_state.get("special_findings", [])
+
     lines = []
     lines.append("# Bloodmap Report (Full)")
     lines.append(f"_생성 시각(KST): {_dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}_")
@@ -212,6 +285,9 @@ with t_report:
         v = labs.get(abbr)
         lines.append(f"- {abbr} ({kor}): {v if v not in (None, '') else '—'}")
     lines.append(f"- ANC 분류: {anc_band(labs.get('ANC'))}")
+    if spec_lines:
+        lines.append(""); lines.append("## 특수검사 해석")
+        for ln in spec_lines: lines.append(f"- {ln}")
     md = "\n".join(lines)
     st.code(md, language="markdown")
     st.download_button("💾 .md 다운로드", data=md.encode("utf-8"), file_name="bloodmap_report.md")
