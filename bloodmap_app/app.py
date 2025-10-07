@@ -5,7 +5,7 @@ from pathlib import Path
 import importlib.util
 import streamlit as st
 
-APP_VERSION = "v7.17e (Safe Import + Peds + Onco/Chemo)"
+APP_VERSION = "v7.17f (Chemo filtered by Dx)"
 
 # ---------- Safe Import Helper ----------
 def _load_local_module(mod_name: str, rel_paths):
@@ -25,14 +25,12 @@ def _load_local_module(mod_name: str, rel_paths):
         return None, None
 
 # ---------- Try load optional modules with graceful fallback ----------
-# Branding
 _branding, BRANDING_PATH = _load_local_module("branding", ["branding.py", "modules/branding.py"])
 if _branding and hasattr(_branding, "render_deploy_banner"):
     render_deploy_banner = _branding.render_deploy_banner
 else:
     def render_deploy_banner(*a, **k): return None
 
-# Core utils (PIN uniqueness)
 _core, CORE_PATH = _load_local_module("core_utils", ["core_utils.py", "modules/core_utils.py"])
 if _core and hasattr(_core, "ensure_unique_pin"):
     ensure_unique_pin = _core.ensure_unique_pin
@@ -42,7 +40,6 @@ else:
         if "#" not in user_key: user_key += "#0001"
         return user_key, False, "ok"
 
-# PDF export
 _pdf, PDF_PATH = _load_local_module("pdf_export", ["pdf_export.py", "modules/pdf_export.py"])
 if _pdf and hasattr(_pdf, "export_md_to_pdf"):
     export_md_to_pdf = _pdf.export_md_to_pdf
@@ -50,7 +47,6 @@ else:
     def export_md_to_pdf(md_text: str) -> bytes:
         return md_text.encode("utf-8")
 
-# Oncology map
 _onco, ONCO_PATH = _load_local_module("onco_map", ["onco_map.py", "modules/onco_map.py"])
 if _onco:
     build_onco_map = getattr(_onco, "build_onco_map", lambda: {})
@@ -61,7 +57,6 @@ else:
     dx_display = lambda g,d: f"{g} - {d}"
     def auto_recs_by_dx(*args, **kwargs): return {"chemo": [], "targeted": [], "abx": []}
 
-# Drug DB
 _drugdb, DRUGDB_PATH = _load_local_module("drug_db", ["drug_db.py", "modules/drug_db.py"])
 if _drugdb:
     DRUG_DB = getattr(_drugdb, "DRUG_DB", {})
@@ -74,21 +69,18 @@ else:
     def display_label(k, db=None): return str(k)
     def key_from_label(s, db=None): return s.split(" (")[0] if s else ""
 
-# UI results / AE alerts
 _ui, UI_PATH = _load_local_module("ui_results", ["ui_results.py", "modules/ui_results.py"])
 if _ui and hasattr(_ui, "collect_top_ae_alerts"):
     collect_top_ae_alerts = _ui.collect_top_ae_alerts
 else:
     def collect_top_ae_alerts(*a, **k): return []
 
-# Diet guide by labs
 _ld, LD_PATH = _load_local_module("lab_diet", ["lab_diet.py", "modules/lab_diet.py"])
 if _ld and hasattr(_ld, "lab_diet_guides"):
     lab_diet_guides = _ld.lab_diet_guides
 else:
     def lab_diet_guides(labs, heme_flag=False): return []
 
-# Pediatric dosing
 _pd, PD_PATH = _load_local_module("peds_dose", ["peds_dose.py", "modules/peds_dose.py"])
 if _pd:
     acetaminophen_ml = getattr(_pd, "acetaminophen_ml", lambda wt: (0.0,0.0))
@@ -97,7 +89,6 @@ else:
     def acetaminophen_ml(w): return (0.0,0.0)
     def ibuprofen_ml(w): return (0.0,0.0)
 
-# Special tests
 _sp, SPECIAL_PATH = _load_local_module("special_tests", ["special_tests.py", "modules/special_tests.py"])
 if _sp and hasattr(_sp, "special_tests_ui"):
     special_tests_ui = _sp.special_tests_ui
@@ -107,7 +98,6 @@ else:
         st.warning("special_tests.py를 찾지 못해, 특수검사 UI는 더미로 표시됩니다.")
         return []
 
-# ---------- App skeleton ----------
 st.set_page_config(page_title=f"Bloodmap {APP_VERSION}", layout="wide")
 st.title(f"Bloodmap {APP_VERSION}")
 st.markdown(
@@ -119,11 +109,9 @@ st.markdown("---")
 render_deploy_banner("https://bloodmap.streamlit.app/", "제작: Hoya/GPT · 자문: Hoya/GPT")
 st.caption(f"모듈 경로 — special_tests: {SPECIAL_PATH or '(not found)'} | onco_map: {ONCO_PATH or '(not found)'} | drug_db: {DRUGDB_PATH or '(not found)'}")
 
-# Preload oncologic structures
 ensure_onco_drug_db(DRUG_DB)
 ONCO = build_onco_map() or {}
 
-# ---------- Helpers ----------
 def wkey(name:str)->str:
     who = st.session_state.get("key","guest#PIN")
     return f"{who}:{name}"
@@ -141,29 +129,19 @@ def float_input(label:str, key:str, placeholder:str=""):
     val = st.text_input(label, value=str(st.session_state.get(key, "")), key=key, placeholder=placeholder)
     return _parse_float(val)
 
-# ====== Emergency helpers + Weights ======
-DEFAULT_WEIGHTS = {
-    # labs
-    "w_anc_lt500": 1.0, "w_anc_500_999": 1.0,
-    "w_temp_38_0_38_4": 1.0, "w_temp_ge_38_5": 1.0,
+DEFAULT_WEIGHTS = {"w_anc_lt500": 1.0, "w_anc_500_999": 1.0, "w_temp_38_0_38_4": 1.0, "w_temp_ge_38_5": 1.0,
     "w_plt_lt20k": 1.0, "w_hb_lt7": 1.0, "w_crp_ge10": 1.0, "w_hr_gt130": 1.0,
-    # symptoms
-    "w_hematuria": 1.0, "w_melena": 1.0, "w_hematochezia": 1.0,
-    "w_chest_pain": 1.0, "w_dyspnea": 1.0, "w_confusion": 1.0,
-    "w_oliguria": 1.0, "w_persistent_vomit": 1.0, "w_petechiae": 1.0,
-}
+    "w_hematuria": 1.0, "w_melena": 1.0, "w_hematochezia": 1.0, "w_chest_pain": 1.0,
+    "w_dyspnea": 1.0, "w_confusion": 1.0, "w_oliguria": 1.0, "w_persistent_vomit": 1.0, "w_petechiae": 1.0}
 def get_weights():
     key = st.session_state.get("key","guest#PIN")
     store = st.session_state.setdefault("weights", {})
     return store.setdefault(key, DEFAULT_WEIGHTS.copy())
 
 def anc_band(anc: float) -> str:
-    if anc is None:
-        return "(미입력)"
-    try:
-        anc = float(anc)
-    except Exception:
-        return "(값 오류)"
+    if anc is None: return "(미입력)"
+    try: anc = float(anc)
+    except Exception: return "(값 오류)"
     if anc < 500: return "🚨 중증 호중구감소(<500)"
     if anc < 1000: return "🟧 중등도 호중구감소(500~999)"
     if anc < 1500: return "🟡 경도 호중구감소(1000~1499)"
@@ -183,12 +161,9 @@ def emergency_level(labs: dict, temp_c, hr, symptoms: dict):
     heart = hr if isinstance(hr,(int,float)) else _parse_float(hr)
 
     W = get_weights()
-    reasons = []
-    contrib = []
-
+    reasons = []; contrib = []
     def add(name, base, wkey):
-        w = W.get(wkey, 1.0)
-        s = base * w
+        w = W.get(wkey, 1.0); s = base * w
         contrib.append({"factor": name, "base": base, "weight": w, "score": s})
         reasons.append(name)
 
@@ -215,7 +190,6 @@ def emergency_level(labs: dict, temp_c, hr, symptoms: dict):
     level = "🚨 응급" if risk >= 5 else ("🟧 주의" if risk >= 2 else "🟢 안심")
     return level, reasons, contrib
 
-# ====== LAB REFERENCE/VALIDATION ======
 LAB_REF_ADULT = {"WBC": (4.0, 10.0), "Hb": (12.0, 16.0), "PLT": (150, 400),
     "ANC": (1500, 8000), "CRP": (0.0, 5.0), "Na": (135, 145),
     "Cr": (0.5, 1.2), "Glu": (70, 140), "Ca": (8.6, 10.2),
@@ -237,7 +211,6 @@ def lab_validate(abbr: str, val, is_peds: bool):
     if v > hi: return f"⬆️ 기준치 초과({lo}~{hi})"
     return "정상범위"
 
-# ====== Sidebar (PIN + vitals) ======
 with st.sidebar:
     st.header("프로필")
     raw_key = st.text_input("별명#PIN", value=st.session_state.get("key","guest#PIN"), key="user_key_raw")
@@ -250,21 +223,16 @@ with st.sidebar:
     temp = st.text_input("현재 체온(℃)", value=st.session_state.get(wkey("cur_temp"), ""), key=wkey("cur_temp"), placeholder="36.8")
     hr   = st.text_input("심박수(bpm)", value=st.session_state.get(wkey("cur_hr"), ""), key=wkey("cur_hr"), placeholder="0")
 
-# ====== Tabs ======
-tab_labels = ["🏠 홈","🧪 피수치 입력","🧬 암 선택","💊 항암제","👶 소아 증상","🔬 특수검사","📄 보고서"]
+tab_labels = ["🏠 홈","🧪 피수치 입력","🧬 암 선택","💊 항암제(진단 기반)","👶 소아 증상","🔬 특수검사","📄 보고서"]
 t_home, t_labs, t_dx, t_chemo, t_peds, t_special, t_report = st.tabs(tab_labels)
 
-# ====== HOME ======
 with t_home:
     st.subheader("응급도 요약")
     labs = st.session_state.get("labs_dict", {})
     level_tmp, reasons_tmp, contrib_tmp = emergency_level(labs, st.session_state.get(wkey("cur_temp")), st.session_state.get(wkey("cur_hr")), {})
-    if level_tmp.startswith("🚨"):
-        st.error("현재 상태: " + level_tmp)
-    elif level_tmp.startswith("🟧"):
-        st.warning("현재 상태: " + level_tmp)
-    else:
-        st.info("현재 상태: " + level_tmp)
+    if level_tmp.startswith("🚨"): st.error("현재 상태: " + level_tmp)
+    elif level_tmp.startswith("🟧"): st.warning("현재 상태: " + level_tmp)
+    else: st.info("현재 상태: " + level_tmp)
 
     st.markdown("---")
     st.subheader("응급도 체크(증상 기반)")
@@ -279,34 +247,25 @@ with t_home:
     with d1: oliguria = st.checkbox("소변량 급감", key=wkey("sym_oliguria"))
     with d2: persistent_vomit = st.checkbox("지속 구토(>6시간)", key=wkey("sym_pvomit"))
     with d3: petechiae = st.checkbox("점상출혈", key=wkey("sym_petechiae"))
-
-    sym = dict(hematuria=hematuria, melena=melena, hematochezia=hematochezia,
-               chest_pain=chest_pain, dyspnea=dyspnea, confusion=confusion,
-               oliguria=oliguria, persistent_vomit=persistent_vomit, petechiae=petechiae)
-
+    sym = dict(hematuria=hematuria, melena=melena, hematochezia=hematochezia, chest_pain=chest_pain,
+               dyspnea=dyspnea, confusion=confusion, oliguria=oliguria, persistent_vomit=persistent_vomit, petechiae=petechiae)
     level, reasons, contrib = emergency_level(labs, st.session_state.get(wkey("cur_temp")), st.session_state.get(wkey("cur_hr")), sym)
-    if level.startswith("🚨"):
-        st.error("응급도: " + level + " — " + " · ".join(reasons))
-    elif level.startswith("🟧"):
-        st.warning("응급도: " + level + " — " + " · ".join(reasons))
-    else:
-        st.info("응급도: " + level + (" — " + " · ".join(reasons) if reasons else ""))
+    if level.startswith("🚨"): st.error("응급도: " + level + " — " + " · ".join(reasons))
+    elif level.startswith("🟧"): st.warning("응급도: " + level + " — " + " · ".join(reasons))
+    else: st.info("응급도: " + level + (" — " + " · ".join(reasons) if reasons else ""))
 
     if contrib:
         st.markdown("**응급도 기여도(Why)**")
         total = sum(x["score"] for x in contrib) or 1.0
-        rows = []
-        for item in contrib:
-            pct = round(100.0 * item["score"]/total, 1)
-            rows.append({"요인": item["factor"],"기본점수": item["base"],"가중치": item["weight"],"반영점수": round(item["score"],2),"기여도%": pct})
         try:
             import pandas as pd
+            rows = [{"요인": i["factor"], "기본점수": i["base"], "가중치": i["weight"], "반영점수": round(i["score"],2), "기여도%": round(100*i["score"]/total,1)} for i in contrib]
             st.dataframe(pd.DataFrame(rows).sort_values("반영점수", ascending=False), use_container_width=True)
         except Exception:
-            for r in sorted(rows, key=lambda x:-x["반영점수"]):
-                st.write(f"- {r['요인']} — 점수 {r['반영점수']} (기본 {r['기본점수']} × 가중치 {r['가중치']}, {r['기여도%']}%)")
+            for it in sorted(contrib, key=lambda x:-x["score"]):
+                pct = round(100.0*it["score"]/total,1)
+                st.write(f"- {it['factor']}: 점수 {round(it['score'],2)} (기본{it['base']}×가중치{it['weight']}, {pct}%)")
 
-# ====== LABS ======
 with t_labs:
     st.subheader("피수치 입력 — 붙여넣기 지원")
     st.caption("표기 예: 4.5 / 135 / 0.8  (숫자와 소수점만 입력)")
@@ -346,23 +305,22 @@ with t_labs:
                 st.success(f"적용됨: {', '.join(list(parsed.keys())[:12])} ...")
 
     cols = st.columns(4); values = {}
-    def _parse_float(txt):
-        if txt is None: return None
-        s = str(txt).strip().replace(",", "")
-        if s == "": return None
-        try: return float(s)
-        except Exception: return None
     for i,(abbr,kor) in enumerate(order):
         with cols[i%4]:
             val = st.text_input(f"{abbr} — {kor}", value=str(st.session_state.get(wkey(abbr), "")), key=wkey(abbr))
-            values[abbr] = _parse_float(val)
+            def _pf(x):
+                if x is None: return None
+                s = str(x).strip().replace(",", "")
+                if s == "": return None
+                try: return float(s)
+                except Exception: return None
+            values[abbr] = _pf(val)
             msg = lab_validate(abbr, values[abbr], use_peds)
             if msg: st.caption(("✅ " if msg=="정상범위" else "⚠️ ")+msg)
     labs_dict = st.session_state.get("labs_dict", {}); labs_dict.update(values)
     st.session_state["labs_dict"] = labs_dict
     st.markdown(f"**ANC 분류:** {anc_band(values.get('ANC'))}")
 
-# ====== DX (암 선택) ======
 with t_dx:
     st.subheader("암 선택")
     if not ONCO:
@@ -384,8 +342,8 @@ with t_dx:
         for cat, arr in recs.items():
             if not arr: continue
             st.write(f"- {cat}: " + ", ".join(arr))
+    st.session_state["recs_by_dx"] = recs
 
-# ====== CHEMO (항암제) ======
 def _aggregate_all_aes(meds, db):
     result = {}
     if not isinstance(meds, (list, tuple)) or not meds:
@@ -420,38 +378,73 @@ def _aggregate_all_aes(meds, db):
     return result
 
 with t_chemo:
-    st.subheader("항암제 선택 및 부작용")
-    if not DRUG_DB:
-        st.warning("drug_db 가 로드되지 않아 목록이 비어있습니다. drug_db.py를 같은 폴더나 modules/ 에 두세요.")
-    # 드롭다운 라벨 만들기
-    labels = []
-    for key, rec in DRUG_DB.items():
-        try:
-            labels.append(display_label(key, DRUG_DB))
-        except Exception:
-            labels.append(str(key))
-    labels = sorted(set(labels)) if labels else []
-    picked_labels = st.multiselect("투여/계획 약물 선택", options=labels, key=wkey("drug_pick"))
-    # 라벨->키
-    picked_keys = [key_from_label(lbl, DRUG_DB) for lbl in picked_labels]
+    st.subheader("항암제(진단 기반)")
+    group = st.session_state.get("onco_group")
+    disease = st.session_state.get("onco_disease")
+    recs = st.session_state.get("recs_by_dx", {}) or {}
+
+    # 1) 우선순위 1: onco_map.auto_recs_by_dx 의 'chemo' 추천
+    rec_chemo = list(dict.fromkeys(recs.get("chemo", []))) if recs else []
+    rec_target = list(dict.fromkeys(recs.get("targeted", []))) if recs else []
+    recommended = rec_chemo + [x for x in rec_target if x not in rec_chemo]
+
+    # 2) 우선순위 2: drug_db에서 indication 키워드 매칭 (fallback)
+    def _indicates(rec: dict, disease: str):
+        if not isinstance(rec, dict) or not disease: return False
+        keys = ["indications","indication","for","dx","uses"]
+        s = " ".join([str(rec.get(k,"")) for k in keys])
+        return (disease.lower() in s.lower()) if s else False
+
+    if (not recommended) and DRUG_DB and disease:
+        for k, rec in DRUG_DB.items():
+            try:
+                if _indicates(rec, disease):
+                    recommended.append(k)
+            except Exception:
+                pass
+
+    # 3) 라벨 구성 (기본: 추천 집합만 표시)
+    if DRUG_DB:
+        label_map = {}
+        for key in DRUG_DB.keys():
+            try: label_map[key] = display_label(key, DRUG_DB)
+            except Exception: label_map[key] = str(key)
+    else:
+        label_map = {}
+
+    show_all = st.toggle("전체 보기(추천 외 약물 포함)", value=False, key=wkey("chemo_show_all"))
+    if show_all or not recommended:
+        pool_keys = sorted(label_map.keys())
+        st.caption("현재: 전체 약물 목록에서 선택")
+    else:
+        pool_keys = recommended
+        st.caption("현재: 진단 기반 추천 목록에서 선택")
+
+    pool_labels = [label_map.get(k, str(k)) for k in pool_keys]
+    # 중복 제거 및 정렬
+    unique_pairs = sorted(set(zip(pool_labels, pool_keys)), key=lambda x: x[0].lower())
+    pool_labels_sorted = [p[0] for p in unique_pairs]
+    pool_keys_sorted = [p[1] for p in unique_pairs]
+
+    picked_labels = st.multiselect("투여/계획 약물 선택", options=pool_labels_sorted, key=wkey("drug_pick"))
+    label_to_key = {lbl: key for lbl, key in unique_pairs}
+    picked_keys = [label_to_key.get(lbl) for lbl in picked_labels if lbl in label_to_key]
     st.session_state["chemo_keys"] = picked_keys
 
     if picked_keys:
         st.markdown("### 선택 약물")
         for k in picked_keys:
-            st.write("- " + display_label(k, DRUG_DB))
-        # 부작용 종합
+            st.write("- " + label_map.get(k, str(k)))
         ae_map = _aggregate_all_aes(picked_keys, DRUG_DB)
         st.markdown("### 항암제 부작용(전체)")
         if ae_map:
             for k, arr in ae_map.items():
-                st.write(f"- **{display_label(k, DRUG_DB)}**")
+                st.write(f"- **{label_map.get(k, str(k))}**")
                 for ln in arr:
                     st.write(f"  - {ln}")
         else:
             st.write("- (DB에 상세 부작용 없음)")
 
-# ====== PEDS (증상 + 해열제) ======
 with t_peds:
     st.subheader("소아 증상 기반 점수 + 해열제 계산")
     c1,c2,c3,c4,c5 = st.columns(5)
@@ -493,13 +486,10 @@ with t_peds:
     except Exception:
         ap_ml_1, ap_ml_max, ib_ml_1, ib_ml_max = (0.0,0.0,0.0,0.0)
     colA, colB = st.columns(2)
-    with colA:
-        st.write(f"아세트아미노펜 1회 권장량: **{ap_ml_1:.1f} mL** (최대 {ap_ml_max:.1f} mL)")
-    with colB:
-        st.write(f"이부프로펜 1회 권장량: **{ib_ml_1:.1f} mL** (최대 {ib_ml_max:.1f} mL)")
+    with colA: st.write(f"아세트아미노펜 1회 권장량: **{ap_ml_1:.1f} mL** (최대 {ap_ml_max:.1f} mL)")
+    with colB: st.write(f"이부프로펜 1회 권장량: **{ib_ml_1:.1f} mL** (최대 {ib_ml_max:.1f} mL)")
     st.caption("쿨다운: APAP ≥4h, IBU ≥6h. 중복 복용 주의.")
 
-# ====== SPECIAL ======
 with t_special:
     st.subheader("특수검사 해석")
     if SPECIAL_PATH:
@@ -512,7 +502,6 @@ with t_special:
     else:
         st.info("아직 입력/선택이 없습니다.")
 
-# ====== REPORT ======
 with t_report:
     st.subheader("보고서 (.md/.txt/.pdf) — 모든 항목 포함")
     key_id   = st.session_state.get("key","(미설정)")
@@ -600,39 +589,11 @@ with t_report:
         lines.append("## 진단명(암)")
         lines.append(f"- 그룹: {group or '(미선택)'}")
         lines.append(f"- 질환: {disease or '(미선택)'}")
-        lines.append(f"- 표시: {dx_disp}")
+        lines.append(f"- 표시: {st.session_state.get('dx_disp','(미선택)')}")
         lines.append("")
 
     def _aggregate_all_aes(meds, db):
-        result = {}
-        if not isinstance(meds, (list, tuple)) or not meds: return result
-        ae_fields = ["ae","ae_ko","adverse_effects","adverse","side_effects","side_effect","warnings","warning","black_box","boxed_warning","toxicity","precautions","safety","safety_profile","notes"]
-        for k in meds:
-            rec = db.get(k) if isinstance(db, dict) else None
-            lines2 = []
-            if isinstance(rec, dict):
-                for field in ae_fields:
-                    v = rec.get(field)
-                    if not v: continue
-                    if isinstance(v, str):
-                        parts = []
-                        for chunk in v.split("\n"):
-                            for semi in chunk.split(";"):
-                                parts.extend([p.strip() for p in semi.split(",")])
-                        lines2 += [p for p in parts if p]
-                    elif isinstance(v, (list, tuple)):
-                        tmp = []
-                        for s in v:
-                            for p in str(s).split(","):
-                                q = p.strip()
-                                if q: tmp.append(q)
-                        lines2 += tmp
-            seen = set(); uniq = []
-            for s in lines2:
-                if s not in seen:
-                    uniq.append(s); seen.add(s)
-            if uniq: result[k] = uniq
-        return result
+        return globals()['_aggregate_all_aes'](meds, db)
 
     if sec_meds:
         lines.append("## 항암제 요약")
