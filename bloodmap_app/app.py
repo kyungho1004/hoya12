@@ -391,22 +391,23 @@ with t_peds:
         st.metric("IBU 24h 최대(ml)", f"{ib_ml_max:.0f}" if ib_ml_max else "—")
     st.caption("쿨다운: APAP ≥4시간, IBU ≥6시간. 중복 복용 주의.")
 
+
 # ====== SPECIAL ======
 with t_special:
-        try:
-            from special_tests import special_tests_ui
-            lines = special_tests_ui()
-            st.session_state['special_interpretations'] = lines or []
-            st.subheader("특수검사 해석")
+    try:
+        from special_tests import special_tests_ui
+        lines = special_tests_ui()
+        st.session_state['special_interpretations'] = lines or []
+        st.subheader("특수검사 해석")
         if lines:
-            for ln in lines: st.write("- " + ln)
+            for ln in lines:
+                st.write("- " + ln)
         else:
             st.info("아직 입력/선택이 없습니다. 위의 '🧪 특수검사'에서 항목을 켜고 값을 넣으면 해석이 여기에 표시됩니다.")
-    except Exception:
+    except Exception as e:
         st.error("특수검사 모듈을 불러오지 못했습니다.")
-
-
 # ====== REPORT ======
+
 with t_report:
     st.subheader("보고서 (.md) — 모든 항목 포함")
     # Gather state
