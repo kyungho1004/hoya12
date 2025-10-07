@@ -55,6 +55,8 @@ def predict_from_symptoms(sym: Dict[str,str], temp_c: float, age_m: int|None=Non
     s += _score(high, 20)
     s += _score(nasal in ["누런","피 섞임"], 20)
     s += _score(cough in ["없음","가끔"], 10)
+    s += _score(eye == "한쪽", 10)
+    s += _score(eye == "양쪽", 5)
     if s: reasons["아데노/편도염 가능"].append("고열 + 끈적/혈성 콧물 또는 기침 적음")
     cand["아데노/편도염 가능"] += s
 
