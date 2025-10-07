@@ -1,5 +1,5 @@
 
-# app.py — Bloodmap (v7.0: ensure Labs tab visible + consolidated fixes)
+# app.py — Bloodmap (v7.11: syntax-clean consolidated build)
 import datetime as _dt
 import streamlit as st
 
@@ -8,8 +8,7 @@ try:
     from pdf_export import export_md_to_pdf
 except Exception:
     def export_md_to_pdf(md_text: str) -> bytes:
-        return md_text.encode('utf-8')
-
+        return md_text.encode("utf-8")
 
 # -------- Safe banner (no-op if missing) --------
 try:
@@ -71,7 +70,7 @@ ONCO = build_onco_map()
 
 # ====== UI helpers ======
 def wkey(name:str)->str:
-    who = st.session_state.get("key","guest")
+    who = st.session_state.get("key","guest#PIN")
     return f"{who}:{name}"
 
 def _parse_float(txt):
@@ -101,10 +100,10 @@ def anc_band(anc: float) -> str:
     return "🟢 정상(≥1500)"
 
 def emergency_level(labs: dict, temp_c, hr, symptoms: dict) -> tuple[str, list[str]]:
-    anc = labs.get("ANC")
-    plt = labs.get("PLT")
-    crp = labs.get("CRP")
-    hb  = labs.get("Hb")
+    anc = labs.get("ANC") if isinstance(labs, dict) else None
+    plt = labs.get("PLT") if isinstance(labs, dict) else None
+    crp = labs.get("CRP") if isinstance(labs, dict) else None
+    hb  = labs.get("Hb")  if isinstance(labs, dict) else None
     alerts = []
 
     t = temp_c if isinstance(temp_c,(int,float)) else _parse_float(temp_c)
@@ -146,6 +145,50 @@ def emergency_level(labs: dict, temp_c, hr, symptoms: dict) -> tuple[str, list[s
     if risk >= 2: return "🟧 주의", alerts
     return "🟢 안심", alerts
 
+# ---- AE aggregation helper (comma/semicolon/newline aware) ----
+def _aggregate_all_aes(meds, db):
+    """Return dict[drug_key] = [AE lines], using broad set of field names."""
+    result = {}
+    if not isinstance(meds, (list, tuple)) or not meds:
+        return result
+    ae_fields = [
+        "ae","ae_ko","adverse_effects","adverse","side_effects","side_effect",
+        "warnings","warning","black_box","boxed_warning","toxicity","precautions",
+        "safety","safety_profile","notes"
+    ]
+    for k in meds:
+        try:
+            rec = db.get(k) if isinstance(db, dict) else None
+        except Exception:
+            rec = None
+        lines = []
+        if isinstance(rec, dict):
+            for field in ae_fields:
+                v = rec.get(field)
+                if not v:
+                    continue
+                if isinstance(v, str):
+                    parts = []
+                    for chunk in v.split("\n"):
+                        for semi in chunk.split(";"):
+                            parts.extend([p.strip() for p in semi.split(",")])
+                    lines += [p for p in parts if p]
+                elif isinstance(v, (list, tuple)):
+                    tmp = []
+                    for s in v:
+                        for p in str(s).split(","):
+                            q = p.strip()
+                            if q: tmp.append(q)
+                    lines += tmp
+        # Dedup
+        seen = set(); uniq = []
+        for s in lines:
+            if s not in seen:
+                uniq.append(s); seen.add(s)
+        if uniq:
+            result[k] = uniq
+    return result
+
 # ====== Sidebar (PIN unique + vitals) ======
 with st.sidebar:
     st.header("프로필")
@@ -159,7 +202,7 @@ with st.sidebar:
     temp = st.text_input("현재 체온(℃)", value=st.session_state.get(wkey("cur_temp"), ""), key=wkey("cur_temp"), placeholder="36.8")
     hr   = st.text_input("심박수(bpm)", value=st.session_state.get(wkey("cur_hr"), ""), key=wkey("cur_hr"), placeholder="0")
 
-# ====== Tabs (ensure visible exact labels) ======
+# ====== Tabs (fixed labels) ======
 tab_labels = ["🏠 홈","🧪 피수치 입력","🧬 암 선택","💊 항암제","👶 소아 증상","🔬 특수검사","📄 보고서"]
 t_home, t_labs, t_dx, t_chemo, t_peds, t_special, t_report = st.tabs(tab_labels)
 
@@ -186,7 +229,7 @@ with t_home:
     with c6: confusion = st.checkbox("의식저하", key=wkey("sym_confusion"))
     d1,d2,d3 = st.columns(3)
     with d1: oliguria = st.checkbox("소변량 급감", key=wkey("sym_oliguria"))
-    with d2: persistent_vomit = st.checkbox("지속 구토", key=wkey("sym_pvomit"))
+    with d2: persistent_vomit = st.checkbox("지속 구토(>6시간)", key=wkey("sym_pvomit"))
     with d3: petechiae = st.checkbox("점상출혈", key=wkey("sym_petechiae"))
 
     sym = dict(hematuria=hematuria, melena=melena, hematochezia=hematochezia,
@@ -201,48 +244,59 @@ with t_home:
     else:
         st.info("응급도: " + level + (" — " + " · ".join(reasons) if reasons else ""))
 
+    # Top AE alerts + full AE list
     meds = st.session_state.get("chemo_keys", [])
     if meds:
         st.markdown("**선택된 약물 응급 경고(Top)**")
         top_alerts = collect_top_ae_alerts(meds, DRUG_DB)
         for a in (top_alerts or []):
             st.error(a)
+        with st.expander("💊 항암제 부작용(전체 보기)", expanded=False):
+            ae_map = _aggregate_all_aes(meds, DRUG_DB)
+            if not ae_map:
+                st.caption("선택된 약물의 상세 부작용 데이터가 DB에 없습니다.")
+            else:
+                for k, lines in ae_map.items():
+                    st.markdown(f"**{display_label(k, DRUG_DB)}**")
+                    for ln in lines:
+                        st.write("- " + ln)
+    else:
+        st.caption("선택된 항암제가 없습니다.")
 
+    # Compact labs summary
     st.markdown("---")
     st.markdown("**최근 피수치 요약**")
     if labs:
         show_keys = ["WBC","Hb","PLT","ANC","CRP","Na","Cr","Glu"]
-        any_show = False
         line_items = []
         for k in show_keys:
             v = labs.get(k)
             if v not in (None, ""):
-                any_show = True
                 line_items.append(f"{k}: {v}")
-        if any_show:
+        if line_items:
             st.write(" / ".join(line_items))
         else:
             st.caption("입력된 수치가 없습니다.")
-
-# --- 환경 진단 패널 ---
-import importlib.util, os, glob
-with st.expander("🛠 환경 진단(모듈/파일 존재 여부)", expanded=False):
-    targets = ["pdf_export.py","special_tests.py","drug_db.py","onco_map.py","ui_results.py",
-               "lab_diet.py","peds_dose.py","branding.py","style.css","app.py"]
-    st.write(f"cwd: {os.getcwd()}")
-    try:
-        here_files = sorted([os.path.basename(p) for p in glob.glob("*")])
-        st.write("현재 폴더 파일:", ", ".join(here_files[:200]))
-    except Exception:
-        pass
-    rows = []
-    for t in targets:
-        exists = os.path.exists(t)
-        spec = importlib.util.find_spec(t[:-3]) if t.endswith(".py") else None
-        rows.append(f"- {t}: {'✅' if exists else '❌'}  | import: {'✅' if spec else '❌'}")
-    st.write("\n".join(rows))
     else:
         st.caption("입력된 수치가 없습니다.")
+
+    # --- 환경 진단 패널 ---
+    import importlib.util, os, glob
+    with st.expander("🛠 환경 진단(모듈/파일 존재 여부)", expanded=False):
+        targets = ["pdf_export.py","special_tests.py","drug_db.py","onco_map.py","ui_results.py",
+                   "lab_diet.py","peds_dose.py","branding.py","style.css","app.py"]
+        st.write(f"cwd: {os.getcwd()}")
+        try:
+            here_files = sorted([os.path.basename(p) for p in glob.glob("*")])
+            st.write("현재 폴더 파일:", ", ".join(here_files[:200]))
+        except Exception:
+            pass
+        rows = []
+        for t in targets:
+            exists = os.path.exists(t)
+            spec = importlib.util.find_spec(t[:-3]) if t.endswith(".py") else None
+            rows.append(f"- {t}: {'✅' if exists else '❌'}  | import: {'✅' if spec else '❌'}")
+        st.write("\n".join(rows))
 
 # ====== LABS ======
 with t_labs:
@@ -279,10 +333,7 @@ with t_labs:
 
     current_group = st.session_state.get("onco_group", "")
     heme_flag = True if current_group == "혈액암" else False
-    try:
-        diets = lab_diet_guides(labs_dict, heme_flag=heme_flag)
-    except Exception:
-        diets = []
+    diets = lab_diet_guides(labs_dict, heme_flag=heme_flag)
     if diets:
         st.markdown("### 🍚 식이가이드(자동)")
         for line in diets:
@@ -409,7 +460,6 @@ with t_peds:
         st.metric("IBU 24h 최대(ml)", f"{ib_ml_max:.0f}" if ib_ml_max else "—")
     st.caption("쿨다운: APAP ≥4시간, IBU ≥6시간. 중복 복용 주의.")
 
-
 # ====== SPECIAL ======
 with t_special:
     try:
@@ -422,20 +472,18 @@ with t_special:
                 st.write("- " + ln)
         else:
             st.info("아직 입력/선택이 없습니다. 위의 '🧪 특수검사'에서 항목을 켜고 값을 넣으면 해석이 여기에 표시됩니다.")
-    except Exception as e:
+    except Exception:
         st.error("특수검사 모듈을 불러오지 못했습니다.")
 
 # ====== REPORT ======
 with t_report:
     st.subheader("보고서 (.md/.txt/.pdf) — 모든 항목 포함")
-    # Gather state
     key_id   = st.session_state.get("key","(미설정)")
     dx_disp  = st.session_state.get("dx_disp","(미선택)")
     meds     = st.session_state.get("chemo_keys", [])
     labs     = st.session_state.get("labs_dict", {})
     group    = st.session_state.get("onco_group","")
     diets    = lab_diet_guides(labs, heme_flag=(group=="혈액암"))
-    # Symptoms (Home checkboxes)
     sym = {
         "혈뇨": st.session_state.get(wkey("sym_hematuria"), False),
         "흑색변": st.session_state.get(wkey("sym_melena"), False),
@@ -447,19 +495,15 @@ with t_report:
         "지속 구토": st.session_state.get(wkey("sym_pvomit"), False),
         "점상출혈": st.session_state.get(wkey("sym_petechiae"), False),
     }
-    # Vitals
     temp = st.session_state.get(wkey("cur_temp"))
     hr   = st.session_state.get(wkey("cur_hr"))
-    # Emergency evaluation
     level, reasons = emergency_level(labs or {}, temp, hr, {
         "hematuria": sym["혈뇨"], "melena": sym["흑색변"], "hematochezia": sym["혈변"],
         "chest_pain": sym["흉통"], "dyspnea": sym["호흡곤란"], "confusion": sym["의식저하"],
         "oliguria": sym["소변량 급감"], "persistent_vomit": sym["지속 구토"], "petechiae": sym["점상출혈"],
     })
-    # Special tests interpretation (from session)
     spec_lines = st.session_state.get('special_interpretations', [])
 
-    # Build report lines
     lines = []
     lines.append("# Bloodmap Report (Full)")
     lines.append(f"_생성 시각(KST): {_dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}_")
@@ -490,40 +534,26 @@ with t_report:
     if meds:
         for m in meds:
             try:
-                from drug_db import display_label
-                lines.append(f"- {display_label(m)}")
+                lines.append(f"- {display_label(m, DRUG_DB)}")
             except Exception:
                 lines.append(f"- {m}")
     else:
         lines.append("- (없음)")
     lines.append("")
-    
-# Full AE list
-if meds:
-    try:
+    # Full AE list (only when available)
+    if meds:
         ae_map = _aggregate_all_aes(meds, DRUG_DB)
-    except Exception:
-        ae_map = {}
-    if ae_map:
-        lines.append("## 항암제 부작용(전체)")
-        for k, arr in ae_map.items(): 
-            try:
-                from drug_db import display_label
-                nm = display_label(k, DRUG_DB)
-            except Exception:
-                nm = k
-            lines.append(f"- {nm}")
-            for ln in arr:
-                lines.append(f"  - {ln}")
-        lines.append("")
-    else:
-        # no section if none; keep report clean
-        pass
-        else:
+        if ae_map:
             lines.append("## 항암제 부작용(전체)")
-            lines.append("- (DB에 상세 부작용 목록 없음)")
+            for k, arr in ae_map.items():
+                try:
+                    nm = display_label(k, DRUG_DB)
+                except Exception:
+                    nm = k
+                lines.append(f"- {nm}")
+                for ln in arr:
+                    lines.append(f"  - {ln}")
             lines.append("")
-
     lines.append("## 피수치 (모든 항목)")
     all_labs = [("WBC","백혈구"),("Ca","칼슘"),("Glu","혈당"),("CRP","CRP"),
                 ("Hb","혈색소"),("P","인(Phosphorus)"),("T.P","총단백"),("Cr","크레아티닌"),
@@ -533,22 +563,18 @@ if meds:
         v = labs.get(abbr) if isinstance(labs, dict) else None
         lines.append(f"- {abbr} ({kor}): {v if v not in (None, '') else '—'}")
     lines.append(f"- ANC 분류: {anc_band(labs.get('ANC') if isinstance(labs, dict) else None)}")
-    lines.append("")
     if diets:
+        lines.append("")
         lines.append("## 식이가이드(자동)")
-        for d in diets:
-            lines.append(f"- {d}")
-        lines.append("")
+        for d in diets: lines.append(f"- {d}")
     if spec_lines:
-        lines.append("## 특수검사 해석")
-        for ln in spec_lines:
-            lines.append(f"- {ln}")
         lines.append("")
-
+        lines.append("## 특수검사 해석")
+        for ln in spec_lines: lines.append(f"- {ln}")
+    lines.append("")
     md = "\n".join(lines)
     st.code(md, language="markdown")
 
-    # ---- DOWNLOADS ----
     st.download_button("💾 보고서 .md 다운로드", data=md.encode("utf-8"),
                     file_name="bloodmap_report.md", mime="text/markdown", key=wkey("dl_md"))
     txt_data = md.replace('**','')
