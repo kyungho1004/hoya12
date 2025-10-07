@@ -406,10 +406,10 @@ with t_special:
             st.info("아직 입력/선택이 없습니다. 위의 '🧪 특수검사'에서 항목을 켜고 값을 넣으면 해석이 여기에 표시됩니다.")
     except Exception as e:
         st.error("특수검사 모듈을 불러오지 못했습니다.")
-# ====== REPORT ======
 
+# ====== REPORT ======
 with t_report:
-    st.subheader("보고서 (.md) — 모든 항목 포함")
+    st.subheader("보고서 (.md/.txt/.pdf) — 모든 항목 포함")
     # Gather state
     key_id   = st.session_state.get("key","(미설정)")
     dx_disp  = st.session_state.get("dx_disp","(미선택)")
@@ -438,7 +438,7 @@ with t_report:
         "chest_pain": sym["흉통"], "dyspnea": sym["호흡곤란"], "confusion": sym["의식저하"],
         "oliguria": sym["소변량 급감"], "persistent_vomit": sym["지속 구토"], "petechiae": sym["점상출혈"],
     })
-    # Special tests interpretation (best-effort)
+    # Special tests interpretation (from session)
     spec_lines = st.session_state.get('special_interpretations', [])
 
     # Build report lines
@@ -499,8 +499,19 @@ with t_report:
         for ln in spec_lines:
             lines.append(f"- {ln}")
         lines.append("")
-    # Render + download
+
     md = "\n".join(lines)
     st.code(md, language="markdown")
-    st.download_button("💾 보고서 .md 다운로드(전체)", data=md.encode("utf-8"),
-                    file_name="bloodmap_report_full.md", mime="text/markdown", key=wkey("dl_md_full"))
+
+    # ---- DOWNLOADS ----
+    st.download_button("💾 보고서 .md 다운로드", data=md.encode("utf-8"),
+                    file_name="bloodmap_report.md", mime="text/markdown", key=wkey("dl_md"))
+    txt_data = md.replace('**','')
+    st.download_button("📝 보고서 .txt 다운로드", data=txt_data.encode("utf-8"),
+                    file_name="bloodmap_report.txt", mime="text/plain", key=wkey("dl_txt"))
+    try:
+        pdf_bytes = export_md_to_pdf(md)
+        st.download_button("📄 보고서 .pdf 다운로드", data=pdf_bytes,
+                        file_name="bloodmap_report.pdf", mime="application/pdf", key=wkey("dl_pdf"))
+    except Exception:
+        st.caption("PDF 변환 모듈을 불러오지 못했습니다. .md 또는 .txt를 사용해주세요.")
