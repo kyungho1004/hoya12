@@ -396,46 +396,106 @@ with t_special:
     except Exception:
         st.error("특수검사 모듈을 불러오지 못했습니다.")
 
+
 # ====== REPORT ======
 with t_report:
-    st.subheader("보고서 (.md)")
-    dx_disp = st.session_state.get("dx_disp","(미선택)")
-    meds = st.session_state.get("chemo_keys", [])
-    labs = st.session_state.get("labs_dict", {})
-    diets = lab_diet_guides(labs, heme_flag=(st.session_state.get("onco_group","")=="혈액암"))
-    ae_top = collect_top_ae_alerts(meds, DRUG_DB)
+    st.subheader("보고서 (.md) — 모든 항목 포함")
+    # Gather state
+    key_id   = st.session_state.get("key","(미설정)")
+    dx_disp  = st.session_state.get("dx_disp","(미선택)")
+    meds     = st.session_state.get("chemo_keys", [])
+    labs     = st.session_state.get("labs_dict", {})
+    group    = st.session_state.get("onco_group","")
+    diets    = lab_diet_guides(labs, heme_flag=(group=="혈액암"))
+    # Symptoms (Home checkboxes)
+    sym = {
+        "혈뇨": st.session_state.get(wkey("sym_hematuria"), False),
+        "흑색변": st.session_state.get(wkey("sym_melena"), False),
+        "혈변": st.session_state.get(wkey("sym_hematochezia"), False),
+        "흉통": st.session_state.get(wkey("sym_chest"), False),
+        "호흡곤란": st.session_state.get(wkey("sym_dyspnea"), False),
+        "의식저하": st.session_state.get(wkey("sym_confusion"), False),
+        "소변량 급감": st.session_state.get(wkey("sym_oliguria"), False),
+        "지속 구토": st.session_state.get(wkey("sym_pvomit"), False),
+        "점상출혈": st.session_state.get(wkey("sym_petechiae"), False),
+    }
+    # Vitals
+    temp = st.session_state.get(wkey("cur_temp"))
+    hr   = st.session_state.get(wkey("cur_hr"))
+    # Emergency evaluation
+    level, reasons = emergency_level(labs or {}, temp, hr, {
+        "hematuria": sym["혈뇨"], "melena": sym["흑색변"], "hematochezia": sym["혈변"],
+        "chest_pain": sym["흉통"], "dyspnea": sym["호흡곤란"], "confusion": sym["의식저하"],
+        "oliguria": sym["소변량 급감"], "persistent_vomit": sym["지속 구토"], "petechiae": sym["점상출혈"],
+    })
+    # Special tests interpretation (best-effort)
+    spec_lines = []
+    try:
+        from special_tests import special_tests_ui
+        spec_lines = special_tests_ui() or []
+    except Exception:
+        spec_lines = []
 
+    # Build report lines
     lines = []
-    lines.append("# Bloodmap Report")
-    lines.append(f"**진단명**: {dx_disp}")
+    lines.append("# Bloodmap Report (Full)")
+    lines.append(f"_생성 시각(KST): {_dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}_")
+    lines.append("")
+    lines.append("## 프로필")
+    lines.append(f"- 키(별명#PIN): {key_id}")
+    lines.append("")
+    lines.append("## 활력징후")
+    lines.append(f"- 체온(℃): {temp if temp not in (None, '') else '—'}")
+    lines.append(f"- 심박수(bpm): {hr if hr not in (None, '') else '—'}")
+    lines.append("")
+    lines.append("## 증상 체크(홈)")
+    for k,v in sym.items():
+        lines.append(f"- {k}: {'예' if v else '아니오'}")
+    lines.append("")
+    lines.append("## 응급도 평가")
+    lines.append(f"- 현재 응급도: {level}")
+    if reasons:
+        for r in reasons:
+            lines.append(f"  - {r}")
+    else:
+        lines.append("  - (특이 소견 없음)")
+    lines.append("")
+    lines.append("## 진단명")
+    lines.append(f"- {dx_disp}")
     lines.append("")
     lines.append("## 항암제 요약")
     if meds:
-        for m in meds: lines.append(f"- {display_label(m, DRUG_DB)}")
+        for m in meds:
+            try:
+                from drug_db import display_label
+                lines.append(f"- {display_label(m)}")
+            except Exception:
+                lines.append(f"- {m}")
     else:
         lines.append("- (없음)")
-    if labs:
-        lines.append("")
-        lines.append("## 주요 수치")
-        for abbr, kor in [("WBC","백혈구"),("Ca","칼슘"),("Glu","혈당"),("CRP","CRP"),
-                          ("Hb","혈색소"),("P","인(Phosphorus)"),("T.P","총단백"),("Cr","크레아티닌"),
-                          ("PLT","혈소판"),("Na","나트륨"),("AST","AST"),("T.B","총빌리루빈"),
-                          ("ANC","절대호중구"),("Alb","알부민"),("ALT","ALT"),("BUN","BUN")]:
-            v = labs.get(abbr)
-            if v not in (None, ""):
-                lines.append(f"- {abbr} ({kor}): {v}")
-        lines.append(f"- ANC 분류: {anc_band(labs.get('ANC'))}")
-    if diets:
-        lines.append("")
-        lines.append("## 식이가이드")
-        for d in diets: lines.append(f"- {d}")
-    if ae_top:
-        lines.append("")
-        lines.append("## 약물 경고(Top)")
-        for a in ae_top: lines.append(f"- {a}")
     lines.append("")
-    lines.append(f"_생성 시각(KST): {_dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}_")
+    lines.append("## 피수치 (모든 항목)")
+    all_labs = [("WBC","백혈구"),("Ca","칼슘"),("Glu","혈당"),("CRP","CRP"),
+                ("Hb","혈색소"),("P","인(Phosphorus)"),("T.P","총단백"),("Cr","크레아티닌"),
+                ("PLT","혈소판"),("Na","나트륨"),("AST","AST"),("T.B","총빌리루빈"),
+                ("ANC","절대호중구"),("Alb","알부민"),("ALT","ALT"),("BUN","BUN")]
+    for abbr, kor in all_labs:
+        v = labs.get(abbr) if isinstance(labs, dict) else None
+        lines.append(f"- {abbr} ({kor}): {v if v not in (None, '') else '—'}")
+    lines.append(f"- ANC 분류: {anc_band(labs.get('ANC') if isinstance(labs, dict) else None)}")
+    lines.append("")
+    if diets:
+        lines.append("## 식이가이드(자동)")
+        for d in diets:
+            lines.append(f"- {d}")
+        lines.append("")
+    if spec_lines:
+        lines.append("## 특수검사 해석")
+        for ln in spec_lines:
+            lines.append(f"- {ln}")
+        lines.append("")
+    # Render + download
     md = "\n".join(lines)
     st.code(md, language="markdown")
-    st.download_button("💾 보고서 .md 다운로드", data=md.encode("utf-8"),
-                    file_name="bloodmap_report.md", mime="text/markdown", key=wkey("dl_md"))
+    st.download_button("💾 보고서 .md 다운로드(전체)", data=md.encode("utf-8"),
+                    file_name="bloodmap_report_full.md", mime="text/markdown", key=wkey("dl_md_full"))
