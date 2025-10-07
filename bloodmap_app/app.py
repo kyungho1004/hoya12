@@ -58,9 +58,16 @@ except Exception:
     def acetaminophen_ml(*a, **k): return (0.0, 0.0)
     def ibuprofen_ml(*a, **k): return (0.0, 0.0)
 
+
 # -------- Page config --------
 st.set_page_config(page_title="Bloodmap", layout="wide")
 st.title("Bloodmap")
+st.markdown(
+    """> In memory of Eunseo, a little star now shining in the sky.
+> This app is made with the hope that she is no longer in pain,
+> and resting peacefully in a world free from all hardships."""
+)
+st.markdown("---")
 render_deploy_banner("https://bloodmap.streamlit.app/", "제작: Hoya/GPT · 자문: Hoya/GPT")
 st.caption("※ 모든 날짜/시간 표기는 Asia/Seoul 기준입니다.")
 
