@@ -51,7 +51,7 @@ def _fav_list():
 
 def special_tests_ui() -> List[str]:
     lines: List[str] = []
-    with st.expander("🧪 특수검사 (선택 입력)", expanded=True):
+    with st.expander("🧪 특수검사 (선택 입력)", expanded=False):
         st.caption("정성검사는 +/++/+++ , 정량검사는 숫자만 입력. ★로 즐겨찾기 고정.")
         favs = _fav_list()
         if favs:
