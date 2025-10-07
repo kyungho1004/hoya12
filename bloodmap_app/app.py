@@ -223,6 +223,24 @@ with t_home:
             st.write(" / ".join(line_items))
         else:
             st.caption("입력된 수치가 없습니다.")
+
+# --- 환경 진단 패널 ---
+import importlib.util, os, glob
+with st.expander("🛠 환경 진단(모듈/파일 존재 여부)", expanded=False):
+    targets = ["pdf_export.py","special_tests.py","drug_db.py","onco_map.py","ui_results.py",
+               "lab_diet.py","peds_dose.py","branding.py","style.css","app.py"]
+    st.write(f"cwd: {os.getcwd()}")
+    try:
+        here_files = sorted([os.path.basename(p) for p in glob.glob("*")])
+        st.write("현재 폴더 파일:", ", ".join(here_files[:200]))
+    except Exception:
+        pass
+    rows = []
+    for t in targets:
+        exists = os.path.exists(t)
+        spec = importlib.util.find_spec(t[:-3]) if t.endswith(".py") else None
+        rows.append(f"- {t}: {'✅' if exists else '❌'}  | import: {'✅' if spec else '❌'}")
+    st.write("\n".join(rows))
     else:
         st.caption("입력된 수치가 없습니다.")
 
@@ -479,24 +497,28 @@ with t_report:
     else:
         lines.append("- (없음)")
     lines.append("")
-    # Full AE list
-    if meds:
+    
+# Full AE list
+if meds:
+    try:
+        ae_map = _aggregate_all_aes(meds, DRUG_DB)
+    except Exception:
+        ae_map = {}
+    if ae_map:
         lines.append("## 항암제 부작용(전체)")
-        try:
-            ae_map = _aggregate_all_aes(meds, DRUG_DB)
-        except Exception:
-            ae_map = {}
-        if ae_map:
-            for k, arr in ae_map.items():
-                try:
-                    from drug_db import display_label
-                    nm = display_label(k, DRUG_DB)
-                except Exception:
-                    nm = k
-                lines.append(f"- {nm}")
-                for ln in arr:
-                    lines.append(f"  - {ln}")
-            lines.append("")
+        for k, arr in ae_map.items(): 
+            try:
+                from drug_db import display_label
+                nm = display_label(k, DRUG_DB)
+            except Exception:
+                nm = k
+            lines.append(f"- {nm}")
+            for ln in arr:
+                lines.append(f"  - {ln}")
+        lines.append("")
+    else:
+        # no section if none; keep report clean
+        pass
         else:
             lines.append("## 항암제 부작용(전체)")
             lines.append("- (DB에 상세 부작용 목록 없음)")

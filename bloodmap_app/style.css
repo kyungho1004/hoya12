@@ -3,26 +3,3 @@
 .block-container { padding-top: 1rem; }
 h1, h2, h3 { letter-spacing: 0.2px; }
 .badge { border-radius: 9999px; padding: 2px 8px; font-size: 12px; }
-
-
-/* === Hide +/- steppers on number inputs === */
-input[type="number"]::-webkit-outer-spin-button,
-input[type="number"]::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-input[type="number"] {
-  -moz-appearance: textfield;
-}
-
-/* Streamlit's +/- icon buttons inside number_input */
-div[data-baseweb="input"] button[aria-label="Increment"],
-div[data-baseweb="input"] button[aria-label="Decrement"] {
-  display: none !important;
-}
-
-/* Some themes render +/- as span buttons */
-div[data-baseweb="input"] [data-testid="stNumberInput"] button {
-  display: none !important;
-}
-
