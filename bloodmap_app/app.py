@@ -4,7 +4,7 @@ from pathlib import Path
 import importlib.util
 import streamlit as st
 
-APP_VERSION = "v7.19 (Weights+Presets • Symptom Badges • Auto Peds/Adult • Peds caregiver ++ • Robust Paste • Dx-Chemo • Full Report)"
+APP_VERSION = "v7.19 (보호자님들의 도움이 되기위해 업데이트중입니다. • Symptom Badges • Auto Peds/Adult • Peds caregiver ++ • Robust Paste • Dx-Chemo • Full Report)"
 
 # ---------- Safe Import Helper ----------
 def _load_local_module(mod_name: str, rel_paths):
