@@ -4,7 +4,7 @@ from pathlib import Path
 import importlib.util
 import streamlit as st
 
-APP_VERSION = "v7.18b (Peds caregiver ++ • Hives/Allergy • Migraine • HFMD • Thunderclap/Visual • Robust Paste • Dx-Chemo • Full Report)"
+APP_VERSION = "v7.18b (Peds caregiver ++ • Hives/Allergy • Migraine • HFMD • Thunderclap/Visual • Robust Paste • Dx-Chemo • Full Report • safe number_input)"
 
 # ---------- Safe Import Helper ----------
 def _load_local_module(mod_name: str, rel_paths):
@@ -120,6 +120,15 @@ def _try_float(s):
     num = m.group(1).replace(",", ".")
     try: return float(num)
     except Exception: return None
+
+def _safe_float(v, default=0.0):
+    """빈문자열/None/문자 섞인 입력을 안전하게 float 변환"""
+    try:
+        if v in (None, ""): return default
+        if isinstance(v, (int, float)): return float(v)
+        return float(str(v).strip())
+    except Exception:
+        return default
 
 # Emergency scoring
 DEFAULT_WEIGHTS = {
@@ -565,6 +574,7 @@ with t_peds:
     with f2: migraine = st.checkbox("편두통 의심(한쪽·박동성·빛/소리 민감)", key=wkey("p_migraine"))
     with f3: hfmd     = st.checkbox("수족구 의심(손발·입 병변)", key=wkey("p_hfmd"))
 
+    # 증상 기반 점수
     score = {"장염 의심":0, "상기도/독감 계열":0, "결막염 의심":0, "탈수/신장 문제":0,
              "출혈성 경향":0, "중이염/귀질환":0, "피부발진/경미한 알레르기":0,
              "복통 평가":0, "알레르기 주의":0, "편두통 의심":0, "수족구 의심":0}
@@ -586,6 +596,7 @@ with t_peds:
     ordered = sorted(score.items(), key=lambda x: x[1], reverse=True)
     st.write("• " + " / ".join([f"{k}: {v}" for k,v in ordered if v>0]) if any(v>0 for _,v in ordered) else "• 특이 점수 없음")
 
+    # 보호자 설명 렌더링
     render_caregiver_notes_peds(
         stool=stool, fever=fever, persistent_vomit=persistent_vomit, oliguria=oliguria,
         cough=cough, nasal=nasal, eye=eye, abd_pain=abd_pain, ear_pain=ear_pain, rash=rash,
@@ -594,10 +605,21 @@ with t_peds:
 
     st.markdown("---")
     st.subheader("해열제 계산기")
-    wt = st.number_input("체중(kg)", min_value=0.0, max_value=200.0,
-                         value=float(st.session_state.get(wkey("wt_peds"), 0.0)),
-                         step=0.1, key=wkey("wt_peds_num"))
+    # 안전 변환(빈 문자열 등으로 인한 ValueError 방지)
+    prev_wt = st.session_state.get(wkey("wt_peds"), 0.0)
+    default_wt = _safe_float(prev_wt, 0.0)
+
+    wt = st.number_input(
+        "체중(kg)",
+        min_value=0.0,
+        max_value=200.0,
+        value=default_wt,
+        step=0.1,
+        key=wkey("wt_peds_num")
+    )
+    # number_input 반환은 항상 float → 안전 저장
     st.session_state[wkey("wt_peds")] = wt
+
     try:
         ap_ml_1, ap_ml_max = acetaminophen_ml(wt)
         ib_ml_1, ib_ml_max = ibuprofen_ml(wt)
