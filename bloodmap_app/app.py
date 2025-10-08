@@ -1272,8 +1272,7 @@ if _qr_img is not None:
 
 st.markdown("---")
 st.markdown("### 대량 생성 ZIP")
-_examples = "https://bloodmap.streamlit.app/\nhttps://cafe.naver.com/bloodmap\nhttps://blog.naver.com/lee7298
-"
+_examples = "https://bloodmap.streamlit.app/\\nhttps://cafe.naver.com/bloodmap\\nhttps://blog.naver.com/lee7298"
 bulk_text = st.text_area("여러 줄로 링크/텍스트 입력", value=_examples, height=120,
                          help="각 줄이 하나의 QR이 됩니다.", key=wkey("qr_bulk_text"))
 if st.button("ZIP 생성", type="primary", use_container_width=True, key=wkey("qr_zip_btn")):
