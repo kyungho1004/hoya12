@@ -99,6 +99,35 @@ except Exception:
     plt = None
     _HAS_MPL = False
 
+
+# ---------- QR Patch (optional) ----------
+# 로컬/모듈 경로에서 qr_patch 로더 (없으면 폴백)
+try:
+    _load_local_module  # noqa: F401
+except NameError:
+    def _load_local_module(mod_name, candidates):
+        import importlib.util, sys, os
+        for p in candidates:
+            if os.path.exists(p):
+                spec = importlib.util.spec_from_file_location(mod_name, p)
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)  # type: ignore
+                sys.modules[mod_name] = mod
+                return mod, os.path.abspath(p)
+        return None, None
+
+_qr, QR_PATH = _load_local_module("qr_patch", ["qr_patch.py", "modules/qr_patch.py"])
+if _qr:
+    st_qr = getattr(_qr, "st_qr", None)
+    generate_qr_image = getattr(_qr, "generate_qr_image", None)
+else:
+    QR_PATH = None
+    def st_qr(data: str, caption: str | None = None, box_size: int = 8, border: int = 2):
+        st.code(str(data))
+        st.caption("QR 라이브러리를 찾지 못했습니다. 위 텍스트를 그대로 공유하세요. (선택: requirements에 qrcode 추가)")
+    def generate_qr_image(data: str, box_size: int = 8, border: int = 2):
+        return None
+
 # ---------- Page & Banner ----------
 st.set_page_config(page_title=f"Bloodmap {APP_VERSION}", layout="wide")
 st.title(f"Bloodmap {APP_VERSION}")
@@ -108,7 +137,7 @@ st.markdown(
 > and resting peacefully in a world free from all hardships."""
 )
 st.markdown("---")
-render_deploy_banner("https://cafe.naver.com/bloodmap", "제작: Hoya/GPT · 자문: Hoya/GPT")
+render_deploy_banner("https://bloodmap.streamlit.app/", "제작: Hoya/GPT · 자문: Hoya/GPT")
 st.caption(f"모듈 경로 — special_tests: {SPECIAL_PATH or '(not found)'} | onco_map: {ONCO_PATH or '(not found)'} | drug_db: {DRUGDB_PATH or '(not found)'}")
 
 # ---------- Helpers ----------
@@ -333,8 +362,8 @@ def render_caregiver_notes_peds(*, stool, fever, persistent_vomit, oliguria,
     st.info("❗ 즉시 병원 평가: 번개치는 두통 · 시야 이상/복시/암점 · 경련 · 의식저하 · 심한 목 통증 · 호흡곤란/입술부종")
 
 # ---------- Tabs ----------
-tab_labels = ["🏠 홈","🧪 피수치 입력","🧬 암 선택","💊 항암제(진단 기반)","👶 소아 증상","🔬 특수검사","📄 보고서"]
-t_home, t_labs, t_dx, t_chemo, t_peds, t_special, t_report = st.tabs(tab_labels)
+tab_labels = ["🏠 홈","🧪 피수치 입력","🧬 암 선택","💊 항암제(진단 기반)","👶 소아 증상","🔬 특수검사","📄 보고서", "🔗 공유/QR"]
+t_home, t_labs, t_dx, t_chemo, t_peds, t_special, t_report, t_qr = st.tabs(tab_labels)
 
 # HOME
 with t_home:
@@ -1153,3 +1182,133 @@ with col_side:
                                file_name="bloodmap_report.pdf", mime="application/pdf")
         except Exception:
             st.caption("PDF 변환 모듈을 불러오지 못했습니다. .md 또는 .txt를 사용해주세요.")
+
+
+# ====================== TAB: 공유/QR ======================
+with t_qr:
+    st.subheader("공유/QR 생성")
+    st.caption(f"모듈 경로 — qr_patch: {QR_PATH or '(not found)'}")
+
+    default_text = "https://bloodmap.streamlit.app/"
+    data = st.text_input("URL 또는 임의 텍스트", value=default_text, placeholder="여기에 주소나 텍스트를 입력", key=wkey("qr_text"))
+    c1, c2 = st.columns(2)
+    with c1:
+        box_size = st.slider("박스 크기(box_size)", 4, 12, 8, key=wkey("qr_box"))
+    with c2:
+        border = st.slider("테두리(border)", 1, 8, 2, key=wkey("qr_border"))
+
+    # Render QR (fallback-safe)
+    st_qr(data, caption="위 텍스트의 QR", box_size=box_size, border=border)
+
+    # PNG download (when available)
+    import io as _io
+    img = generate_qr_image(data, box_size=box_size, border=border)
+    if img is not None:
+        buf = _io.BytesIO()
+        try:
+            img.save(buf, format="PNG")
+            st.download_button("⬇️ QR PNG 다운로드", data=buf.getvalue(), file_name="bloodmap_qr.png", mime="image/png", use_container_width=True, key=wkey("qr_dl"))
+        except Exception:
+            st.warning("PNG 저장에 실패했습니다. requirements에 Pillow가 필요한지 확인하세요.")
+    else:
+        st.code(str(data))
+        st.caption("QR 라이브러리를 찾지 못했습니다. 위 텍스트를 그대로 공유하세요. (선택: requirements에 qrcode 추가)")
+
+# ------------------ QR Plus: preset / logo / bulk ZIP / kakao text ------------------
+import io, zipfile
+from typing import List, Tuple
+
+st.markdown("### 빠른 프리셋")
+_preset_items: List[Tuple[str, str]] = [
+    ("공식 배포", "https://bloodmap.streamlit.app/"),
+    ("공지", "https://cafe.naver.com/bloodmap"),
+    ("블로그", "https://blog.naver.com/lee7298"),
+    ("카페", "https://cafe.naver.com/bloodmap"),
+]
+pc1, pc2, pc3, pc4 = st.columns(4)
+for (col, (label, val)) in zip([pc1, pc2, pc3, pc4], _preset_items):
+    with col:
+        if st.button(label, key=wkey(f"qr_preset_{label}"), use_container_width=True):
+            st.session_state["qr_text"] = val
+
+st.markdown("---")
+st.markdown("### 로고 합성(선택)")
+logo_file = st.file_uploader("중앙 로고(PNG/JPG)", type=["png","jpg","jpeg"], key=wkey("qr_logo"))
+logo_scale = st.slider("로고 크기(%)", 10, 40, 20, key=wkey("qr_logo_pct"))
+
+def _overlay_logo(qr_img, logo_bytes, scale_pct=20):
+    try:
+        from PIL import Image
+        if qr_img is None or logo_bytes is None:
+            return qr_img
+        logo = Image.open(io.BytesIO(logo_bytes)).convert("RGBA")
+        if not hasattr(qr_img, "size"):
+            qr_img = qr_img.convert("RGBA")
+        w, h = qr_img.size
+        target = int(min(w, h) * (scale_pct/100.0))
+        if target <= 0:
+            return qr_img
+        logo = logo.resize((target, target))
+        pos = ((w - target)//2, (h - target)//2)
+        qr_img.paste(logo, pos, mask=logo if "A" in logo.getbands() else None)
+        return qr_img
+    except Exception:
+        return qr_img
+
+_qr_img = generate_qr_image(data, box_size=box_size, border=border)
+if _qr_img is not None and logo_file is not None:
+    _qr_img = _overlay_logo(_qr_img, logo_file.read(), scale_pct=logo_scale)
+
+if _qr_img is not None:
+    st.image(_qr_img, caption="합성 반영 결과", use_container_width=False)
+    _buf = io.BytesIO()
+    try:
+        _qr_img.save(_buf, format="PNG")
+        st.download_button("QR PNG 다운로드", data=_buf.getvalue(),
+                           file_name="bloodmap_qr.png", mime="image/png",
+                           use_container_width=True, key=wkey("qr_dl_png"))
+    except Exception:
+        st.warning("PNG 저장에 실패했습니다. Pillow 설치를 확인하세요.")
+
+st.markdown("---")
+st.markdown("### 대량 생성 ZIP")
+_examples = "https://bloodmap.streamlit.app/\nhttps://example.com/notice\nhttps://example.com/cafe"
+bulk_text = st.text_area("여러 줄로 링크/텍스트 입력", value=_examples, height=120,
+                         help="각 줄이 하나의 QR이 됩니다.", key=wkey("qr_bulk_text"))
+if st.button("ZIP 생성", type="primary", use_container_width=True, key=wkey("qr_zip_btn")):
+    lines = [ln.strip() for ln in (bulk_text or "").splitlines() if ln.strip()]
+    if not lines:
+        st.warning("입력된 줄이 없습니다.")
+    else:
+        zip_buf = io.BytesIO()
+        with zipfile.ZipFile(zip_buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+            for idx, ln in enumerate(lines, start=1):
+                im = generate_qr_image(ln, box_size=box_size, border=border)
+                if im is None:
+                    zf.writestr(f"qr_{idx:02d}.txt", ln.encode("utf-8"))
+                    continue
+                png_b = io.BytesIO()
+                try:
+                    im.save(png_b, format="PNG")
+                    zf.writestr(f"qr_{idx:02d}.png", png_b.getvalue())
+                except Exception:
+                    zf.writestr(f"qr_{idx:02d}.txt", ln.encode("utf-8"))
+        st.download_button("ZIP 다운로드", data=zip_buf.getvalue(),
+                           file_name="qr_bulk.zip", mime="application/zip",
+                           use_container_width=True, key=wkey("qr_dl_zip"))
+
+st.markdown("---")
+st.markdown("### 카카오톡 공유 문구 자동 생성")
+k_col1, k_col2 = st.columns([2,1])
+with k_col1:
+    kakao_title = st.text_input("제목", value="피수치 해석 · BloodMap", key=wkey("k_title"))
+    kakao_desc  = st.text_area("본문(간단 안내)", value="한국시간 기준 안내입니다. 세포·면역치료는 표기하지 않습니다.", height=80, key=wkey("k_desc"))
+with k_col2:
+    kakao_hashtags = st.text_input("해시태그(공백/쉼표 구분)", value="피수치 혈액검사 해석 보호자", key=wkey("k_tags"))
+
+_k_tags = [t.strip() for t in (kakao_hashtags or "").replace(",", " ").split() if t.strip()]
+_k_text = f"{kakao_title}\n{data}\n\n{kakao_desc}\n\n" + (" ".join(f"#{t}" for t in _k_tags) if _k_tags else "")
+st.code(_k_text, language="text")
+st.caption("위 텍스트를 카카오톡에 붙여 넣으면 됩니다.")
+# ------------------ /QR Plus ------------------
+
