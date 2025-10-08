@@ -5,7 +5,7 @@ from pathlib import Path
 import importlib.util
 import streamlit as st
 
-APP_VERSION = "v7.21 (Weights+Presets • Symptom Badges • Auto Peds/Adult • Chemo Interactions • Hospital QR • Special notes • Caregiver++ • Report Graphs)"
+APP_VERSION = "v7.22 (Weights+Presets • Symptom Badges • Auto Peds/Adult • Chemo Interactions • Hospital QR • Special notes • Caregiver++ • Report Graphs w/ Fallback)"
 
 # ---------- Safe Import Helper ----------
 def _load_local_module(mod_name: str, rel_paths):
@@ -45,7 +45,7 @@ if _pdf and hasattr(_pdf, "export_md_to_pdf"):
     export_md_to_pdf = _pdf.export_md_to_pdf
 else:
     def export_md_to_pdf(md_text: str) -> bytes:
-        # 최소 폴백: PDF 엔진이 없으면 텍스트 바이트를 반환(다운로드는 가능)
+        # 최소 폴백: PDF 엔진이 없으면 텍스트 바이트 반환(다운로드는 가능)
         return md_text.encode("utf-8")
 
 _onco, ONCO_PATH = _load_local_module("onco_map", ["onco_map.py", "modules/onco_map.py"])
@@ -90,6 +90,14 @@ else:
     def special_tests_ui():
         st.warning("special_tests.py를 찾지 못해, 특수검사 UI는 더미로 표시됩니다.")
         return []
+
+# --- optional plotting backend (matplotlib → st.line_chart → 표 폴백) ---
+try:
+    import matplotlib.pyplot as plt  # 있으면 사용
+    _HAS_MPL = True
+except Exception:
+    plt = None
+    _HAS_MPL = False
 
 # ---------- Page & Banner ----------
 st.set_page_config(page_title=f"Bloodmap {APP_VERSION}", layout="wide")
@@ -363,7 +371,6 @@ with t_home:
         thunderclap=thunderclap, visual_change=visual_change,
     )
 
-    # 증상 조합 경고 배지
     alerts = []
     a = _try_float((labs or {}).get("ANC"))
     p = _try_float((labs or {}).get("PLT"))
@@ -382,7 +389,6 @@ with t_home:
     else:
         st.info("위험 조합 경고 없음")
 
-    # 응급도 산출
     level, reasons, contrib = emergency_level(
         labs, st.session_state.get(wkey("cur_temp")), st.session_state.get(wkey("cur_hr")), sym
     )
@@ -564,7 +570,6 @@ def check_chemo_interactions(keys):
     warns = []; notes = []
     if not keys: return warns, notes
     metas = {k: _meta_for_drug(k) for k in keys}
-    # 1) 동일 계열 중복
     classes = {}
     for k, m in metas.items():
         if not m["class"]: continue
@@ -572,18 +577,14 @@ def check_chemo_interactions(keys):
     for klass, arr in classes.items():
         if len(arr) >= 2 and klass not in ("antiemetic","hydration"):
             warns.append(f"동일 계열 **{klass}** 약물 중복({', '.join(arr)}) — 누적 독성 주의")
-    # 2) QT 연장 위험군
     qt_list = [k for k,m in metas.items() if "qt_prolong" in m["tags"]]
     if len(qt_list) >= 2:
         warns.append(f"**QT 연장 위험** 약물 다수 병용({', '.join(qt_list)}) — EKG/전해질 모니터링")
-    # 3) 강한 골수억제
     myelo_list = [k for k,m in metas.items() if "myelosuppression" in m["tags"]]
     if len(myelo_list) >= 2:
         warns.append(f"**강한 골수억제 병용**({', '.join(myelo_list)}) — 감염/출혈 위험 ↑")
-    # 4) 면역항암제 + 스테로이드
     if any("immunotherapy" in m["tags"] for m in metas.values()) and any("steroid" in m["tags"] for m in metas.values()):
         warns.append("**면역항암제 + 스테로이드** 병용 — 면역반응 저하 가능 (임상적 필요 시 예외)")
-    # 5) per-drug 메모
     for k, m in metas.items():
         for it in m["interactions"]:
             notes.append(f"- {k}: {it}")
@@ -671,7 +672,6 @@ with t_chemo:
         for k in picked_keys:
             st.write("- " + label_map.get(k, str(k)))
 
-        # 상호작용/중복요법 경고
         warns, notes = check_chemo_interactions(picked_keys)
         if warns:
             st.markdown("### ⚠️ 병용 주의/경고")
@@ -680,7 +680,6 @@ with t_chemo:
             st.markdown("### ℹ️ 참고(데이터베이스 기재)")
             for n in notes: st.info(n)
 
-        # 부작용 총망라
         ae_map = _aggregate_all_aes(picked_keys, DRUG_DB)
         st.markdown("### 항암제 부작용(전체)")
         if ae_map:
@@ -828,8 +827,6 @@ def _qr_image_bytes(text: str) -> bytes:
 
 # REPORT with side panel (기록/그래프)
 with t_report:
-    import matplotlib.pyplot as plt  # 지시사항에 따라 seaborn 사용 금지, 색/스타일 지정 금지
-
     st.subheader("보고서 (.md/.txt/.pdf) — 모든 항목 포함")
 
     # 공통 데이터
@@ -893,23 +890,54 @@ with t_report:
             st.info("기록이 없습니다. 먼저 ‘현재 값을 기록에 추가’를 눌러주세요.")
         else:
             x = [h["ts"] for h in hist]
-            for m in pick:
-                y = []
-                for h in hist:
-                    v = None
-                    if "labs" in h and isinstance(h["labs"], dict):
-                        v = h["labs"].get(m, "")
-                    y.append(_try_float(v))
-                if all(v is None for v in y):
-                    continue
-                fig = plt.figure()
-                plt.plot(x, [v if v is not None else float("nan") for v in y], marker="o")
-                plt.title(m)
-                plt.xlabel("기록 시각")
-                plt.ylabel(m)
-                plt.xticks(rotation=45, ha="right")
-                plt.tight_layout()
-                st.pyplot(fig)
+            if _HAS_MPL:
+                for m in pick:
+                    y = []
+                    for h in hist:
+                        v = None
+                        if "labs" in h and isinstance(h["labs"], dict):
+                            v = h["labs"].get(m, "")
+                        try:
+                            v = float(str(v).replace(",", "."))
+                        except Exception:
+                            v = None
+                        y.append(v)
+                    if all(v is None for v in y):
+                        continue
+                    fig = plt.figure()
+                    plt.plot(x, [v if v is not None else float("nan") for v in y], marker="o")
+                    plt.title(m)
+                    plt.xlabel("기록 시각")
+                    plt.ylabel(m)
+                    plt.xticks(rotation=45, ha="right")
+                    plt.tight_layout()
+                    st.pyplot(fig)
+            else:
+                try:
+                    import pandas as pd
+                    df_rows = []
+                    for idx, h in enumerate(hist):
+                        row = {"ts": x[idx]}
+                        for m in pick:
+                            v = (h.get("labs", {}) or {}).get(m, None)
+                            try:
+                                v = float(str(v).replace(",", "."))
+                            except Exception:
+                                v = None
+                            row[m] = v
+                        df_rows.append(row)
+                    if df_rows:
+                        df = pd.DataFrame(df_rows).set_index("ts")
+                        for m in pick:
+                            st.line_chart(df[[m]])
+                    else:
+                        st.info("표시할 데이터가 없습니다.")
+                except Exception:
+                    st.warning("matplotlib/pandas 미설치 → 간단 표로 표시합니다.")
+                    for m in pick:
+                        colX, colY = st.columns([1,2])
+                        with colX: st.caption(m)
+                        with colY: st.write([ (x[i], (hist[i].get('labs',{}) or {}).get(m, None)) for i in range(len(hist)) ])
 
         # 기록 CSV 다운로드
         if hist:
@@ -927,7 +955,6 @@ with t_report:
 
     # ---------- 왼쪽: 보고서 본문 ----------
     with col_report:
-        # 섹션 선택
         use_dflt = st.checkbox("기본(모두 포함)", True, key=wkey("rep_all"))
         colp1,colp2 = st.columns(2)
         with colp1:
