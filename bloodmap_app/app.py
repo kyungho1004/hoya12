@@ -1,10 +1,11 @@
+# app.py
 import datetime as _dt
-import os, sys, re, io
+import os, sys, re, io, csv
 from pathlib import Path
 import importlib.util
 import streamlit as st
 
-APP_VERSION = "v7.20 (Weights+Presets • Symptom Badges • Auto Peds/Adult • Chemo Interactions • Hospital QR • Special notes • Caregiver++)"
+APP_VERSION = "v7.21 (Weights+Presets • Symptom Badges • Auto Peds/Adult • Chemo Interactions • Hospital QR • Special notes • Caregiver++ • Report Graphs)"
 
 # ---------- Safe Import Helper ----------
 def _load_local_module(mod_name: str, rel_paths):
@@ -44,7 +45,8 @@ if _pdf and hasattr(_pdf, "export_md_to_pdf"):
     export_md_to_pdf = _pdf.export_md_to_pdf
 else:
     def export_md_to_pdf(md_text: str) -> bytes:
-        return md_text.encode("utf-8")  # 폴백: 텍스트를 PDF자리로
+        # 최소 폴백: PDF 엔진이 없으면 텍스트 바이트를 반환(다운로드는 가능)
+        return md_text.encode("utf-8")
 
 _onco, ONCO_PATH = _load_local_module("onco_map", ["onco_map.py", "modules/onco_map.py"])
 if _onco:
@@ -255,6 +257,7 @@ def render_caregiver_notes_peds(*, stool, fever, persistent_vomit, oliguria,
         """
 - 옷은 가볍게, 실내 시원하게(과도한 땀내기 X)
 - **미온수 마사지**는 잠깐만
+- **해열제 간격**: 아세트아미노펜 ≥4h, 이부프로펜 ≥6h
         """)
     if persistent_vomit:
         bullet("🤢 구토 지속",
@@ -521,7 +524,7 @@ with t_dx:
             st.write(f"- {cat}: " + ", ".join(arr))
     st.session_state["recs_by_dx"] = recs
 
-# ---------- Chemo interactions (Feature #3) ----------
+# ---------- Chemo interactions ----------
 def _to_set_or_empty(x):
     s = set()
     if not x: return s
@@ -543,7 +546,6 @@ def _meta_for_drug(key):
     rec = DRUG_DB.get(key, {}) if isinstance(DRUG_DB, dict) else {}
     klass = str(rec.get("class","")).strip().lower()
     tags  = _to_set_or_empty(rec.get("tags")) | _to_set_or_empty(rec.get("tag")) | _to_set_or_empty(rec.get("properties"))
-    # 허용되는 태그 힌트들 표준화
     if "qt" in tags or "qt_prolong" in tags or "qt-prolong" in tags: tags.add("qt_prolong")
     if "myelo" in tags or "myelosuppression" in tags: tags.add("myelosuppression")
     if "io" in tags or "immunotherapy" in tags or "pd-1" in tags or "pd-l1" in tags or "ctla-4" in tags:
@@ -562,7 +564,7 @@ def check_chemo_interactions(keys):
     warns = []; notes = []
     if not keys: return warns, notes
     metas = {k: _meta_for_drug(k) for k in keys}
-    # 1) 동일 계열 중복 (예: platinum, taxane 등)
+    # 1) 동일 계열 중복
     classes = {}
     for k, m in metas.items():
         if not m["class"]: continue
@@ -570,18 +572,18 @@ def check_chemo_interactions(keys):
     for klass, arr in classes.items():
         if len(arr) >= 2 and klass not in ("antiemetic","hydration"):
             warns.append(f"동일 계열 **{klass}** 약물 중복({', '.join(arr)}) — 누적 독성 주의")
-    # 2) QT 연장 위험군 복수 병용
+    # 2) QT 연장 위험군
     qt_list = [k for k,m in metas.items() if "qt_prolong" in m["tags"]]
     if len(qt_list) >= 2:
         warns.append(f"**QT 연장 위험** 약물 다수 병용({', '.join(qt_list)}) — EKG/전해질 모니터링")
-    # 3) 강한 골수억제(myelosuppression) 중복
+    # 3) 강한 골수억제
     myelo_list = [k for k,m in metas.items() if "myelosuppression" in m["tags"]]
     if len(myelo_list) >= 2:
         warns.append(f"**강한 골수억제 병용**({', '.join(myelo_list)}) — 감염/출혈 위험 ↑")
-    # 4) 면역항암제 + 스테로이드 병용
+    # 4) 면역항암제 + 스테로이드
     if any("immunotherapy" in m["tags"] for m in metas.values()) and any("steroid" in m["tags"] for m in metas.values()):
         warns.append("**면역항암제 + 스테로이드** 병용 — 면역반응 저하 가능 (임상적 필요 시 예외)")
-    # 5) DB에 명시된 per-drug 상호작용/경고 노트 모음
+    # 5) per-drug 메모
     for k, m in metas.items():
         for it in m["interactions"]:
             notes.append(f"- {k}: {it}")
@@ -758,7 +760,7 @@ with t_peds:
         hives=hives, migraine=migraine, hfmd=hfmd
     )
 
-# SPECIAL (Feature #6: 간단 각주 매핑)
+# SPECIAL (간단 각주 매핑)
 def _annotate_special_notes(lines):
     if not lines: return []
     notes_map = {
@@ -792,7 +794,7 @@ with t_special:
     else:
         st.info("아직 입력/선택이 없습니다.")
 
-# REPORT (+ Feature #5: 병원 전달용 QR)
+# ---------- QR helper ----------
 def _build_hospital_summary():
     key_id   = st.session_state.get("key","(미설정)")
     labs     = st.session_state.get("labs_dict", {}) or {}
@@ -805,7 +807,6 @@ def _build_hospital_summary():
                 "sym_confusion","sym_oliguria","sym_pvomit","sym_petechiae","sym_thunderclap","sym_visual_change"]
     sym_kor  = ["혈뇨","흑색변","혈변","흉통","호흡곤란","의식저하","소변량 급감","지속 구토","점상출혈","번개두통","시야 이상"]
     sym_line = ", ".join([nm for nm, kk in zip(sym_kor, sym_keys) if st.session_state.get(wkey(kk), False)]) or "해당 없음"
-    # 핵심 수치만 발췌
     pick = ["WBC","Hb","PLT","ANC","CRP","Na","K","Ca","Cr","BUN","AST","ALT","T.B","Alb","Glu"]
     lab_parts = []
     for k in pick:
@@ -825,10 +826,15 @@ def _qr_image_bytes(text: str) -> bytes:
     except Exception:
         return b""  # 라이브러리 없으면 빈 바이트 반환
 
+# REPORT with side panel (기록/그래프)
 with t_report:
+    import matplotlib.pyplot as plt  # 지시사항에 따라 seaborn 사용 금지, 색/스타일 지정 금지
+
     st.subheader("보고서 (.md/.txt/.pdf) — 모든 항목 포함")
+
+    # 공통 데이터
     key_id   = st.session_state.get("key","(미설정)")
-    labs     = st.session_state.get("labs_dict", {})
+    labs     = st.session_state.get("labs_dict", {}) or {}
     group    = st.session_state.get("onco_group","")
     disease  = st.session_state.get("onco_disease","")
     meds     = st.session_state.get("chemo_keys", [])
@@ -858,155 +864,216 @@ with t_report:
         "thunderclap": sym_map["번개치는 듯한 두통"], "visual_change": sym_map["시야 이상/복시/암점"],
     })
 
-    # 내보낼 섹션 선택
-    use_dflt = st.checkbox("기본(모두 포함)", True, key=wkey("rep_all"))
-    colp1,colp2 = st.columns(2)
-    with colp1:
-        sec_profile = st.checkbox("프로필/활력/모드", True if use_dflt else False, key=wkey("sec_profile"))
-        sec_symptom = st.checkbox("증상 체크(홈)", True if use_dflt else False, key=wkey("sec_symptom"))
-        sec_emerg   = st.checkbox("응급도 평가(기여도/가중치 포함)", True if use_dflt else False, key=wkey("sec_emerg"))
-        sec_dx      = st.checkbox("진단명(암 선택)", True if use_dflt else False, key=wkey("sec_dx"))
-    with colp2:
-        sec_meds    = st.checkbox("항암제 요약/부작용/병용경고", True if use_dflt else False, key=wkey("sec_meds"))
-        sec_labs    = st.checkbox("피수치 전항목", True if use_dflt else False, key=wkey("sec_labs"))
-        sec_diet    = st.checkbox("식이가이드", True if use_dflt else False, key=wkey("sec_diet"))
-        sec_special = st.checkbox("특수검사 해석(각주)", True if use_dflt else False, key=wkey("sec_special"))
+    # 레이아웃: 왼쪽(보고서) · 오른쪽(기록/그래프)
+    col_report, col_side = st.columns([2, 1])
 
-    # 병원 전달 요약 + QR (Feature #5)
-    st.markdown("### 🏥 병원 전달용 요약 + QR")
-    qr_text = _build_hospital_summary()
-    st.code(qr_text, language="text")
-    qr_png = _qr_image_bytes(qr_text)
-    if qr_png:
-        st.image(qr_png, caption="이 QR을 스캔하면 위 요약 텍스트가 표시됩니다.", use_column_width=False)
-        st.download_button("QR 이미지(.png) 다운로드", data=qr_png, file_name="bloodmap_hospital_qr.png", mime="image/png")
-    else:
-        st.info("QR 라이브러리를 찾지 못했습니다. 위 텍스트를 그대로 공유하세요. (선택: requirements에 `qrcode` 추가)")
+    # ---------- 오른쪽: 기록/그래프 ----------
+    with col_side:
+        st.markdown("### 📈 기록/그래프")
 
-    # 보고서 본문 생성
-    lines = []
-    lines.append("# Bloodmap Report (Full)")
-    lines.append(f"_생성 시각(KST): {_dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}_")
-    lines.append("")
-    lines.append("> In memory of Eunseo, a little star now shining in the sky.")
-    lines.append("> This app is made with the hope that she is no longer in pain,")
-    lines.append("> and resting peacefully in a world free from all hardships.")
-    lines.append("")
-    lines.append("---")
-    lines.append("")
+        # 기록 저장
+        st.session_state.setdefault("lab_history", [])
+        if st.button("➕ 현재 값을 기록에 추가", key=wkey("add_history")):
+            snap = {
+                "ts": _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "temp": temp or "",
+                "hr": hr or "",
+                "labs": {k: ("" if labs.get(k) in (None,"") else labs.get(k)) for k in labs.keys()}
+            }
+            st.session_state["lab_history"].append(snap)
+            st.success("현재 값이 기록에 추가되었습니다.")
 
-    if sec_profile:
-        lines.append("## 프로필/활력/모드")
-        lines.append(f"- 키(별명#PIN): {key_id}")
-        lines.append(f"- 나이(년): {age_years}")
-        lines.append(f"- 모드: {'소아' if is_peds else '성인'}")
-        lines.append(f"- 체온(℃): {temp if temp not in (None, '') else '—'}")
-        lines.append(f"- 심박수(bpm): {hr if hr not in (None, '') else '—'}")
-        lines.append("")
+        # 항목 선택 + 그래프
+        default_metrics = ["WBC","Hb","PLT","ANC","CRP","Na","Cr","BUN","AST","ALT","Glu"]
+        all_metrics = sorted({*default_metrics, *list(labs.keys())})
+        pick = st.multiselect("그래프 항목 선택", options=all_metrics, default=default_metrics[:4], key=wkey("chart_metrics"))
 
-    if sec_symptom:
-        lines.append("## 증상 체크(홈)")
-        for k,v in sym_map.items():
-            lines.append(f"- {k}: {'예' if v else '아니오'}")
-        lines.append("")
-
-    if sec_emerg:
-        lines.append("## 응급도 평가")
-        lines.append(f"- 현재 응급도: {level}")
-        if reasons:
-            for r in reasons: lines.append(f"  - {r}")
-        if contrib:
-            lines.append("### 응급도 기여도(Why)")
-            total = sum(x["score"] for x in contrib) or 1.0
-            for it in sorted(contrib, key=lambda x:-x["score"]):
-                pct = round(100.0*it["score"]/total,1)
-                lines.append(f"- {it['factor']}: 점수 {round(it['score'],2)} (기본{it['base']}×가중치{it['weight']}, {pct}%)")
-        lines.append("")
-        lines.append("### 사용한 가중치")
-        for k,v in get_weights().items():
-            lines.append(f"- {k}: {v}")
-        lines.append("")
-
-    if sec_dx:
-        lines.append("## 진단명(암)")
-        lines.append(f"- 그룹: {group or '(미선택)'}")
-        lines.append(f"- 질환: {disease or '(미선택)'}")
-        lines.append("")
-
-    if sec_meds:
-        lines.append("## 항암제 요약")
-        if meds:
-            for m in meds:
-                try: lines.append(f"- {display_label(m, DRUG_DB)}")
-                except Exception: lines.append(f"- {m}")
+        hist = st.session_state.get("lab_history", [])
+        if not hist:
+            st.info("기록이 없습니다. 먼저 ‘현재 값을 기록에 추가’를 눌러주세요.")
         else:
-            lines.append("- (없음)")
+            x = [h["ts"] for h in hist]
+            for m in pick:
+                y = []
+                for h in hist:
+                    v = None
+                    if "labs" in h and isinstance(h["labs"], dict):
+                        v = h["labs"].get(m, "")
+                    y.append(_try_float(v))
+                if all(v is None for v in y):
+                    continue
+                fig = plt.figure()
+                plt.plot(x, [v if v is not None else float("nan") for v in y], marker="o")
+                plt.title(m)
+                plt.xlabel("기록 시각")
+                plt.ylabel(m)
+                plt.xticks(rotation=45, ha="right")
+                plt.tight_layout()
+                st.pyplot(fig)
+
+        # 기록 CSV 다운로드
+        if hist:
+            output = io.StringIO()
+            writer = csv.writer(output)
+            headers = ["ts","temp","hr"] + all_metrics
+            writer.writerow(headers)
+            for h in hist:
+                row = [h.get("ts",""), h.get("temp",""), h.get("hr","")]
+                for m in all_metrics:
+                    row.append((h.get("labs",{}) or {}).get(m, ""))
+                writer.writerow(row)
+            st.download_button("⬇️ 기록 CSV 다운로드", data=output.getvalue().encode("utf-8"),
+                               file_name="bloodmap_history.csv", mime="text/csv")
+
+    # ---------- 왼쪽: 보고서 본문 ----------
+    with col_report:
+        # 섹션 선택
+        use_dflt = st.checkbox("기본(모두 포함)", True, key=wkey("rep_all"))
+        colp1,colp2 = st.columns(2)
+        with colp1:
+            sec_profile = st.checkbox("프로필/활력/모드", True if use_dflt else False, key=wkey("sec_profile"))
+            sec_symptom = st.checkbox("증상 체크(홈)", True if use_dflt else False, key=wkey("sec_symptom"))
+            sec_emerg   = st.checkbox("응급도 평가(기여도/가중치 포함)", True if use_dflt else False, key=wkey("sec_emerg"))
+            sec_dx      = st.checkbox("진단명(암 선택)", True if use_dflt else False, key=wkey("sec_dx"))
+        with colp2:
+            sec_meds    = st.checkbox("항암제 요약/부작용/병용경고", True if use_dflt else False, key=wkey("sec_meds"))
+            sec_labs    = st.checkbox("피수치 전항목", True if use_dflt else False, key=wkey("sec_labs"))
+            sec_diet    = st.checkbox("식이가이드", True if use_dflt else False, key=wkey("sec_diet"))
+            sec_special = st.checkbox("특수검사 해석(각주)", True if use_dflt else False, key=wkey("sec_special"))
+
+        # 병원 전달 요약 + QR
+        st.markdown("### 🏥 병원 전달용 요약 + QR")
+        qr_text = _build_hospital_summary()
+        st.code(qr_text, language="text")
+        qr_png = _qr_image_bytes(qr_text)
+        if qr_png:
+            st.image(qr_png, caption="이 QR을 스캔하면 위 요약 텍스트가 표시됩니다.", use_column_width=False)
+            st.download_button("QR 이미지(.png) 다운로드", data=qr_png, file_name="bloodmap_hospital_qr.png", mime="image/png")
+        else:
+            st.info("QR 라이브러리를 찾지 못했습니다. 위 텍스트를 그대로 공유하세요. (선택: requirements에 `qrcode` 추가)")
+
+        # 보고서 본문 생성
+        lines = []
+        lines.append("# Bloodmap Report (Full)")
+        lines.append(f"_생성 시각(KST): {_dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}_")
+        lines.append("")
+        lines.append("> In memory of Eunseo, a little star now shining in the sky.")
+        lines.append("> This app is made with the hope that she is no longer in pain,")
+        lines.append("> and resting peacefully in a world free from all hardships.")
+        lines.append("")
+        lines.append("---")
         lines.append("")
 
-        # 보고서에도 경고/참고 포함
-        warns, notes = check_chemo_interactions(meds)
-        if warns:
-            lines.append("### ⚠️ 병용 주의/경고")
-            for w in warns: lines.append(f"- {w}")
-            lines.append("")
-        if notes:
-            lines.append("### ℹ️ 참고(데이터베이스 기재)")
-            for n in notes: lines.append(n)
+        if sec_profile:
+            lines.append("## 프로필/활력/모드")
+            lines.append(f"- 키(별명#PIN): {key_id}")
+            lines.append(f"- 나이(년): {age_years}")
+            lines.append(f"- 모드: {'소아' if is_peds else '성인'}")
+            lines.append(f"- 체온(℃): {temp if temp not in (None, '') else '—'}")
+            lines.append(f"- 심박수(bpm): {hr if hr not in (None, '') else '—'}")
             lines.append("")
 
-        # 부작용
-        if meds:
-            ae_map = _aggregate_all_aes(meds, DRUG_DB)
-            if ae_map:
-                lines.append("## 항암제 부작용(전체)")
-                for k, arr in ae_map.items():
-                    try: nm = display_label(k, DRUG_DB)
-                    except Exception: nm = k
-                    lines.append(f"- {nm}")
-                    for ln in arr: lines.append(f"  - {ln}")
+        if sec_symptom:
+            lines.append("## 증상 체크(홈)")
+            for k,v in sym_map.items():
+                lines.append(f"- {k}: {'예' if v else '아니오'}")
+            lines.append("")
+
+        if sec_emerg:
+            lines.append("## 응급도 평가")
+            lines.append(f"- 현재 응급도: {level}")
+            if reasons:
+                for r in reasons: lines.append(f"  - {r}")
+            if contrib:
+                lines.append("### 응급도 기여도(Why)")
+                total = sum(x["score"] for x in contrib) or 1.0
+                for it in sorted(contrib, key=lambda x:-x["score"]):
+                    pct = round(100.0*it["score"]/total,1)
+                    lines.append(f"- {it['factor']}: 점수 {round(it['score'],2)} (기본{it['base']}×가중치{it['weight']}, {pct}%)")
+            lines.append("")
+            lines.append("### 사용한 가중치")
+            for k,v in get_weights().items():
+                lines.append(f"- {k}: {v}")
+            lines.append("")
+
+        if sec_dx:
+            lines.append("## 진단명(암)")
+            lines.append(f"- 그룹: {group or '(미선택)'}")
+            lines.append(f"- 질환: {disease or '(미선택)'}")
+            lines.append("")
+
+        if sec_meds:
+            lines.append("## 항암제 요약")
+            if meds:
+                for m in meds:
+                    try: lines.append(f"- {display_label(m, DRUG_DB)}")
+                    except Exception: lines.append(f"- {m}")
+            else:
+                lines.append("- (없음)")
+            lines.append("")
+
+            warns, notes = check_chemo_interactions(meds)
+            if warns:
+                lines.append("### ⚠️ 병용 주의/경고")
+                for w in warns: lines.append(f"- {w}")
+                lines.append("")
+            if notes:
+                lines.append("### ℹ️ 참고(데이터베이스 기재)")
+                for n in notes: lines.append(n)
                 lines.append("")
 
-    if sec_labs:
-        lines.append("## 피수치 (모든 항목)")
-        all_labs = [("WBC","백혈구"),("Ca","칼슘"),("Glu","혈당"),("CRP","CRP"),
-                    ("Hb","혈색소"),("P","인(Phosphorus)"),("T.P","총단백"),("Cr","크레아티닌"),
-                    ("PLT","혈소판"),("Na","나트륨"),("AST","AST"),("T.B","총빌리루빈"),
-                    ("ANC","절대호중구"),("Alb","알부민"),("ALT","ALT"),("BUN","BUN")]
-        for abbr, kor in all_labs:
-            v = labs.get(abbr) if isinstance(labs, dict) else None
-            lines.append(f"- {abbr} ({kor}): {v if v not in (None, '') else '—'}")
-        lines.append(f"- ANC 분류: {anc_band(labs.get('ANC') if isinstance(labs, dict) else None)}")
+            if meds:
+                ae_map = _aggregate_all_aes(meds, DRUG_DB)
+                if ae_map:
+                    lines.append("## 항암제 부작용(전체)")
+                    for k, arr in ae_map.items():
+                        try: nm = display_label(k, DRUG_DB)
+                        except Exception: nm = k
+                        lines.append(f"- {nm}")
+                        for ln in arr: lines.append(f"  - {ln}")
+                    lines.append("")
+
+        if sec_labs:
+            lines.append("## 피수치 (모든 항목)")
+            all_labs = [("WBC","백혈구"),("Ca","칼슘"),("Glu","혈당"),("CRP","CRP"),
+                        ("Hb","혈색소"),("P","인(Phosphorus)"),("T.P","총단백"),("Cr","크레아티닌"),
+                        ("PLT","혈소판"),("Na","나트륨"),("AST","AST"),("T.B","총빌리루빈"),
+                        ("ANC","절대호중구"),("Alb","알부민"),("ALT","ALT"),("BUN","BUN")]
+            for abbr, kor in all_labs:
+                v = labs.get(abbr) if isinstance(labs, dict) else None
+                lines.append(f"- {abbr} ({kor}): {v if v not in (None, '') else '—'}")
+            lines.append(f"- ANC 분류: {anc_band(labs.get('ANC') if isinstance(labs, dict) else None)}")
+            lines.append("")
+
+        if sec_diet:
+            dlist = diets or []
+            if dlist:
+                lines.append("## 식이가이드(자동)")
+                for d in dlist: lines.append(f"- {d}")
+                lines.append("")
+
+        if sec_special:
+            spec_lines = st.session_state.get('special_interpretations', [])
+            if spec_lines:
+                lines.append("## 특수검사 해석(각주 포함)")
+                for ln in spec_lines: lines.append(f"- {ln}")
+                lines.append("")
+
+        lines.append("---")
+        lines.append("### 🏥 병원 전달용 텍스트 (QR 동일 내용)")
+        lines.append(_build_hospital_summary())
         lines.append("")
 
-    if sec_diet:
-        dlist = diets or []
-        if dlist:
-            lines.append("## 식이가이드(자동)")
-            for d in dlist: lines.append(f"- {d}")
-            lines.append("")
-
-    if sec_special:
-        spec_lines = st.session_state.get('special_interpretations', [])
-        if spec_lines:
-            lines.append("## 특수검사 해석(각주 포함)")
-            for ln in spec_lines: lines.append(f"- {ln}")
-            lines.append("")
-
-    lines.append("---")
-    lines.append("### 🏥 병원 전달용 텍스트 (QR 동일 내용)")
-    lines.append(qr_text)
-    lines.append("")
-
-    md = "\n".join(lines)
-    st.code(md, language="markdown")
-    st.download_button("💾 보고서 .md 다운로드", data=md.encode("utf-8"),
-                       file_name="bloodmap_report.md", mime="text/markdown")
-    txt_data = md.replace('**','')
-    st.download_button("📝 보고서 .txt 다운로드", data=txt_data.encode("utf-8"),
-                       file_name="bloodmap_report.txt", mime="text/plain")
-    try:
-        pdf_bytes = export_md_to_pdf(md)
-        st.download_button("📄 보고서 .pdf 다운로드", data=pdf_bytes,
-                           file_name="bloodmap_report.pdf", mime="application/pdf")
-    except Exception:
-        st.caption("PDF 변환 모듈을 불러오지 못했습니다. .md 또는 .txt를 사용해주세요.")
+        md = "\n".join(lines)
+        st.code(md, language="markdown")
+        st.download_button("💾 보고서 .md 다운로드", data=md.encode("utf-8"),
+                           file_name="bloodmap_report.md", mime="text/markdown")
+        txt_data = md.replace('**','')
+        st.download_button("📝 보고서 .txt 다운로드", data=txt_data.encode("utf-8"),
+                           file_name="bloodmap_report.txt", mime="text/plain")
+        try:
+            pdf_bytes = export_md_to_pdf(md)
+            st.download_button("📄 보고서 .pdf 다운로드", data=pdf_bytes,
+                               file_name="bloodmap_report.pdf", mime="application/pdf")
+        except Exception:
+            st.caption("PDF 변환 모듈을 불러오지 못했습니다. .md 또는 .txt를 사용해주세요.")
