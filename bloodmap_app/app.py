@@ -5,7 +5,7 @@ from pathlib import Path
 import importlib.util
 import streamlit as st
 
-APP_VERSION = "v7.22 (Weights+Presets • Symptom Badges • Auto Peds/Adult • Chemo Interactions • Hospital QR • Special notes • Caregiver++ • Report Graphs w/ Fallback)"
+APP_VERSION = "In memory of Eunseo, a little star now shining in the sky. This app is made with the hope that she is no longer in pain, and resting peacefully in a world free from all hardships."
 
 # ---------- Safe Import Helper ----------
 def _load_local_module(mod_name: str, rel_paths):
