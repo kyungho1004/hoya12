@@ -1230,9 +1230,9 @@ from typing import List, Tuple
 st.markdown("### 빠른 프리셋")
 _preset_items: List[Tuple[str, str]] = [
     ("공식 배포", "https://bloodmap.streamlit.app/"),
-    ("공지", "https://example.com/notice"),
-    ("블로그", "https://example.com/blog"),
-    ("카페", "https://example.com/cafe"),
+    ("공지", "https://cafe.naver.com/bloodmap"),
+    ("블로그", "https://blog.naver.com/lee7298"),
+    ("카페", "https://cafe.naver.com/bloodmap"),
 ]
 pc1, pc2, pc3, pc4 = st.columns(4)
 for (col, (label, val)) in zip([pc1, pc2, pc3, pc4], _preset_items):
