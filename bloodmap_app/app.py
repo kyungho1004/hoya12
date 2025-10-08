@@ -1190,7 +1190,16 @@ with t_qr:
     st.caption(f"모듈 경로 — qr_patch: {QR_PATH or '(not found)'}")
 
     default_text = "https://bloodmap.streamlit.app/"
-    data = st.text_input("URL 또는 임의 텍스트", value=default_text, placeholder="여기에 주소나 텍스트를 입력", key=wkey("qr_text"))
+    data_raw = st.text_input("URL 또는 임의 텍스트", value=default_text, placeholder="여기에 주소나 텍스트를 입력", key=wkey("qr_text"))
+    import re as _re
+    data = (data_raw or "").strip()
+    if data and not _re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*://", data):
+        # 스킴이 없으면 https:// 자동 부여
+        data = "https://" + data
+    if " " in data:
+        st.warning("URL에 공백이 포함되어 있어 접근이 안 될 수 있습니다. 공백을 제거하거나 %20으로 인코딩하세요.")
+    # 클릭 테스트용 링크
+    st.markdown(f"[🔗 링크 열기]({data})")
     c1, c2 = st.columns(2)
     with c1:
         box_size = st.slider("박스 크기(box_size)", 4, 12, 8, key=wkey("qr_box"))
@@ -1221,9 +1230,9 @@ from typing import List, Tuple
 st.markdown("### 빠른 프리셋")
 _preset_items: List[Tuple[str, str]] = [
     ("공식 배포", "https://bloodmap.streamlit.app/"),
-    ("공지", "https://cafe.naver.com/bloodmap"),
-    ("블로그", "https://blog.naver.com/lee7298"),
-    ("카페", "https://cafe.naver.com/bloodmap"),
+    ("공지", "https://example.com/notice"),
+    ("블로그", "https://example.com/blog"),
+    ("카페", "https://example.com/cafe"),
 ]
 pc1, pc2, pc3, pc4 = st.columns(4)
 for (col, (label, val)) in zip([pc1, pc2, pc3, pc4], _preset_items):
