@@ -761,12 +761,44 @@ with t_peds:
     if hives: score["알레르기 주의"] += 60
     if migraine: score["편두통 의심"] += 35
     if hfmd: score["수족구 의심"] += 40
-
+    t.markdown("---")
+    st.subheader("보호자 체크리스트")
+    show_ck = st.toggle("체크리스트 열기", value=False, key=wkey("peds_ck"))
+   if show_ck:
+    colL, colR = st.columns(2)
+    with colL:
+        st.markdown("**🟢 집에서 해볼 수 있는 것**")
+        st.write("- 충분한 수분 섭취(ORS/미온수)")
+        st.write("- 해열제 올바른 간격 준수")
+        st.write("- 생리식염수 비강 세척/흡인(콧물)")
+        st.write("- 가벼운 옷/시원한 환경")
+    with colR:
+        st.markdown("**🔴 즉시 진료가 필요한 신호**")
+        st.write("- 번개치는 두통, 시야 이상, 경련, 의식저하")
+        st.write("- 호흡곤란/청색증/입술부종")
+        st.write("- 소변량 급감·축 늘어짐(탈수)")
+        st.write("- 피 섞인 변/검은 변, 점상출혈 지속")
     ordered = sorted(score.items(), key=lambda x: x[1], reverse=True)
     st.write("• " + " / ".join([f"{k}: {v}" for k,v in ordered if v>0]) if any(v>0 for _,v in ordered) else "• 특이 점수 없음")
 
     st.markdown("---")
     st.subheader("해열제 계산기")
+    st.markdown("#### 해열제 예시 스케줄러(교차복용)")
+     start = st.time_input("시작시간", value=_dt.datetime.now().time(), key=wkey("peds_sched_start"))
+   try:
+    base = _dt.datetime.combine(_dt.date.today(), start)
+    plan = [
+        ("APAP", base),
+        ("IBU",  base + _dt.timedelta(hours=3)),
+        ("APAP", base + _dt.timedelta(hours=6)),
+        ("IBU",  base + _dt.timedelta(hours=9)),
+    ]
+    st.caption("※ 실제 복용 간격: APAP≥4h, IBU≥6h. 예시는 간단 참고용.")
+    for drug, t in plan:
+        st.write(f"- {drug} @ {t.strftime('%H:%M')}")
+except Exception:
+    st.info("시간 형식을 확인하세요.")
+
     prev_wt = st.session_state.get(wkey("wt_peds"), 0.0)
     default_wt = _safe_float(prev_wt, 0.0)
     wt = st.number_input("체중(kg)", min_value=0.0, max_value=200.0, value=default_wt, step=0.1, key=wkey("wt_peds_num"))
@@ -792,25 +824,31 @@ with t_peds:
 def _annotate_special_notes(lines):
     if not lines: return []
     notes_map = {
-        r"procalcitonin|pct": "세균성 감염 지표로 사용 — 해석은 임상 맥락 필수",
-        r"d[- ]?dimer": "혈전/색전 의심 시 상승 — 비특이적",
-        r"ferritin": "염증/HLH/철대사 이상 평가에 참고",
-        r"troponin": "심근 손상 지표 — 신장기능/수술 등도 영향",
-        r"bnp|nt[- ]?pro[- ]?bnp": "심부전 가능성 평가 — 연령/신장기능 고려",
-        r"crp": "염증 비특이 지표 — 추세로 평가",
+        r"procalcitonin|pct": "세균성 감염 지표 — 초기 6–24h, 신장기능/패혈증 단계 고려",
+        r"d[- ]?dimer": "혈전/색전 의심 시 상승 — 고령·수술 후·임신 등에서 비특이적 상승",
+        r"ferritin": "염증/HLH/철대사 이상 — 간질환·감염에서도 상승 가능",
+        r"troponin": "심근 손상 — 신장기능 저하/빈맥/수술·패혈증에서도 경도 상승 가능",
+        r"bnp|nt[- ]?pro[- ]?bnp": "심부전 가능성 — 연령·비만·신장기능·폐고혈압 영향",
+        r"crp": "염증 비특이 — 절대치보다 **추세**가 중요",
+        r"esr": "만성 염증성 지표 — 빈혈/임신/고령에서 상승",
+        r"ldh": "용혈/종양부하/조직손상 — 비특이 지표",
+        r"haptoglobin": "용혈 시 감소 — 간질환/급성기반응으로 변화",
+        r"fibrinogen": "급성기 반응성으로 상승 — DIC 말기에 감소",
     }
+    pitfalls = "※ 해석은 임상 맥락·시간축(발현 경과)·신장/간기능 영향을 반드시 함께 보세요."
     out = []
     for ln in lines:
-        added = False
+        tagged = False
         for pat, note in notes_map.items():
             if re.search(pat, ln, flags=re.I):
                 out.append(f"{ln} — [참고] {note}")
-                added = True
+                tagged = True
                 break
-        if not added:
+        if not tagged:
             out.append(ln)
+    out.append(pitfalls)
     return out
-
+       
 with t_special:
     st.subheader("특수검사 해석")
     if SPECIAL_PATH: st.caption(f"special_tests 로드: {SPECIAL_PATH}")
