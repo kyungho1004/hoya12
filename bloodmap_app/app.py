@@ -111,6 +111,9 @@ st.markdown("---")
 render_deploy_banner("https://bloodmap.streamlit.app/", "제작: Hoya/GPT · 자문: Hoya/GPT")
 st.caption(f"모듈 경로 — special_tests: {SPECIAL_PATH or '(not found)'} | onco_map: {ONCO_PATH or '(not found)'} | drug_db: {DRUGDB_PATH or '(not found)'}")
 
+from qr_patch import st_qr
+st_qr("https://bloodmap.streamlit.app/", caption="공식 배포 링크 QR")
+
 # ---------- Helpers ----------
 def wkey(name:str)->str:
     who = st.session_state.get("key","guest#PIN")
