@@ -4,7 +4,6 @@ import os, sys, re, io, csv
 from pathlib import Path
 import importlib.util
 import streamlit as st
-from qr_patch import st_qr, generate_qr_image, ensure_qrcode
 
 APP_VERSION = "In memory of Eunseo, a little star now shining in the sky. This app is made with the hope that she is no longer in pain, and resting peacefully in a world free from all hardships."
 
