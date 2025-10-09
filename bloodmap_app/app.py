@@ -4,6 +4,20 @@ import os, sys, re, io, csv
 from pathlib import Path
 import importlib.util
 import streamlit as st
+import os as _os, sys as _sys, importlib.util as _ilu
+
+
+def _peds_load_local_module(_modname, _filename):
+    ...
+try:
+    from peds_conditions_ui import render_peds_conditions_page
+except Exception:
+    _m = _peds_load_local_module("peds_conditions_ui", "peds_conditions_ui.py")
+    ...
+try:
+    from peds_caregiver_page import render_caregiver_mode
+except Exception:
+    _m2 = _peds_load_local_module("peds_caregiver_page", "peds_caregiver_page.py")
 
 APP_VERSION = "v7.24 (Graphs Bands • Peds Checklist+Schedule • Onco-DB Guard • Special Notes+)"
 
