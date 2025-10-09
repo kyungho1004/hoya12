@@ -1,23 +1,57 @@
+# --- BEGIN pediatric safe-import loader (auto) ---
+# 이 블록은 peds_* 모듈 임포트 실패 시, 동일 폴더에서 직접 로드하는 백업 로더입니다.
+import os as _os, sys as _sys, importlib.util as _ilu
+def _peds_load_local_module(_modname: str, _filename: str):
+    try:
+        _here = _os.path.dirname(__file__) if "__file__" in globals() else _os.getcwd()
+        _path = _os.path.join(_here, _filename)
+        if _os.path.exists(_path):
+            _spec = _ilu.spec_from_file_location(_modname, _path)
+            _mod = _ilu.module_from_spec(_spec)
+            assert _spec and _spec.loader
+            _spec.loader.exec_module(_mod)  # type: ignore
+            _sys.modules[_modname] = _mod
+            return _mod
+    except Exception as _e:
+        try:
+            import streamlit as st
+            st.warning(f"모듈 로드 실패({_modname}): {_e}")
+        except Exception:
+            pass
+    return None
+
+# 표준 임포트 → 실패 시 로컬 로더로 대체
+try:
+    from peds_conditions_ui import render_peds_conditions_page  # type: ignore
+except Exception:
+    _m = _peds_load_local_module("peds_conditions_ui", "peds_conditions_ui.py")
+    if _m and hasattr(_m, "render_peds_conditions_page"):
+        render_peds_conditions_page = getattr(_m, "render_peds_conditions_page")
+    else:
+        def render_peds_conditions_page(*args, **kwargs):
+            import streamlit as st
+            st.error("peds_conditions_ui 로드 실패")
+
+try:
+    from peds_caregiver_page import render_caregiver_mode  # type: ignore
+except Exception:
+    _m2 = _peds_load_local_module("peds_caregiver_page", "peds_caregiver_page.py")
+    if _m2 and hasattr(_m2, "render_caregiver_mode"):
+        render_caregiver_mode = getattr(_m2, "render_caregiver_mode")
+    else:
+        def render_caregiver_mode(*args, **kwargs):
+            import streamlit as st
+            st.error("peds_caregiver_page 로드 실패")
+# --- END pediatric safe-import loader (auto) ---
+
+from peds_caregiver_page import render_caregiver_mode  # pediatric patch
+from peds_conditions_ui import render_peds_conditions_page  # pediatric patch
 # app.py
 import datetime as _dt
 import os, sys, re, io, csv
 from pathlib import Path
 import importlib.util
 import streamlit as st
-import os as _os, sys as _sys, importlib.util as _ilu
-
-
-def _peds_load_local_module(_modname, _filename):
-    ...
-try:
-    from peds_conditions_ui import render_peds_conditions_page
-except Exception:
-    _m = _peds_load_local_module("peds_conditions_ui", "peds_conditions_ui.py")
-    ...
-try:
-    from peds_caregiver_page import render_caregiver_mode
-except Exception:
-    _m2 = _peds_load_local_module("peds_caregiver_page", "peds_caregiver_page.py")
 
 APP_VERSION = "v7.24 (Graphs Bands • Peds Checklist+Schedule • Onco-DB Guard • Special Notes+)"
 
@@ -1571,3 +1605,17 @@ with t_report:
         except Exception:
             st.caption("PDF 변환 모듈을 불러오지 못했습니다. .md 또는 .txt를 사용해주세요.")
 
+
+# === Pediatric Caregiver Guides (auto-patched 2025-10-09T05:34:06.512590Z) ===
+try:
+    # render two tabs without colliding existing keys
+    _peds_tabs = st.tabs(["👶 소아 가이드", "🧩 보호자 모드"], key="tabs_peds_guides_v1")
+    with _peds_tabs[0]:
+        render_peds_conditions_page()
+    with _peds_tabs[1]:
+        render_caregiver_mode()
+except Exception as _e:
+    try:
+        st.warning(f"소아 가이드 섹션 로딩 실패: {_e}")
+    except Exception:
+        pass
