@@ -80,7 +80,12 @@ def _dosing_note_ml(weight_kg: Optional[float]) -> str:
             f"- IBU: 약 {ibu_mg} mg/회 (≥6h, 생후 6개월 미만 지양){extra}\n"
             f"- 24h 총량/성분중복 확인, 다음 복용 .ics는 앱의 케어로그를 이용하세요.")
 
-def render_peds_conditions_page(default_weight_kg: Optional[float]=None, key_prefix: str="peds"):
+def render_peds_conditions_page(default_weight_kg: Optional[float]=None, key_prefix: Optional[str]=None):
+        # auto namespace for keys if not provided
+    if key_prefix is None:
+        cnt = st.session_state.get('_peds_conditions_ui_inst', 0)
+        key_prefix = f"peds_{cnt}"
+        st.session_state['_peds_conditions_ui_inst'] = cnt + 1
     st.header("👶 소아 병명별 한눈에 가이드")
     _safe_branding_banner()
 

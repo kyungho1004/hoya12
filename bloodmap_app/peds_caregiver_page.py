@@ -46,15 +46,18 @@ def _safe_branding_banner():
         except Exception:
             pass
 
-def render_caregiver_mode(default_weight_kg: Optional[float]=None, key_prefix: str="peds_cg"):
+def render_caregiver_mode(default_weight_kg: Optional[float]=None, key_prefix: Optional[str]=None):
+    # auto namespace
+    if key_prefix is None:
+        cnt = st.session_state.get('_peds_caregiver_page_inst', 0)
+        key_prefix = f"peds_cg_{cnt}"
+        st.session_state['_peds_caregiver_page_inst'] = cnt + 1
     st.header("🧩 보호자 모드 — 병명별 안내 묶음")
     _safe_branding_banner()
 
     names = condition_names()
     picks = st.multiselect("배포할 병명을 선택하세요", names, default=names[:3], key=f"{key_prefix}_picks")
-    weight = st.number_input("아이 체중 (kg)", min_value=0.0, step=0.5,
-                             value=float(default_weight_kg) if default_weight_kg else 0.0,
-                             key=f"{key_prefix}_weight")
+    weight = st.number_input("아이 체중 (kg)", min_value=0.0, step=0.5, value=float(default_weight_kg) if default_weight_kg else 0.0, key=f"{key_prefix}_weight")
     add_antipy = st.checkbox("해열제 요약 포함", value=True, key=f"{key_prefix}_addapy")
 
     st.divider()
