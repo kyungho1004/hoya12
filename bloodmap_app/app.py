@@ -1,3 +1,47 @@
+# === Pediatric Guides safe-import loader (auto) ===
+import os as _os, sys as _sys, importlib.util as _ilu
+def _peds_load_local(_modname: str, _filename: str):
+    try:
+        _here = _os.path.dirname(__file__) if "__file__" in globals() else _os.getcwd()
+        _path = _os.path.join(_here, _filename)
+        if _os.path.exists(_path):
+            _spec = _ilu.spec_from_file_location(_modname, _path)
+            _mod = _ilu.module_from_spec(_spec)
+            assert _spec and _spec.loader
+            _spec.loader.exec_module(_mod)  # type: ignore
+            _sys.modules[_modname] = _mod
+            return _mod
+    except Exception as _e:
+        try:
+            import streamlit as st
+            st.warning(f"모듈 로드 실패({_modname}): {_e}")
+        except Exception:
+            pass
+    return None
+
+try:
+    from peds_conditions_ui import render_peds_conditions_page  # type: ignore
+except Exception:
+    _m = _peds_load_local("peds_conditions_ui", "peds_conditions_ui.py")
+    if _m and hasattr(_m, "render_peds_conditions_page"):
+        render_peds_conditions_page = getattr(_m, "render_peds_conditions_page")
+    else:
+        def render_peds_conditions_page(*args, **kwargs):
+            import streamlit as st
+            st.error("peds_conditions_ui 로드 실패")
+
+try:
+    from peds_caregiver_page import render_caregiver_mode  # type: ignore
+except Exception:
+    _m2 = _peds_load_local("peds_caregiver_page", "peds_caregiver_page.py")
+    if _m2 and hasattr(_m2, "render_caregiver_mode"):
+        render_caregiver_mode = getattr(_m2, "render_caregiver_mode")
+    else:
+        def render_caregiver_mode(*args, **kwargs):
+            import streamlit as st
+            st.error("peds_caregiver_page 로드 실패")
+# === End pediatric loader ===
+
 # app.py
 import datetime as _dt
 import os, sys, re, io, csv
@@ -1557,3 +1601,27 @@ with t_report:
         except Exception:
             st.caption("PDF 변환 모듈을 불러오지 못했습니다. .md 또는 .txt를 사용해주세요.")
 
+# === Pediatric Caregiver Guides section (auto-patched 2025-10-09T06:30:38.219569Z) ===
+def _render_pediatric_guides_section():
+    import streamlit as st
+    st.header("👶 소아 — 보호자 안내")
+    tabs = st.tabs(["병명별 한눈에", "보호자 모드(묶음)"])
+    with tabs[0]:
+        try:
+            render_peds_conditions_page()
+        except Exception as _e:
+            st.warning(f"병명별 가이드 로딩 실패: {_e}")
+    with tabs[1]:
+        try:
+            render_caregiver_mode()
+        except Exception as _e:
+            st.warning(f"보호자 모드 로딩 실패: {_e}")
+
+try:
+    _render_pediatric_guides_section()
+except Exception as _e:
+    try:
+        import streamlit as st
+        st.warning(f"소아 보호자 섹션 오류: {_e}")
+    except Exception:
+        pass
