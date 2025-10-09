@@ -32,7 +32,7 @@ def _inject_css_once() -> None:
         unsafe_allow_html=True,
     )
 
-def render_deploy_banner(app_url: str, made_by: str) -> None:
+def render_deploy_banner(app_url: str="https://bloodmap.streamlit.app", made_by: str="Hoya/GPT") -> None:
     """
     앱 상단에 공식 배포 링크 및 고정 안내를 출력합니다.
     - 링크/캡션 폰트를 기본보다 '약간' 크게 렌더링

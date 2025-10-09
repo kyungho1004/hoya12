@@ -8,6 +8,7 @@ from typing import List, Optional
 import streamlit as st
 import inspect
 
+
 def _safe_branding_banner():
     """Call branding.render_deploy_banner with backward-compatible signature."""
     app_url = "https://bloodmap.streamlit.app"
@@ -22,13 +23,13 @@ def _safe_branding_banner():
             pass
         return
     try:
+        import inspect
         sig = inspect.signature(_rdb)
         if len(sig.parameters) >= 2:
             _rdb(app_url, made_by)
         else:
             _rdb()
     except TypeError:
-        # Force-call with two args if signature mismatch
         try:
             _rdb(app_url, made_by)
         except Exception:
@@ -37,26 +38,12 @@ def _safe_branding_banner():
                 st.info(f"제작/자문: {made_by} · ⏱ KST")
             except Exception:
                 pass
-    except Exception as e:
+    except Exception:
         try:
             import streamlit as st
             st.info("제작/자문: Hoya/GPT · ⏱ KST")
         except Exception:
             pass
-
-import io, zipfile
-
-from peds_conditions import condition_names, build_share_text, build_text
-try:
-    from branding import render_deploy_banner
-except Exception:
-    def _safe_branding_banner():
-        st.info("제작/자문: Hoya/GPT · ⏱ KST · 혼돈 방지: 세포·면역치료 비표기")
-
-try:
-    from pdf_export import export_md_to_pdf
-except Exception:
-    export_md_to_pdf = None
 
 def render_caregiver_mode(default_weight_kg: Optional[float]=None):
     st.header("🧩 보호자 모드 — 병명별 안내 묶음")

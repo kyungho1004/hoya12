@@ -9,6 +9,7 @@ from typing import Optional
 import streamlit as st
 import inspect
 
+
 def _safe_branding_banner():
     """Call branding.render_deploy_banner with backward-compatible signature."""
     app_url = "https://bloodmap.streamlit.app"
@@ -23,13 +24,13 @@ def _safe_branding_banner():
             pass
         return
     try:
+        import inspect
         sig = inspect.signature(_rdb)
         if len(sig.parameters) >= 2:
             _rdb(app_url, made_by)
         else:
             _rdb()
     except TypeError:
-        # Force-call with two args if signature mismatch
         try:
             _rdb(app_url, made_by)
         except Exception:
@@ -38,39 +39,12 @@ def _safe_branding_banner():
                 st.info(f"제작/자문: {made_by} · ⏱ KST")
             except Exception:
                 pass
-    except Exception as e:
+    except Exception:
         try:
             import streamlit as st
             st.info("제작/자문: Hoya/GPT · ⏱ KST")
         except Exception:
             pass
-
-
-try:
-    from branding import render_deploy_banner  # 프로젝트 배너(제작/자문/KST/비표기 고지)
-except Exception:
-    def _safe_branding_banner():
-        st.info("제작/자문: Hoya/GPT · ⏱ KST · 혼돈 방지: 세포·면역치료 비표기")
-
-from peds_conditions import condition_names, build_text, build_share_text
-# 선택: peds_dose가 있으면 mL 계산에 활용
-try:
-    import peds_dose
-except Exception:
-    peds_dose = None
-
-# 선택: qrcode가 있으면 QR 생성
-try:
-    import qrcode
-    QR_OK = True
-except Exception:
-    QR_OK = False
-
-# 선택: PDF 내보내기
-try:
-    from pdf_export import export_md_to_pdf
-except Exception:
-    export_md_to_pdf = None
 
 def _dosing_note_ml(weight_kg: Optional[float]) -> str:
     """peds_dose 모듈이 있으면 mL 안내까지, 없으면 mg 기준만."""
