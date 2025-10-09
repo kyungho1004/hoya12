@@ -1638,6 +1638,26 @@ with t_report:
 def _render_pediatric_guides_section():
     import streamlit as st
     st.header("👶 소아 — 보호자 안내")
+    # --- Namespacing to avoid cross-tab collisions ---
+    if '_peds_ns_seed' not in st.session_state:
+        import uuid
+        st.session_state['_peds_ns_seed'] = uuid.uuid4().hex[:6]
+    _seed = st.session_state['_peds_ns_seed']
+    _guide_prefix = f"peds_guide_{_seed}"
+    _sym_prefix = f"peds_sym_{_seed}"
+    _cg_prefix = f"peds_cg_{_seed}"
+    col_reset, _ = st.columns([1,3])
+    with col_reset:
+        if st.button('🔄 섹션 초기화', key=f"peds_reset_{_seed}"):
+            # wipe prior peds keys and rotate seed
+            keys_to_del = [k for k in list(st.session_state.keys()) if k.startswith('peds_')]
+            for k in keys_to_del:
+                try:
+                    del st.session_state[k]
+                except Exception:
+                    pass
+            st.session_state['_peds_ns_seed'] = uuid.uuid4().hex[:6]
+            st.experimental_rerun()
     tabs = st.tabs(["병명별 한눈에", "보호자 모드(묶음)"])
     with tabs[0]:
         try:
