@@ -44,8 +44,6 @@ except Exception:
             st.error("peds_caregiver_page 로드 실패")
 # --- END pediatric safe-import loader (auto) ---
 
-from peds_caregiver_page import render_caregiver_mode  # pediatric patch
-from peds_conditions_ui import render_peds_conditions_page  # pediatric patch
 # app.py
 import datetime as _dt
 import os, sys, re, io, csv
@@ -1606,16 +1604,23 @@ with t_report:
             st.caption("PDF 변환 모듈을 불러오지 못했습니다. .md 또는 .txt를 사용해주세요.")
 
 
-# === Pediatric Caregiver Guides (auto-patched 2025-10-09T05:34:06.512590Z) ===
-try:
-    # render two tabs without colliding existing keys
-   _peds_tabs = st.tabs(["👶 소아 가이드", "🧩 보호자 모드"])
-    with _peds_tabs[0]:
+
+# === Pediatric Caregiver Guides (indent-fix 2025-10-09T05:59:40.669982Z) ===
+def _render_peds_guides_section():
+    import streamlit as st
+    tabs = st.tabs(["👶 소아 가이드", "🧩 보호자 모드"])
+    with tabs[0]:
         render_peds_conditions_page()
-    with _peds_tabs[1]:
+    with tabs[1]:
         render_caregiver_mode()
+
+try:
+    _render_peds_guides_section()
 except Exception as _e:
     try:
+        import streamlit as st
         st.warning(f"소아 가이드 섹션 로딩 실패: {_e}")
     except Exception:
         pass
+
+# ===
