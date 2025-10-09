@@ -986,6 +986,23 @@ with t_peds:
     with f3:
         hfmd = st.checkbox("수족구 의심(손발·입 병변)", key=wkey("p_hfmd"))
 
+    # 자동 해석: 증상 입력 시 즉시 보호자 가이드 표시
+    render_caregiver_notes_peds(
+        stool=stool,
+        fever=fever,
+        persistent_vomit=persistent_vomit,
+        oliguria=oliguria,
+        cough=cough,
+        nasal=nasal,
+        eye=eye,
+        abd_pain=abd_pain,
+        ear_pain=ear_pain,
+        rash=rash,
+        hives=hives,
+        migraine=migraine,
+        hfmd=hfmd,
+    )
+
     score = {
         "장염 의심": 0,
         "상기도/독감 계열": 0,
