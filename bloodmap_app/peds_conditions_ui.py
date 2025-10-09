@@ -118,7 +118,7 @@ def render_peds_conditions_page(default_weight_kg: Optional[float]=None, key_pre
     else:
         st.info("PDF 엔진이 없어 TXT로만 저장됩니다. (pdf_export 모듈 필요)")
 
-    base_url = st.text_input("공유용 링크(배포 후 수정하세요)", value="https://bloodmap.streamlit.app/guide")
+    base_url = st.text_input("공유용 링크(배포 후 수정하세요)", value="https://bloodmap.streamlit.app/guide", key=f"{key_prefix}_shareurl")
     share_url = f"{base_url}?name={name}"
     if QR_OK:
         btn = st.button("공유용 QR 만들기", key=f"{key_prefix}_qr")

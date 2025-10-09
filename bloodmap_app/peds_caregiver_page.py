@@ -51,11 +51,11 @@ def render_caregiver_mode(default_weight_kg: Optional[float]=None, key_prefix: s
     _safe_branding_banner()
 
     names = condition_names()
-    picks = st.multiselect("배포할 병명을 선택하세요", names, default=names[:3])
+    picks = st.multiselect("배포할 병명을 선택하세요", names, default=names[:3], key=f"{key_prefix}_picks")
     weight = st.number_input("아이 체중 (kg)", min_value=0.0, step=0.5,
                              value=float(default_weight_kg) if default_weight_kg else 0.0,
                              key=f"{key_prefix}_weight")
-    add_antipy = st.checkbox("해열제 요약 포함", value=True)
+    add_antipy = st.checkbox("해열제 요약 포함", value=True, key=f"{key_prefix}_addapy")
 
     st.divider()
     if not picks:
