@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 """
 peds_conditions_ui.py
@@ -9,6 +8,25 @@ from typing import Optional
 import streamlit as st
 import inspect
 
+# Data/model imports
+from peds_conditions import condition_names, build_text, build_share_text
+
+# Optional dependencies
+try:
+    import peds_dose  # for mL conversion if available
+except Exception:
+    peds_dose = None
+
+try:
+    import qrcode  # for QR generation if available
+    QR_OK = True
+except Exception:
+    QR_OK = False
+
+try:
+    from pdf_export import export_md_to_pdf  # for PDF export
+except Exception:
+    export_md_to_pdf = None
 
 def _safe_branding_banner():
     """Call branding.render_deploy_banner with backward-compatible signature."""
@@ -18,13 +36,11 @@ def _safe_branding_banner():
         from branding import render_deploy_banner as _rdb
     except Exception:
         try:
-            import streamlit as st
             st.info("제작/자문: Hoya/GPT · ⏱ KST · 혼돈 방지: 세포·면역치료 비표기")
         except Exception:
             pass
         return
     try:
-        import inspect
         sig = inspect.signature(_rdb)
         if len(sig.parameters) >= 2:
             _rdb(app_url, made_by)
@@ -35,13 +51,11 @@ def _safe_branding_banner():
             _rdb(app_url, made_by)
         except Exception:
             try:
-                import streamlit as st
                 st.info(f"제작/자문: {made_by} · ⏱ KST")
             except Exception:
                 pass
     except Exception:
         try:
-            import streamlit as st
             st.info("제작/자문: Hoya/GPT · ⏱ KST")
         except Exception:
             pass
@@ -54,7 +68,6 @@ def _dosing_note_ml(weight_kg: Optional[float]) -> str:
     apap_mg_max = round(weight_kg * 15)
     ibu_mg = round(weight_kg * 10)
     extra = ""
-    # peds_dose에 농도 테이블이 있으면 mL 환산
     try:
         if peds_dose and hasattr(peds_dose, "to_ml"):
             apap_ml = peds_dose.to_ml("APAP", apap_mg_min, apap_mg_max)
@@ -86,7 +99,6 @@ def render_peds_conditions_page(default_weight_kg: Optional[float]=None):
     st.divider()
     if add_antipy:
         text = build_share_text(name, weight if weight>0 else None)
-        # 추가 mL 안내
         if add_ml:
             text += _dosing_note_ml(weight if weight>0 else None)
     else:
@@ -95,12 +107,10 @@ def render_peds_conditions_page(default_weight_kg: Optional[float]=None):
     st.subheader("요약 보기")
     st.write(text)
 
-    # 공유/다운로드 (TXT)
     st.download_button("요약 텍스트 다운로드 (.txt)", data=text.encode('utf-8'),
                        file_name=f"{name}_가이드.txt", mime="text/plain",
                        key="peds_cond_dl")
 
-    # PDF 내보내기
     if export_md_to_pdf:
         pdf_bin = export_md_to_pdf(text)
         st.download_button("PDF로 내보내기", data=pdf_bin, file_name=f"{name}_가이드.pdf",
@@ -108,7 +118,6 @@ def render_peds_conditions_page(default_weight_kg: Optional[float]=None):
     else:
         st.info("PDF 엔진이 없어 TXT로만 저장됩니다. (pdf_export 모듈 필요)")
 
-    # QR 코드 (선택): 배포시 base_url만 바꾸면 공유 링크 인코딩 가능
     base_url = st.text_input("공유용 링크(배포 후 수정하세요)", value="https://bloodmap.streamlit.app/guide")
     share_url = f"{base_url}?name={name}"
     if QR_OK:
