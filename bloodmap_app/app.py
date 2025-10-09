@@ -1650,10 +1650,8 @@ def _render_pediatric_guides_section():
         except Exception as _e:
             st.warning(f"보호자 모드 로딩 실패: {_e}")
 
-# One-time guard to avoid duplicate pediatric rendering
-import streamlit as _st_guard
-if not _st_guard.session_state.get("_peds_section_rendered", False):
-    _st_guard.session_state["_peds_section_rendered"] = True
+try:
     _render_pediatric_guides_section()
-else:
-    pass
+except Exception as _e:
+    import streamlit as st
+    st.warning(f"소아 보호자 섹션 오류: {_e}")
