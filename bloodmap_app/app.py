@@ -1,3 +1,36 @@
+# === Triage UI safe-import loader (auto) ===
+import os as _os, sys as _sys, importlib.util as _ilu
+def _load_local_module_triage(_modname: str, _filename: str):
+    try:
+        _here = _os.path.dirname(__file__) if "__file__" in globals() else _os.getcwd()
+        _path = _os.path.join(_here, _filename)
+        if _os.path.exists(_path):
+            _spec = _ilu.spec_from_file_location(_modname, _path)
+            _mod = _ilu.module_from_spec(_spec)
+            assert _spec and _spec.loader
+            _spec.loader.exec_module(_mod)  # type: ignore
+            _sys.modules[_modname] = _mod
+            return _mod
+    except Exception as _e:
+        try:
+            import streamlit as st
+            st.warning(f"모듈 로드 실패({_modname}): {_e}")
+        except Exception:
+            pass
+    return None
+
+try:
+    from triage_weights_ui import render_triage_weights_ui  # type: ignore
+except Exception:
+    _mtri = _load_local_module_triage("triage_weights_ui", "triage_weights_ui.py")
+    if _mtri and hasattr(_mtri, "render_triage_weights_ui"):
+        render_triage_weights_ui = getattr(_mtri, "render_triage_weights_ui")
+    else:
+        def render_triage_weights_ui(*args, **kwargs):
+            import streamlit as st
+            st.error("triage_weights_ui 로드 실패")
+# === End triage loader ===
+
 # --- BEGIN pediatric safe-import loader (auto) ---
 # 이 블록은 peds_* 모듈 임포트 실패 시, 동일 폴더에서 직접 로드하는 백업 로더입니다.
 import os as _os, sys as _sys, importlib.util as _ilu
@@ -1624,3 +1657,21 @@ except Exception as _e:
         pass
 
 # ===
+
+# === 응급도 가중치 섹션 (auto-patched 2025-10-09T06:21:39.122778Z) ===
+def _render_triage_section():
+    import streamlit as st
+    st.header("⚖️ 응급도 가중치")
+    try:
+        render_triage_weights_ui(state_key_prefix="triage_main")
+    except Exception as _e:
+        st.warning(f"응급도 가중치 로딩 실패: {_e}")
+
+try:
+    _render_triage_section()
+except Exception as _e:
+    try:
+        import streamlit as st
+        st.warning(f"응급도 섹션 오류: {_e}")
+    except Exception:
+        pass
