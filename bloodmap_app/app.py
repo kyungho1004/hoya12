@@ -1601,19 +1601,19 @@ with t_report:
         except Exception:
             st.caption("PDF 변환 모듈을 불러오지 못했습니다. .md 또는 .txt를 사용해주세요.")
 
-# === Pediatric Caregiver Guides section (auto-patched 2025-10-09T06:30:38.219569Z) ===
+# === Pediatric Caregiver Guides section (single, 2025-10-09T06:47:00.819355Z) ===
 def _render_pediatric_guides_section():
     import streamlit as st
     st.header("👶 소아 — 보호자 안내")
     tabs = st.tabs(["병명별 한눈에", "보호자 모드(묶음)"])
     with tabs[0]:
         try:
-            render_peds_conditions_page()
+            render_peds_conditions_page(key_prefix="peds_one")
         except Exception as _e:
             st.warning(f"병명별 가이드 로딩 실패: {_e}")
     with tabs[1]:
         try:
-            render_caregiver_mode()
+            render_caregiver_mode(key_prefix="peds_one")
         except Exception as _e:
             st.warning(f"보호자 모드 로딩 실패: {_e}")
 

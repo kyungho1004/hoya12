@@ -46,7 +46,7 @@ def _safe_branding_banner():
         except Exception:
             pass
 
-def render_caregiver_mode(default_weight_kg: Optional[float]=None):
+def render_caregiver_mode(default_weight_kg: Optional[float]=None, key_prefix: str="peds_cg"):
     st.header("🧩 보호자 모드 — 병명별 안내 묶음")
     _safe_branding_banner()
 
@@ -54,7 +54,7 @@ def render_caregiver_mode(default_weight_kg: Optional[float]=None):
     picks = st.multiselect("배포할 병명을 선택하세요", names, default=names[:3])
     weight = st.number_input("아이 체중 (kg)", min_value=0.0, step=0.5,
                              value=float(default_weight_kg) if default_weight_kg else 0.0,
-                             key="cg_weight")
+                             key=f"{key_prefix}_weight")
     add_antipy = st.checkbox("해열제 요약 포함", value=True)
 
     st.divider()
@@ -77,7 +77,7 @@ def render_caregiver_mode(default_weight_kg: Optional[float]=None):
         st.subheader("개별 PDF 다운로드")
         for name, pdf in pdf_files:
             st.download_button(f"{name}.pdf 저장", data=pdf, file_name=f"{name}.pdf",
-                               mime="application/pdf", key=f"dl_{name}")
+                               mime="application/pdf", key=f"{key_prefix}_dl_{name}")
 
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
@@ -85,6 +85,6 @@ def render_caregiver_mode(default_weight_kg: Optional[float]=None):
                 z.writestr(f"{name}.pdf", pdf)
         st.download_button("선택 항목 ZIP로 다운로드", data=buf.getvalue(),
                            file_name="caregiver_pack.zip", mime="application/zip",
-                           key="dl_zip")
+                           key=f"{key_prefix}_dl_zip")
     else:
         st.info("PDF 엔진이 없어 미리보기만 제공됩니다. (pdf_export 모듈 필요)")

@@ -80,21 +80,21 @@ def _dosing_note_ml(weight_kg: Optional[float]) -> str:
             f"- IBU: 약 {ibu_mg} mg/회 (≥6h, 생후 6개월 미만 지양){extra}\n"
             f"- 24h 총량/성분중복 확인, 다음 복용 .ics는 앱의 케어로그를 이용하세요.")
 
-def render_peds_conditions_page(default_weight_kg: Optional[float]=None):
+def render_peds_conditions_page(default_weight_kg: Optional[float]=None, key_prefix: str="peds"):
     st.header("👶 소아 병명별 한눈에 가이드")
     _safe_branding_banner()
 
     st.caption("보호자 친화 요약 · 참고용 · 최종 판단은 의료진에게")
-    name = st.selectbox("병명을 선택하세요", condition_names(), key="peds_cond_name")
+    name = st.selectbox("병명을 선택하세요", condition_names(), key=f"{key_prefix}_name")
     col1, col2, col3 = st.columns([1,1,1])
     with col1:
         weight = st.number_input("아이 체중 (kg)", min_value=0.0, step=0.5,
                                  value=float(default_weight_kg) if default_weight_kg else 0.0,
-                                 key="peds_cond_weight")
+                                 key=f"{key_prefix}_weight")
     with col2:
-        add_antipy = st.checkbox("해열제 요약 포함", value=True, key="peds_cond_addapy")
+        add_antipy = st.checkbox("해열제 요약 포함", value=True, key=f"{key_prefix}_addapy")
     with col3:
-        add_ml = st.checkbox("mL 환산(가능 시)", value=True, key="peds_cond_addml")
+        add_ml = st.checkbox("mL 환산(가능 시)", value=True, key=f"{key_prefix}_addml")
 
     st.divider()
     if add_antipy:
@@ -109,19 +109,19 @@ def render_peds_conditions_page(default_weight_kg: Optional[float]=None):
 
     st.download_button("요약 텍스트 다운로드 (.txt)", data=text.encode('utf-8'),
                        file_name=f"{name}_가이드.txt", mime="text/plain",
-                       key="peds_cond_dl")
+                       key=f"{key_prefix}_dl_txt")
 
     if export_md_to_pdf:
         pdf_bin = export_md_to_pdf(text)
         st.download_button("PDF로 내보내기", data=pdf_bin, file_name=f"{name}_가이드.pdf",
-                           mime="application/pdf", key="peds_cond_pdf")
+                           mime="application/pdf", key=f"{key_prefix}_dl_pdf")
     else:
         st.info("PDF 엔진이 없어 TXT로만 저장됩니다. (pdf_export 모듈 필요)")
 
     base_url = st.text_input("공유용 링크(배포 후 수정하세요)", value="https://bloodmap.streamlit.app/guide")
     share_url = f"{base_url}?name={name}"
     if QR_OK:
-        btn = st.button("공유용 QR 만들기", key="peds_qr_btn")
+        btn = st.button("공유용 QR 만들기", key=f"{key_prefix}_qr")
         if btn:
             img = qrcode.make(share_url)
             st.image(img, caption="QR — 카메라로 스캔하여 열기")
