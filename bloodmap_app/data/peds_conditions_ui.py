@@ -7,11 +7,47 @@ peds_conditions_ui.py
 """
 from typing import Optional
 import streamlit as st
+import inspect
+
+def _safe_branding_banner():
+    """Call branding.render_deploy_banner with backward-compatible signature."""
+    app_url = "https://bloodmap.streamlit.app"
+    made_by = "Hoya/GPT"
+    try:
+    except Exception:
+        try:
+            import streamlit as st
+            st.info("제작/자문: Hoya/GPT · ⏱ KST · 혼돈 방지: 세포·면역치료 비표기")
+        except Exception:
+            pass
+        return
+    try:
+        sig = inspect.signature(_rdb)
+        if len(sig.parameters) >= 2:
+            _rdb(app_url, made_by)
+        else:
+            _rdb()
+    except TypeError:
+        # Force-call with two args if signature mismatch
+        try:
+            _rdb(app_url, made_by)
+        except Exception:
+            try:
+                import streamlit as st
+                st.info(f"제작/자문: {made_by} · ⏱ KST")
+            except Exception:
+                pass
+    except Exception as e:
+        try:
+            import streamlit as st
+            st.info("제작/자문: Hoya/GPT · ⏱ KST")
+        except Exception:
+            pass
+
 
 try:
-    from branding import render_deploy_banner  # 프로젝트 배너(제작/자문/KST/비표기 고지)
 except Exception:
-    def render_deploy_banner():
+    def _safe_branding_banner():
         st.info("제작/자문: Hoya/GPT · ⏱ KST · 혼돈 방지: 세포·면역치료 비표기")
 
 from peds_conditions import condition_names, build_text, build_share_text
@@ -57,7 +93,7 @@ def _dosing_note_ml(weight_kg: Optional[float]) -> str:
 
 def render_peds_conditions_page(default_weight_kg: Optional[float]=None):
     st.header("👶 소아 병명별 한눈에 가이드")
-    render_deploy_banner()
+    _safe_branding_banner()
 
     st.caption("보호자 친화 요약 · 참고용 · 최종 판단은 의료진에게")
     name = st.selectbox("병명을 선택하세요", condition_names(), key="peds_cond_name")

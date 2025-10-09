@@ -6,13 +6,49 @@ peds_caregiver_page.py
 """
 from typing import List, Optional
 import streamlit as st
+import inspect
+
+def _safe_branding_banner():
+    """Call branding.render_deploy_banner with backward-compatible signature."""
+    app_url = "https://bloodmap.streamlit.app"
+    made_by = "Hoya/GPT"
+    try:
+    except Exception:
+        try:
+            import streamlit as st
+            st.info("제작/자문: Hoya/GPT · ⏱ KST · 혼돈 방지: 세포·면역치료 비표기")
+        except Exception:
+            pass
+        return
+    try:
+        sig = inspect.signature(_rdb)
+        if len(sig.parameters) >= 2:
+            _rdb(app_url, made_by)
+        else:
+            _rdb()
+    except TypeError:
+        # Force-call with two args if signature mismatch
+        try:
+            _rdb(app_url, made_by)
+        except Exception:
+            try:
+                import streamlit as st
+                st.info(f"제작/자문: {made_by} · ⏱ KST")
+            except Exception:
+                pass
+    except Exception as e:
+        try:
+            import streamlit as st
+            st.info("제작/자문: Hoya/GPT · ⏱ KST")
+        except Exception:
+            pass
+
 import io, zipfile
 
 from peds_conditions import condition_names, build_share_text, build_text
 try:
-    from branding import render_deploy_banner
 except Exception:
-    def render_deploy_banner():
+    def _safe_branding_banner():
         st.info("제작/자문: Hoya/GPT · ⏱ KST · 혼돈 방지: 세포·면역치료 비표기")
 
 try:
@@ -22,7 +58,7 @@ except Exception:
 
 def render_caregiver_mode(default_weight_kg: Optional[float]=None):
     st.header("🧩 보호자 모드 — 병명별 안내 묶음")
-    render_deploy_banner()
+    _safe_branding_banner()
 
     names = condition_names()
     picks = st.multiselect("배포할 병명을 선택하세요", names, default=names[:3])
