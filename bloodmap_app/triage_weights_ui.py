@@ -82,7 +82,20 @@ def render_triage_weights_ui(state_key_prefix: str = "triage") -> None:
                     idx += 1
 
         score, contrib, _ = compute_score(cfg)
-        _render_header(score, contrib)
+        # summary on the right
+        cL, cR = st.columns([2,1])
+        with cL:
+            _render_header(score, contrib)
+        with cR:
+            st.markdown("#### 권고")
+            if score >= 80:
+                st.error("즉시 진료/응급실 고려")
+            elif score >= 60:
+                st.warning("빠른 외래 + 긴밀 모니터링")
+            elif score >= 40:
+                st.info("경과 관찰 + 재평가 예약")
+            else:
+                st.success("가정 관리 + 교육자료 제공")
 
         with st.expander("점수 계산 방식(설명)"):
             st.write("""
@@ -108,7 +121,20 @@ def render_triage_weights_ui(state_key_prefix: str = "triage") -> None:
                 cfg.signals[f] = c4.slider("", 0.0, 5.0, float(cfg.signals[f]), 0.5, key=f"{state_key_prefix}_s_{i}")
 
         score, contrib, _ = compute_score(cfg)
-        _render_header(score, contrib)
+        # summary on the right
+        cL, cR = st.columns([2,1])
+        with cL:
+            _render_header(score, contrib)
+        with cR:
+            st.markdown("#### 권고")
+            if score >= 80:
+                st.error("즉시 진료/응급실 고려")
+            elif score >= 60:
+                st.warning("빠른 외래 + 긴밀 모니터링")
+            elif score >= 40:
+                st.info("경과 관찰 + 재평가 예약")
+            else:
+                st.success("가정 관리 + 교육자료 제공")
 
         # Export/Import
         with st.expander("프리셋 저장/불러오기"):
