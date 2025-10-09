@@ -1,26 +1,21 @@
 
 # -*- coding: utf-8 -*-
 """
-app.py — 최종본(메인=암 관련 복구, 소아=분리)
-- 메인: 기존 암/혈액 관련 섹션을 가능한 한 자동 탐지·렌더
-- 소아 보호자 가이드는 사이드바 '소아 안내'에서만 렌더
-- 세션 시드 기반 네임스페이스로 탭 간/페이지 간 충돌 방지
+app.py — 메인(암/혈액) 섹션 명시 렌더 + 소아 안내 분리 최종본
 """
 
 import streamlit as st
 import os as _os, sys as _sys, importlib.util as _ilu
-from typing import List, Tuple
 
 st.set_page_config(page_title="Bloodmap", layout="wide")
 
 # ====== 사이드바 라우팅 ======
 if "nav_page" not in st.session_state:
     st.session_state["nav_page"] = "메인"
-
 with st.sidebar:
     nav_page = st.radio("페이지", ["메인", "소아 안내"], index=0, key="nav_page")
 
-# ====== 공통: 안전 로더 ======
+# ====== 안전 로더 ======
 def _load_local(_modname: str, _filename: str):
     try:
         _here = _os.path.dirname(__file__) if "__file__" in globals() else _os.getcwd()
@@ -36,72 +31,104 @@ def _load_local(_modname: str, _filename: str):
         st.warning(f"모듈 로드 실패({_modname}): {_e}")
     return None
 
-# ====== 메인(암/혈액) 섹션 자동 렌더 ======
+def _safe_import(name, filename):
+    try:
+        return __import__(name)
+    except Exception:
+        return _load_local(name, filename)
+
+# ====== 메인(암/혈액) 섹션 ======
 def _render_main_home():
-    st.header("🩺 메인")
-    st.caption("암/혈액 관련 도구를 자동으로 불러옵니다. 모듈이 없으면 해당 섹션은 건너뜁니다.")
-
-    # (모듈, 후보 함수들, 섹션 제목)
-    sections: List[Tuple[str, List[str], str]] = [
-        ("ui_results", ["render_main", "render_page", "render_results"], "🔬 검사결과 해석"),
-        ("onco_map", ["render_main", "render_onco_map", "render_page"], "🎗️ 암 경로 맵"),
-        ("lab_diet", ["render_main", "render_section", "render_page"], "🥗 검사 전후 식이"),
-        ("special_tests", ["render_main", "render_section", "render_page"], "🧪 특수검사"),
-        ("drug_db", ["render_main", "render_drug_db", "render_page"], "💊 항암제 DB/상호작용"),
-        ("core_utils", ["render_main", "render_page"], "🧰 유틸리티"),
-    ]
-
-    any_rendered = False
-    for mod_name, fn_candidates, title in sections:
-        mod = None
+    # 배너
+    branding = _safe_import("branding", "branding.py")
+    if branding and hasattr(branding, "render_deploy_banner"):
         try:
-            mod = __import__(mod_name)
-        except Exception:
-            mod = _load_local(mod_name, f"{mod_name}.py")
-        if not mod:
-            continue
-
-        fn = None
-        for cand in fn_candidates:
-            if hasattr(mod, cand):
-                fn = getattr(mod, cand)
-                break
-        if not callable(fn):
-            continue
-
-        any_rendered = True
-        with st.expander(title, expanded=True if title.startswith("🔬") else False):
+            branding.render_deploy_banner(app_url="", made_by="")  # 안전 기본값
+        except TypeError:
+            # 다른 시그니처 대응
             try:
-                fn()  # type: ignore
-            except TypeError:
-                # 일부 함수는 st/session을 args로 받을 수 있음 → 인자 없이 재시도 실패 시 경고
-                try:
-                    fn(st)  # type: ignore
-                except Exception as _e:
-                    st.warning(f"{title} 로딩 실패: {_e}")
+                branding.render_deploy_banner()
+            except Exception as _e:
+                st.caption(f"배너 표시 생략: {_e}")
 
-    if not any_rendered:
-        st.info("불러올 메인 섹션을 찾지 못했습니다. 기존 메인 코드를 이 함수(_render_main_home) 안에서 호출하도록 연결해 주세요.")
+    # 헤더/퀵툴
+    core_utils = _safe_import("core_utils", "core_utils.py")
+    if core_utils:
+        if hasattr(core_utils, "render_page_header"):
+            try:
+                core_utils.render_page_header("🩺 메인 — 암/혈액 도구")
+            except Exception:
+                st.header("🩺 메인 — 암/혈액 도구")
+        else:
+            st.header("🩺 메인 — 암/혈액 도구")
+        if hasattr(core_utils, "render_quick_tools"):
+            try:
+                with st.expander("⚡ 빠른 도구", expanded=False):
+                    core_utils.render_quick_tools()
+            except Exception as _e:
+                st.warning(f"빠른 도구 로딩 실패: {_e}")
+    else:
+        st.header("🩺 메인 — 암/혈액 도구")
+
+    # 섹션 1: 검사결과 해석
+    ui_results = _safe_import("ui_results", "ui_results.py")
+    if ui_results and hasattr(ui_results, "results_only_after_analyze"):
+        with st.expander("🔬 검사결과 해석", expanded=True):
+            try:
+                ui_results.results_only_after_analyze()
+            except Exception as _e:
+                st.warning(f"검사결과 섹션 오류: {_e}")
+
+    # 섹션 2: 암 경로 맵
+    onco_map = _safe_import("onco_map", "onco_map.py")
+    if onco_map and hasattr(onco_map, "render_onco_map"):
+        with st.expander("🎗️ 암 경로 맵", expanded=False):
+            try:
+                onco_map.render_onco_map()
+            except Exception as _e:
+                st.warning(f"암 경로 맵 오류: {_e}")
+
+    # 섹션 3: 응급도 가중치(UI)
+    triage_ui = _safe_import("triage_weights_ui", "triage_weights_ui.py")
+    if triage_ui and hasattr(triage_ui, "render_triage_weights_ui"):
+        with st.expander("⚖️ 응급도 가중치 (간단/자세히)", expanded=False):
+            try:
+                triage_ui.render_triage_weights_ui()
+            except Exception as _e:
+                st.warning(f"응급도 가중치 UI 오류: {_e}")
+
+    # 섹션 4: 식이 안내
+    lab_diet = _safe_import("lab_diet", "lab_diet.py")
+    if lab_diet and hasattr(lab_diet, "render_lab_diet"):
+        with st.expander("🥗 검사 전후 식이 안내", expanded=False):
+            try:
+                lab_diet.render_lab_diet()
+            except Exception as _e:
+                st.warning(f"식이 안내 오류: {_e}")
+
+    # 섹션 5: 특수검사
+    special_tests = _safe_import("special_tests", "special_tests.py")
+    if special_tests and hasattr(special_tests, "render_special_tests"):
+        with st.expander("🧪 특수검사", expanded=False):
+            try:
+                special_tests.render_special_tests()
+            except Exception as _e:
+                st.warning(f"특수검사 오류: {_e}")
+
+    # 섹션 6: 항암제 DB
+    drug_db = _safe_import("drug_db", "drug_db.py")
+    if drug_db and hasattr(drug_db, "render_drug_db"):
+        with st.expander("💊 항암제 DB/상호작용", expanded=False):
+            try:
+                drug_db.render_drug_db()
+            except Exception as _e:
+                st.warning(f"항암제 DB 오류: {_e}")
 
 # ====== 소아 보호자 안내(전용 페이지) ======
 # pediatric modules
-try:
-    from peds_conditions_ui import render_peds_conditions_page  # type: ignore
-except Exception:
-    _m = _load_local("peds_conditions_ui", "peds_conditions_ui.py")
-    render_peds_conditions_page = getattr(_m, "render_peds_conditions_page", None)
-
-try:
-    from peds_caregiver_page import render_caregiver_mode  # type: ignore
-except Exception:
-    _m = _load_local("peds_caregiver_page", "peds_caregiver_page.py")
-    render_caregiver_mode = getattr(_m, "render_caregiver_mode", None)
-
-try:
-    from peds_symptoms_ui import render_peds_symptoms_page  # type: ignore
-except Exception:
-    _m = _load_local("peds_symptoms_ui", "peds_symptoms_ui.py")
-    render_peds_symptoms_page = getattr(_m, "render_peds_symptoms_page", None)
+peds_cond = _safe_import("peds_conditions_ui", "peds_conditions_ui.py")
+peds_cg   = _safe_import("peds_caregiver_page", "peds_caregiver_page.py")
+peds_sym  = _safe_import("peds_symptoms_ui", "peds_symptoms_ui.py")
 
 def _render_pediatric_guides_section():
     st.header("👶 소아 — 보호자 안내")
@@ -130,39 +157,40 @@ def _render_pediatric_guides_section():
             st.session_state["_peds_ns_seed"] = uuid.uuid4().hex[:6]
             st.experimental_rerun()
 
-    # 탭 구성
     tab_names = ["병명별 한눈에", "보호자 모드(묶음)"]
-    if callable(render_peds_symptoms_page):
+    has_sym = (peds_sym is not None) and hasattr(peds_sym, "render_peds_symptoms_page")
+    if has_sym:
         tab_names.insert(1, "소아 증상")
+
     tabs = st.tabs(tab_names)
 
     idx = 0
     with tabs[idx]:
-        if callable(render_peds_conditions_page):
+        if peds_cond and hasattr(peds_cond, "render_peds_conditions_page"):
             try:
-                render_peds_conditions_page(key_prefix=_guide_prefix)
+                peds_cond.render_peds_conditions_page(key_prefix=_guide_prefix)
             except Exception as _e:
                 st.warning(f"병명별 가이드 로딩 실패: {_e}")
         else:
-            st.error("peds_conditions_ui 모듈을 찾을 수 없습니다.")
+            st.error("peds_conditions_ui 모듈이 필요합니다.")
     idx += 1
 
-    if "소아 증상" in tab_names:
+    if has_sym:
         with tabs[idx]:
             try:
-                render_peds_symptoms_page(key_prefix=_sym_prefix)  # type: ignore
+                peds_sym.render_peds_symptoms_page(key_prefix=_sym_prefix)  # type: ignore
             except Exception as _e:
                 st.warning(f"소아 증상 로딩 실패: {_e}")
         idx += 1
 
     with tabs[idx]:
-        if callable(render_caregiver_mode):
+        if peds_cg and hasattr(peds_cg, "render_caregiver_mode"):
             try:
-                render_caregiver_mode(key_prefix=_cg_prefix)
+                peds_cg.render_caregiver_mode(key_prefix=_cg_prefix)
             except Exception as _e:
                 st.warning(f"보호자 모드 로딩 실패: {_e}")
         else:
-            st.error("peds_caregiver_page 모듈을 찾을 수 없습니다.")
+            st.error("peds_caregiver_page 모듈이 필요합니다.")
 
 # ====== 라우팅 ======
 if nav_page == "메인":
