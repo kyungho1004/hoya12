@@ -4,6 +4,8 @@ import os, sys, re, io, csv
 from pathlib import Path
 import importlib.util
 import streamlit as st
+from peds_caregiver_page import render_caregiver_mode  # pediatric patch
+from peds_conditions_ui import render_peds_conditions_page  # pediatric patch
 
 APP_VERSION = "v7.24 (Graphs Bands • Peds Checklist+Schedule • Onco-DB Guard • Special Notes+)"
 
