@@ -1,18 +1,25 @@
-# Bloodmap App — Latest Bundle
-Built UTC: 2025-10-09 06:51:50Z
+Bloodmap pediatric + triage bundle
+UTC build: 2025-10-09 07:26:39Z
 
-## Syntax check results
-- app.py: OK
-- branding.py: OK
-- pdf_export.py: OK
-- peds_dose.py: OK
-- peds_conditions.py: OK
-- peds_conditions_ui.py: OK
-- peds_caregiver_page.py: OK
-- triage_weights.py: OK
-- triage_weights_ui.py: OK
+Files included:
+- app.py
+- branding.py
+- pdf_export.py
+- peds_dose.py
+- peds_conditions.py
+- peds_conditions_ui.py
+- peds_caregiver_page.py
+- peds_symptoms_ui.py
+- triage_weights.py
+- triage_weights_ui.py
+- style.css
+- core_utils.py
+- ui_results.py
+- lab_diet.py
+- special_tests.py
+- onco_map.py
+- drug_db.py
 
-## Notes
-- Pediatric section is rendered once using a session_state guard.
-- key_prefix is applied to all pediatric widgets to avoid duplicates.
-- Triage UI includes Simple/Detailed modes with heme/onc-friendly labels.
+Quick tips:
+1) 앱 실행 후 사이드바에서 '소아 안내' 페이지로 이동하면 소아 섹션만 렌더됩니다.
+2) 섹션 상단의 '🔄 섹션 초기화' 버튼으로 peds_* 상태를 초기화할 수 있습니다.
