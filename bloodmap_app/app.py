@@ -1,3 +1,36 @@
+
+# === Pediatric Symptoms safe-import loader (auto) ===
+import os as _os, sys as _sys, importlib.util as _ilu
+def _peds_sym_load_local(_modname: str, _filename: str):
+    try:
+        _here = _os.path.dirname(__file__) if "__file__" in globals() else _os.getcwd()
+        _path = _os.path.join(_here, _filename)
+        if _os.path.exists(_path):
+            _spec = _ilu.spec_from_file_location(_modname, _path)
+            _mod = _ilu.module_from_spec(_spec)
+            assert _spec and _spec.loader
+            _spec.loader.exec_module(_mod)  # type: ignore
+            _sys.modules[_modname] = _mod
+            return _mod
+    except Exception as _e:
+        try:
+            import streamlit as st
+            st.warning(f"모듈 로드 실패({_modname}): {_e}")
+        except Exception:
+            pass
+    return None
+
+try:
+    from peds_symptoms_ui import render_peds_symptoms_page  # type: ignore
+except Exception:
+    _ms = _peds_sym_load_local("peds_symptoms_ui", "peds_symptoms_ui.py")
+    if _ms and hasattr(_ms, "render_peds_symptoms_page"):
+        render_peds_symptoms_page = getattr(_ms, "render_peds_symptoms_page")
+    else:
+        def render_peds_symptoms_page(*args, **kwargs):
+            import streamlit as st
+            st.error("peds_symptoms_ui 로드 실패")
+# === End symptoms loader ===
 # === Pediatric Guides safe-import loader (auto) ===
 import os as _os, sys as _sys, importlib.util as _ilu
 def _peds_load_local(_modname: str, _filename: str):
