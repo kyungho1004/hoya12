@@ -1609,7 +1609,7 @@ with t_report:
 # === Pediatric Caregiver Guides (auto-patched 2025-10-09T05:34:06.512590Z) ===
 try:
     # render two tabs without colliding existing keys
-    _peds_tabs = st.tabs(["👶 소아 가이드", "🧩 보호자 모드"], key="tabs_peds_guides_v1")
+   _peds_tabs = st.tabs(["👶 소아 가이드", "🧩 보호자 모드"])
     with _peds_tabs[0]:
         render_peds_conditions_page()
     with _peds_tabs[1]:
