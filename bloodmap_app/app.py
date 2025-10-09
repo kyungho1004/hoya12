@@ -553,6 +553,13 @@ with t_home:
         st.success("가중치 변경 사항 저장됨.")
 
 # LABS
+
+    try:
+        st.info("활력징후(맥박·호흡·의식)를 확인해 주세요. 아이가 축 늘어지거나, 경련 병력이 있거나, 경련이 의심될 때는 지체 없이 병원 진료를 권합니다.")
+    except Exception:
+        pass
+
+
 def _normalize_abbr(k: str) -> str:
     k = (k or "").strip().upper().replace(" ", "")
     alias = {
@@ -1045,9 +1052,9 @@ with t_peds:
 
     # 3) 해열제 예시 스케줄러
     st.markdown("#### 해열제 예시 스케줄러(교차복용)")
-    sched_start = st.time_input("시작시간", value=_dt.datetime.now().time(), key=wkey("peds_sched_sched_start"))
+    start = st.time_input("시작시간", value=_dt.datetime.now().time(), key=wkey("peds_sched_start"))
     try:
-        base = _dt.datetime.combine(_dt.date.today(), sched_start)
+        base = _dt.datetime.combine(_dt.date.today(), start)
         plan = [
             ("APAP", base),
             ("IBU", base + _dt.timedelta(hours=3)),
