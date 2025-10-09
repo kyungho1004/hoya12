@@ -522,7 +522,40 @@ with t_home:
             set_weights(DEFAULT_WEIGHTS)
             st.info("가중치를 기본값으로 되돌렸습니다.")
     W = get_weights()
-    grid = [
+    
+# 보호자용 간단 라벨/설명 토글
+care_friendly = st.toggle("보호자용 간단 라벨", value=True, key=wkey("care_friendly"))
+
+CARE_LABELS = {
+    "w_anc_lt500": "호중구 매우 낮음 (ANC<500)",
+    "w_anc_500_999": "호중구 낮음 (ANC 500~999)",
+    "w_temp_38_0_38_4": "발열 38.0~38.4℃",
+    "w_temp_ge_38_5": "고열 38.5℃ 이상",
+    "w_plt_lt20k": "혈소판 매우 낮음 (<20,000)",
+    "w_hb_lt7": "심한 빈혈 (Hb<7)",
+    "w_crp_ge10": "염증수치 상승 (CRP≥10)",
+    "w_hr_gt130": "맥박 빠름 (HR>130)",
+    "w_hematuria": "소변에 피가 섞임",
+    "w_melena": "검은색 변(상부위장관 출혈 의심)",
+    "w_hematochezia": "선명한 피 변(하부위장관 출혈 의심)",
+    "w_chest_pain": "가슴 통증",
+    "w_dyspnea": "숨이 찬 느낌/호흡곤란",
+    "w_confusion": "의식이 흐림/이상",
+    "w_oliguria": "소변량이 갑자기 줄어듦",
+    "w_persistent_vomit": "지속적인 구토",
+    "w_petechiae": "점상출혈(붉은 점상 반점)",
+    "w_thunderclap": "갑작스럽고 번개 치듯 심한 두통",
+    "w_visual_change": "시야 이상/갑작스런 변화",
+}
+
+HELP_TEXT = {
+    "w_temp_ge_38_5": "38.5℃ 이상이 지속되면 병원 연락을 권해요.",
+    "w_oliguria": "6–8시간 소변이 없거나 눈물/입 마름이 보이면 탈수 의심.",
+    "w_persistent_vomit": "구토가 6시간 넘게 이어지면 진료가 필요할 수 있어요.",
+    "w_dyspnea": "숨이 차거나 입술이 퍼래지면 즉시 진료가 좋아요.",
+    "w_petechiae": "멍·붉은 점이 늘면 출혈성 경향을 의심해요.",
+}
+grid = [
         ("ANC<500", "w_anc_lt500"),
         ("ANC 500~999", "w_anc_500_999"),
         ("발열 38.0~38.4", "w_temp_38_0_38_4"),
@@ -543,11 +576,17 @@ with t_home:
         ("번개두통", "w_thunderclap"),
         ("시야 이상", "w_visual_change"),
     ]
-    cols = st.columns(3)
-    newW = dict(W)
-    for i, (label, keyid) in enumerate(grid):
-        with cols[i % 3]:
-            newW[keyid] = st.slider(label, 0.0, 3.0, float(W.get(keyid, 1.0)), 0.1, key=wkey(f"w_{keyid}"))
+cols = st.columns(3)
+newW = dict(W)
+for i, (label, keyid) in enumerate(grid):
+    with cols[i % 3]:
+        show_label = CARE_LABELS.get(keyid, label) if care_friendly else label
+        newW[keyid] = st.slider(show_label, 0.0, 3.0, float(W.get(keyid, 1.0)), 0.1, key=wkey(f"w_{keyid}"))
+        if care_friendly and keyid in HELP_TEXT:
+            st.caption(HELP_TEXT[keyid])
+if newW != W:
+    set_weights(newW)
+    st.success("가중치 변경 사항 저장됨.")
     if newW != W:
         set_weights(newW)
         st.success("가중치 변경 사항 저장됨.")
