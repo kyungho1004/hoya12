@@ -31,6 +31,23 @@ def _load_local(_modname: str, _filename: str):
         st.warning(f"모듈 로드 실패({_modname}): {_e}")
     return None
 
+
+def _call_maybe_with_st(fn):
+    """Call fn(); if it needs one positional arg, pass streamlit as st."""
+    try:
+        return fn()
+    except TypeError as e:
+        import inspect, streamlit as st
+        try:
+            sig = inspect.signature(fn)
+            params = [p for p in sig.parameters.values() if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD) and p.default is p.empty]
+            if len(params) == 1:
+                return fn(st)
+        except Exception:
+            pass
+        raise
+
+
 def _safe_import(name, filename):
     try:
         return __import__(name)
@@ -75,7 +92,7 @@ def _render_main_home():
     if ui_results and hasattr(ui_results, "results_only_after_analyze"):
         with st.expander("🔬 검사결과 해석", expanded=True):
             try:
-                ui_results.results_only_after_analyze()
+                _call_maybe_with_st(ui_results.results_only_after_analyze)
             except Exception as _e:
                 st.warning(f"검사결과 섹션 오류: {_e}")
 
