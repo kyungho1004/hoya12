@@ -1,67 +1,175 @@
-# --- 간단 모드 (일반 보호자용) ---
-if mode == "간단":
-    groups = {
-        "감염/발열": ["발열 38.0–38.4","고열 ≥38.5","CRP ≥10","ANC<500","ANC 500–999"],
-        "피·출혈": ["혈소판 <20k","점상출혈","혈변","흑색변","혈뇨"],
-        "호흡·심장": ["호흡곤란","흉통","HR>130"],
-        "신경": ["의식저하","번개두통","시야 이상"],
-        "소변·탈수": ["소변량 급감","지속 구토"],
-        "기타": []
+
+# -*- coding: utf-8 -*-
+"""
+triage_weights.py
+응급도 가중치 코어 로직 + 프리셋
+- 점수 범위 0~100 표준화
+- 요인과 가중치, 입력 신호로 응급도 지수 계산
+"""
+from __future__ import annotations
+from dataclasses import dataclass, field
+from typing import Dict, List, Tuple
+
+# 요인 정의(순서 유지)
+FACTORS: List[str] = [
+    "ANC<500",
+    "ANC 500–999",
+    "발열 38.0–38.4",
+    "고열 ≥38.5",
+    "혈소판 <20k",
+    "중증빈혈 Hb<7",
+    "CRP ≥10",
+    "HR>130",
+    "혈뇨",
+    "흑색변",
+    "혈변",
+    "흉통",
+    "호흡곤란",
+    "의식저하",
+    "소변량 급감",
+    "지속 구토",
+    "점상출혈",
+    "번개두통",
+    "시야 이상"
+]
+
+# 기본 프리셋
+PRESETS: Dict[str, Dict[str, float]] = {
+    "기본(Default)": {
+        "ANC<500": 1.8,
+        "ANC 500–999": 1.4,
+        "발열 38.0–38.4": 1.0,
+        "고열 ≥38.5": 1.4,
+        "혈소판 <20k": 1.6,
+        "중증빈혈 Hb<7": 1.6,
+        "CRP ≥10": 1.2,
+        "HR>130": 1.2,
+        "혈뇨": 1.2,
+        "흑색변": 1.6,
+        "혈변": 1.6,
+        "흉통": 1.4,
+        "호흡곤란": 1.8,
+        "의식저하": 2.0,
+        "소변량 급감": 1.4,
+        "지속 구토": 1.2,
+        "점상출혈": 1.4,
+        "번개두통": 1.8,
+        "시야 이상": 1.6
+    },
+    "중증혈소판감소": {
+        "ANC<500": 1.4,
+        "ANC 500–999": 1.0,
+        "발열 38.0–38.4": 1.0,
+        "고열 ≥38.5": 1.2,
+        "혈소판 <20k": 2.0,
+        "중증빈혈 Hb<7": 1.4,
+        "CRP ≥10": 1.0,
+        "HR>130": 1.0,
+        "혈뇨": 1.6,
+        "흑색변": 1.8,
+        "혈변": 1.8,
+        "흉통": 1.2,
+        "호흡곤란": 1.4,
+        "의식저하": 1.8,
+        "소변량 급감": 1.2,
+        "지속 구토": 1.0,
+        "점상출혈": 1.8,
+        "번개두통": 1.4,
+        "시야 이상": 1.4
+    },
+    "발열-호중구감소증": {
+        "ANC<500": 2.0,
+        "ANC 500–999": 1.6,
+        "발열 38.0–38.4": 1.4,
+        "고열 ≥38.5": 1.8,
+        "혈소판 <20k": 1.2,
+        "중증빈혈 Hb<7": 1.2,
+        "CRP ≥10": 1.4,
+        "HR>130": 1.4,
+        "혈뇨": 1.0,
+        "흑색변": 1.2,
+        "혈변": 1.2,
+        "흉통": 1.4,
+        "호흡곤란": 1.8,
+        "의식저하": 2.0,
+        "소변량 급감": 1.4,
+        "지속 구토": 1.2,
+        "점상출혈": 1.2,
+        "번개두통": 1.6,
+        "시야 이상": 1.4
+    },
+    "탈수/신장 우려": {
+        "ANC<500": 1.2,
+        "ANC 500–999": 1.0,
+        "발열 38.0–38.4": 1.0,
+        "고열 ≥38.5": 1.2,
+        "혈소판 <20k": 1.2,
+        "중증빈혈 Hb<7": 1.2,
+        "CRP ≥10": 1.0,
+        "HR>130": 1.2,
+        "혈뇨": 1.6,
+        "흑색변": 1.2,
+        "혈변": 1.2,
+        "흉통": 1.2,
+        "호흡곤란": 1.4,
+        "의식저하": 1.8,
+        "소변량 급감": 1.8,
+        "지속 구토": 1.6,
+        "점상출혈": 1.0,
+        "번개두통": 1.2,
+        "시야 이상": 1.2
     }
+}
 
-    # 라벨 치환(쉬운 질문형)
-    label_map = {
-        "ANC<500":"🩸 호중구가 매우 낮다고 들었나요?",
-        "ANC 500–999":"🩸 호중구가 조금 낮다고 들었나요?",
-        "발열 38.0–38.4":"🌡️ 미열(38.0~38.4)인가요?",
-        "고열 ≥38.5":"🌡️ 38.5℃ 이상 고열인가요?",
-        "혈소판 <20k":"🧪 멍/코피/코딱지 피가 잦나요?",
-        "중증빈혈 Hb<7":"❤️ 창백·어지럼이 두드러지나요?",
-        "CRP ≥10":"🧪 염증수치(CRP)가 높다고 했나요?",
-        "HR>130":"💓 가만히 있어도 맥박이 >130인가요?",
-        "혈뇨":"🚽 소변에 피가 보이나요?",
-        "흑색변":"🚽 변이 까맣게 변했나요?",
-        "혈변":"🚽 변에 선홍빛 피가 섞이나요?",
-        "흉통":"🫁 가슴이 아픈가요?",
-        "호흡곤란":"🫁 숨이 차거나 힘든가요?",
-        "의식저하":"🧠 깨우기 어렵거나 처지나요?",
-        "소변량 급감":"🥤 소변이 확 줄었나요?",
-        "지속 구토":"🥤 마신 걸 계속 토하나요?",
-        "점상출혈":"🔴 바늘끝같은 붉은 점이 퍼져 있나요?",
-        "번개두통":"🧠 ‘벼락처럼’ 심한 두통이 갑자기?",
-        "시야 이상":"🧠 시야가 흐리거나 겹쳐 보이나요?"
-    }
+@dataclass
+class TriageConfig:
+    weights: Dict[str, float] = field(default_factory=lambda: PRESETS["일반 소아"].copy())
+    # 각 요인의 "신호 강도" (0~5)
+    signals: Dict[str, float] = field(default_factory=lambda: {f: 0.0 for f in FACTORS})
+    # 잠금: True면 가중치 편집 불가
+    locked: Dict[str, bool] = field(default_factory=lambda: {f: False for f in FACTORS})
 
-    with st.container(border=True):
-        for grp, items in groups.items():
-            if not items: 
-                continue
-            with st.expander(grp, expanded=True if grp in ["감염/발열","호흡·심장"] else False):
-                cols = st.columns(3)
-                for i, name in enumerate(items):
-                    with cols[i % 3]:
-                        q = label_map.get(name, name)
-                        sel = st.radio(q, ["없음","약간","뚜렷"],
-                            index=0 if cfg.signals[name]<=0.1 else (1 if cfg.signals[name] < 4 else 2),
-                            key=f"{state_key_prefix}_simple_{name}")
-                        cfg.signals[name] = 0.0 if sel=="없음" else (2.5 if sel=="약간" else 5.0)
+    def as_dict(self) -> Dict:
+        return {"weights": self.weights, "signals": self.signals, "locked": self.locked}
 
-                        # 툴팁(전문가 설명)
-                        if st.checkbox("ℹ️ 자세히", key=f"{state_key_prefix}_tip_{name}", value=False):
-                            st.caption(f"전문가용: '{name}' 신호 강도는 프리셋 가중치와 곱해져 계산됩니다.")
+    @staticmethod
+    def from_dict(data: Dict) -> "TriageConfig":
+        cfg = TriageConfig()
+        for f in FACTORS:
+            if "weights" in data and f in data["weights"]:
+                cfg.weights[f] = float(data["weights"][f])
+            if "signals" in data and f in data["signals"]:
+                cfg.signals[f] = float(data["signals"][f])
+            if "locked" in data and f in data["locked"]:
+                cfg.locked[f] = bool(data["locked"][f])
+        return cfg
 
-    # 점수/권고: 좌·우 분리
-    score, contrib, _ = compute_score(cfg)
-    cL, cR = st.columns([2,1])
-    with cL:
-        _render_header(score, contrib)
-    with cR:
-        st.markdown("#### 권고")
-        if score >= 80:
-            st.error("지금 응급실 권고\n- 마스크 착용, 최근 복용약 메모 지참")
-        elif score >= 60:
-            st.warning("오늘 빠른 외래 + 집에서 수분·증상 관찰")
-        elif score >= 40:
-            st.info("1–2일 내 재평가 예약 + 안내문 제공")
-        else:
-            st.success("가정 관리 + 악화 시 바로 연락")
+def normalize_score(raw: float, max_raw: float) -> float:
+    """0~100 범위로 표준화"""
+    if max_raw <= 0:
+        return 0.0
+    val = max(0.0, min(100.0, raw / max_raw * 100.0))
+    return round(val, 1)
+
+def compute_score(cfg: TriageConfig) -> Tuple[float, Dict[str, float], float]:
+    """
+    총점, 기여도 dict, 최대가능치 반환
+    신호 강도는 0~5, 가중치는 0.5~2.0 범위 권장
+    """
+    # 최대가능치: 각 요인이 신호 5라고 가정
+    max_raw = sum(5.0 * cfg.weights[f] for f in FACTORS)
+    contrib = {}
+    raw = 0.0
+    for f in FACTORS:
+        c = cfg.signals[f] * cfg.weights[f]
+        contrib[f] = c
+        raw += c
+    score = normalize_score(raw, max_raw)
+    return score, contrib, max_raw
+
+def rank_contributors(contrib: Dict[str, float], topn: int = 3) -> List[Tuple[str, float]]:
+    items = sorted(contrib.items(), key=lambda x: x[1], reverse=True)
+    return items[:topn]
+
+def get_presets() -> Dict[str, Dict[str, float]]:
+    return {k: v.copy() for k, v in PRESETS.items()}
