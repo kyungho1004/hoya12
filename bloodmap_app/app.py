@@ -1,3 +1,49 @@
+# --- BEGIN pediatric safe-import loader (auto) ---
+# 이 블록은 peds_* 모듈 임포트 실패 시, 동일 폴더에서 직접 로드하는 백업 로더입니다.
+import os as _os, sys as _sys, importlib.util as _ilu
+def _peds_load_local_module(_modname: str, _filename: str):
+    try:
+        _here = _os.path.dirname(__file__) if "__file__" in globals() else _os.getcwd()
+        _path = _os.path.join(_here, _filename)
+        if _os.path.exists(_path):
+            _spec = _ilu.spec_from_file_location(_modname, _path)
+            _mod = _ilu.module_from_spec(_spec)
+            assert _spec and _spec.loader
+            _spec.loader.exec_module(_mod)  # type: ignore
+            _sys.modules[_modname] = _mod
+            return _mod
+    except Exception as _e:
+        try:
+            import streamlit as st
+            st.warning(f"모듈 로드 실패({_modname}): {_e}")
+        except Exception:
+            pass
+    return None
+
+# 표준 임포트 → 실패 시 로컬 로더로 대체
+try:
+    from peds_conditions_ui import render_peds_conditions_page  # type: ignore
+except Exception:
+    _m = _peds_load_local_module("peds_conditions_ui", "peds_conditions_ui.py")
+    if _m and hasattr(_m, "render_peds_conditions_page"):
+        render_peds_conditions_page = getattr(_m, "render_peds_conditions_page")
+    else:
+        def render_peds_conditions_page(*args, **kwargs):
+            import streamlit as st
+            st.error("peds_conditions_ui 로드 실패")
+
+try:
+    from peds_caregiver_page import render_caregiver_mode  # type: ignore
+except Exception:
+    _m2 = _peds_load_local_module("peds_caregiver_page", "peds_caregiver_page.py")
+    if _m2 and hasattr(_m2, "render_caregiver_mode"):
+        render_caregiver_mode = getattr(_m2, "render_caregiver_mode")
+    else:
+        def render_caregiver_mode(*args, **kwargs):
+            import streamlit as st
+            st.error("peds_caregiver_page 로드 실패")
+# --- END pediatric safe-import loader (auto) ---
+
 # app.py
 import datetime as _dt
 import os, sys, re, io, csv
@@ -522,40 +568,7 @@ with t_home:
             set_weights(DEFAULT_WEIGHTS)
             st.info("가중치를 기본값으로 되돌렸습니다.")
     W = get_weights()
-    
-# 보호자용 간단 라벨/설명 토글
-care_friendly = st.toggle("보호자용 간단 라벨", value=True, key=wkey("care_friendly"))
-
-CARE_LABELS = {
-    "w_anc_lt500": "호중구 매우 낮음 (ANC<500)",
-    "w_anc_500_999": "호중구 낮음 (ANC 500~999)",
-    "w_temp_38_0_38_4": "발열 38.0~38.4℃",
-    "w_temp_ge_38_5": "고열 38.5℃ 이상",
-    "w_plt_lt20k": "혈소판 매우 낮음 (<20,000)",
-    "w_hb_lt7": "심한 빈혈 (Hb<7)",
-    "w_crp_ge10": "염증수치 상승 (CRP≥10)",
-    "w_hr_gt130": "맥박 빠름 (HR>130)",
-    "w_hematuria": "소변에 피가 섞임",
-    "w_melena": "검은색 변(상부위장관 출혈 의심)",
-    "w_hematochezia": "선명한 피 변(하부위장관 출혈 의심)",
-    "w_chest_pain": "가슴 통증",
-    "w_dyspnea": "숨이 찬 느낌/호흡곤란",
-    "w_confusion": "의식이 흐림/이상",
-    "w_oliguria": "소변량이 갑자기 줄어듦",
-    "w_persistent_vomit": "지속적인 구토",
-    "w_petechiae": "점상출혈(붉은 점상 반점)",
-    "w_thunderclap": "갑작스럽고 번개 치듯 심한 두통",
-    "w_visual_change": "시야 이상/갑작스런 변화",
-}
-
-HELP_TEXT = {
-    "w_temp_ge_38_5": "38.5℃ 이상이 지속되면 병원 연락을 권해요.",
-    "w_oliguria": "6–8시간 소변이 없거나 눈물/입 마름이 보이면 탈수 의심.",
-    "w_persistent_vomit": "구토가 6시간 넘게 이어지면 진료가 필요할 수 있어요.",
-    "w_dyspnea": "숨이 차거나 입술이 퍼래지면 즉시 진료가 좋아요.",
-    "w_petechiae": "멍·붉은 점이 늘면 출혈성 경향을 의심해요.",
-}
-grid = [
+    grid = [
         ("ANC<500", "w_anc_lt500"),
         ("ANC 500~999", "w_anc_500_999"),
         ("발열 38.0~38.4", "w_temp_38_0_38_4"),
@@ -576,29 +589,16 @@ grid = [
         ("번개두통", "w_thunderclap"),
         ("시야 이상", "w_visual_change"),
     ]
-cols = st.columns(3)
-newW = dict(W)
-for i, (label, keyid) in enumerate(grid):
-    with cols[i % 3]:
-        show_label = CARE_LABELS.get(keyid, label) if care_friendly else label
-        newW[keyid] = st.slider(show_label, 0.0, 3.0, float(W.get(keyid, 1.0)), 0.1, key=wkey(f"w_{keyid}"))
-        if care_friendly and keyid in HELP_TEXT:
-            st.caption(HELP_TEXT[keyid])
-if newW != W:
-    set_weights(newW)
-    st.success("가중치 변경 사항 저장됨.")
+    cols = st.columns(3)
+    newW = dict(W)
+    for i, (label, keyid) in enumerate(grid):
+        with cols[i % 3]:
+            newW[keyid] = st.slider(label, 0.0, 3.0, float(W.get(keyid, 1.0)), 0.1, key=wkey(f"w_{keyid}"))
     if newW != W:
         set_weights(newW)
         st.success("가중치 변경 사항 저장됨.")
 
 # LABS
-
-    try:
-        st.info("활력징후(맥박·호흡·의식)를 확인해 주세요. 아이가 축 늘어지거나, 경련 병력이 있거나, 경련이 의심될 때는 지체 없이 병원 진료를 권합니다.")
-    except Exception:
-        pass
-
-
 def _normalize_abbr(k: str) -> str:
     k = (k or "").strip().upper().replace(" ", "")
     alias = {
@@ -1024,23 +1024,6 @@ with t_peds:
         migraine = st.checkbox("편두통 의심(한쪽·박동성·빛/소리 민감)", key=wkey("p_migraine"))
     with f3:
         hfmd = st.checkbox("수족구 의심(손발·입 병변)", key=wkey("p_hfmd"))
-
-    # 자동 해석: 증상 입력 시 즉시 보호자 가이드 표시
-    render_caregiver_notes_peds(
-        stool=stool,
-        fever=fever,
-        persistent_vomit=persistent_vomit,
-        oliguria=oliguria,
-        cough=cough,
-        nasal=nasal,
-        eye=eye,
-        abd_pain=abd_pain,
-        ear_pain=ear_pain,
-        rash=rash,
-        hives=hives,
-        migraine=migraine,
-        hfmd=hfmd,
-    )
 
     score = {
         "장염 의심": 0,
@@ -1620,3 +1603,24 @@ with t_report:
         except Exception:
             st.caption("PDF 변환 모듈을 불러오지 못했습니다. .md 또는 .txt를 사용해주세요.")
 
+
+
+# === Pediatric Caregiver Guides (indent-fix 2025-10-09T05:59:40.669982Z) ===
+def _render_peds_guides_section():
+    import streamlit as st
+    tabs = st.tabs(["👶 소아 가이드", "🧩 보호자 모드"])
+    with tabs[0]:
+        render_peds_conditions_page()
+    with tabs[1]:
+        render_caregiver_mode()
+
+try:
+    _render_peds_guides_section()
+except Exception as _e:
+    try:
+        import streamlit as st
+        st.warning(f"소아 가이드 섹션 로딩 실패: {_e}")
+    except Exception:
+        pass
+
+# ===
