@@ -420,8 +420,8 @@ def render_caregiver_notes_peds(
     st.info("❗ 즉시 병원 평가: 번개치는 두통 · 시야 이상/복시/암점 · 경련 · 의식저하 · 심한 목 통증 · 호흡곤란/입술부종")
 
 # ---------- Tabs ----------
-tab_labels = ["🏠 홈", "🧪 피수치 입력", "🧬 암 선택", "💊 항암제(진단 기반)", "👶 소아 증상", "🧫 암환자", "🔬 특수검사", "📄 보고서"]
-t_home, t_labs, t_dx, t_chemo, t_peds, t_onco, t_special, t_report = st.tabs(tab_labels)
+tab_labels = ["🏠 홈", "🧪 피수치 입력", "🧬 암 선택", "💊 항암제(진단 기반)", "👶 소아 증상", "🔬 특수검사", "📄 보고서"]
+t_home, t_labs, t_dx, t_chemo, t_peds, t_special, t_report = st.tabs(tab_labels)
 
 # HOME
 with t_home:
@@ -553,6 +553,13 @@ with t_home:
         st.success("가중치 변경 사항 저장됨.")
 
 # LABS
+
+    try:
+        st.info("활력징후(맥박·호흡·의식)를 확인해 주세요. 아이가 축 늘어지거나, 경련 병력이 있거나, 경련이 의심될 때는 지체 없이 병원 진료를 권합니다.")
+    except Exception:
+        pass
+
+
 def _normalize_abbr(k: str) -> str:
     k = (k or "").strip().upper().replace(" ", "")
     alias = {
@@ -978,6 +985,23 @@ with t_peds:
         migraine = st.checkbox("편두통 의심(한쪽·박동성·빛/소리 민감)", key=wkey("p_migraine"))
     with f3:
         hfmd = st.checkbox("수족구 의심(손발·입 병변)", key=wkey("p_hfmd"))
+
+    # 자동 해석: 증상 입력 시 즉시 보호자 가이드 표시
+    render_caregiver_notes_peds(
+        stool=stool,
+        fever=fever,
+        persistent_vomit=persistent_vomit,
+        oliguria=oliguria,
+        cough=cough,
+        nasal=nasal,
+        eye=eye,
+        abd_pain=abd_pain,
+        ear_pain=ear_pain,
+        rash=rash,
+        hives=hives,
+        migraine=migraine,
+        hfmd=hfmd,
+    )
 
     score = {
         "장염 의심": 0,
@@ -1557,149 +1581,3 @@ with t_report:
         except Exception:
             st.caption("PDF 변환 모듈을 불러오지 못했습니다. .md 또는 .txt를 사용해주세요.")
 
-
-
-# ---- ONCO (암환자) ----
-with t_onco:
-    st.subheader("암환자 빠른 안내 (가정 대처 + 바로 진료 기준)")
-
-    st.markdown("가정 안내는 참고용이에요. **응급이 의심되면 지체하지 말고 119/응급실**을 이용해 주세요.")
-
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        temp = st.selectbox("체온", ["<38.0℃", "38.0~38.4℃", "≥38.5℃"], index=0, key=wkey("on_temp"))
-    with c2:
-        anc = st.number_input("ANC(호중구) /μL", min_value=0, max_value=10000, value=1500, step=100, key=wkey("on_anc"))
-    with c3:
-        plt = st.number_input("혈소판 /μL", min_value=0, max_value=500000, value=150000, step=1000, key=wkey("on_plt"))
-    with c4:
-        hb = st.number_input("Hb (g/dL)", min_value=0.0, max_value=20.0, value=12.0, step=0.1, key=wkey("on_hb"))
-
-    s1, s2, s3 = st.columns(3)
-    with s1:
-        chemo_recent = st.checkbox("최근 4주 이내 항암제 치료", key=wkey("on_chemo"))
-        chills = st.checkbox("오한/떨림", key=wkey("on_chills"))
-        cough2 = st.checkbox("기침/가래", key=wkey("on_cough2"))
-    with s2:
-        bleeding = st.checkbox("출혈(잇몸/코피/멍 증가)", key=wkey("on_bleed"))
-        dyspnea = st.checkbox("호흡곤란/숨참", key=wkey("on_dysp"))
-        chest_pain = st.checkbox("가슴 통증", key=wkey("on_cp"))
-    with s3:
-        confusion = st.checkbox("의식저하/혼돈", key=wkey("on_conf"))
-        persistent_vomit2 = st.checkbox("지속 구토(>6시간)", key=wkey("on_vomit"))
-        oliguria2 = st.checkbox("소변량 급감", key=wkey("on_olig"))
-
-    nf = (temp != "<38.0℃") and (anc < 500)  # 호중구감소성 발열 의심
-    high_bleed = plt < 20000 or bleeding
-    severe_anemia = hb < 7.0
-    high_urgency = any([dyspnea, chest_pain, confusion]) or temp == "≥38.5℃" or nf
-
-    W = get_weights()
-    score = 0.0
-    score += float(W.get("w_temp_ge_38_5", 1.0)) if temp == "≥38.5℃" else (float(W.get("w_temp_38_0_38_4", 1.0)) if temp == "38.0~38.4℃" else 0.0)
-    score += float(W.get("w_anc_lt500", 1.0)) if anc < 500 else (float(W.get("w_anc_500_999", 1.0)) if anc < 1000 else 0.0)
-    score += float(W.get("w_plt_lt20k", 1.0)) if plt < 20000 else 0.0
-    score += float(W.get("w_hb_lt7", 1.0)) if hb < 7.0 else 0.0
-    score += float(W.get("w_dyspnea", 1.0)) if dyspnea else 0.0
-    score += float(W.get("w_chest_pain", 1.0)) if chest_pain else 0.0
-    score += float(W.get("w_confusion", 1.0)) if confusion else 0.0
-    score += float(W.get("w_persistent_vomit", 1.0)) if persistent_vomit2 else 0.0
-    score += float(W.get("w_oliguria", 1.0)) if oliguria2 else 0.0
-
-    tags = []
-    if nf: tags.append("호중구감소성 발열 의심")
-    if high_bleed: tags.append("출혈 위험")
-    if severe_anemia: tags.append("중증 빈혈 의심")
-    st.write("• 상태 요약: " + (" / ".join(tags) if tags else "특이 위험 태그 없음") + f"  | 점수: {score:.1f}")
-
-    st.markdown("### 집에서 살펴볼 점")
-    def li(t): st.write("- " + t)
-    if temp in ["38.0~38.4℃", "≥38.5℃"]:
-        li("체온을 20–30분 간격으로 확인해 주세요. 미지근한 물수건으로 몸을 닦아주면 조금 편안해질 수 있어요.")
-        li("수분을 조금씩 자주 섭취해 주세요. 해열제는 담당의 지시에 따르되, **이부프로펜/NSAIDs**는 혈소판이 낮을 때는 피하는 게 안전해요.")
-    if anc < 1000 and chemo_recent:
-        li("감염에 취약한 시기예요. **외출 시 마스크**, 손 위생, 사람 많은 곳은 당분간 피해주세요.")
-    if plt < 50000:
-        li("양치/면도는 부드럽게, 코 풀 때는 한쪽씩 천천히. 멍/붉은 점이 늘면 연락이 필요할 수 있어요.")
-    if hb < 8.0:
-        li("계단·격한 활동은 잠시 줄이고 충분히 쉬어주세요. 어지럼/가슴두근거림이 심해지면 진료가 좋아요.")
-
-    st.markdown("---")
-    st.markdown("### 바로 진료/연락이 좋아요")
-    li(":red[**체온 38.5℃ 이상** 또는 오한/떨림이 지속될 때]")
-    li(":red[**ANC<500** 이면서 발열이 있을 때(호중구감소성 발열 의심)]")
-    li(":red[호흡곤란, 가슴 통증, 의식저하/혼돈이 있을 때]")
-    li(":red[혈변/검은변, 멈추지 않는 코피, 멍·붉은 점이 빠르게 늘 때]")
-    li(":red[소변이 6–8시간 이상 없거나 심한 구토/설사로 수분 섭취가 어려울 때]")
-
-    if high_urgency:
-        st.info("지금 상태에서는 가까운 병원 또는 담당 병원에 즉시 연락하는 것이 좋아요. 이동 시에는 마스크를 착용하고, 필요한 경우 구급을 이용해 주세요.")
-
-st.markdown("---")
-st.subheader("피수치 입력/해석")
-
-lc1, lc2, lc3, lc4 = st.columns(4)
-with lc1:
-    wbc = st.number_input("WBC (10⁹/L)", min_value=0.0, max_value=200.0, value=4.0, step=0.1, key=wkey("on_wbc"))
-    anc_abs = st.number_input("절대호중구 ANC (/μL)", min_value=0, max_value=20000, value=int(anc), step=50, key=wkey("on_anc_abs"))
-    hb_lab = st.number_input("Hb (g/dL)", min_value=0.0, max_value=20.0, value=float(hb), step=0.1, key=wkey("on_hb_lab"))
-    plt_lab = st.number_input("혈소판 (/μL)", min_value=0, max_value=500000, value=int(plt), step=1000, key=wkey("on_plt_lab"))
-with lc2:
-    crp = st.number_input("CRP (mg/L)", min_value=0.0, max_value=1000.0, value=0.0, step=0.5, key=wkey("on_crp"))
-    pct = st.number_input("PCT (ng/mL)", min_value=0.0, max_value=100.0, value=0.0, step=0.1, key=wkey("on_pct"))
-    esr = st.number_input("ESR (mm/hr)", min_value=0.0, max_value=200.0, value=0.0, step=1.0, key=wkey("on_esr"))
-    dd = st.number_input("D-dimer (μg/mL FEU)", min_value=0.0, max_value=20.0, value=0.0, step=0.1, key=wkey("on_dd"))
-with lc3:
-    na = st.number_input("Na (mEq/L)", min_value=100.0, max_value=170.0, value=138.0, step=0.5, key=wkey("on_na"))
-    k = st.number_input("K (mEq/L)", min_value=1.0, max_value=9.0, value=4.0, step=0.1, key=wkey("on_k"))
-    cl = st.number_input("Cl (mEq/L)", min_value=70.0, max_value=130.0, value=103.0, step=0.5, key=wkey("on_cl"))
-    ca = st.number_input("Ca (mg/dL)", min_value=5.0, max_value=15.0, value=9.2, step=0.1, key=wkey("on_ca"))
-with lc4:
-    bun = st.number_input("BUN (mg/dL)", min_value=1.0, max_value=200.0, value=12.0, step=0.5, key=wkey("on_bun"))
-    cr = st.number_input("Creatinine (mg/dL)", min_value=0.1, max_value=10.0, value=0.9, step=0.1, key=wkey("on_cr"))
-    ast_v = st.number_input("AST (U/L)", min_value=0.0, max_value=1000.0, value=20.0, step=1.0, key=wkey("on_ast"))
-    alt_v = st.number_input("ALT (U/L)", min_value=0.0, max_value=1000.0, value=20.0, step=1.0, key=wkey("on_alt"))
-
-bads = []
-if anc_abs < 500: bads.append("ANC<500 (감염 위험↑)")
-elif anc_abs < 1000: bads.append("ANC 500~999")
-if plt_lab < 20000: bads.append("혈소판<20k (출혈 위험)")
-elif plt_lab < 50000: bads.append("혈소판 20~50k")
-if hb_lab < 7.0: bads.append("중증 빈혈 가능")
-elif hb_lab < 8.0: bads.append("빈혈 주의")
-if crp >= 10: bads.append("CRP≥10 (염증↑)")
-if pct >= 0.5: bads.append("PCT≥0.5 (세균성 감염 가능)")
-if na < 130: bads.append("저나트륨")
-if k >= 5.5: bads.append("고칼륨")
-if cr >= 1.5: bads.append("Cr 상승(신장)")
-if ast_v >= 100 or alt_v >= 100: bads.append("간수치 상승")
-if dd >= 1.0: bads.append("D-dimer 상승")
-
-if bads:
-    st.warning("피수치 요약: " + " / ".join(bads))
-else:
-    st.success("피수치상 즉시 위험 신호는 두드러지지 않아요. 임상 증상과 함께 보세요.")
-
-st.markdown("—")
-st.subheader("특수 검사 가이드(상황별 제안)")
-tips = []
-if nf or temp == "≥38.5℃" or crp >= 10 or pct >= 0.5:
-    tips += ["혈액배양(가능하면 2세트) 및 소변배양 고려", "흉부 X-ray(기침/호흡기 증상 있으면 우선)"]
-if dyspnea or chest_pain:
-    tips += ["심전도(ECG), 흉부 X-ray ± 흉부 CT(의료진 판단)", "혈액가스/산소포화도 확인", "심근효소(Troponin)"]
-if confusion:
-    tips += ["저혈당/전해질 먼저 확인, 필요 시 뇌영상(CT/MRI) 의료진 판단"]
-if high_bleed or dd >= 1.0:
-    tips += ["응고계(PT/INR, aPTT, Fibrinogen)"]
-if oliguria2 or (bun >= 20 or cr >= 1.5):
-    tips += ["요검사/요배양, 전해질 재평가"]
-if persistent_vomit2:
-    tips += ["전해질(특히 Na/K/Cl) 재확인, 필요 시 복부 영상은 의료진 판단"]
-if cough2 and (crp >= 10 or temp != "<38.0℃"):
-    tips += ["호흡기 바이러스/세균 패널(의료기관 가능 시)"]
-if tips:
-    st.markdown("**권장 검토 항목(의료진 판단 하에):**")
-    for t in dict.fromkeys(tips):
-        st.write("- " + t)
-else:
-    st.write("현재 입력 기준으로 꼭 필요한 특수검사 제안은 없어요. 증상 변화에 따라 달라질 수 있어요.")
