@@ -644,7 +644,7 @@ with t_peds:
         persistent_vomit = st.checkbox("지속 구토(>6시간)", key=wkey("p_pvomit"))
         oliguria = st.checkbox("소변량 급감", key=wkey("p_oliguria"))
 
-    st.toggle("간단보기", value=True, key=wkey("peds_simple"))
+    st.toggle("증상별 자세히 보기", value=True, key=wkey("peds_simple"))
     render_caregiver_notes_peds(
         stool=stool, fever=fever, persistent_vomit=persistent_vomit, oliguria=oliguria,
         cough=cough, nasal=nasal, eye=eye, abd_pain=abd_pain, ear_pain=ear_pain,
