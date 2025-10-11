@@ -495,7 +495,7 @@ st.set_page_config(page_title="피수치 가이드(special_tests 고정판)", la
 st.title("피수치 가이드 — special_tests 연동 강화판")
 st.caption("암종 선택/피수치/소아가이드/특수검사/항암제/보고서 통합. special_tests 경로·함수명 자동 인식.")
 
-tabs = st.tabs(["🏠 홈", "🧪 피수치 입력", "🩺 압종분류", "🧒 소아 가이드", "🔬 특수검사", "🧬 암종 선택", "💊 항암제", "📄 보고서"])
+tabs = st.tabs(["🏠 홈", "🧪 피수치 입력", "🩺 혈압체크", "🧒 소아 가이드", "🔬 특수검사", "🧬 암종 선택", "💊 항암제", "📄 보고서"])
 
 with tabs[1]:
     labs_input_ui()
