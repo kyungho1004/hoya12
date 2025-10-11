@@ -441,10 +441,6 @@ def render_diet_guides(context=None, key_prefix: str = ""):
         if fever and fever != "37.x":
             notes += [
                 "발열: 옷 가볍게/실내 시원하게, 해열제 간격(아세트 ≥4h, 이부 ≥6h)",
-                "(만약 열이 안잡힐경우 2시간 간격으로 아세트아미노펜 과 이부프로펜을 교차복용해주시고)",
-                "(물이나 ors 또는 음료수를 소량씩 자주 먹이시면 해열작용에 도움이됩니다)",
-                "(손과 발을 만져서 손발이 따듯하다면 해열제가 작용중이니 30분에서 1시간간격으로 열체크해주시면 도움이됩니다)",
-                "(집안 온도는 25에서 26도 사이가 좋으며 미지근한물로 닦아주시면 해열작용에 많은 도움이됩니다)",
             ]
         return notes
 
@@ -561,47 +557,316 @@ def bp_ui():
     return cat, note
 
 # ---------------- UI: Peds ----------------
-def render_caregiver_notes_peds(*, stool, fever, persistent_vomit, oliguria, cough, nasal, eye, abd_pain, ear_pain, rash, hives, migraine, hfmd, constipation=False, anc_low=None, diarrhea=False):
-    st.header("🧒 소아가이드")
+
+def render_caregiver_notes_peds(*,
+    stool, fever, persistent_vomit, oliguria, cough, nasal, eye,
+    abd_pain, ear_pain, rash, hives, migraine, hfmd,
+    constipation=False, anc_low=None, diarrhea=False, key_prefix="peds_"
+):
+    st.header("🧒 소아가이드 (강화판)")
+    # ANC 기준 자동
     if anc_low is None:
         try:
             anc_val = _parse_float(st.session_state.get("labs_dict", {}).get("ANC"))
             anc_low = (anc_val is not None and anc_val < 500)
         except Exception:
             anc_low = False
+
     notes=[]
-    def bullet(title, body):
-        st.markdown(f"**{title}**"); st.markdown(body.strip())
-        first = body.strip().splitlines()[0].strip("- ").strip()
-        if first: notes.append(f"{title} — {first}")
+    def bullet(title, lines):
+        st.markdown(f"**{title}**")
+        for ln in lines:
+            st.markdown(f"- {ln}")
+        if lines:
+            # 첫 줄 요약만 보고서에 수집
+            first = str(lines[0]).strip()
+            if first: notes.append(f"{title} — {first}")
+
+    # 공통 ER 레드플래그
+    with st.expander("🚨 이런 경우 즉시 응급평가"):
+        er_flags = [
+            "의식 저하/불응, 경련",
+            "호흡곤란, 청색증, 쉼 없이 헐떡임",
+            "수분 섭취 불가 + 소변 거의 없음(12시간↑)",
+            "지속 구토(담즙/혈성 구토) 또는 혈변",
+            "40℃에 가까운 고열 또는 해열제로 조절되지 않는 열",
+            "복막자극징후(복부 강직/반발통)",
+        ]
+        for f in er_flags: st.markdown(f"- {f}")
+
+    # ANC 낮음 위생/식이
     if anc_low:
-        bullet("🍽️ ANC 낮음(호중구 감소) 식이가이드","""
-- **생야채/날고기·생선 금지**, 모든 음식은 **충분히 익혀서**
-- **멸균/살균 제품** 위주 섭취, 유통기한·보관 온도 준수
-- 과일은 **껍질 제거 후** 섭취(가능하면 데친 뒤 식혀서)
-- **조리 후 2시간 지나면 폐기**, **뷔페/회/초밥/생채소 샐러드 금지**
-""")
-    if diarrhea:
-        bullet("💧 설사/장염 의심","""
-- 하루 **잦은 묽은 변**이면 장염 가능성
-- **ORS**: 처음 1시간 **10–20 mL/kg**, 이후 설사 1회당 **5–10 mL/kg**
-- **즉시 진료**: 피 섞인 변, **고열 ≥39℃**, **소변 거의 없음/축 늘어짐**
-""")
-        bullet("🍽️ 식이가이드(설사)","""
-- 초기 24시간: **바나나·쌀죽·사과퓨레·토스트(BRAT 변형)** 참고
-- **자주·소량**의 미지근한 수분, 탄산/아이스는 피하기
-""")
-    if constipation:
-        bullet("🚻 변비 대처","""
-- **수분**: 대략 체중 **50–60 mL/kg/일**(지시 맞춰 조정)
-- **좌변 습관**: 식후 10–15분, 하루 1회 5–10분
-""")
-    if fever in ["38~38.5","38.5~39","39 이상"]:
-        bullet("🌡️ 발열 대처","""
-- 옷 가볍게, 실내온도는 25에서 26도 소량의 이나 ors 음료수 를 주시면 많이 도움됩니다.
-- 해열제 열이 안잡힐경우 아세트아미노펜 과 이부프로펜은 최소 간격2시간을 유지해주세요.
-- **해열제 간격**: 아세트아미노펜 ≥4h, 이부프로펀 ≥6h
-""")
+        bullet("🍽️ ANC 낮음(호중구감소) — 식이/위생",
+        [
+            "**생야채/날고기·생선 금지**, 모든 음식 **충분히 익혀서**",
+            "살균/UHT 제품 위주, 유통기한·보관온도 준수",
+            "과일은 **껍질 제거**(가능하면 데친 후 섭취)",
+            "조리 후 2시간 지나면 폐기, **뷔페/회/초밥/생채소 샐러드 금지**",
+        ])
+
+    # 탈수 평가 체크리스트
+    with st.expander("💧 탈수 평가 체크리스트"):
+        c1,c2,c3 = st.columns(3)
+        with c1:
+            dry_mouth = st.checkbox("입안이 마르고 눈물 없음", key=wkey(f"{key_prefix}dry"))
+            sunken = st.checkbox("눈/천문 함몰", key=wkey(f"{key_prefix}sink"))
+        with c2:
+            sleepy = st.checkbox("평소보다 많이 처짐/졸림", key=wkey(f"{key_prefix}sleepy"))
+            poor_intake = st.checkbox("마시기/먹기 힘듦", key=wkey(f"{key_prefix}poor"))
+        with c3:
+            scant_urine = st.checkbox("소변 횟수 현저히 감소", key=wkey(f"{key_prefix}urine"))
+            fast_hr = st.checkbox("빠른 맥박/호흡", key=wkey(f"{key_prefix}tachy"))
+        dehydrated = sum([dry_mouth, sunken, sleepy, poor_intake, scant_urine, fast_hr]) >= 2
+        st.info("평가: " + ("중등도 이상 탈수 가능성 — 수액평가 고려" if dehydrated else "탈수 소견 뚜렷하지 않음"))
+
+    # Fever
+    with st.expander("🌡️ 발열"):
+        bullet("발열 관리",
+            [
+            "옷은 가볍게 입히고, 실내 온도는 **25–26℃**로 유지",
+            "소량씩 자주 **물/ORS** 섭취",
+            "해열제 간격: **아세트아미노펜 ≥4시간**, **이부프로펜 ≥6시간**(생후 6개월 미만 금지)",
+            "열이 잘 안 내릴 때 두 약을 번갈아 쓸 수 있으나, **서로 다른 약 사이 최소 2시간 간격** 유지"
+            ])
+        if fever in ["38~38.5","38.5~39","39 이상"]:
+            bullet("의료평가 시점",
+            [
+                "3–5일 이상 지속되거나, **36시간 이내 반응 미비**",
+                "경련/의식저하/호흡곤란 동반 시 즉시 평가",
+            ])
+
+    # Diarrhea
+    with st.expander("💩 설사/장염"):
+        if diarrhea:
+            bullet("수분/ORS 가이드",
+            [
+                "첫 1시간 **10–20 mL/kg**, 이후 설사 1회당 **5–10 mL/kg** 보충",
+                "탄산·아이스 피하고 **미지근한** 수분",
+            ])
+        # ORS 계산기
+        wt = st.number_input("체중(kg)", min_value=1.0, max_value=120.0, value=20.0, step=0.5, key=wkey(f"{key_prefix}wt"))
+        freq = st.selectbox("하루 설사 횟수", ["0~2","3~4","5~6","7 이상"], index=1, key=wkey(f"{key_prefix}freq"))
+        # 간단 계산(교육용)
+        base = 15.0 * wt  # 첫 1시간 중간값(15 mL/kg)
+        add_map = {"0~2": 2,"3~4": 3,"5~6": 5,"7 이상": 7}
+        add = add_map.get(freq, 3) * 7.5 * wt  # 회당 7.5 mL/kg * 횟수 추정
+        total = base + add
+        st.caption(f"권장 ORS(교육용 추정): 약 **{int(total)} mL/일** (상태에 따라 조정 필요)")
+        bullet("주의",
+        [
+            "피 섞인 변, **고열 ≥39℃**, 축 늘어짐/소변 거의 없음 → 즉시 진료",
+        ])
+
+    # Constipation
+    with st.expander("🚻 변비"):
+        if constipation:
+            bullet("생활요법",
+            [
+                "수분: 대략 **50–60 mL/kg/일**(지시 범위 내 조정)",
+                "식후 **좌변 습관 10–15분**",
+                "섬유: 귀리·보리·사과/배·키위·프룬·고구마·통곡빵·현미·익힌 채소",
+            ])
+
+    # Cough/Cold
+    with st.expander("🤧 기침/감기"):
+        bullet("호흡기 증상 대처",
+        [
+            "비강 세척/가습, 수분 충분",
+            "해열제 간격 준수, 기침약은 연령/지시에 따라",
+            "호흡 곤란, 청색증, **늑간 함몰** 시 즉시 평가",
+        ])
+
+    # Otitis
+    with st.expander("👂 귀 통증(중이염 의심)"):
+        bullet("통증 조절/관리",
+        [
+            "해열·진통제 간격 준수(아세트아미노펜 ≥4h, 이부프로펜 ≥6h)",
+            "**귀에 물이 들어가지 않도록 주의**(샤워/목욕/수영 시 귀마개 또는 주의)",
+            "샤워 후 **고개를 기울여 물 빼기**, 드라이어 **약풍을 멀리서** 사용 가능",
+            "**면봉으로 귀 안을 파지 않기**(외이도 손상/염증 악화)",
+            "코막힘 동반 시 비강 세척/스테로이드 분무(지시 범위)",
+            "**고막천공 의심(귀에서 분비물/통증 심함)** 시 **점이제 자가 사용 금지**, 즉시 평가",
+            "항생제 처방 시 **용량·기간 반드시 준수**, 증상 지속/악화 시 재평가"
+        ])
+
+    # Abd pain
+    with st.expander("🤕 복통"):
+        bullet("주의 소견",
+        [
+            "쥐어짜는 통증, **우하복부 국소통**, 보행 시 악화",
+            "구토/발열 동반, **반발통** → 충수염 등 평가",
+        ])
+
+    # Vomiting
+    with st.expander("🤮 구토"):
+        if persistent_vomit:
+            bullet("반복 구토 대처",
+            [
+                "소량씩 자주 수분, **투명한 수분부터**",
+                "탈수/복통/혈성 구토 동반 시 평가",
+            ])
+
+    # 교육용 해열제 용량표 (간단 안내)
+    with st.expander("📝 교육용 해열제 용량(요약)"):
+        st.markdown("- **Acetaminophen(아세트아미노펜)**: **10–15 mg/kg**/회, **4–6시간 간격**, 하루 최대 **75 mg/kg** 또는 지시량")
+        st.markdown("- **Ibuprofen(이부프로펜)**: **10 mg/kg**/회, **6–8시간 간격**, **생후 6개월 미만 금지**")
+        st.caption("※ 실제 복용은 개별 지시/라벨을 반드시 따르세요.")
+
+
+# --- 즉시 요약: 입력한 증상에 따른 대처 요령 ---
+action_items = []
+
+def add_action(title, tips):
+    if tips:
+        action_items.append((title, tips))
+        # notes에도 첫 줄 요약 수집
+        notes.append(f"{title} — {tips[0]}")
+
+# Fever-based
+if str(fever) in ["38~38.5","38.5~39","39 이상"]:
+    add_action("🌡️ 발열 대처", [
+            "옷 가볍게, 실내 **25–26℃**, 소량씩 자주 **물/ORS**",
+            "아세트아미노펜 10–15 mg/kg q4–6h, 이부프로펜 10 mg/kg q6–8h(≥6개월)",
+            "두 약을 번갈아 쓰는 경우 **서로 다른 약 사이 최소 2시간** 간격 유지",
+            "3–5일 지속/조절 어려움·경련·호흡곤란 동반 시 평가"
+        ])
+
+# Diarrhea
+if bool(diarrhea):
+    add_action("💩 설사 대처", [
+        "ORS: 1시간 10–20 mL/kg, 이후 1회당 5–10 mL/kg 보충",
+        "탄산·아이스 피하고 미지근한 수분, 유제품은 상태 봐가며"
+    ])
+
+# Constipation
+if bool(constipation):
+    add_action("🚻 변비 대처", [
+        "수분 50–60 mL/kg/일(지시 범위), 식후 좌변 10–15분",
+        "섬유(귀리·프룬·키위·통곡·익힌 채소), 활동량 확보"
+    ])
+
+# Vomiting / Oliguria
+if bool(persistent_vomit):
+    add_action("🤮 구토 대처", [
+        "소량씩 자주 투명한 수분부터, 탈수/혈성 구토 동반 시 평가"
+    ])
+if bool(oliguria):
+    add_action("🚨 소변량 급감", [
+        "탈수 가능성 — 수분 계획 재점검, 필요 시 의료평가"
+    ])
+
+# Respiratory
+if str(cough) in ["보통","심함"] or str(nasal) in ["진득","누런"]:
+    add_action("🤧 기침/코막힘", [
+        "비강 세척/가습, 해열제 간격 준수",
+        "호흡 곤란·늑간함몰 시 즉시 평가"
+    ])
+
+# Otitis
+if str(ear_pain) in ["보통","심함"]:
+        add_action("👂 귀 통증", [
+            "해열·진통제 간격 준수, **귀에 물 들어가지 않게**(샤워/수영 주의)",
+            "샤워 후 **고개 기울여 물 빼기**, 드라이어 약풍 멀리서",
+            "고막천공 의심/분비물 동반 시 **점이제 자가 금지**·즉시 평가"
+        ])
+
+# Abdominal pain
+if str(abd_pain) in ["보통","심함"]:
+    add_action("🤕 복통", [
+        "우하복부 국소통/보행 악화/반발통/발열 동반 시 충수염 평가"
+    ])
+
+# Skin / Allergy
+if bool(rash) or bool(hives):
+    add_action("🌿 피부/알레르기", [
+        "광범위/심한 가려움·호흡곤란·전신두드러기 동반 시 즉시 평가"
+    ])
+
+# Headache/Migraine
+if bool(migraine):
+    add_action("🧠 두통", [
+        "수분/휴식·조용한 환경, 반복 구토/신경학적 이상 동반 시 평가"
+    ])
+
+# ANC low
+if anc_low:
+    add_action("🍽️ ANC 낮음 위생/식이", [
+        "날 것 금지·충분히 익히기, 과일 껍질 제거·데치기",
+        "조리 후 2시간 이내 섭취·뷔페/회/생채소 금지"
+    ])
+
+
+# Respiratory wheeze/asthma-style
+if bool(wheeze) or bool(sob):
+    add_action("🫁 쌕쌕거림/호흡곤란", [
+        "숨 가쁨·늑간함몰·말수 줄면 즉시 평가",
+        "속효성 기관지확장제 사용 중이면 지시에 따라, 반응 없으면 진료"
+    ])
+
+# Sore throat
+if bool(throat):
+    add_action("🗣️ 인후통", [
+        "미지근한 물/꿀(>1세)/가글, 자극적 음식 피하기",
+        "고열·호흡곤란·심한 연하통이면 평가"
+    ])
+
+# Conjunctivitis
+if str(eye) in ["노랑-농성","양쪽"]:
+    add_action("👁️ 결막염 의심", [
+        "손씻기·수건/베개 공유 금지",
+        "농성·통증·시력저하 동반 시 평가"
+    ])
+
+# Viral syndrome (flu/COVID-like) by fever+cough/nasal
+if (str(fever) in ["38~38.5","38.5~39","39 이상"]) and (str(cough) in ["보통","심함"] or str(nasal) in ["진득","누런"]):
+    add_action("🦠 호흡기 바이러스 의심", [
+        "휴식·수분·해열제 간격 준수",
+        "호흡곤란/탈수/의식변화 시 평가"
+    ])
+
+# Skin rash / urticaria
+if bool(rash):
+    add_action("🌿 피부 발진", [
+        "미온수 샤워·자극 회피, 가려움 심하면 냉찜질",
+        "고열·점상출혈·점막병변·호흡곤란 동반시 즉시 평가"
+    ])
+if bool(hives):
+    add_action("🍤 두드러기", [
+        "원인 의심 음식·약 중단, 가려움 완화",
+        "입술/혀부종·호흡곤란 동반 시 **아나필락시스 의심 → 즉시 119/응급실**"
+    ])
+
+# UTI/Dysuria
+if bool(dysuria) or bool(hematuria):
+    add_action("🚻 배뇨 통증/혈뇨", [
+        "수분 섭취 늘리고, 통증 지속·발열 동반 시 소변검사 평가"
+    ])
+
+# HFMD
+if bool(hfmd):
+    add_action("🖐️ 수족구", [
+        "수분·통증 조절, 입안 통증 시 차가운 음식",
+        "탈수 징후·고열 지속 시 평가"
+    ])
+
+# Headache/migraine already handled; emphasize red flags
+if bool(migraine):
+    add_action("🧠 두통 경고", [
+        "자고 깨도 지속/새로운 신경학적 이상(구토 반복/보행이상/시야이상) 시 평가"
+    ])
+
+    # Render action cards
+if action_items:
+    st.subheader("✅ 증상 입력 기반 즉시 가이드")
+    for title, tips in action_items:
+        with st.container():
+            st.markdown(f"**{title}**")
+            for t in tips:
+                st.markdown(f"- {t}")
+    st.session_state["peds_actions"] = action_items
+else:
+    st.session_state["peds_actions"] = []
+
     st.session_state["peds_notes"] = notes
 
 # ---------------- Chemo (concise) ----------------
@@ -626,63 +891,76 @@ CHEMO_DB={
 
 # ---- 암종별 프로토콜 추천 ----
 
+
 CHEMO_PROTOCOLS = {
  "APL": ["ATRA (Tretinoin, Vesanoid) / 베사노이드", "Arsenic Trioxide (ATO) / 삼산화비소", "Doxorubicin (DOX) / 독소루비신", "Idarubicin / 이다루비신", "Daunorubicin / 다우노루비신"],
- "AML": ["Cytarabine (Ara-C) / 시타라빈(아라씨)", "Daunorubicin / 다우노루비신", "Idarubicin / 이다루비신"],
- "ALL": ["Vincristine (VCR) / 빈크리스틴", "MTX (Methotrexate) / 메토트렉세이트", "Mercaptopurine (6-MP) / 6-머캅토퓨린"],
- "CML": ["Imatinib / 이매티닙(글리벡)"],
- "DLBCL": ["Cyclophosphamide (CTX) / 사이클로포스파마이드", "Doxorubicin (DOX) / 독소루비신", "Vincristine (VCR) / 빈크리스틴"],
- "Hodgkin": ["Doxorubicin (DOX) / 독소루비신", "Vincristine (VCR) / 빈크리스틴", "Cyclophosphamide (CTX) / 사이클로포스파마이드"],
- "Colon": ["5-Fluorouracil (5-FU) / 5-플루오로우라실", "Capecitabine (CAP) / 카페시타빈", "Oxaliplatin (L-OHP) / 옥살리플라틴", "Irinotecan (CPT-11) / 이리노테칸", "Bevacizumab / 베바시주맙"],
+ "AML": ["Cytarabine (Ara-C) / 시타라빈(아라씨)", "Daunorubicin / 다우노루비신", "Idarubicin / 이다루비신", "Etoposide (VP-16) / 에토포사이드"],
+ "ALL": ["Vincristine (VCR) / 빈크리스틴", "MTX (Methotrexate) / 메토트렉세이트", "Mercaptopurine (6-MP) / 6-머캅토퓨린", "Prednisone / 프레드니손", "Pegaspargase / 페그아스파라게이스"],
+ "CML": ["Imatinib / 이매티닙(글리벡)", "Dasatinib / 다사티닙", "Nilotinib / 닐로티닙"],
+ "CLL": ["Ibrutinib / 이브루티닙", "Acalabrutinib / 아칼라브루티닙", "Venetoclax / 베네토클락스", "Rituximab / 리툭시맙"],
+ "DLBCL": ["Rituximab / 리툭시맙", "Cyclophosphamide (CTX) / 사이클로포스파마이드", "Doxorubicin (DOX) / 독소루비신", "Vincristine (VCR) / 빈크리스틴", "Prednisone / 프레드니손"],
+ "Hodgkin": ["Doxorubicin (DOX) / 독소루비신", "Bleomycin / 블레오마이신" if False else "Dacarbazine (DTIC) / 다카바진", "Vinblastine / 빈블라스틴"],
+ "Multiple Myeloma": ["Bortezomib / 보르테조밉", "Lenalidomide / 레날리도마이드", "Dexamethasone" if False else "Prednisone / 프레드니손", "Carfilzomib / 카르필조밉", "Daratumumab / 다라투무맙"],
+ "Colon/Rectal": ["5-Fluorouracil (5-FU) / 5-플루오로우라실", "Capecitabine (CAP) / 카페시타빈", "Oxaliplatin (L-OHP) / 옥살리플라틴", "Irinotecan (CPT-11) / 이리노테칸", "Bevacizumab / 베바시주맙", "Regorafenib / 레고라페닙"],
  "Gastric": ["Capecitabine (CAP) / 카페시타빈", "5-Fluorouracil (5-FU) / 5-플루오로우라실", "Oxaliplatin (L-OHP) / 옥살리플라틴", "Cisplatin (CDDP) / 시스플라틴", "Trastuzumab / 트라스투주맙"],
  "Pancreas": ["Gemcitabine / 젬시타빈", "Nab-Paclitaxel (Abraxane) / 나브-파클리탁셀", "Irinotecan (CPT-11) / 이리노테칸", "Oxaliplatin (L-OHP) / 옥살리플라틴"],
  "Biliary": ["Gemcitabine / 젬시타빈", "Cisplatin (CDDP) / 시스플라틴"],
- "Breast": ["Cyclophosphamide (CTX) / 사이클로포스파마이드", "Doxorubicin (DOX) / 독소루비신", "Paclitaxel / 파클리탁셀", "Docetaxel / 도세탁셀", "Trastuzumab / 트라스투주맙"],
- "NSCLC": ["Cisplatin (CDDP) / 시스플라틴", "Carboplatin (CBDCA) / 카보플라틴", "Pemetrexed / 페메트렉시드", "Paclitaxel / 파클리탁셀", "Docetaxel / 도세탁셀", "Bevacizumab / 베바시주맙"],
- "SCLC": ["Cisplatin (CDDP) / 시스플라틴", "Carboplatin (CBDCA) / 카보플라틴", "Irinotecan (CPT-11) / 이리노테칸"],
+ "Hepatocellular": ["Atezolizumab / 아테졸리주맙", "Bevacizumab / 베바시주맙", "Sorafenib / 소라페닙", "Lenvatinib / 렌바티닙"],
+ "Breast": ["Cyclophosphamide (CTX) / 사이클로포스파마이드", "Doxorubicin (DOX) / 독소루비신", "Paclitaxel / 파클리탁셀", "Docetaxel / 도세탁셀", "Trastuzumab / 트라스투주맙", "Pertuzumab / 퍼투주맙", "Aromatase Inhibitors (AI) / 아로마타제 억제제"],
+ "NSCLC": ["Cisplatin (CDDP) / 시스플라틴", "Carboplatin (CBDCA) / 카보플라틴", "Pemetrexed / 페메트렉시드", "Paclitaxel / 파클리탁셀", "Docetaxel / 도세탁셀", "Osimertinib / 오시머티닙", "Pembrolizumab / 펨브롤리주맙"],
+ "SCLC": ["Cisplatin (CDDP) / 시스플라틴", "Carboplatin (CBDCA) / 카보플라틴", "Etoposide (VP-16) / 에토포사이드"],
+ "Head & Neck": ["Cisplatin (CDDP) / 시스플라틴", "5-Fluorouracil (5-FU) / 5-플루오로우라실", "Cetuximab / 세툭시맙"],
  "NPC": ["Cisplatin (CDDP) / 시스플라틴", "5-Fluorouracil (5-FU) / 5-플루오로우라실"],
- "H&N": ["Cisplatin (CDDP) / 시스플라틴", "5-Fluorouracil (5-FU) / 5-플루오로우라실"],
- "Ovary": ["Carboplatin (CBDCA) / 카보플라틴", "Paclitaxel / 파클리탁셀"],
- "Cervix": ["Cisplatin (CDDP) / 시스플라틴", "Paclitaxel / 파클리탁셀"],
- "GIST": ["Imatinib / 이매티닙(글리벡)"],
- "RCC": ["Sunitinib / 수니티닛"],
+ "Ovary": ["Carboplatin (CBDCA) / 카보플라틴", "Paclitaxel / 파클리탁셀", "Bevacizumab / 베바시주맙", "Olaparib / 올라파립"],
+ "Cervix": ["Cisplatin (CDDP) / 시스플라틴", "Paclitaxel / 파클리탁셀", "Bevacizumab / 베바시주맙", "Pembrolizumab / 펨브롤리주맙"],
+ "Prostate": ["Docetaxel / 도세탁셀", "Abiraterone / 아비라테론", "Enzalutamide / 엔잘루타마이드"],
+ "GIST": ["Imatinib / 이매티닙(글리벡)", "Sunitinib / 수니티닛", "Regorafenib / 레고라페닙"],
+ "RCC": ["Sunitinib / 수니티닛", "Pazopanib / 파조파닙", "Nivolumab / 니볼루맙", "Ipilimumab / 이필리무맙"],
  "Glioma": ["Temozolomide (TMZ) / 테모졸로마이드"]
 }
+
 
 
 def suggest_agents_by_onco(group:str, dx:str):
     key = (dx or "").upper()
     gkey = (group or "").upper()
-    # direct keyword hit
     for k, agents in CHEMO_PROTOCOLS.items():
         if k in key:
             return agents
     # Korean/aliases
-    if any(s in key for s in ["APL","급성 전골수구성"]): return CHEMO_PROTOCOLS["APL"]
-    if any(s in key for s in ["AML","급성 골수성"]): return CHEMO_PROTOCOLS["AML"]
-    if any(s in key for s in ["ALL","급성 림프구성"]): return CHEMO_PROTOCOLS["ALL"]
-    if any(s in key for s in ["CML","만성 골수성"]): return CHEMO_PROTOCOLS["CML"]
-    if any(s in key for s in ["DLBCL","NHL","비호지킨"]): return CHEMO_PROTOCOLS["DLBCL"]
-    if any(s in key for s in ["HODGKIN","호지킨"]): return CHEMO_PROTOCOLS["Hodgkin"]
-    if any(s in key for s in ["COLON","RECT","대장","직장"]): return CHEMO_PROTOCOLS["Colon"]
-    if any(s in key for s in ["GASTRIC","위암"]): return CHEMO_PROTOCOLS["Gastric"]
-    if any(s in key for s in ["PANCREAS","췌장"]): return CHEMO_PROTOCOLS["Pancreas"]
-    if any(s in key for s in ["BILIARY","담도","담낭","담관"]): return CHEMO_PROTOCOLS["Biliary"]
-    if any(s in key for s in ["BREAST","유방"]): return CHEMO_PROTOCOLS["Breast"]
-    if any(s in key for s in ["NSCLC","비소세포","폐"]): return CHEMO_PROTOCOLS["NSCLC"]
-    if any(s in key for s in ["SCLC","소세포"]): return CHEMO_PROTOCOLS["SCLC"]
-    if any(s in key for s in ["NPC","비인두"]): return CHEMO_PROTOCOLS["NPC"]
-    if any(s in key for s in ["HEAD&NECK","두경부"]): return CHEMO_PROTOCOLS["H&N"]
-    if any(s in key for s in ["OVARY","난소"]): return CHEMO_PROTOCOLS["Ovary"]
-    if any(s in key for s in ["CERVIX","자궁경부"]): return CHEMO_PROTOCOLS["Cervix"]
-    if any(s in key for s in ["GIST"]): return CHEMO_PROTOCOLS["GIST"]
-    if any(s in key for s in ["RCC","신세포","신장암"]): return CHEMO_PROTOCOLS["RCC"]
-    if any(s in key for s in ["GLIOMA","신경교종","교모세포종","GBM"]): return CHEMO_PROTOCOLS["Glioma"]
-    # group fallback
-    if "HEMATO" in gkey or "혈액" in (group or ""): 
-        if "APL" in gkey: return CHEMO_PROTOCOLS["APL"]
-        if "AML" in gkey: return CHEMO_PROTOCOLS["AML"]
-        if "ALL" in gkey: return CHEMO_PROTOCOLS["ALL"]
+    alias = {
+        "APL":"APL|급성 전골수구성",
+        "AML":"AML|급성 골수성",
+        "ALL":"ALL|급성 림프구성",
+        "CML":"CML|만성 골수성",
+        "CLL":"CLL|만성 림프구성",
+        "DLBCL":"DLBCL|NHL|비호지킨",
+        "Hodgkin":"HODGKIN|호지킨",
+        "Colon/Rectal":"COLON|RECT|대장|직장",
+        "Gastric":"GASTRIC|위암",
+        "Pancreas":"PANCREAS|췌장",
+        "Biliary":"BILIARY|담도|담관|담낭",
+        "Hepatocellular":"HCC|간세포암|간암",
+        "Breast":"BREAST|유방",
+        "NSCLC":"NSCLC|비소세포|폐선암|편평",
+        "SCLC":"SCLC|소세포",
+        "Head & Neck":"HEAD & NECK|두경부",
+        "NPC":"NPC|비인두",
+        "Ovary":"OVARY|난소",
+        "Cervix":"CERVIX|자궁경부",
+        "Prostate":"PROSTATE|전립선",
+        "GIST":"GIST",
+        "RCC":"RCC|신세포|신장암",
+        "Glioma":"GLIOMA|신경교종|교모세포종|GBM"
+    }
+    for key_name, pattern in alias.items():
+        import re as _re
+        if _re.search(pattern, key):
+            return CHEMO_PROTOCOLS.get(key_name, [])
+    # group-level fallback
+    if "HEMATO" in gkey or "혈액" in (group or ""):
+        for k in ["APL","AML","ALL","CML","CLL","DLBCL","Hodgkin"]:
+            if k in CHEMO_PROTOCOLS: return CHEMO_PROTOCOLS[k]
     return []
 
 # ---- 추가 항암제 DB (업데이트 병합) ----
@@ -784,6 +1062,153 @@ EXTRA_CHEMO = {
 }
 try:
     CHEMO_DB.update(EXTRA_CHEMO)
+except Exception:
+    pass
+
+# ---- 추가 항암제 DB (대규모 확장) ----
+EXTRA_CHEMO2 = {
+ # Heme - leukemias/lymphomas/myeloma
+ "Etoposide (VP-16) / 에토포사이드":{
+  "effects":{"blood":["{DANGER} 골수억제"],"gi":["{WARN} 오심/구토"],"alopecia":["{WARN} 탈모"]},
+  "monitor":["CBC","감염징후"]
+ },
+ "Prednisone / 프레드니손":{
+  "effects":{"endocrine":["{WARN} 고혈당/체중증가"],"inf":["{WARN} 감염 위험↑"]},
+  "monitor":["혈당","혈압","감염징후"]
+ },
+ "Pegaspargase / 페그아스파라게이스":{
+  "effects":{"hepatic":["{WARN} 간효소상승"],"pancreas":["{DANGER} 췌장염"],"thrombo":["{WARN} 혈전/출혈"]},
+  "monitor":["AST/ALT/Tb","복통/아밀라제/리파아제","D-dimer/피브리노겐"]
+ },
+ "Rituximab / 리툭시맙":{
+  "effects":{"infusion":["{WARN} 주입반응"],"hepB":["{DANGER} B형간염 재활성화"]},
+  "monitor":["HBsAg/anti-HBc","주입반응 대비"]
+ },
+ "Vinblastine / 빈블라스틴":{
+  "effects":{"neuro":["{WARN} 말초신경병증"],"blood":["{DANGER} 골수억제"]},
+  "monitor":["신경증상","CBC"]
+ },
+ "Dacarbazine (DTIC) / 다카바진":{
+  "effects":{"gi":["{WARN} 오심/구토"],"blood":["{DANGER} 골수억제"]},
+  "monitor":["CBC"]
+ },
+ "Brentuximab Vedotin / 브렌툭시맙":{
+  "effects":{"neuro":["{WARN} 말초신경병증"],"inf":["{WARN} 주입반응"]},
+  "monitor":["신경증상","주입반응"]
+ },
+ "Bortezomib / 보르테조밉":{
+  "effects":{"neuro":["{WARN} 말초신경병증"],"herpes":["{WARN} 대상포진 재활성화"]},
+  "monitor":["신경증상","HSV 예방 고려"]
+ },
+ "Lenalidomide / 레날리도마이드":{
+  "effects":{"blood":["{DANGER} 호중구/혈소판 감소"],"thrombo":["{WARN} 혈전 위험"]},
+  "monitor":["CBC","항응고 고려"]
+ },
+ "Carfilzomib / 카르필조밉":{
+  "effects":{"cardiac":["{WARN} 심부전/고혈압"],"renal":["{WARN} 신기능 악화"]},
+  "monitor":["심기능/혈압","Cr/eGFR"]
+ },
+ "Daratumumab / 다라투무맙":{
+  "effects":{"infusion":["{WARN} 주입반응"],"serology":["{WARN} 적합성 교차시험 간섭"]},
+  "monitor":["주입반응 대비","수혈 전 알림"]
+ },
+ "Ibrutinib / 이브루티닙":{
+  "effects":{"bleed":["{WARN} 출혈 위험"],"af":["{WARN} 심방세동"]},
+  "monitor":["출혈/심전도"]
+ },
+ "Acalabrutinib / 아칼라브루티닙":{
+  "effects":{"bleed":["{WARN} 출혈 위험"],"headache":["{WARN} 두통 흔함"]},
+  "monitor":["출혈징후"]
+ },
+ "Venetoclax / 베네토클락스":{
+  "effects":{"tls":["{DANGER} 종양용해증후군"],"blood":["{DANGER} 골수억제"]},
+  "monitor":["TLS 위험평가/수액/요산억제","CBC"]
+ },
+ "Dasatinib / 다사티닙":{
+  "effects":{"pleural":["{WARN} 흉막삼출"],"bleed":["{WARN} 출혈"]},
+  "monitor":["흉막삼출 증상","혈소판"]
+ },
+ "Nilotinib / 닐로티닙":{
+  "effects":{"qt":["{WARN} QT 연장"],"metabolic":["{WARN} 고혈당"]},
+  "monitor":["ECG,QTc","혈당"]
+ },
+
+ # Solid - GI, breast, lung, GU, etc.
+ "Oxaliplatin (L-OHP) / 옥살리플라틴":{
+  "effects":{"neuro":["{WARN} 급성 냉유발 감각이상","{WARN} 누적 말초신경병증"]},
+  "monitor":["신경증상"]
+ },
+ "Regorafenib / 레고라페닙":{
+  "effects":{"hand_foot":["{WARN} 수족증후군"],"hepatic":["{WARN} 간독성"]},
+  "monitor":["피부관리","AST/ALT/Tb"]
+ },
+ "Sorafenib / 소라페닙":{
+  "effects":{"hand_foot":["{WARN} 수족증후군"],"htn":["{WARN} 고혈압"]},
+  "monitor":["혈압","피부/손발"]
+ },
+ "Lenvatinib / 렌바티닙":{
+  "effects":{"htn":["{WARN} 고혈압"],"proteinuria":["{WARN} 단백뇨"]},
+  "monitor":["혈압","소변 단백"]
+ },
+ "Atezolizumab / 아테졸리주맙":{
+  "effects":{"irAE":["{WARN} 면역관련 이상반응(폐렴/장염/간염/내분비)"]},
+  "monitor":["증상 모니터/스테로이드 알고리즘"]
+ },
+ "Pembrolizumab / 펨브롤리주맙":{
+  "effects":{"irAE":["{WARN} 면역관련 이상반응"]},
+  "monitor":["증상 모니터/스테로이드 알고리즘"]
+ },
+ "Nivolumab / 니볼루맙":{
+  "effects":{"irAE":["{WARN} 면역관련 이상반응"]},
+  "monitor":["증상 모니터/스테로이드 알고리즘"]
+ },
+ "Ipilimumab / 이필리무맙":{
+  "effects":{"irAE":["{WARN} 면역관련 이상반응(강도↑)"]},
+  "monitor":["증상 모니터/스테로이드 알고리즘"]
+ },
+ "Dabrafenib / 다브라페닙":{
+  "effects":{"fever":["{WARN} 발열"],"skin":["{WARN} 피부발진"]},
+  "monitor":["체온","피부"]
+ },
+ "Trametinib / 트라메티닙":{
+  "effects":{"cardiac":["{WARN} 심기능저하"],"skin":["{WARN} 발진"]},
+  "monitor":["LVEF","피부"]
+ },
+ "Olaparib / 올라파립":{
+  "effects":{"blood":["{DANGER} 빈혈/호중구감소"],"gi":["{WARN} 오심"]},
+  "monitor":["CBC"]
+ },
+ "Enzalutamide / 엔잘루타마이드":{
+  "effects":{"neuro":["{WARN} 피로/어지럼"],"seiz":["{WARN} 드문 경련"]},
+  "monitor":["신경증상"]
+ },
+ "Abiraterone / 아비라테론":{
+  "effects":{"hepatic":["{WARN} 간효소상승"],"endocrine":["{WARN} 염분/저K"]},
+  "monitor":["AST/ALT","K,혈압","프레드니손 병용"]
+ },
+ "Pazopanib / 파조파닙":{
+  "effects":{"hepatic":["{WARN} 간독성"],"htn":["{WARN} 고혈압"]},
+  "monitor":["AST/ALT/Tb","혈압"]
+ },
+ "Cetuximab / 세툭시맙":{
+  "effects":{"skin":["{WARN} 여드름양 발진"],"infusion":["{WARN} 주입반응"]},
+  "monitor":["피부관리","주입반응"]
+ },
+ "Osimertinib / 오시머티닙":{
+  "effects":{"cardiac":["{WARN} QT 연장"],"pulmonary":["{WARN} 간질성 폐렴"]},
+  "monitor":["ECG,QTc","호흡증상"]
+ },
+ "Pertuzumab / 퍼투주맙":{
+  "effects":{"cardiac":["{WARN} 심기능저하"]},
+  "monitor":["LVEF"]
+ },
+ "Aromatase Inhibitors (AI) / 아로마타제 억제제":{
+  "effects":{"bone":["{WARN} 골감소증/관절통"]},
+  "monitor":["골밀도","통증관리"]
+ }
+}
+try:
+    CHEMO_DB.update(EXTRA_CHEMO2)
 except Exception:
     pass
 def render_chemo_adverse_effects(agents, route_map=None):
@@ -1098,38 +1523,45 @@ with tabs[4]:
 with tabs[5]:
     bp_ui(); autosave_state()
 
+
 with tabs[6]:
     c1,c2,c3 = st.columns(3)
     with c1:
-        stool = st.selectbox("설사 횟수", ["0~2회","3~4회","5~6회","7회 이상"], key=wkey("stool"))
-        diarrhea_exp = st.checkbox("설사 있음", key=wkey("diarrhea"))
-        fever = st.selectbox("최고 체온", ["37.x","38~38.5","38.5~39","39 이상"], key=wkey("fever"))
-        constipation = st.checkbox("변비", key=wkey("constipation"))
+        stool = st.selectbox("설사 횟수", ["0~2회","3~4회","5~6회","7회 이상"], key=wkey("peds_stool"))
+        diarrhea_exp = st.checkbox("설사 있음", key=wkey("peds_diarrhea"))
+        fever = st.selectbox("최고 체온", ["37.x","38~38.5","38.5~39","39 이상"], key=wkey("peds_fever"))
+        constipation = st.checkbox("변비", key=wkey("peds_constipation"))
     with c2:
-        persistent_vomit = st.checkbox("지속 구토", key=wkey("vomit"))
-        oliguria = st.checkbox("소변량 급감", key=wkey("oligo"))
-        cough = st.selectbox("기침 정도", ["없음","조금","보통","심함"], key=wkey("cough"))
-        nasal = st.selectbox("콧물 상태", ["맑음","진득","누런"], key=wkey("nasal"))
+        persistent_vomit = st.checkbox("지속 구토", key=wkey("peds_vomit"))
+        oliguria = st.checkbox("소변량 급감", key=wkey("peds_oligo"))
+        cough = st.selectbox("기침 정도", ["없음","조금","보통","심함"], key=wkey("peds_cough"))
+        wheeze = st.checkbox("쌕쌕거림/천명", key=wkey("peds_wheeze"))
+        sob = st.checkbox("호흡곤란/숨 가쁨", key=wkey("peds_sob"))
+        nasal = st.selectbox("콧물 상태", ["맑음","진득","누런"], key=wkey("peds_nasal"))
     with c3:
-        eye = st.selectbox("눈 분비물", ["없음","맑음","노랑-농성","양쪽"], key=wkey("eye"))
-        abd_pain = st.selectbox("복통", ["없음","조금","보통","심함"], key=wkey("abd"))
-        ear_pain = st.selectbox("귀 통증", ["없음","조금","보통","심함"], key=wkey("ear"))
-        rash = st.checkbox("피부 발진", key=wkey("rash"))
-        hives = st.checkbox("두드러기", key=wkey("hives"))
-        migraine = st.checkbox("두통/편두통", key=wkey("migraine"))
-        hfmd = st.checkbox("수족구 의심", key=wkey("hfmd"))
+        eye = st.selectbox("눈 분비물", ["없음","맑음","노랑-농성","양쪽"], key=wkey("peds_eye"))
+        throat = st.checkbox("인후통/목 아픔", key=wkey("peds_throat"))
+        abd_pain = st.selectbox("복통", ["없음","조금","보통","심함"], key=wkey("peds_abd"))
+        ear_pain = st.selectbox("귀 통증", ["없음","조금","보통","심함"], key=wkey("peds_ear"))
+        rash = st.checkbox("피부 발진", key=wkey("peds_rash"))
+        hives = st.checkbox("두드러기", key=wkey("peds_hives"))
+        dysuria = st.checkbox("배뇨 시 통증", key=wkey("peds_dysuria"))
+        hematuria = st.checkbox("혈뇨 의심", key=wkey("peds_hematuria"))
+        migraine = st.checkbox("두통/편두통", key=wkey("peds_migraine"))
+        hfmd = st.checkbox("수족구 의심", key=wkey("peds_hfmd"))
     render_caregiver_notes_peds(
         stool=stool, fever=fever, persistent_vomit=persistent_vomit, oliguria=oliguria,
         cough=cough, nasal=nasal, eye=eye, abd_pain=abd_pain, ear_pain=ear_pain,
         rash=rash, hives=hives, migraine=migraine, hfmd=hfmd,
-        constipation=constipation, diarrhea=diarrhea_exp
+        constipation=constipation, diarrhea=diarrhea_exp, key_prefix="peds_",
+        wheeze=wheeze, sob=sob, throat=throat, dysuria=dysuria, hematuria=hematuria
     )
     with st.expander("🥗 식이가이드 (lab_diet 연동)"):
         ctx = {
             "ANC": _parse_float(st.session_state.get("labs_dict", {}).get("ANC")) if st.session_state.get("labs_dict") else None,
-            "fever": st.session_state.get("fever"),
-            "constipation": st.session_state.get("constipation"),
-            "diarrhea": st.session_state.get("diarrhea"),
+            "fever": st.session_state.get("peds_fever"),
+            "constipation": st.session_state.get("peds_constipation"),
+            "diarrhea": st.session_state.get("peds_diarrhea"),
         }
         render_diet_guides(context=ctx, key_prefix="peds_")
     autosave_state()
