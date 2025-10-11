@@ -327,8 +327,7 @@ def _render_diet_fallback(context=None):
         for x in DIET_DEFAULT["ANC_low_food_safety"]:
             st.markdown(f"- {x}"); notes.append(f"ANC낮음: {x}")
     # Diarrhea — only if explicitly indicated by context
-    stool = (context or {}).get("stool")
-    diarrhea_flag = bool((context or {}).get("diarrhea")) or (stool in ["3~4회","5~6회","7회 이상"])
+    diarrhea_flag = bool((context or {}).get("diarrhea"))
     if diarrhea_flag:
         st.markdown("**설사/탈수 예방**")
         for x in DIET_DEFAULT["diarrhea"]:
@@ -637,7 +636,8 @@ def render_caregiver_notes_peds(*, stool, fever, persistent_vomit, oliguria, cou
 - 과일은 **껍질 제거 후** 섭취(가능하면 데친 뒤 식혀서)
 - **조리 후 2시간 지나면 폐기**, **뷔페/회/초밥/생채소 샐러드 금지**
 """)
-    if stool in ["3~4회","5~6회","7회 이상"]:
+    diarrhea_flag = bool(st.session_state.get("home_diarrhea") or st.session_state.get("diarrhea"))
+    if diarrhea_flag:
         bullet("💧 설사/장염 의심","""
 - 하루 **3회 이상 묽은 변**이면 장염 가능성, **노란/초록·거품 많은 변**이면 로타/노로 의심
 - **ORS**: 처음 1시간 **10–20 mL/kg**, 이후 설사 1회당 **5–10 mL/kg**
@@ -993,6 +993,7 @@ with tabs[0]:
         c1,c2,c3 = st.columns(3)
         with c1:
             stool = st.selectbox("설사 횟수", ["0~2회","3~4회","5~6회","7회 이상"], key=wkey("home_stool"))
+            diarrhea_exp = st.checkbox("설사 있음", key=wkey("home_diarrhea"))
             fever = st.selectbox("최고 체온", ["37.x","38~38.5","38.5~39","39 이상"], key=wkey("home_fever"))
             constipation = st.checkbox("변비", key=wkey("home_constipation"))
         with c2:
@@ -1019,7 +1020,7 @@ with tabs[0]:
             "fever": st.session_state.get("fever") or st.session_state.get("home_fever"),
             "constipation": st.session_state.get("constipation") or st.session_state.get("home_constipation"),
             "stool": st.session_state.get("home_stool"),
-            "diarrhea": True if st.session_state.get("home_stool") in ["3~4회","5~6회","7회 이상"] else False,
+            "diarrhea": bool(st.session_state.get("home_diarrhea")),
         }
         render_diet_guides(context=ctx)
 
@@ -1049,6 +1050,7 @@ with tabs[6]:
     c1,c2,c3 = st.columns(3)
     with c1:
         stool = st.selectbox("설사 횟수", ["0~2회","3~4회","5~6회","7회 이상"], key=wkey("stool"))
+        diarrhea_exp = st.checkbox("설사 있음", key=wkey("diarrhea"))
         fever = st.selectbox("최고 체온", ["37.x","38~38.5","38.5~39","39 이상"], key=wkey("fever"))
         constipation = st.checkbox("변비", key=wkey("constipation"))
     with c2:
@@ -1073,7 +1075,7 @@ with tabs[6]:
             "fever": st.session_state.get("fever"),
             "constipation": st.session_state.get("constipation"),
             "stool": st.session_state.get("stool"),
-            "diarrhea": True if st.session_state.get("stool") in ["3~4회","5~6회","7회 이상"] else False,
+            "diarrhea": bool(st.session_state.get("diarrhea")),
         }
         render_diet_guides(context=ctx)
     autosave_state()
