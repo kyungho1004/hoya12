@@ -267,6 +267,71 @@ def _load_diet_module():
             last_err = e
     return None, last_err
 
+
+# ---- Built-in fallback diet guide (used if lab_diet has no UI/data) ----
+DIET_DEFAULT = {
+    "ANC_low_food_safety": [
+        "생야채/날고기·생선 금지, 모든 음식은 충분히 익혀서",
+        "멸균/살균 제품 위주 섭취, 유통기한/보관 온도 준수",
+        "과일은 껍질 제거 후 섭취(가능하면 데친 뒤 식혀서)",
+        "조리 후 2시간 지나면 폐기, 뷔페/회/초밥/생채소 샐러드 금지",
+    ],
+    "diarrhea": [
+        "초기 24시간: 바나나·쌀죽·사과퓨레·토스트(BRAT 변형) 참고",
+        "자주·소량의 미지근한 수분, 탄산/아이스는 피하기",
+        "ORS: 처음 1시간 10–20 mL/kg, 이후 설사 1회당 5–10 mL/kg",
+    ],
+    "constipation_normal": [
+        "수분: 대략 체중 50–60 mL/kg/일 (의료진 지시 맞춰 조정)",
+        "좌변 습관: 식후 10–15분, 하루 1회 5–10분",
+        "식이섬유: 귀리·보리·사과/배, 키위, 자두·프룬, 고구마, 통곡빵, 현미, 익힌 채소",
+        "프룬/배 주스 1–3 mL/kg/회, 하루 1–2회(과하면 설사)",
+    ],
+    "constipation_anc_low": [
+        "생야채 대신 익힌 채소 / 가열 곡류(통곡·오트밀·귀리죽)",
+        "과일은 껍질 제거, 프룬/배 주스는 끓여 식힌 물 1:1 희석",
+    ],
+    "fever_hydration": [
+        "가벼운 옷차림과 서늘한 실내 유지",
+        "수분 자주 보충, 해열제 간격: 아세트아미노펜 ≥4h, 이부프로펜 ≥6h",
+    ]
+}
+
+def _render_diet_fallback(context=None):
+    import streamlit as st
+    notes = []
+    st.markdown("#### 기본 식이가이드(내장)")
+    anc = None
+    try:
+        anc = (context or {}).get("ANC", None)
+    except Exception:
+        anc = None
+    fever = (context or {}).get("fever")
+    constipation = bool((context or {}).get("constipation"))
+    # ANC low safety
+    if anc is not None and anc < 500:
+        st.markdown("**ANC 낮음(호중구 감소) — 식품 위생/안전**")
+        for x in DIET_DEFAULT["ANC_low_food_safety"]:
+            st.markdown(f"- {x}"); notes.append(f"ANC낮음: {x}")
+    # Diarrhea (fever may suggest infection; still give hydration)
+    st.markdown("**설사/탈수 예방**")
+    for x in DIET_DEFAULT["diarrhea"]:
+        st.markdown(f"- {x}"); notes.append(f"설사: {x}")
+    # Constipation
+    if constipation:
+        st.markdown("**변비 식이가이드**")
+        for x in DIET_DEFAULT["constipation_normal"]:
+            st.markdown(f"- {x}"); notes.append(f"변비: {x}")
+        if anc is not None and anc < 500:
+            for x in DIET_DEFAULT["constipation_anc_low"]:
+                st.markdown(f"- {x}"); notes.append(f"변비(ANC낮음): {x}")
+    # Fever
+    if fever and fever != "37.x":
+        st.markdown("**발열 시 수분/해열 가이드**")
+        for x in DIET_DEFAULT["fever_hydration"]:
+            st.markdown(f"- {x}"); notes.append(f"발열: {x}")
+    return notes
+
 def render_diet_guides(context=None):
     st.header("🥗 식이가이드")
     try:
@@ -307,7 +372,9 @@ def render_diet_guides(context=None):
             st.session_state['diet_notes'] = out_lines
             st.caption(f"lab_diet 연결: {info}")
         else:
-            st.warning("lab_diet에서 사용할 수 있는 UI/데이터를 찾지 못했습니다. (허용: diet_ui/render_diet_ui/build_diet_ui/ui 또는 DIET_GUIDES 등)")
+            notes = _render_diet_fallback(context)
+        st.session_state['diet_notes'] = notes
+        st.info('lab_diet 외부 모듈에서 UI/데이터를 찾지 못해, **내장 기본 식이가이드**를 표시합니다.')
     except Exception as e:
         st.error(f"식이가이드 로드 오류: {e}")
 
@@ -716,7 +783,11 @@ def diagnostics_panel():
     if callable(diet_loader):
         try:
             dmod, dpath = diet_loader()
-            st.write(f"- lab_diet: **{'✅ 로드됨' if dmod else '❌ 실패'}** — 경로: `{dpath}`")
+            if dmod:
+                attrs = [a for a in ["diet_ui","render_diet_ui","build_diet_ui","ui","DIET_GUIDES","GUIDES","DATA"] if hasattr(dmod,a)]
+                st.write(f"- lab_diet: **✅ 로드됨** — 경로: `{dpath}` — 제공 항목: {attrs or '-'}")
+            else:
+                st.write(f"- lab_diet: ❌ 실패 — 경로: `{dpath}`")
         except Exception as e:
             st.write(f"- lab_diet: ❌ 오류 — {e}")
 
