@@ -227,6 +227,7 @@ def _parse_float(x):
     except Exception:
         return None
 
+
 def labs_input_ui():
     st.header("🧪 피수치 입력 (유효성 검증)")
     labs = st.session_state.get("labs_dict", {}).copy()
@@ -234,25 +235,32 @@ def labs_input_ui():
     alerts = []
     for i,(name,unit) in enumerate(LAB_FIELDS):
         with cols[i%3]:
-            val = st.text_input(f"{name} ({unit})", value=str(labs.get(name,"")), key=wkey(f"lab_{name}"))
+            # None이나 문자열 "None"은 표시하지 않음
+            raw = labs.get(name, "")
+            if raw is None or str(raw).strip().lower() == "none":
+                raw = ""
+            val = st.text_input(f"{name} ({unit})", value=str(raw), placeholder="숫자 입력", key=wkey(f"lab_{name}"))
             labs[name] = val.strip()
-            v = _parse_float(val)
-            if name in REF_RANGE and v is not None:
-                lo, hi = REF_RANGE[name]
-                ok = ((lo is None or v >= lo) and (hi is None or v <= hi))
-                if ok:
-                    st.caption("✅ 참고범위 내")
-                else:
-                    alerts.append(f"{name} 비정상: {v}")
-                    st.caption("⚠️ 참고범위 벗어남")
-            elif v is None and val.strip() != "":
-                st.caption("❌ 숫자 인식 실패")
+            # 사용자가 입력했을 때만 파싱/검증
+            if val.strip() != "":
+                v = _parse_float(val)
+                if v is None:
+                    st.caption("❌ 숫자 인식 실패")
+                elif name in REF_RANGE:
+                    lo, hi = REF_RANGE[name]
+                    ok = ((lo is None or v >= lo) and (hi is None or v <= hi))
+                    if ok:
+                        st.caption("✅ 참고범위 내")
+                    else:
+                        alerts.append(f"{name} 비정상: {v}")
+                        st.caption("⚠️ 참고범위 벗어남")
     st.session_state["labs_dict"]=labs
     if alerts:
         st.warning("이상치: " + ", ".join(alerts))
-    st.markdown("#### 입력 요약")
-    for k,v in labs.items():
-        if str(v).strip()!="": st.markdown(f"- **{k}**: {v}")
+    if any(str(v).strip() for v in labs.values()):
+        st.markdown("#### 입력 요약")
+        for k,v in labs.items():
+            if str(v).strip()!="": st.markdown(f"- **{k}**: {v}")
     return labs
 
 # ---------- Blood pressure ----------
