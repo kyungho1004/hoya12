@@ -443,9 +443,11 @@ with tabs[3]:
 with tabs[4]:
     render_special_tests()
 
+def load_onco_map(): ...
+def onco_select_ui(): ...
+# 위 함수들 정의 후
 with tabs[5]:
     onco_select_ui()
-
 with tabs[6]:
     st.subheader("항암제 선택")
     all_agents = list(CHEMO_DB.keys())
