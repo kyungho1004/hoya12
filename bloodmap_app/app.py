@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 import streamlit as st
 from datetime import datetime, timezone, timedelta
+from pathlib import Path
+import importlib.util, sys
 
 KST = timezone(timedelta(hours=9))
 
@@ -12,32 +14,56 @@ def wkey(s: str) -> str:
     return f"k_{s}"
 
 # --------------------
-# onco_map loader (linked)
+# onco_map MULTI-SCAN loader
 # --------------------
-def load_onco():
+def _candidate_onco_paths():
+    cands = []
     try:
-        import importlib.util, sys, pathlib
-        p = pathlib.Path("/mnt/data/onco_map.py")
-        if not p.exists():
-            return None, None
-        spec = importlib.util.spec_from_file_location("onco_map", str(p))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules["onco_map"] = mod
-        spec.loader.exec_module(mod)  # type: ignore
-        build = getattr(mod, "build_onco_map", None)
-        disp = getattr(mod, "dx_display", None)
-        if callable(build):
-            omap = build()
-            return omap, disp
-    except Exception as e:
-        st.warning(f"onco_map 불러오기 실패: {e}")
-    return None, None
+        here = Path(__file__).resolve().parent
+        cands += [here / "onco_map.py"]
+    except Exception:
+        pass
+    cands += [
+        Path.cwd() / "onco_map.py",
+        Path("onco_map.py"),
+        Path("/mnt/data/onco_map.py"),
+        Path("/mount/src/hoya12/bloodmap_app/onco_map.py"),
+    ]
+    # unique, existing first
+    seen = set()
+    out = []
+    for p in cands:
+        s = str(p.resolve()) if p.exists() else str(p)
+        if s not in seen:
+            seen.add(s)
+            out.append(p)
+    return out
+
+def load_onco():
+    last_err = None
+    for p in _candidate_onco_paths():
+        try:
+            if not p.exists():
+                continue
+            spec = importlib.util.spec_from_file_location("onco_map", str(p))
+            mod = importlib.util.module_from_spec(spec)
+            sys.modules["onco_map"] = mod
+            spec.loader.exec_module(mod)  # type: ignore
+            build = getattr(mod, "build_onco_map", None)
+            disp = getattr(mod, "dx_display", None)
+            if callable(build):
+                omap = build()
+                if isinstance(omap, dict) and omap:
+                    return omap, disp, p
+        except Exception as e:
+            last_err = e
+    return None, None, last_err
 
 def onco_select_ui():
     st.subheader("암종류 선택 (onco_map 연동)")
-    omap, dx_display = load_onco()
+    omap, dx_display, info = load_onco()
     if not isinstance(omap, dict) or not omap:
-        st.error("onco_map.py에서 암 분류를 불러오지 못했습니다. 수동 입력을 사용하세요.")
+        st.error(f"onco_map.py에서 암 분류를 불러오지 못했습니다. {'에러: '+str(info) if info else ''}")
         g_manual = st.text_input("암 그룹(수동)", value=st.session_state.get("onco_group") or "")
         d_manual = st.text_input("진단(암종, 수동)", value=st.session_state.get("onco_dx") or "")
         if g_manual or d_manual:
@@ -46,24 +72,18 @@ def onco_select_ui():
             st.success("수동 입력값을 사용합니다.")
         return st.session_state.get("onco_group"), st.session_state.get("onco_dx")
 
+    st.caption(f"onco_map 연결: {info}")
     groups = sorted(list(omap.keys()))
     group = st.selectbox("암 그룹", groups, key=wkey("onco_group"))
     dx_keys = sorted(list(omap.get(group, {}).keys()))
-    # display labels using dx_display if available
-    labels = []
-    for dx in dx_keys:
-        if dx_display:
-            labels.append(dx_display(group, dx))
-        else:
-            labels.append(f"{group} - {dx}")
+    # label list uses dx_display if provided
+    labels = [(dx_display(group, dx) if dx_display else f"{group} - {dx}") for dx in dx_keys]
+    # maintain stable mapping via index
     if dx_keys:
-        idx = 0
         default_dx = st.session_state.get("onco_dx")
-        if default_dx in dx_keys:
-            idx = dx_keys.index(default_dx)
-        label = st.selectbox("진단(암종)", labels, index=idx, key=wkey("onco_dx_label"))
-        # map back to internal key
-        dx = dx_keys[labels.index(label)]
+        idx = dx_keys.index(default_dx) if default_dx in dx_keys else 0
+        idx = st.selectbox("진단(암종)", list(range(len(labels))), index=idx, format_func=lambda i: labels[i], key=wkey("onco_dx_idx"))
+        dx = dx_keys[idx]
         st.session_state["onco_group"] = group
         st.session_state["onco_dx"] = dx
         # preview recommended drugs if present
@@ -414,9 +434,9 @@ def build_report():
 # --------------------
 # App Layout
 # --------------------
-st.set_page_config(page_title="피수치 가이드(onco 연동판)", layout="wide")
-st.title("피수치 가이드 — onco_map 연동판")
-st.caption("한국시간 기준(KST). 암종 선택/피수치/소아가이드/특수검사/항암제/보고서 통합.")
+st.set_page_config(page_title="피수치 가이드(onco 멀티스캔)", layout="wide")
+st.title("피수치 가이드 — onco_map 멀티스캔 연동판")
+st.caption("암종 선택/피수치/소아가이드/특수검사/항암제/보고서 통합. onco_map 경로 자동 탐색.")
 
 tabs = st.tabs(["🏠 홈", "🧪 피수치 입력", "🩺 압종분류", "🧒 소아 가이드", "🔬 특수검사", "🧬 암종 선택", "💊 항암제", "📄 보고서"])
 
