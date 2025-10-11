@@ -1,4 +1,17 @@
 
+# ---- Safe guards for autosave/restore when imported into existing app.py ----
+try:
+    autosave_state
+except NameError:
+    def autosave_state():
+        return None
+try:
+    restore_state
+except NameError:
+    def restore_state():
+        return None
+
+
 # -*- coding: utf-8 -*-
 import streamlit as st
 from datetime import datetime, timezone, timedelta
