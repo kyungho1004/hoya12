@@ -611,6 +611,14 @@ t_home, t_labs, t_dx, t_chemo, t_peds, t_special, t_report = st.tabs(tab_labels)
 
 # HOME
 with t_home:
+
+    # --- 홈 탭: 보호자용 응급도 가중치(쉬운) ---
+    st.markdown("### 🧭 빠른 설정: 응급도 가중치(보호자용)")
+    try:
+        weights = render_emerg_weights_ui()   # 보호자용 3단(낮음/보통/높음) + 전문가 슬라이더(접기)
+        st.caption("설정은 자동 저장됩니다. (st.session_state['emerg_weights'])")
+    except Exception as e:
+        st.warning(f"가중치 UI를 불러오지 못했습니다: {e}")
     st.subheader("응급도 요약")
     labs = st.session_state.get("labs_dict", {})
     level_tmp, reasons_tmp, contrib_tmp = emergency_level(
