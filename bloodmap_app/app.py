@@ -618,6 +618,169 @@ CHEMO_DB={
   "monitor":["CBC, AST/ALT, Cr/eGFR","HD-MTX: MTX 농도 + 류코보린 + 요알칼리화"],
  },
 }
+
+# ---- 암종별 프로토콜 추천 ----
+
+CHEMO_PROTOCOLS = {
+ "APL": ["ATRA (Tretinoin, Vesanoid) / 베사노이드", "Arsenic Trioxide (ATO) / 삼산화비소", "Doxorubicin (DOX) / 독소루비신", "Idarubicin / 이다루비신", "Daunorubicin / 다우노루비신"],
+ "AML": ["Cytarabine (Ara-C) / 시타라빈(아라씨)", "Daunorubicin / 다우노루비신", "Idarubicin / 이다루비신"],
+ "ALL": ["Vincristine (VCR) / 빈크리스틴", "MTX (Methotrexate) / 메토트렉세이트", "Mercaptopurine (6-MP) / 6-머캅토퓨린"],
+ "CML": ["Imatinib / 이매티닙(글리벡)"],
+ "DLBCL": ["Cyclophosphamide (CTX) / 사이클로포스파마이드", "Doxorubicin (DOX) / 독소루비신", "Vincristine (VCR) / 빈크리스틴"],
+ "Hodgkin": ["Doxorubicin (DOX) / 독소루비신", "Vincristine (VCR) / 빈크리스틴", "Cyclophosphamide (CTX) / 사이클로포스파마이드"],
+ "Colon": ["5-Fluorouracil (5-FU) / 5-플루오로우라실", "Capecitabine (CAP) / 카페시타빈", "Oxaliplatin (L-OHP) / 옥살리플라틴", "Irinotecan (CPT-11) / 이리노테칸", "Bevacizumab / 베바시주맙"],
+ "Gastric": ["Capecitabine (CAP) / 카페시타빈", "5-Fluorouracil (5-FU) / 5-플루오로우라실", "Oxaliplatin (L-OHP) / 옥살리플라틴", "Cisplatin (CDDP) / 시스플라틴", "Trastuzumab / 트라스투주맙"],
+ "Pancreas": ["Gemcitabine / 젬시타빈", "Nab-Paclitaxel (Abraxane) / 나브-파클리탁셀", "Irinotecan (CPT-11) / 이리노테칸", "Oxaliplatin (L-OHP) / 옥살리플라틴"],
+ "Biliary": ["Gemcitabine / 젬시타빈", "Cisplatin (CDDP) / 시스플라틴"],
+ "Breast": ["Cyclophosphamide (CTX) / 사이클로포스파마이드", "Doxorubicin (DOX) / 독소루비신", "Paclitaxel / 파클리탁셀", "Docetaxel / 도세탁셀", "Trastuzumab / 트라스투주맙"],
+ "NSCLC": ["Cisplatin (CDDP) / 시스플라틴", "Carboplatin (CBDCA) / 카보플라틴", "Pemetrexed / 페메트렉시드", "Paclitaxel / 파클리탁셀", "Docetaxel / 도세탁셀", "Bevacizumab / 베바시주맙"],
+ "SCLC": ["Cisplatin (CDDP) / 시스플라틴", "Carboplatin (CBDCA) / 카보플라틴", "Irinotecan (CPT-11) / 이리노테칸"],
+ "NPC": ["Cisplatin (CDDP) / 시스플라틴", "5-Fluorouracil (5-FU) / 5-플루오로우라실"],
+ "H&N": ["Cisplatin (CDDP) / 시스플라틴", "5-Fluorouracil (5-FU) / 5-플루오로우라실"],
+ "Ovary": ["Carboplatin (CBDCA) / 카보플라틴", "Paclitaxel / 파클리탁셀"],
+ "Cervix": ["Cisplatin (CDDP) / 시스플라틴", "Paclitaxel / 파클리탁셀"],
+ "GIST": ["Imatinib / 이매티닙(글리벡)"],
+ "RCC": ["Sunitinib / 수니티닛"],
+ "Glioma": ["Temozolomide (TMZ) / 테모졸로마이드"]
+}
+
+
+def suggest_agents_by_onco(group:str, dx:str):
+    key = (dx or "").upper()
+    gkey = (group or "").upper()
+    # direct keyword hit
+    for k, agents in CHEMO_PROTOCOLS.items():
+        if k in key:
+            return agents
+    # Korean/aliases
+    if any(s in key for s in ["APL","급성 전골수구성"]): return CHEMO_PROTOCOLS["APL"]
+    if any(s in key for s in ["AML","급성 골수성"]): return CHEMO_PROTOCOLS["AML"]
+    if any(s in key for s in ["ALL","급성 림프구성"]): return CHEMO_PROTOCOLS["ALL"]
+    if any(s in key for s in ["CML","만성 골수성"]): return CHEMO_PROTOCOLS["CML"]
+    if any(s in key for s in ["DLBCL","NHL","비호지킨"]): return CHEMO_PROTOCOLS["DLBCL"]
+    if any(s in key for s in ["HODGKIN","호지킨"]): return CHEMO_PROTOCOLS["Hodgkin"]
+    if any(s in key for s in ["COLON","RECT","대장","직장"]): return CHEMO_PROTOCOLS["Colon"]
+    if any(s in key for s in ["GASTRIC","위암"]): return CHEMO_PROTOCOLS["Gastric"]
+    if any(s in key for s in ["PANCREAS","췌장"]): return CHEMO_PROTOCOLS["Pancreas"]
+    if any(s in key for s in ["BILIARY","담도","담낭","담관"]): return CHEMO_PROTOCOLS["Biliary"]
+    if any(s in key for s in ["BREAST","유방"]): return CHEMO_PROTOCOLS["Breast"]
+    if any(s in key for s in ["NSCLC","비소세포","폐"]): return CHEMO_PROTOCOLS["NSCLC"]
+    if any(s in key for s in ["SCLC","소세포"]): return CHEMO_PROTOCOLS["SCLC"]
+    if any(s in key for s in ["NPC","비인두"]): return CHEMO_PROTOCOLS["NPC"]
+    if any(s in key for s in ["HEAD&NECK","두경부"]): return CHEMO_PROTOCOLS["H&N"]
+    if any(s in key for s in ["OVARY","난소"]): return CHEMO_PROTOCOLS["Ovary"]
+    if any(s in key for s in ["CERVIX","자궁경부"]): return CHEMO_PROTOCOLS["Cervix"]
+    if any(s in key for s in ["GIST"]): return CHEMO_PROTOCOLS["GIST"]
+    if any(s in key for s in ["RCC","신세포","신장암"]): return CHEMO_PROTOCOLS["RCC"]
+    if any(s in key for s in ["GLIOMA","신경교종","교모세포종","GBM"]): return CHEMO_PROTOCOLS["Glioma"]
+    # group fallback
+    if "HEMATO" in gkey or "혈액" in (group or ""): 
+        if "APL" in gkey: return CHEMO_PROTOCOLS["APL"]
+        if "AML" in gkey: return CHEMO_PROTOCOLS["AML"]
+        if "ALL" in gkey: return CHEMO_PROTOCOLS["ALL"]
+    return []
+
+# ---- 추가 항암제 DB (업데이트 병합) ----
+EXTRA_CHEMO = {
+ "Arsenic Trioxide (ATO) / 삼산화비소":{
+  "effects":{"common":["{WARN} 피로/오심","{WARN} QT 연장","{WARN} 저K/저Mg"],"serious":["{DANGER} 분화증후군","{DANGER} 부정맥"]},
+  "monitor":["ECG,QTc","K/Mg 보충","체중/부종","CBC"]
+ },
+ "Daunorubicin / 다우노루비신":{
+  "effects":{"cardiac":["{DANGER} 누적 심근독성/심부전"],"blood":["{DANGER} 골수억제"]},
+  "monitor":["누적용량","LVEF","CBC"]
+ },
+ "Idarubicin / 이다루비신":{
+  "effects":{"cardiac":["{DANGER} 심독성"],"blood":["{DANGER} 골수억제"]},
+  "monitor":["LVEF","CBC","간/신"]
+ },
+ "Vincristine (VCR) / 빈크리스틴":{
+  "effects":{"neuro":["{WARN} 말초신경병증","{WARN} 변비/장폐색"],"dose_limit":["{DANGER} 신경독성 용량제한"]},
+  "monitor":["신경학적 증상","변비 예방"]
+ },
+ "Cyclophosphamide (CTX) / 사이클로포스파마이드":{
+  "effects":{"urologic":["{WARN} 출혈성 방광염 — MESNA/수분요법"],"blood":["{DANGER} 골수억제"]},
+  "monitor":["CBC","혈뇨","수분섭취"]
+ },
+ "Doxorubicin (DOX) / 독소루비신":{
+  "effects":{"cardiac":["{DANGER} 누적 심근독성"],"blood":["{DANGER} 골수억제"]},
+  "monitor":["LVEF","누적용량","CBC"]
+ },
+ "Cisplatin (CDDP) / 시스플라틴":{
+  "effects":{"renal":["{DANGER} 신독성"],"neuro":["{WARN} 말초신경병증"],"oto":["{WARN} 이독성"],"nausea":["{WARN} 고도 구토"]},
+  "monitor":["Cr/eGFR","Mg/K","청력","구토예방"]
+ },
+ "Carboplatin (CBDCA) / 카보플라틴":{
+  "effects":{"blood":["{DANGER} 혈소판감소"]},
+  "monitor":["CBC(Plt)"]
+ },
+ "Oxaliplatin (L-OHP) / 옥살리플라틴":{
+  "effects":{"neuro":["{WARN} 냉유발 감각이상","{WARN} 누적 말초신경병증"]},
+  "monitor":["신경증상"]
+ },
+ "5-Fluorouracil (5-FU) / 5-플루오로우라실":{
+  "effects":{"cardiac":["{WARN} 관상경련"],"gi":["{WARN} 구내염/설사"]},
+  "monitor":["구강/장증상"]
+ },
+ "Capecitabine (CAP) / 카페시타빈":{
+  "effects":{"hand_foot":["{WARN} 수족증후군"],"gi":["{WARN} 설사/구내염"]},
+  "monitor":["피부관리","용량조절"]
+ },
+ "Irinotecan (CPT-11) / 이리노테칸":{
+  "effects":{"gi":["{DANGER} 급성/지연성 설사 — 아트로핀/로페라미드"],"blood":["{DANGER} 골수억제"]},
+  "monitor":["설사 프로토콜","CBC"]
+ },
+ "Paclitaxel / 파클리탁셀":{
+  "effects":{"hypersens":["{WARN} 과민반응 — 전처치"],"neuro":["{WARN} 말초신경병증"]},
+  "monitor":["전처치","주입반응"]
+ },
+ "Docetaxel / 도세탁셀":{
+  "effects":{"fluid":["{WARN} 체액저류 — 스테로이드 전처치"],"blood":["{DANGER} 호중구감소증"]},
+  "monitor":["전처치 스테로이드","CBC"]
+ },
+ "Mercaptopurine (6-MP) / 6-머캅토퓨린":{
+  "effects":{"hepatic":["{WARN} 간독성/황달"],"blood":["{DANGER} 골수억제"],"genetic":["{WARN} TPMT/NUDT15 변이 시 독성↑"]},
+  "monitor":["AST/ALT/Tb","CBC","TPMT/NUDT15"]
+ },
+ "Pemetrexed / 페메트렉시드":{
+  "effects":{"gi":["{WARN} 구내염"],"hemat":["{DANGER} 골수억제"]},
+  "monitor":["엽산/B12 보충","덱사 전처치","CBC"]
+ },
+ "Imatinib / 이매티닙(글리벡)":{
+  "effects":{"edema":["{WARN} 말초부종/체중증가"],"hepatic":["{WARN} 간효소상승"]},
+  "monitor":["CBC","간기능","부종/체중"]
+ },
+ "Sunitinib / 수니티닛":{
+  "effects":{"htn":["{WARN} 고혈압"],"hand_foot":["{WARN} 수족증후군"],"thyroid":["{WARN} 갑상선 기능저하"]},
+  "monitor":["혈압","피부/손발","TSH"]
+ }
+
+,
+ "Gemcitabine / 젬시타빈":{
+  "effects":{"blood":["{DANGER} 골수억제"],"hepatic":["{WARN} 간효소상승"],"pulmonary":["{WARN} 드물게 간질성 폐질환"]},
+  "monitor":["CBC","간기능","호흡증상"]
+ },
+ "Nab-Paclitaxel (Abraxane) / 나브-파클리탁셀":{
+  "effects":{"blood":["{DANGER} 호중구감소"],"neuro":["{WARN} 말초신경병증"]},
+  "monitor":["CBC","신경증상"]
+ },
+ "Temozolomide (TMZ) / 테모졸로마이드":{
+  "effects":{"blood":["{DANGER} 골수억제"],"gi":["{WARN} 오심/구토"]},
+  "monitor":["CBC","감염징후"]
+ },
+ "Bevacizumab / 베바시주맙":{
+  "effects":{"htn":["{WARN} 고혈압"],"bleed":["{WARN} 출혈 위험"],"gi":["{WARN} 위장관 천공(드묾)"]},
+  "monitor":["혈압","단백뇨/소변","출혈징후"]
+ },
+ "Trastuzumab / 트라스투주맙":{
+  "effects":{"cardiac":["{WARN} 심기능저하(용혈성 심근병증)"]},
+  "monitor":["LVEF","심부전 증상"]
+ }
+}
+try:
+    CHEMO_DB.update(EXTRA_CHEMO)
+except Exception:
+    pass
 def render_chemo_adverse_effects(agents, route_map=None):
     st.header("💊 항암제")
     if is_heme_cancer():
@@ -904,6 +1067,17 @@ with tabs[1]:
 with tabs[2]:
     all_agents = list(CHEMO_DB.keys())
     selected_agents = st.multiselect("항암제", all_agents, key=wkey("agents"))
+if st.button("암종 기반 추천 항암제 불러오기", key=wkey("load_proto")):
+    g = st.session_state.get("onco_group") or ""
+    d = st.session_state.get("onco_dx") or ""
+    sug = suggest_agents_by_onco(g, d)
+    if sug:
+        st.session_state["selected_agents"] = sug
+        selected_agents = sug
+        st.success("암종 기반 추천을 적용했습니다.")
+    else:
+        st.info("해당 진단에 대한 추천 항암제가 준비되지 않았습니다.")
+
     st.session_state["selected_agents"]=selected_agents
     route_map={}
     if "Cytarabine (Ara-C) / 시타라빈(아라씨)" in selected_agents:
