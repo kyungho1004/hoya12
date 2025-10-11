@@ -308,6 +308,9 @@ def render_caregiver_notes_peds(
     migraine,
     hfmd,
 ):
+
+    # 보호자용 짧은 안내(친절 모드)
+    st.caption("걱정 많으시죠. 집에서 할 수 있는 작은 변화도 도움이 됩니다. 아래 안내는 참고용이며, 아이 상태가 빠르게 나빠지면 즉시 병원을 방문해 주세요.")
     st.markdown("---")
     st.subheader("보호자 설명 (증상별)")
 
@@ -543,14 +546,65 @@ with t_home:
         ("번개두통", "w_thunderclap"),
         ("시야 이상", "w_visual_change"),
     ]
-    cols = st.columns(3)
-    newW = dict(W)
-    for i, (label, keyid) in enumerate(grid):
-        with cols[i % 3]:
-            newW[keyid] = st.slider(label, 0.0, 3.0, float(W.get(keyid, 1.0)), 0.1, key=wkey(f"w_{keyid}"))
-    if newW != W:
-        set_weights(newW)
-        st.success("가중치 변경 사항 저장됨.")
+    
+    # --- 초보자용 간단 설정 ---
+    st.markdown("#### 🔰 초보자용 간단 설정")
+    st.caption("어려우면 이 부분만 조정해도 충분합니다. 세밀한 값은 아래 '전문가용'에서 바꿀 수 있어요.")
+    W_simple = dict(W)
+
+    def _apply_group(level, keys, base=1.0):
+        mapping = {"낮음": 0.9, "보통": 1.0, "높음": 1.2}
+        w = mapping.get(level, 1.0)
+        for k in keys:
+            W_simple[k] = round(base * w, 2)
+
+    colS1, colS2, colS3 = st.columns(3)
+    with colS1:
+        inf_lvl = st.select_slider("발열·감염 민감도", options=["낮음","보통","높음"], value="보통", help="고열/CRP/호중구 감소에 대한 가중치")
+    with colS2:
+        bleed_lvl = st.select_slider("출혈 위험 민감도", options=["낮음","보통","높음"], value="보통", help="혈소판 감소/출혈 징후에 대한 가중치")
+    with colS3:
+        neuro_lvl = st.select_slider("신경·호흡 민감도", options=["낮음","보통","높음"], value="보통", help="의식저하/흉통/호흡곤란/번개두통/시야이상")
+
+    _apply_group(inf_lvl, ["w_temp_ge_38_5","w_temp_38_0_38_4","w_crp_ge10","w_anc_lt500","w_anc_500_999"])
+    _apply_group(bleed_lvl, ["w_plt_lt20k","w_petechiae","w_melena","w_hematochezia"])
+    _apply_group(neuro_lvl, ["w_confusion","w_chest_pain","w_dyspnea","w_thunderclap","w_visual_change","w_hr_gt130"])
+
+    if W_simple != W:
+        set_weights(W_simple)
+        st.success("초보자용 설정이 적용되었습니다.")
+
+    with st.expander("전문가용 세밀 조정(슬라이더)", expanded=False):
+        W = get_weights()
+        grid = [
+            ("ANC<500", "w_anc_lt500"),
+            ("ANC 500~999", "w_anc_500_999"),
+            ("발열 38.0~38.4", "w_temp_38_0_38_4"),
+            ("고열 ≥38.5", "w_temp_ge_38_5"),
+            ("혈소판 <20k", "w_plt_lt20k"),
+            ("중증빈혈 Hb<7", "w_hb_lt7"),
+            ("CRP ≥10", "w_crp_ge10"),
+            ("HR>130", "w_hr_gt130"),
+            ("혈뇨", "w_hematuria"),
+            ("흑색변", "w_melena"),
+            ("혈변", "w_hematochezia"),
+            ("흉통", "w_chest_pain"),
+            ("호흡곤란", "w_dyspnea"),
+            ("의식저하", "w_confusion"),
+            ("소변량 급감", "w_oliguria"),
+            ("지속 구토", "w_persistent_vomit"),
+            ("점상출혈", "w_petechiae"),
+            ("번개두통", "w_thunderclap"),
+            ("시야 이상", "w_visual_change"),
+        ]
+        cols = st.columns(3)
+        newW = dict(W)
+        for i, (label, keyid) in enumerate(grid):
+            with cols[i % 3]:
+                newW[keyid] = st.slider(label, 0.0, 3.0, float(W.get(keyid, 1.0)), 0.1, key=wkey(f"w_{keyid}"))
+        if newW != W:
+            set_weights(newW)
+            st.success("가중치 변경 사항 저장됨.")
 
 # LABS
 
