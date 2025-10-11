@@ -5,6 +5,38 @@ from pathlib import Path
 import importlib.util
 import streamlit as st
 
+def render_emerg_weights_pro():
+    """전문가용: 슬라이더만 제공하는 응급도 가중치 패널.
+    emerg_weights 세션 상태를 직접 조정합니다.
+    """
+    import streamlit as st
+    st.subheader("전문가용: 응급도 가중치(슬라이더)")
+    st.caption("의료진/숙련 보호자를 위한 세밀 조정 영역입니다.")
+
+    # 기본 키 목록 (기존 슬라이더와 동일한 키셋 유지)
+    keys = [
+        ("anc_lt_500","ANC<500"),("anc_500_999","ANC 500–999"),("fever_38_0_38_4","발열 38.0–38.4"),
+        ("fever_ge_38_5","고열 ≥38.5"),("hb_lt_7","중증빈혈 Hb<7"),("plt_lt_20k","혈소판 <20k"),
+        ("crp_ge_10","CRP ≥10"),("hr_gt_130","HR>130"),("resp_distress","호흡곤란"),
+        ("melena","흑색변"),("hematochezia","혈변"),("persistent_vomit","지속 구토"),
+        ("oliguria","소변량 급감"),("loc_altered","의식저하"),("migraine_severe","번개두통")
+    ]
+
+    # 기본값 없을 때를 대비해 가벼운 초기화
+    if "emerg_weights" not in st.session_state:
+        st.session_state["emerg_weights"] = {k: 0.7 for k,_ in keys}
+
+    cols = st.columns(3)
+    for i, (k, label) in enumerate(keys):
+        with cols[i % 3]:
+            st.session_state["emerg_weights"][k] = st.slider(
+                label, 0.0, 1.0, float(st.session_state["emerg_weights"].get(k, 0.7)), 0.05,
+                help="가중치가 높을수록 긴급도 점수에 더 크게 반영됩니다.", key=f"pro_{k}"
+            )
+
+# --- Feature flag: show weights UI (hidden by default) ---
+DEV_SHOW_WEIGHTS = False
+
 def render_emerg_weights_ui():
     import streamlit as st
     st.subheader("응급도 가중치 (편집 + 프리셋)")
@@ -611,15 +643,27 @@ t_home, t_labs, t_dx, t_chemo, t_peds, t_special, t_report = st.tabs(tab_labels)
 
 # HOME
 with t_home:
+    # (hidden) 홈 탭 가중치 UI
+    if DEV_SHOW_WEIGHTS:
+    
 
-    # --- 홈 탭: 보호자용 응급도 가중치(쉬운) ---
-    st.markdown("### 🧭 빠른 설정: 응급도 가중치(보호자용)")
-    try:
-        weights = render_emerg_weights_ui()   # 보호자용 3단(낮음/보통/높음) + 전문가 슬라이더(접기)
-        st.caption("설정은 자동 저장됩니다. (st.session_state['emerg_weights'])")
-    except Exception as e:
-        st.warning(f"가중치 UI를 불러오지 못했습니다: {e}")
-    st.subheader("응급도 요약")
+    
+
+        # --- 홈 탭: 보호자용 응급도 가중치(쉬운) ---
+
+        st.markdown("### 🧭 빠른 설정: 응급도 가중치(보호자용)")
+
+        try:
+
+            weights = render_emerg_weights_ui()   # 보호자용 3단(낮음/보통/높음) + 전문가 슬라이더(접기)
+
+            st.caption("설정은 자동 저장됩니다. (st.session_state['emerg_weights'])")
+
+        except Exception as e:
+
+            st.warning(f"가중치 UI를 불러오지 못했습니다: {e}")
+
+        st.subheader("응급도 요약")
     labs = st.session_state.get("labs_dict", {})
     level_tmp, reasons_tmp, contrib_tmp = emergency_level(
         labs, st.session_state.get(wkey("cur_temp")), st.session_state.get(wkey("cur_hr")), {}
