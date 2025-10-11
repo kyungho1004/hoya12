@@ -115,6 +115,22 @@ except Exception:
     _HAS_MPL = False
 
 # ---------- Page & Banner ----------
+
+
+# --- 친절 모드 & 배너 ---
+try:
+    from branding import render_deploy_banner
+    try:
+        render_deploy_banner()
+    except Exception:
+        st.caption("한국시간 기준(KST). 세포·면역치료 항목은 혼돈 방지를 위해 표기하지 않습니다. 제작·자문: Hoya/GPT")
+except Exception:
+    st.caption("한국시간 기준(KST). 제작·자문: Hoya/GPT")
+
+col_friendly, col_blank = st.columns([1,3])
+with col_friendly:
+    st.toggle("친절 모드(쉬운말)", key="friendly_mode", help="어려운 용어를 줄이고, 더 쉬운 설명을 함께 보여줍니다.", value=True)
+
 st.set_page_config(page_title=f"Bloodmap {APP_VERSION}", layout="wide")
 st.title(f"Bloodmap {APP_VERSION}")
 st.markdown(
@@ -1210,7 +1226,7 @@ with t_peds:
     with f3:
         hfmd = st.checkbox("수족구 의심(손발·입 병변)", key=wkey("p_hfmd"))
     # 추가: 증상 지속 기간(보고서/로직 활용 가능)
-    duration = st.selectbox("증상 지속일수", ["선택 안 함", "1일", "2일", "3일 이상"], key=wkey("p_duration"))
+    duration = st.selectbox("증상 지속일수", ["선택 안 함", "1일", "2일", "3일 이상"], key=wkey("p_duration"), help="대략적인 기간만 선택해도 괜찮아요.")
     if duration == "선택 안 함":
         duration_val = None
     else:
@@ -1225,16 +1241,16 @@ with t_peds:
         st.warning("🍽️ 저호중구 시 음식 안전: **생야채/생과일 껍질**은 피하고, **완전 가열** 후 섭취하세요. 남은 음식은 **2시간 이후 섭취 비권장**. 멸균·살균 식품 권장.")
 
     # 추가: 최고 체온(°C)와 레드 플래그 체크
-    max_temp = st.number_input("최고 체온(°C)", min_value=34.0, max_value=43.5, step=0.1, format="%.1f", key=wkey("p_max_temp"))
+    max_temp = st.number_input("최고 체온(°C)", min_value=34.0, max_value=43.5, step=0.1, format="%.1f", key=wkey("p_max_temp"), help="하루 중 가장 높았던 체온을 입력해 주세요. 대략값도 괜찮습니다.")
     col_rf1, col_rf2, col_rf3, col_rf4 = st.columns(4)
     with col_rf1:
-        red_seizure = st.checkbox("경련/의식저하", key=wkey("p_red_seizure"))
+        red_seizure = st.checkbox("경련/의식저하", key=wkey("p_red_seizure"), help="발작처럼 몸이 뻣뻣해지거나 의식이 흐려지는 경우")
     with col_rf2:
-        red_bloodstool = st.checkbox("혈변/검은변", key=wkey("p_red_blood"))
+        red_bloodstool = st.checkbox("혈변/검은변", key=wkey("p_red_blood"), help="붉은 피가 섞이거나, 타르처럼 검은 변")
     with col_rf3:
-        red_night = st.checkbox("야간/새벽 악화", key=wkey("p_red_night"))
+        red_night = st.checkbox("야간/새벽 악화", key=wkey("p_red_night"), help="밤에 더 아파하거나 잠을 못 잘 정도의 악화")
     with col_rf4:
-        red_dehydration = st.checkbox("탈수 의심(눈물↓·입마름)", key=wkey("p_red_dehyd"))
+        red_dehydration = st.checkbox("탈수 의심(눈물↓·입마름)", key=wkey("p_red_dehyd"), help="눈물이 잘 안 나오거나 입안이 바싹 마르는 경우")
 
     # 간단 위험 배지 산정
     fever_flag = (max_temp is not None and max_temp >= 38.5)
@@ -1248,6 +1264,13 @@ with t_peds:
     else:
         risk_badge = "🟢"
         st.info("🟢 현재는 비교적 안정 신호입니다. 악화 시 바로 상위 단계 조치를 따르세요.")
+
+    # 작은 위로와 안내
+    if st.session_state.get("friendly_mode", True):
+        from datetime import datetime, timedelta, timezone
+        kst = timezone(timedelta(hours=9))
+        now_kst = datetime.now(kst).strftime("%Y-%m-%d %H:%M")
+        st.caption(f"지금 시간을 기준으로 정리했어요(KST: {now_kst}). 보호자님, 혼자 아니에요. 작은 변화도 도움이 됩니다.")
 
     # ORS(경구수분보충) 가이드 — 설사/지속구토/소변감소 시 노출
     if (stool != "없음") or persistent_vomit or oliguria or red_dehydration:
@@ -1323,6 +1346,11 @@ with t_peds:
 
 
     st.markdown("---")
+    
+    if st.session_state.get("friendly_mode", True):
+        st.caption("이 도구는 참고용 안내이며, 최종 진단은 의료진의 판단을 따릅니다. 증상이 빠르게 악화되면 즉시 병원을 방문하세요.")
+    
+
     st.subheader("해열제 계산기")
     prev_wt = st.session_state.get(wkey("wt_peds"), 0.0)
     default_wt = _safe_float(prev_wt, 0.0)
