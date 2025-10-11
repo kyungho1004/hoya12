@@ -481,16 +481,66 @@ def build_report():
     if not any(sec.startswith("##") for sec in parts[1:]): parts.append("## 입력된 데이터가 없어 기본 안내만 표시됩니다.")
     return "\n\n".join(parts)
 
+
+def _find_pdf_export_paths():
+    from pathlib import Path
+    cands = [
+        Path("/mount/src/hoya12/bloodmap_app/pdf_export.py"),
+        Path("/mnt/data/pdf_export.py"),
+        Path.cwd() / "pdf_export.py",
+        Path(__file__).resolve().parent / "pdf_export.py",
+    ]
+    out = []
+    seen = set()
+    for p in cands:
+        try:
+            rp = str(p.resolve()) if p.exists() else str(p)
+        except Exception:
+            rp = str(p)
+        if rp not in seen:
+            seen.add(rp); out.append(p)
+    return out
+
 def export_report_pdf(md_text: str) -> bytes:
+    # Try external helper first
+    import importlib.util, sys
+    last_err = None
+    for p in _find_pdf_export_paths():
+        try:
+            if not p.exists():
+                continue
+            spec = importlib.util.spec_from_file_location("pdf_export", str(p))
+            mod = importlib.util.module_from_spec(spec)
+            sys.modules["pdf_export"] = mod
+            spec.loader.exec_module(mod)  # type: ignore
+            if hasattr(mod, "export_md_to_pdf"):
+                return mod.export_md_to_pdf(md_text)
+        except Exception as e:
+            last_err = e
+    # Fallback: try reportlab directly if available
     try:
-        spec = importlib.util.spec_from_file_location("pdf_export", "/mnt/data/pdf_export.py")
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)  # type: ignore
-        if hasattr(mod, "export_md_to_pdf"):
-            return mod.export_md_to_pdf(md_text)  # returns bytes
+        from reportlab.lib.pagesizes import A4
+        from reportlab.pdfgen import canvas
+        from reportlab.lib.units import cm
+        import io, textwrap
+        buf = io.BytesIO()
+        c = canvas.Canvas(buf, pagesize=A4)
+        width, height = A4
+        x, y = 2*cm, height-2*cm
+        c.setFont("Helvetica-Bold", 14); c.drawString(x, y, "피수치/가이드 보고서"); y -= 1*cm
+        c.setFont("Helvetica", 10)
+        for para in md_text.split("\n\n"):
+            for line in textwrap.wrap(para.replace("\n", " "), 90):
+                if y < 2*cm:
+                    c.showPage(); y = height-2*cm; c.setFont("Helvetica", 10)
+                c.drawString(x, y, line); y -= 0.5*cm
+            y -= 0.3*cm
+        c.showPage(); c.save()
+        return buf.getvalue()
     except Exception as e:
-        st.error(f"PDF 내보내기 오류: {e}")
-    return b""
+        import streamlit as st
+        st.warning(f"PDF 변환 모듈을 찾지 못했습니다. TXT만 제공됩니다. (last error: {last_err or e})")
+        return b""
 
 # ---------- Feedback ----------
 def feedback_form():
@@ -536,6 +586,7 @@ def feedback_stats():
     with cols[2]: st.metric("평균 만족도", f"{avg:.1f}" if avg is not None else "-")
 
 # ---------- Diagnostics ----------
+
 def diagnostics_panel():
     st.markdown("### 🔧 진단 패널 (경로/모듈 상태)")
     # onco_map
@@ -550,13 +601,18 @@ def diagnostics_panel():
         st.write(f"- special_tests: ❌ 오류 — {e}")
     # pdf_export
     try:
-        spec = importlib.util.spec_from_file_location("pdf_export", "/mnt/data/pdf_export.py")
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)  # type: ignore
-        ok = hasattr(mod, "export_md_to_pdf")
-        st.write(f"- pdf_export: **{'✅ 사용 가능' if ok else '❌ 함수 없음'}** — 경로: `/mnt/data/pdf_export.py`")
+        cands = [str(p) for p in _find_pdf_export_paths()]
+        used = None
+        for s in cands:
+            if Path(s).exists():
+                used = s; break
+        ok = used is not None
+        st.write(f"- pdf_export: **{'✅ 후보 발견' if ok else '❌ 없음'}** — 후보: {cands}")
+        if not ok:
+            st.caption("→ '/mount/src/hoya12/bloodmap_app/pdf_export.py' 또는 '/mnt/data/pdf_export.py' 위치에 배치하면 자동 인식됩니다.")
     except Exception as e:
         st.write(f"- pdf_export: ❌ 오류 — {e}")
+
 
 # ---------- App Layout (requested order) ----------
 st.set_page_config(page_title="피수치 가이드 — 최종 통합판", layout="wide")
