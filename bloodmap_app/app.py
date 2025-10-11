@@ -1,6 +1,6 @@
 
 # -*- coding: utf-8 -*-
-# ---- Safe guards for autosave/restore (injected) ----
+# ---- Safe guards (no-op if real functions exist later) ----
 try:
     autosave_state
 except NameError:
@@ -11,12 +11,30 @@ try:
 except NameError:
     def restore_state():
         return None
+try:
+    load_onco
+except NameError:
+    def load_onco():
+        return None, None, "onco_map loader not available"
+try:
+    _load_special_module
+except NameError:
+    def _load_special_module():
+        return None, "special_tests loader not available"
+try:
+    _find_pdf_export_paths
+except NameError:
+    def _find_pdf_export_paths():
+        from pathlib import Path
+        return [Path("/mount/src/hoya12/bloodmap_app/pdf_export.py"),
+                Path("/mnt/data/pdf_export.py")]
 
 import streamlit as st
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 import importlib.util, sys, csv, json
 
+# ---------- Basics ----------
 KST = timezone(timedelta(hours=9))
 def kst_now() -> str:
     return datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S KST")
@@ -27,12 +45,11 @@ CURRENT_USERS = 140
 FEED_PATH = Path("/mnt/data/feedback.csv")
 AUTOSAVE_PATH = Path("/mnt/data/autosave.json")
 
-# ---------- Autosave / Restore (real implementations) ----------
-
+# ---------- Autosave / Restore (robust) ----------
 ESSENTIAL_KEYS = [
     "labs_dict","bp_summary","onco_group","onco_dx","peds_notes",
     "special_interpretations","selected_agents","onco_warnings",
-    "show_peds_on_home"
+    "show_peds_on_home","diet_notes"
 ]
 def restore_state():
     try:
@@ -47,11 +64,10 @@ def restore_state():
 def autosave_state():
     try:
         data = {k: st.session_state.get(k) for k in ESSENTIAL_KEYS}
-        # ensure directory exists
         AUTOSAVE_PATH.parent.mkdir(parents=True, exist_ok=True)
         AUTOSAVE_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     except Exception as e:
-        # fallback to temp dir to avoid repeated error
+        # Fallback to temp
         try:
             import tempfile
             alt = Path(tempfile.gettempdir()) / "autosave.json"
@@ -62,6 +78,47 @@ def autosave_state():
                 st.error(f"자동 저장 실패: {e2}")
                 st.session_state["_autosave_err_shown"] = True
 
+# ---------- onco_map loader ----------
+def _candidate_onco_paths():
+    cands = []
+    try:
+        here = Path(__file__).resolve().parent
+        cands += [here / "onco_map.py"]
+    except Exception:
+        pass
+    cands += [
+        Path("/mount/src/hoya12/bloodmap_app/onco_map.py"),
+        Path("/mnt/data/onco_map.py"),
+        Path.cwd() / "onco_map.py",
+        Path("onco_map.py"),
+    ]
+    out, seen = [], set()
+    for p in cands:
+        s = str(p.resolve()) if p.exists() else str(p)
+        if s not in seen:
+            seen.add(s); out.append(p)
+    return out
+
+def load_onco():
+    last_err = None
+    for p in _candidate_onco_paths():
+        try:
+            if not p.exists(): continue
+            spec = importlib.util.spec_from_file_location("onco_map", str(p))
+            mod = importlib.util.module_from_spec(spec)
+            sys.modules["onco_map"] = mod
+            spec.loader.exec_module(mod)  # type: ignore
+            build = getattr(mod, "build_onco_map", None)
+            disp = getattr(mod, "dx_display", None)
+            omap = None
+            if callable(build): omap = build()
+            elif hasattr(mod, "OM"): omap = getattr(mod, "OM")
+            elif hasattr(mod, "ONCO_MAP"): omap = getattr(mod, "ONCO_MAP")
+            if isinstance(omap, dict) and omap:
+                return omap, disp, p
+        except Exception as e:
+            last_err = e
+    return None, None, last_err
 
 def onco_select_ui():
     st.header("🧬 암종 선택")
@@ -110,10 +167,10 @@ def _candidate_special_paths():
     except Exception:
         pass
     cands += [
+        Path("/mount/src/hoya12/bloodmap_app/special_tests.py"),
+        Path("/mnt/data/special_tests.py"),
         Path.cwd() / "special_tests.py",
         Path("special_tests.py"),
-        Path("/mnt/data/special_tests.py"),
-        Path("/mount/src/hoya12/bloodmap_app/special_tests.py"),
     ]
     out, seen = [], set()
     for p in cands:
@@ -175,8 +232,6 @@ def render_special_tests():
     except Exception as e:
         st.error(f"특수검사 로드 오류: {e}")
 
-
-
 # ---------- lab_diet loader (식이가이드) ----------
 def _candidate_diet_paths():
     cands = []
@@ -219,20 +274,20 @@ def render_diet_guides(context=None):
         if not mod:
             st.error(f"lab_diet 모듈을 찾지 못했습니다. {'에러: '+str(info) if info else ''}")
             return
-        # Try known UI functions
+        # Preferred UI functions
         for fn in ["diet_ui","render_diet_ui","build_diet_ui","ui"]:
             f = getattr(mod, fn, None)
             if callable(f):
                 res = f(context) if context is not None else f()
-                # If UI function returns list of strings, save as notes
                 if isinstance(res, (list, tuple)):
                     st.session_state['diet_notes'] = [str(x) for x in res]
+                st.caption(f"lab_diet 연결: {info}")
                 return
-        # Try data structures
+        # Data structures
+        out_lines = []
         for name in ["DIET_GUIDES","GUIDES","DATA"]:
             if hasattr(mod, name):
                 data = getattr(mod, name)
-                out_lines = []
                 if isinstance(data, dict):
                     st.markdown("### 가이드 목록")
                     for k,v in data.items():
@@ -248,14 +303,15 @@ def render_diet_guides(context=None):
                     for ln in data:
                         st.markdown(f"- {ln}")
                         out_lines.append(str(ln))
-                st.session_state['diet_notes'] = out_lines
-                st.caption(f"lab_diet 연결: {info}")
-                return
-        st.warning("lab_diet에서 사용할 수 있는 UI/데이터를 찾지 못했습니다. (허용: diet_ui/render_diet_ui/build_diet_ui/ui 또는 DIET_GUIDES 등)")
+        if out_lines:
+            st.session_state['diet_notes'] = out_lines
+            st.caption(f"lab_diet 연결: {info}")
+        else:
+            st.warning("lab_diet에서 사용할 수 있는 UI/데이터를 찾지 못했습니다. (허용: diet_ui/render_diet_ui/build_diet_ui/ui 또는 DIET_GUIDES 등)")
     except Exception as e:
         st.error(f"식이가이드 로드 오류: {e}")
-# ---------- Labs (validation) ----------
 
+# ---------- Labs (custom order + validation) ----------
 LAB_FIELDS=[
     ("WBC","x10^3/µL"),
     ("Hb","g/dL"),
@@ -277,7 +333,6 @@ LAB_FIELDS=[
     ("Tb","mg/dL"),
 ]
 
-
 REF_RANGE = {
     "WBC": (4.0, 10.0),
     "Hb": (12.0, 16.0),
@@ -288,11 +343,11 @@ REF_RANGE = {
     "Na": (135, 145),
     "K": (3.5, 5.1),
     "Alb": (3.5, 5.2),
-    "Glu": (70, 140),          # 일반 외래 상황 고려해 약간 넓힘
+    "Glu": (70, 140),
     "TP": (6.0, 8.3),
     "AST": (0, 40),
     "ALT": (0, 40),
-    "LD": (120, 250),          # 검사실마다 다름 → 보편 범위
+    "LD": (120, 250),
     "CRP": (0, 5),
     "Cr": (0.5, 1.2),
     "UA": (3.5, 7.2),
@@ -308,7 +363,6 @@ def _parse_float(x):
     except Exception:
         return None
 
-
 def labs_input_ui():
     st.header("🧪 피수치 입력 (유효성 검증)")
     labs = st.session_state.get("labs_dict", {}).copy()
@@ -316,13 +370,11 @@ def labs_input_ui():
     alerts = []
     for i,(name,unit) in enumerate(LAB_FIELDS):
         with cols[i%3]:
-            # None이나 문자열 "None"은 표시하지 않음
             raw = labs.get(name, "")
             if raw is None or str(raw).strip().lower() == "none":
                 raw = ""
             val = st.text_input(f"{name} ({unit})", value=str(raw), placeholder="숫자 입력", key=wkey(f"lab_{name}"))
             labs[name] = val.strip()
-            # 사용자가 입력했을 때만 파싱/검증
             if val.strip() != "":
                 v = _parse_float(val)
                 if v is None:
@@ -409,7 +461,7 @@ def render_caregiver_notes_peds(*, stool, fever, persistent_vomit, oliguria, cou
     if fever in ["38~38.5","38.5~39","39 이상"]:
         bullet("🌡️ 발열 대처","""
 - 옷 가볍게, 실내 시원하게
-- **해열제 간격**: 아세트아미노펜 ≥4h, 이부프로펜 ≥6h
+- **해열제 간격**: 아세트아미노펜 ≥4h, 이부프로펀 ≥6h
 - **연락 기준**: **≥38.5℃**, **내원 기준**: **≥39.0℃** 또는 무기력/경련/탈수/호흡곤란
 """)
     if persistent_vomit:
@@ -533,17 +585,14 @@ def build_report():
     if not any(sec.startswith("##") for sec in parts[1:]): parts.append("## 입력된 데이터가 없어 기본 안내만 표시됩니다.")
     return "\n\n".join(parts)
 
-
 def _find_pdf_export_paths():
-    from pathlib import Path
     cands = [
         Path("/mount/src/hoya12/bloodmap_app/pdf_export.py"),
         Path("/mnt/data/pdf_export.py"),
         Path.cwd() / "pdf_export.py",
         Path(__file__).resolve().parent / "pdf_export.py",
     ]
-    out = []
-    seen = set()
+    out, seen = [], set()
     for p in cands:
         try:
             rp = str(p.resolve()) if p.exists() else str(p)
@@ -555,7 +604,6 @@ def _find_pdf_export_paths():
 
 def export_report_pdf(md_text: str) -> bytes:
     # Try external helper first
-    import importlib.util, sys
     last_err = None
     for p in _find_pdf_export_paths():
         try:
@@ -590,7 +638,6 @@ def export_report_pdf(md_text: str) -> bytes:
         c.showPage(); c.save()
         return buf.getvalue()
     except Exception as e:
-        import streamlit as st
         st.warning(f"PDF 변환 모듈을 찾지 못했습니다. TXT만 제공됩니다. (last error: {last_err or e})")
         return b""
 
@@ -637,27 +684,42 @@ def feedback_stats():
     with cols[1]: st.metric("누적 피드백", f"{cnt} 건")
     with cols[2]: st.metric("평균 만족도", f"{avg:.1f}" if avg is not None else "-")
 
-# ---------- Diagnostics ----------
-
+# ---------- Diagnostics (safe) ----------
 def diagnostics_panel():
     st.markdown("### 🔧 진단 패널 (경로/모듈 상태)")
-    # onco_map
-    omap, dx_display, onco_info = load_onco()
-    status = "✅ 로드됨" if isinstance(omap, dict) and omap else "❌ 실패"
-    st.write(f"- onco_map: **{status}** — 경로: `{onco_info}`")
-    # special_tests
-    try:
-        mod, sp_info = _load_special_module()
-        st.write(f"- special_tests: **{'✅ 로드됨' if mod else '❌ 실패'}** — 경로: `{sp_info}`")
-    except Exception as e:
-        st.write(f"- special_tests: ❌ 오류 — {e}")
 
-# lab_diet
-try:
-    dmod, dpath = _load_diet_module()
-    st.write(f"- lab_diet: **{'✅ 로드됨' if dmod else '❌ 실패'}** — 경로: `{dpath}`")
-except Exception as e:
-    st.write(f"- lab_diet: ❌ 오류 — {e}")
+    # onco_map
+    onco_loader = globals().get("load_onco")
+    if callable(onco_loader):
+        try:
+            omap, dx_display, onco_info = onco_loader()
+            status = "✅ 로드됨" if isinstance(omap, dict) and omap else "❌ 실패"
+            st.write(f"- onco_map: **{status}** — 경로: `{onco_info}`")
+        except Exception as e:
+            st.write(f"- onco_map: ❌ 오류 — {e}")
+    else:
+        st.write("- onco_map: ❌ 로더 없음")
+
+    # special_tests
+    sp_loader = globals().get("_load_special_module")
+    if callable(sp_loader):
+        try:
+            mod, sp_info = sp_loader()
+            st.write(f"- special_tests: **{'✅ 로드됨' if mod else '❌ 실패'}** — 경로: `{sp_info}`")
+        except Exception as e:
+            st.write(f"- special_tests: ❌ 오류 — {e}")
+    else:
+        st.write("- special_tests: ❌ 로더 없음")
+
+    # lab_diet
+    diet_loader = globals().get("_load_diet_module")
+    if callable(diet_loader):
+        try:
+            dmod, dpath = diet_loader()
+            st.write(f"- lab_diet: **{'✅ 로드됨' if dmod else '❌ 실패'}** — 경로: `{dpath}`")
+        except Exception as e:
+            st.write(f"- lab_diet: ❌ 오류 — {e}")
+
     # pdf_export
     try:
         cands = [str(p) for p in _find_pdf_export_paths()]
@@ -672,6 +734,20 @@ except Exception as e:
     except Exception as e:
         st.write(f"- pdf_export: ❌ 오류 — {e}")
 
+    # autosave
+    try:
+        can_write = False
+        try:
+            AUTOSAVE_PATH.parent.mkdir(parents=True, exist_ok=True)
+            test_p = AUTOSAVE_PATH.parent / "_write_test.tmp"
+            test_p.write_text("ok", encoding="utf-8")
+            can_write = True
+            test_p.unlink(missing_ok=True)
+        except Exception:
+            can_write = False
+        st.write(f"- autosave: 경로 `{AUTOSAVE_PATH}` — {'✅ 쓰기 가능' if can_write else '❌ 쓰기 불가(임시경로로 대체)'}")
+    except Exception as e:
+        st.write(f"- autosave: ❌ 오류 — {e}")
 
 # ---------- App Layout (requested order) ----------
 st.set_page_config(page_title="피수치 가이드 — 최종 통합판", layout="wide")
