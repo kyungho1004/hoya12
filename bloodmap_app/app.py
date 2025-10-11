@@ -561,8 +561,7 @@ def bp_ui():
 def render_caregiver_notes_peds(*,
     stool, fever, persistent_vomit, oliguria, cough, nasal, eye,
     abd_pain, ear_pain, rash, hives, migraine, hfmd,
-    constipation=False, anc_low=None, diarrhea=False, key_prefix="peds_"
-):
+    constipation=False, anc_low=None, diarrhea=False, key_prefix="peds_", wheeze=False, sob=False, throat=False, dysuria=False, hematuria=False):
     st.header("🧒 소아가이드 (강화판)")
     # ANC 기준 자동
     if anc_low is None:
@@ -722,138 +721,138 @@ def add_action(title, tips):
         # notes에도 첫 줄 요약 수집
         notes.append(f"{title} — {tips[0]}")
 
-# Fever-based
-if str(fever) in ["38~38.5","38.5~39","39 이상"]:
-    add_action("🌡️ 발열 대처", [
-            "옷 가볍게, 실내 **25–26℃**, 소량씩 자주 **물/ORS**",
-            "아세트아미노펜 10–15 mg/kg q4–6h, 이부프로펜 10 mg/kg q6–8h(≥6개월)",
-            "두 약을 번갈아 쓰는 경우 **서로 다른 약 사이 최소 2시간** 간격 유지",
-            "3–5일 지속/조절 어려움·경련·호흡곤란 동반 시 평가"
+    # Fever-based
+    if str(fever) in ["38~38.5","38.5~39","39 이상"]:
+        add_action("🌡️ 발열 대처", [
+                "옷 가볍게, 실내 **25–26℃**, 소량씩 자주 **물/ORS**",
+                "아세트아미노펜 10–15 mg/kg q4–6h, 이부프로펜 10 mg/kg q6–8h(≥6개월)",
+                "두 약을 번갈아 쓰는 경우 **서로 다른 약 사이 최소 2시간** 간격 유지",
+                "3–5일 지속/조절 어려움·경련·호흡곤란 동반 시 평가"
+            ])
+
+    # Diarrhea
+    if bool(diarrhea):
+        add_action("💩 설사 대처", [
+            "ORS: 1시간 10–20 mL/kg, 이후 1회당 5–10 mL/kg 보충",
+            "탄산·아이스 피하고 미지근한 수분, 유제품은 상태 봐가며"
         ])
 
-# Diarrhea
-if bool(diarrhea):
-    add_action("💩 설사 대처", [
-        "ORS: 1시간 10–20 mL/kg, 이후 1회당 5–10 mL/kg 보충",
-        "탄산·아이스 피하고 미지근한 수분, 유제품은 상태 봐가며"
-    ])
-
-# Constipation
-if bool(constipation):
-    add_action("🚻 변비 대처", [
-        "수분 50–60 mL/kg/일(지시 범위), 식후 좌변 10–15분",
-        "섬유(귀리·프룬·키위·통곡·익힌 채소), 활동량 확보"
-    ])
-
-# Vomiting / Oliguria
-if bool(persistent_vomit):
-    add_action("🤮 구토 대처", [
-        "소량씩 자주 투명한 수분부터, 탈수/혈성 구토 동반 시 평가"
-    ])
-if bool(oliguria):
-    add_action("🚨 소변량 급감", [
-        "탈수 가능성 — 수분 계획 재점검, 필요 시 의료평가"
-    ])
-
-# Respiratory
-if str(cough) in ["보통","심함"] or str(nasal) in ["진득","누런"]:
-    add_action("🤧 기침/코막힘", [
-        "비강 세척/가습, 해열제 간격 준수",
-        "호흡 곤란·늑간함몰 시 즉시 평가"
-    ])
-
-# Otitis
-if str(ear_pain) in ["보통","심함"]:
-        add_action("👂 귀 통증", [
-            "해열·진통제 간격 준수, **귀에 물 들어가지 않게**(샤워/수영 주의)",
-            "샤워 후 **고개 기울여 물 빼기**, 드라이어 약풍 멀리서",
-            "고막천공 의심/분비물 동반 시 **점이제 자가 금지**·즉시 평가"
+    # Constipation
+    if bool(constipation):
+        add_action("🚻 변비 대처", [
+            "수분 50–60 mL/kg/일(지시 범위), 식후 좌변 10–15분",
+            "섬유(귀리·프룬·키위·통곡·익힌 채소), 활동량 확보"
         ])
 
-# Abdominal pain
-if str(abd_pain) in ["보통","심함"]:
-    add_action("🤕 복통", [
-        "우하복부 국소통/보행 악화/반발통/발열 동반 시 충수염 평가"
-    ])
+    # Vomiting / Oliguria
+    if bool(persistent_vomit):
+        add_action("🤮 구토 대처", [
+            "소량씩 자주 투명한 수분부터, 탈수/혈성 구토 동반 시 평가"
+        ])
+    if bool(oliguria):
+        add_action("🚨 소변량 급감", [
+            "탈수 가능성 — 수분 계획 재점검, 필요 시 의료평가"
+        ])
 
-# Skin / Allergy
-if bool(rash) or bool(hives):
-    add_action("🌿 피부/알레르기", [
-        "광범위/심한 가려움·호흡곤란·전신두드러기 동반 시 즉시 평가"
-    ])
+    # Respiratory
+    if str(cough) in ["보통","심함"] or str(nasal) in ["진득","누런"]:
+        add_action("🤧 기침/코막힘", [
+            "비강 세척/가습, 해열제 간격 준수",
+            "호흡 곤란·늑간함몰 시 즉시 평가"
+        ])
 
-# Headache/Migraine
-if bool(migraine):
-    add_action("🧠 두통", [
-        "수분/휴식·조용한 환경, 반복 구토/신경학적 이상 동반 시 평가"
-    ])
+    # Otitis
+    if str(ear_pain) in ["보통","심함"]:
+            add_action("👂 귀 통증", [
+                "해열·진통제 간격 준수, **귀에 물 들어가지 않게**(샤워/수영 주의)",
+                "샤워 후 **고개 기울여 물 빼기**, 드라이어 약풍 멀리서",
+                "고막천공 의심/분비물 동반 시 **점이제 자가 금지**·즉시 평가"
+            ])
 
-# ANC low
-if anc_low:
-    add_action("🍽️ ANC 낮음 위생/식이", [
-        "날 것 금지·충분히 익히기, 과일 껍질 제거·데치기",
-        "조리 후 2시간 이내 섭취·뷔페/회/생채소 금지"
-    ])
+    # Abdominal pain
+    if str(abd_pain) in ["보통","심함"]:
+        add_action("🤕 복통", [
+            "우하복부 국소통/보행 악화/반발통/발열 동반 시 충수염 평가"
+        ])
+
+    # Skin / Allergy
+    if bool(rash) or bool(hives):
+        add_action("🌿 피부/알레르기", [
+            "광범위/심한 가려움·호흡곤란·전신두드러기 동반 시 즉시 평가"
+        ])
+
+    # Headache/Migraine
+    if bool(migraine):
+        add_action("🧠 두통", [
+            "수분/휴식·조용한 환경, 반복 구토/신경학적 이상 동반 시 평가"
+        ])
+
+    # ANC low
+    if anc_low:
+        add_action("🍽️ ANC 낮음 위생/식이", [
+            "날 것 금지·충분히 익히기, 과일 껍질 제거·데치기",
+            "조리 후 2시간 이내 섭취·뷔페/회/생채소 금지"
+        ])
 
 
-# Respiratory wheeze/asthma-style
-if bool(wheeze) or bool(sob):
-    add_action("🫁 쌕쌕거림/호흡곤란", [
-        "숨 가쁨·늑간함몰·말수 줄면 즉시 평가",
-        "속효성 기관지확장제 사용 중이면 지시에 따라, 반응 없으면 진료"
-    ])
+    # Respiratory wheeze/asthma-style
+    if bool(wheeze) or bool(sob):
+        add_action("🫁 쌕쌕거림/호흡곤란", [
+            "숨 가쁨·늑간함몰·말수 줄면 즉시 평가",
+            "속효성 기관지확장제 사용 중이면 지시에 따라, 반응 없으면 진료"
+        ])
 
-# Sore throat
-if bool(throat):
-    add_action("🗣️ 인후통", [
-        "미지근한 물/꿀(>1세)/가글, 자극적 음식 피하기",
-        "고열·호흡곤란·심한 연하통이면 평가"
-    ])
+    # Sore throat
+    if bool(throat):
+        add_action("🗣️ 인후통", [
+            "미지근한 물/꿀(>1세)/가글, 자극적 음식 피하기",
+            "고열·호흡곤란·심한 연하통이면 평가"
+        ])
 
-# Conjunctivitis
-if str(eye) in ["노랑-농성","양쪽"]:
-    add_action("👁️ 결막염 의심", [
-        "손씻기·수건/베개 공유 금지",
-        "농성·통증·시력저하 동반 시 평가"
-    ])
+    # Conjunctivitis
+    if str(eye) in ["노랑-농성","양쪽"]:
+        add_action("👁️ 결막염 의심", [
+            "손씻기·수건/베개 공유 금지",
+            "농성·통증·시력저하 동반 시 평가"
+        ])
 
-# Viral syndrome (flu/COVID-like) by fever+cough/nasal
-if (str(fever) in ["38~38.5","38.5~39","39 이상"]) and (str(cough) in ["보통","심함"] or str(nasal) in ["진득","누런"]):
-    add_action("🦠 호흡기 바이러스 의심", [
-        "휴식·수분·해열제 간격 준수",
-        "호흡곤란/탈수/의식변화 시 평가"
-    ])
+    # Viral syndrome (flu/COVID-like) by fever+cough/nasal
+    if (str(fever) in ["38~38.5","38.5~39","39 이상"]) and (str(cough) in ["보통","심함"] or str(nasal) in ["진득","누런"]):
+        add_action("🦠 호흡기 바이러스 의심", [
+            "휴식·수분·해열제 간격 준수",
+            "호흡곤란/탈수/의식변화 시 평가"
+        ])
 
-# Skin rash / urticaria
-if bool(rash):
-    add_action("🌿 피부 발진", [
-        "미온수 샤워·자극 회피, 가려움 심하면 냉찜질",
-        "고열·점상출혈·점막병변·호흡곤란 동반시 즉시 평가"
-    ])
-if bool(hives):
-    add_action("🍤 두드러기", [
-        "원인 의심 음식·약 중단, 가려움 완화",
-        "입술/혀부종·호흡곤란 동반 시 **아나필락시스 의심 → 즉시 119/응급실**"
-    ])
+    # Skin rash / urticaria
+    if bool(rash):
+        add_action("🌿 피부 발진", [
+            "미온수 샤워·자극 회피, 가려움 심하면 냉찜질",
+            "고열·점상출혈·점막병변·호흡곤란 동반시 즉시 평가"
+        ])
+    if bool(hives):
+        add_action("🍤 두드러기", [
+            "원인 의심 음식·약 중단, 가려움 완화",
+            "입술/혀부종·호흡곤란 동반 시 **아나필락시스 의심 → 즉시 119/응급실**"
+        ])
 
-# UTI/Dysuria
-if bool(dysuria) or bool(hematuria):
-    add_action("🚻 배뇨 통증/혈뇨", [
-        "수분 섭취 늘리고, 통증 지속·발열 동반 시 소변검사 평가"
-    ])
+    # UTI/Dysuria
+    if bool(dysuria) or bool(hematuria):
+        add_action("🚻 배뇨 통증/혈뇨", [
+            "수분 섭취 늘리고, 통증 지속·발열 동반 시 소변검사 평가"
+        ])
 
-# HFMD
-if bool(hfmd):
-    add_action("🖐️ 수족구", [
-        "수분·통증 조절, 입안 통증 시 차가운 음식",
-        "탈수 징후·고열 지속 시 평가"
-    ])
+    # HFMD
+    if bool(hfmd):
+        add_action("🖐️ 수족구", [
+            "수분·통증 조절, 입안 통증 시 차가운 음식",
+            "탈수 징후·고열 지속 시 평가"
+        ])
 
-# Headache/migraine already handled; emphasize red flags
-if bool(migraine):
-    add_action("🧠 두통 경고", [
-        "자고 깨도 지속/새로운 신경학적 이상(구토 반복/보행이상/시야이상) 시 평가"
-    ])
+    # Headache/migraine already handled; emphasize red flags
+    if bool(migraine):
+        add_action("🧠 두통 경고", [
+            "자고 깨도 지속/새로운 신경학적 이상(구토 반복/보행이상/시야이상) 시 평가"
+        ])
 
     # Render action cards
 if action_items:
