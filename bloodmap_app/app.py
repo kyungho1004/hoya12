@@ -28,6 +28,7 @@ FEED_PATH = Path("/mnt/data/feedback.csv")
 AUTOSAVE_PATH = Path("/mnt/data/autosave.json")
 
 # ---------- Autosave / Restore (real implementations) ----------
+
 ESSENTIAL_KEYS = [
     "labs_dict","bp_summary","onco_group","onco_dx","peds_notes",
     "special_interpretations","selected_agents","onco_warnings",
@@ -46,51 +47,21 @@ def restore_state():
 def autosave_state():
     try:
         data = {k: st.session_state.get(k) for k in ESSENTIAL_KEYS}
+        # ensure directory exists
+        AUTOSAVE_PATH.parent.mkdir(parents=True, exist_ok=True)
         AUTOSAVE_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     except Exception as e:
-        st.warning(f"자동 저장 실패: {e}")
-
-# ---------- onco_map loader ----------
-def _candidate_onco_paths():
-    cands = []
-    try:
-        here = Path(__file__).resolve().parent
-        cands += [here / "onco_map.py"]
-    except Exception:
-        pass
-    cands += [
-        Path.cwd() / "onco_map.py",
-        Path("onco_map.py"),
-        Path("/mnt/data/onco_map.py"),
-        Path("/mount/src/hoya12/bloodmap_app/onco_map.py"),
-    ]
-    out, seen = [], set()
-    for p in cands:
-        s = str(p.resolve()) if p.exists() else str(p)
-        if s not in seen:
-            seen.add(s); out.append(p)
-    return out
-
-def load_onco():
-    last_err = None
-    for p in _candidate_onco_paths():
+        # fallback to temp dir to avoid repeated error
         try:
-            if not p.exists(): continue
-            spec = importlib.util.spec_from_file_location("onco_map", str(p))
-            mod = importlib.util.module_from_spec(spec)
-            sys.modules["onco_map"] = mod
-            spec.loader.exec_module(mod)  # type: ignore
-            build = getattr(mod, "build_onco_map", None)
-            disp = getattr(mod, "dx_display", None)
-            omap = None
-            if callable(build): omap = build()
-            elif hasattr(mod, "OM"): omap = getattr(mod, "OM")
-            elif hasattr(mod, "ONCO_MAP"): omap = getattr(mod, "ONCO_MAP")
-            if isinstance(omap, dict) and omap:
-                return omap, disp, p
-        except Exception as e:
-            last_err = e
-    return None, None, last_err
+            import tempfile
+            alt = Path(tempfile.gettempdir()) / "autosave.json"
+            alt.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+            st.warning(f"/mnt/data에 저장 실패하여 임시경로로 저장했습니다: {alt} (사유: {e})")
+        except Exception as e2:
+            if not st.session_state.get("_autosave_err_shown"):
+                st.error(f"자동 저장 실패: {e2}")
+                st.session_state["_autosave_err_shown"] = True
+
 
 def onco_select_ui():
     st.header("🧬 암종 선택")
