@@ -14,7 +14,7 @@ def wkey(s: str) -> str:
     return f"k_{s}"
 
 # --------------------
-# onco_map MULTI-SCAN loader
+# onco_map MULTI-SCAN loader (same as previous build)
 # --------------------
 def _candidate_onco_paths():
     cands = []
@@ -29,22 +29,18 @@ def _candidate_onco_paths():
         Path("/mnt/data/onco_map.py"),
         Path("/mount/src/hoya12/bloodmap_app/onco_map.py"),
     ]
-    # unique, existing first
-    seen = set()
-    out = []
+    seen = set(); out = []
     for p in cands:
         s = str(p.resolve()) if p.exists() else str(p)
         if s not in seen:
-            seen.add(s)
-            out.append(p)
+            seen.add(s); out.append(p)
     return out
 
 def load_onco():
     last_err = None
     for p in _candidate_onco_paths():
         try:
-            if not p.exists():
-                continue
+            if not p.exists(): continue
             spec = importlib.util.spec_from_file_location("onco_map", str(p))
             mod = importlib.util.module_from_spec(spec)
             sys.modules["onco_map"] = mod
@@ -76,9 +72,7 @@ def onco_select_ui():
     groups = sorted(list(omap.keys()))
     group = st.selectbox("암 그룹", groups, key=wkey("onco_group"))
     dx_keys = sorted(list(omap.get(group, {}).keys()))
-    # label list uses dx_display if provided
     labels = [(dx_display(group, dx) if dx_display else f"{group} - {dx}") for dx in dx_keys]
-    # maintain stable mapping via index
     if dx_keys:
         default_dx = st.session_state.get("onco_dx")
         idx = dx_keys.index(default_dx) if default_dx in dx_keys else 0
@@ -86,7 +80,6 @@ def onco_select_ui():
         dx = dx_keys[idx]
         st.session_state["onco_group"] = group
         st.session_state["onco_dx"] = dx
-        # preview recommended drugs if present
         dmap = omap.get(group, {}).get(dx, {})
         recs = []
         for sec in ["chemo","targeted","maintenance","support","abx"]:
@@ -302,26 +295,90 @@ def render_caregiver_notes_peds(
 """)
 
 # --------------------
-# Special tests
+# SPECIAL TESTS — robust loader
 # --------------------
-def render_special_tests():
+def _candidate_special_paths():
+    cands = []
     try:
-        import importlib.util, sys, pathlib
-        p = pathlib.Path("/mnt/data/special_tests.py")
-        if p.exists():
+        here = Path(__file__).resolve().parent
+        cands += [here / "special_tests.py"]
+    except Exception:
+        pass
+    cands += [
+        Path.cwd() / "special_tests.py",
+        Path("special_tests.py"),
+        Path("/mnt/data/special_tests.py"),
+        Path("/mount/src/hoya12/bloodmap_app/special_tests.py"),
+    ]
+    seen = set(); out = []
+    for p in cands:
+        s = str(p.resolve()) if p.exists() else str(p)
+        if s not in seen:
+            seen.add(s); out.append(p)
+    return out
+
+def _load_special_module():
+    last_err = None
+    for p in _candidate_special_paths():
+        try:
+            if not p.exists(): continue
             spec = importlib.util.spec_from_file_location("special_tests", str(p))
             mod = importlib.util.module_from_spec(spec)
             sys.modules["special_tests"] = mod
             spec.loader.exec_module(mod)  # type: ignore
-            if hasattr(mod, "special_tests_ui"):
-                lines = mod.special_tests_ui()
-                st.session_state["special_interpretations"] = lines
-                if lines:
-                    st.markdown("### 해석 라인")
-                    for ln in lines:
-                        st.markdown(f"- {ln}")
-                return
-        st.warning("특수검사 모듈을 찾지 못했거나 UI 함수가 없습니다.")
+            return mod, p
+        except Exception as e:
+            last_err = e
+    return None, last_err
+
+def _call_special_ui(mod):
+    # 허용되는 함수 이름들
+    for fn in ["special_tests_ui", "render_special_tests_ui", "build_special_tests_ui", "ui"]:
+        f = getattr(mod, fn, None)
+        if callable(f):
+            return f()
+    # 딕셔너리/리스트를 반환하는 정적 데이터도 허용
+    for name in ["SPECIAL_TESTS", "SPECIAL_RESULTS", "DATA"]:
+        if hasattr(mod, name):
+            data = getattr(mod, name)
+            if isinstance(data, (list, tuple)):
+                return list(data)
+            if isinstance(data, dict):
+                # dict → "key: value" 라인 리스트로 변환
+                out = []
+                for k, v in data.items():
+                    if isinstance(v, (list, tuple)):
+                        for x in v:
+                            out.append(f"{k}: {x}")
+                    else:
+                        out.append(f"{k}: {v}")
+                return out
+    return None
+
+def render_special_tests():
+    try:
+        mod, info = _load_special_module()
+        if not mod:
+            st.error(f"특수검사 모듈을 찾지 못했습니다. {'에러: '+str(info) if info else ''}")
+            return
+        res = _call_special_ui(mod)
+        if res is None:
+            st.error("특수검사 UI 함수를 찾지 못했습니다. (허용: special_tests_ui/render_special_tests_ui/build_special_tests_ui/ui 또는 SPECIAL_TESTS 자료구조)")
+            return
+        # 결과 렌더 및 세션 저장
+        if isinstance(res, (list, tuple)):
+            lines = [str(x) for x in res]
+        else:
+            # 함수가 Streamlit 내부 렌더만 하고 리스트를 반환 안 할 수 있음
+            lines = getattr(mod, "LATEST_LINES", [])
+            if not isinstance(lines, list):
+                lines = []
+        st.session_state["special_interpretations"] = lines
+        if lines:
+            st.markdown("### 특수검사 해석")
+            for ln in lines:
+                st.markdown(f"- {ln}")
+        st.caption(f"special_tests 연결: {info}")
     except Exception as e:
         st.error(f"특수검사 로드 오류: {e}")
 
@@ -434,9 +491,9 @@ def build_report():
 # --------------------
 # App Layout
 # --------------------
-st.set_page_config(page_title="피수치 가이드(onco 멀티스캔)", layout="wide")
-st.title("피수치 가이드 — onco_map 멀티스캔 연동판")
-st.caption("암종 선택/피수치/소아가이드/특수검사/항암제/보고서 통합. onco_map 경로 자동 탐색.")
+st.set_page_config(page_title="피수치 가이드(special_tests 고정판)", layout="wide")
+st.title("피수치 가이드 — special_tests 연동 강화판")
+st.caption("암종 선택/피수치/소아가이드/특수검사/항암제/보고서 통합. special_tests 경로·함수명 자동 인식.")
 
 tabs = st.tabs(["🏠 홈", "🧪 피수치 입력", "🩺 압종분류", "🧒 소아 가이드", "🔬 특수검사", "🧬 암종 선택", "💊 항암제", "📄 보고서"])
 
