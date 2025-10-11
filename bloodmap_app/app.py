@@ -12,64 +12,79 @@ def wkey(s: str) -> str:
     return f"k_{s}"
 
 # --------------------
-# 암종류 선택(그룹/진단) 로더
+# onco_map loader (linked)
 # --------------------
-def load_onco_map():
+def load_onco():
     try:
         import importlib.util, sys, pathlib
         p = pathlib.Path("/mnt/data/onco_map.py")
         if not p.exists():
-            return {}
+            return None, None
         spec = importlib.util.spec_from_file_location("onco_map", str(p))
         mod = importlib.util.module_from_spec(spec)
         sys.modules["onco_map"] = mod
         spec.loader.exec_module(mod)  # type: ignore
-        # build_onco_map가 있으면 사용
-        if hasattr(mod, "build_onco_map"):
-            return mod.build_onco_map()
-        # 레거시: OM이라는 딕셔너리 있을 수도 있음
-        return getattr(mod, "OM", {})
+        build = getattr(mod, "build_onco_map", None)
+        disp = getattr(mod, "dx_display", None)
+        if callable(build):
+            omap = build()
+            return omap, disp
     except Exception as e:
         st.warning(f"onco_map 불러오기 실패: {e}")
-        return {}
+    return None, None
 
 def onco_select_ui():
-    st.subheader("암종류 선택")
-    omap = load_onco_map()
+    st.subheader("암종류 선택 (onco_map 연동)")
+    omap, dx_display = load_onco()
     if not isinstance(omap, dict) or not omap:
-        st.error("암종 분류 테이블이 비었습니다. onco_map.py를 확인하세요.")
-        return None, None
+        st.error("onco_map.py에서 암 분류를 불러오지 못했습니다. 수동 입력을 사용하세요.")
+        g_manual = st.text_input("암 그룹(수동)", value=st.session_state.get("onco_group") or "")
+        d_manual = st.text_input("진단(암종, 수동)", value=st.session_state.get("onco_dx") or "")
+        if g_manual or d_manual:
+            st.session_state["onco_group"] = g_manual.strip() or None
+            st.session_state["onco_dx"] = d_manual.strip() or None
+            st.success("수동 입력값을 사용합니다.")
+        return st.session_state.get("onco_group"), st.session_state.get("onco_dx")
 
     groups = sorted(list(omap.keys()))
     group = st.selectbox("암 그룹", groups, key=wkey("onco_group"))
-    dxs = sorted(list(omap.get(group, {}).keys()))
-    if not dxs:
-        st.warning("해당 그룹에 진단이 없습니다.")
-        st.session_state["onco_dx"] = None
-        return group, None
-
-    dx = st.selectbox("진단(암종)", dxs, key=wkey("onco_dx"))
-    st.session_state["onco_group"] = group
-    st.session_state["onco_dx"] = dx
-
-    # 진단에 매핑된 권장 약물(있다면) 미리보기
-    recs = []
-    try:
+    dx_keys = sorted(list(omap.get(group, {}).keys()))
+    # display labels using dx_display if available
+    labels = []
+    for dx in dx_keys:
+        if dx_display:
+            labels.append(dx_display(group, dx))
+        else:
+            labels.append(f"{group} - {dx}")
+    if dx_keys:
+        idx = 0
+        default_dx = st.session_state.get("onco_dx")
+        if default_dx in dx_keys:
+            idx = dx_keys.index(default_dx)
+        label = st.selectbox("진단(암종)", labels, index=idx, key=wkey("onco_dx_label"))
+        # map back to internal key
+        dx = dx_keys[labels.index(label)]
+        st.session_state["onco_group"] = group
+        st.session_state["onco_dx"] = dx
+        # preview recommended drugs if present
         dmap = omap.get(group, {}).get(dx, {})
-        for sec in ["chemo", "target", "maintenance", "support"]:
-            recs.extend([f"{sec}: {x}" for x in dmap.get(sec, [])])
-    except Exception:
-        pass
-
-    if recs:
-        st.markdown("#### 권장 약물(맵 기반)")
-        for r in recs[:20]:
-            st.write("- " + r)
-
-    return group, dx
+        recs = []
+        for sec in ["chemo","targeted","maintenance","support","abx"]:
+            arr = dmap.get(sec, [])
+            if arr:
+                recs.append(f"{sec}: " + ", ".join(arr[:12]))
+        if recs:
+            st.markdown("#### onco_map 권장 약물")
+            for r in recs:
+                st.write("- " + r)
+    else:
+        st.warning("해당 그룹에 진단이 없습니다.")
+        st.session_state["onco_group"] = group
+        st.session_state["onco_dx"] = None
+    return st.session_state.get("onco_group"), st.session_state.get("onco_dx")
 
 # --------------------
-# 피수치 입력창 (Labs)
+# Labs
 # --------------------
 LAB_FIELDS = [
     ("WBC", "x10^3/µL"),
@@ -101,7 +116,6 @@ def labs_input_ui():
             val = st.text_input(f"{name} ({unit})", value=str(labs.get(name, "")), key=wkey(f"lab_{name}"))
             labs[name] = val.strip()
     st.session_state["labs_dict"] = labs
-    # 결과 미리보기
     if labs:
         st.markdown("#### 입력 요약")
         for k, v in labs.items():
@@ -110,7 +124,7 @@ def labs_input_ui():
     return labs
 
 # --------------------
-# 혈압 분류
+# Blood pressure
 # --------------------
 def classify_bp(sbp, dbp):
     if sbp is None or dbp is None:
@@ -147,7 +161,7 @@ def bp_ui():
     return cat, note
 
 # --------------------
-# 소아 보호자 가이드
+# Pediatric caregiver guide
 # --------------------
 def render_caregiver_notes_peds(
     *, stool, fever, persistent_vomit, oliguria, cough, nasal, eye, abd_pain, ear_pain, rash, hives, migraine, hfmd, constipation=False, anc_low=None,
@@ -268,7 +282,7 @@ def render_caregiver_notes_peds(
 """)
 
 # --------------------
-# 특수검사
+# Special tests
 # --------------------
 def render_special_tests():
     try:
@@ -292,7 +306,7 @@ def render_special_tests():
         st.error(f"특수검사 로드 오류: {e}")
 
 # --------------------
-# 항암제 부작용(확장 요약)
+# Chemo adverse effects (concise)
 # --------------------
 GOOD="🟢"; WARN="🟡"; DANGER="🚨"
 def _b(txt: str) -> str:
@@ -350,7 +364,7 @@ def render_chemo_adverse_effects(agents, route_map=None):
     st.session_state["onco_warnings"] = list(dict.fromkeys(summary))[:60]
 
 # --------------------
-# 보고서
+# Report
 # --------------------
 def build_report():
     parts = []
@@ -368,7 +382,6 @@ def build_report():
         parts.append("## 혈압 분류(압종분류)")
         parts.append(f"- {bp}")
 
-    # 암종 선택
     g = st.session_state.get("onco_group")
     d = st.session_state.get("onco_dx")
     if g or d:
@@ -401,8 +414,8 @@ def build_report():
 # --------------------
 # App Layout
 # --------------------
-st.set_page_config(page_title="피수치 가이드(암종 선택 복구판)", layout="wide")
-st.title("피수치 가이드 — 암종 선택 복구판")
+st.set_page_config(page_title="피수치 가이드(onco 연동판)", layout="wide")
+st.title("피수치 가이드 — onco_map 연동판")
 st.caption("한국시간 기준(KST). 암종 선택/피수치/소아가이드/특수검사/항암제/보고서 통합.")
 
 tabs = st.tabs(["🏠 홈", "🧪 피수치 입력", "🩺 압종분류", "🧒 소아 가이드", "🔬 특수검사", "🧬 암종 선택", "💊 항암제", "📄 보고서"])
@@ -443,11 +456,9 @@ with tabs[3]:
 with tabs[4]:
     render_special_tests()
 
-def load_onco_map(): ...
-def onco_select_ui(): ...
-# 위 함수들 정의 후
 with tabs[5]:
     onco_select_ui()
+
 with tabs[6]:
     st.subheader("항암제 선택")
     all_agents = list(CHEMO_DB.keys())
