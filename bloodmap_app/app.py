@@ -5,41 +5,784 @@ from pathlib import Path
 import importlib.util
 import streamlit as st
 
-def render_emerg_weights_pro():
-    """전문가용: 슬라이더만 제공하는 응급도 가중치 패널.
-    emerg_weights 세션 상태를 직접 조정합니다.
-    """
-    import streamlit as st
-    st.subheader("전문가용: 응급도 가중치(슬라이더)")
-    st.caption("의료진/숙련 보호자를 위한 세밀 조정 영역입니다.")
-
-    # 기본 키 목록 (기존 슬라이더와 동일한 키셋 유지)
-    keys = [
-        ("anc_lt_500","ANC<500"),("anc_500_999","ANC 500–999"),("fever_38_0_38_4","발열 38.0–38.4"),
-        ("fever_ge_38_5","고열 ≥38.5"),("hb_lt_7","중증빈혈 Hb<7"),("plt_lt_20k","혈소판 <20k"),
-        ("crp_ge_10","CRP ≥10"),("hr_gt_130","HR>130"),("resp_distress","호흡곤란"),
-        ("melena","흑색변"),("hematochezia","혈변"),("persistent_vomit","지속 구토"),
-        ("oliguria","소변량 급감"),("loc_altered","의식저하"),("migraine_severe","번개두통")
-    ]
-
-    # 기본값 없을 때를 대비해 가벼운 초기화
-    if "emerg_weights" not in st.session_state:
-        st.session_state["emerg_weights"] = {k: 0.7 for k,_ in keys}
-
-    cols = st.columns(3)
-    for i, (k, label) in enumerate(keys):
-        with cols[i % 3]:
-            st.session_state["emerg_weights"][k] = st.slider(
-                label, 0.0, 1.0, float(st.session_state["emerg_weights"].get(k, 0.7)), 0.05,
-                help="가중치가 높을수록 긴급도 점수에 더 크게 반영됩니다.", key=f"pro_{k}"
-            )
-
 # --- Feature flag: show weights UI (hidden by default) ---
 DEV_SHOW_WEIGHTS = False
 
 def render_emerg_weights_ui():
     import streamlit as st
+    st.subheader("응급도 가중치 (편집 + 프리셋)")
+    st.caption("숫자 슬라이더 대신 **낮음/보통/높음**으로 쉽게 조정할 수 있어요. 필요하면 전문가 슬라이더도 열 수 있습니다.")
 
+    col_p1, col_p2, col_p3 = st.columns([2,1,1])
+    with col_p1:
+        preset = st.selectbox(
+            "프리셋 선택",
+            ["기본(권장)", "보수적(민감도↑)", "적극적(특이도↑)"],
+            help="보호자에게는 '기본(권장)'이 가장 쉬워요.",
+            key="ew_preset"
+        )
+    with col_p2:
+        lock_preset = st.toggle("프리셋 값 보호", value=True, help="실수로 바뀌지 않게 잠가요.", key="ew_lock")
+    with col_p3:
+        reset = st.button("기본값으로 초기화", key="ew_reset")
+
+    base = {
+        "anc_lt_500": 1.0, "anc_500_999": 0.7, "crp_ge_10": 0.6,
+        "hb_lt_7": 0.8, "plt_lt_20k": 0.9,
+        "fever_38_0_38_4": 0.6, "fever_ge_38_5": 1.0, "hr_gt_130": 0.7,
+        "resp_distress": 1.0, "loc_altered": 1.0,
+        "melena": 1.0, "hematochezia": 1.0, "persistent_vomit": 0.9, "oliguria": 0.8, "migraine_severe": 0.6,
+    }
+    conservative = {k: min(1.0, v + 0.15) for k, v in base.items()}
+    aggressive   = {k: max(0.0, v - 0.15) for k, v in base.items()}
+    preset_map = {"기본(권장)": base, "보수적(민감도↑)": conservative, "적극적(특이도↑)": aggressive}
+
+    if "emerg_weights" not in st.session_state or reset:
+        st.session_state["emerg_weights"] = preset_map["기본(권장)"].copy()
+
+    col_apply1, col_apply2 = st.columns([1,5])
+    with col_apply1:
+        if st.button("프리셋 적용", key="ew_apply") or lock_preset:
+            st.session_state["emerg_weights"].update(preset_map.get(preset, base))
+
+    def lvl_select(label, key, why, default=None):
+        levels = {"낮음": 0.4, "보통": 0.7, "높음": 1.0}
+        if default is None:
+            default = {1.0:"높음",0.7:"보통",0.4:"낮음"}.get(st.session_state["emerg_weights"].get(key,0.7),"보통")
+        col1, col2 = st.columns([2,3])
+        with col1:
+            st.markdown(f"**{label}**")
+            st.caption(why)
+        with col2:
+            choice = st.select_slider("가중치", options=list(levels.keys()), value=default, key=f"lv_{key}",
+                                      help="긴급도 계산에서 이 항목의 영향력을 고릅니다.")
+        st.session_state["emerg_weights"][key] = levels[choice]
+
+    with st.container():
+        st.markdown("#### 🩸 혈액/감염")
+        lvl_select("호중구 **매우 낮음** (ANC<500)", "anc_lt_500", "감염 위험이 매우 큽니다.")
+        lvl_select("호중구 낮음 (ANC 500~999)", "anc_500_999", "감염 위험이 큽니다.")
+        lvl_select("염증 수치 높음 (CRP≥10)", "crp_ge_10", "감염·염증 가능성 시사.")
+
+        st.markdown("#### ❤️ 활력/고위험 신호")
+        lvl_select("고열 ≥38.5℃", "fever_ge_38_5", "고열은 탈수·세균성 감염 위험 신호.")
+        lvl_select("미열 38.0~38.4℃", "fever_38_0_38_4", "경과 관찰이 필요합니다.")
+        lvl_select("호흡곤란", "resp_distress", "숨이 차 보이거나, 흉부 함몰/청색증.")
+        lvl_select("의식 저하/이상", "loc_altered", "무기력/반응 둔화/경련 등.")
+
+        st.markdown("#### 🍽️ 소화/출혈")
+        lvl_select("검은 변(흑색변)", "melena", "상부위장관 출혈 의심.")
+        lvl_select("혈변", "hematochezia", "하부위장관 출혈 의심.")
+        lvl_select("지속 구토", "persistent_vomit", "탈수·전해질 이상 위험.")
+        lvl_select("소변량 급감", "oliguria", "탈수/신장 기능 저하 의심.")
+
+    with st.expander("전문가(의료진) 설정 — 세밀 조정", expanded=False):
+        st.caption("의료진/숙련 보호자를 위한 세밀 슬라이더입니다.")
+        cols = st.columns(3)
+        keys = [
+            ("anc_lt_500","ANC<500"),("anc_500_999","ANC 500–999"),("fever_38_0_38_4","발열 38.0–38.4"),
+            ("fever_ge_38_5","고열 ≥38.5"),("hb_lt_7","중증빈혈 Hb<7"),("plt_lt_20k","혈소판 <20k"),
+            ("crp_ge_10","CRP ≥10"),("hr_gt_130","HR>130"),("resp_distress","호흡곤란"),
+            ("melena","흑색변"),("hematochezia","혈변"),("persistent_vomit","지속 구토"),
+            ("oliguria","소변량 급감"),("loc_altered","의식저하"),("migraine_severe","번개두통")
+        ]
+        for i, (k, label) in enumerate(keys):
+            with cols[i % 3]:
+                st.session_state["emerg_weights"][k] = st.slider(
+                    label, 0.0, 1.0, float(st.session_state["emerg_weights"].get(k, 0.7)), 0.05,
+                    help="가중치가 높을수록 긴급도 점수에 더 크게 반영됩니다.", key=f"sl_{k}"
+                )
+
+    st.markdown("---")
+    w = st.session_state["emerg_weights"]
+    preview = []
+    score1 = w["fever_ge_38_5"] + w["resp_distress"]
+    preview.append(f"• **고열(≥38.5℃) + 호흡곤란** → 가중치 합 {score1:.2f} (응급 권고 가능성 매우 높음)")
+    score2 = w["anc_lt_500"] + w["fever_ge_38_5"] + w["crp_ge_10"]
+    preview.append(f"• **호중구<500 + 고열 + CRP≥10** → 가중치 합 {score2:.2f} (패혈증 위험 평가 우선)")
+    st.info("**현재 설정 미리보기**\n\n" + "\n".join(preview))
+
+    return st.session_state["emerg_weights"]
+
+# --- Session defaults to prevent NameError on first load ---
+if 'peds_notes' not in st.session_state:
+    st.session_state['peds_notes'] = ''
+if 'peds_actions' not in st.session_state:
+    st.session_state['peds_actions'] = []
+
+
+APP_VERSION = "v7.24 (Graphs Bands • Peds Checklist+Schedule • Onco-DB Guard • Special Notes+)"
+
+# ---------- Safe Import Helper ----------
+def _load_local_module(mod_name: str, rel_paths):
+    here = Path(__file__).resolve().parent
+    for rel in rel_paths:
+        cand = (here / rel).resolve()
+        if cand.exists():
+            spec = importlib.util.spec_from_file_location(mod_name, str(cand))
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            sys.modules[mod_name] = mod
+            return mod, str(cand)
+    try:
+        mod = __import__(mod_name)
+        return mod, f"(sys.path)::{mod.__file__}"
+    except Exception:
+        return None, None
+
+# ---------- Optional modules with graceful fallback ----------
+_branding, BRANDING_PATH = _load_local_module("branding", ["branding.py", "modules/branding.py"])
+if _branding and hasattr(_branding, "render_deploy_banner"):
+    render_deploy_banner = _branding.render_deploy_banner
+else:
+    def render_deploy_banner(*a, **k):
+        return None
+
+_core, CORE_PATH = _load_local_module("core_utils", ["core_utils.py", "modules/core_utils.py"])
+if _core and hasattr(_core, "ensure_unique_pin"):
+    ensure_unique_pin = _core.ensure_unique_pin
+else:
+    def ensure_unique_pin(user_key: str, auto_suffix: bool = True):
+        if not user_key:
+            return "guest#PIN", False, "empty"
+        if "#" not in user_key:
+            user_key += "#0001"
+        return user_key, False, "ok"
+
+_pdf, PDF_PATH = _load_local_module("pdf_export", ["pdf_export.py", "modules/pdf_export.py"])
+if _pdf and hasattr(_pdf, "export_md_to_pdf"):
+    export_md_to_pdf = _pdf.export_md_to_pdf
+else:
+    def export_md_to_pdf(md_text: str) -> bytes:
+        return md_text.encode("utf-8")
+
+_onco, ONCO_PATH = _load_local_module("onco_map", ["onco_map.py", "modules/onco_map.py"])
+if _onco:
+    build_onco_map = getattr(_onco, "build_onco_map", lambda: {})
+    dx_display = getattr(_onco, "dx_display", lambda g, d: f"{g} - {d}")
+    auto_recs_by_dx = getattr(_onco, "auto_recs_by_dx", lambda *a, **k: {"chemo": [], "targeted": [], "abx": []})
+else:
+    build_onco_map = lambda: {}
+    dx_display = lambda g, d: f"{g} - {d}"
+    def auto_recs_by_dx(*args, **kwargs):
+        return {"chemo": [], "targeted": [], "abx": []}
+
+_drugdb, DRUGDB_PATH = _load_local_module("drug_db", ["drug_db.py", "modules/drug_db.py"])
+if _drugdb:
+    DRUG_DB = getattr(_drugdb, "DRUG_DB", {})
+    ensure_onco_drug_db = getattr(_drugdb, "ensure_onco_drug_db", lambda db: None)
+    display_label = getattr(_drugdb, "display_label", lambda k, db=None: str(k))
+else:
+    DRUG_DB = {}
+    def ensure_onco_drug_db(db):
+        pass
+    def display_label(k, db=None):
+        return str(k)
+
+_ld, LD_PATH = _load_local_module("lab_diet", ["lab_diet.py", "modules/lab_diet.py"])
+if _ld and hasattr(_ld, "lab_diet_guides"):
+    lab_diet_guides = _ld.lab_diet_guides
+else:
+    def lab_diet_guides(labs, heme_flag=False):
+        return []
+
+_pd, PD_PATH = _load_local_module("peds_dose", ["peds_dose.py", "modules/peds_dose.py"])
+if _pd:
+    acetaminophen_ml = getattr(_pd, "acetaminophen_ml", lambda wt: (0.0, 0.0))
+    ibuprofen_ml = getattr(_pd, "ibuprofen_ml", lambda wt: (0.0, 0.0))
+else:
+    def acetaminophen_ml(w):
+        return (0.0, 0.0)
+    def ibuprofen_ml(w):
+        return (0.0, 0.0)
+
+_sp, SPECIAL_PATH = _load_local_module("special_tests", ["special_tests.py", "modules/special_tests.py"])
+if _sp and hasattr(_sp, "special_tests_ui"):
+    special_tests_ui = _sp.special_tests_ui
+else:
+    SPECIAL_PATH = None
+    def special_tests_ui():
+        st.warning("special_tests.py를 찾지 못해, 특수검사 UI는 더미로 표시됩니다.")
+        return []
+
+# --- plotting backend (matplotlib → st.line_chart → 표 폴백) ---
+try:
+    import matplotlib.pyplot as plt
+    _HAS_MPL = True
+except Exception:
+    plt = None
+    _HAS_MPL = False
+
+# ---------- Page & Banner ----------
+
+
+# --- 친절 모드 & 배너 ---
+try:
+    from branding import render_deploy_banner
+    try:
+        render_deploy_banner()
+    except Exception:
+        st.caption("한국시간 기준(KST). 세포·면역치료 항목은 혼돈 방지를 위해 표기하지 않습니다. 제작·자문: Hoya/GPT")
+except Exception:
+    st.caption("한국시간 기준(KST). 제작·자문: Hoya/GPT")
+
+col_friendly, col_blank = st.columns([1,3])
+with col_friendly:
+    st.toggle("친절 모드(쉬운말)", key="friendly_mode", help="어려운 용어를 줄이고, 더 쉬운 설명을 함께 보여줍니다.", value=True)
+
+st.set_page_config(page_title=f"Bloodmap {APP_VERSION}", layout="wide")
+st.title(f"Bloodmap {APP_VERSION}")
+st.markdown(
+    """> In memory of Eunseo, a little star now shining in the sky.
+> This app is made with the hope that she is no longer in pain,
+> and resting peacefully in a world free from all hardships."""
+)
+st.markdown("---")
+render_deploy_banner("https://bloodmap.streamlit.app/", "제작: Hoya/GPT · 자문: Hoya/GPT")
+st.caption(f"모듈 경로 — special_tests: {SPECIAL_PATH or '(not found)'} | onco_map: {ONCO_PATH or '(not found)'} | drug_db: {DRUGDB_PATH or '(not found)'}")
+
+# ---------- Helpers ----------
+def wkey(name: str) -> str:
+    who = st.session_state.get("key", "guest#PIN")
+    return f"{who}:{name}"
+
+def _try_float(s):
+    if s is None:
+        return None
+    if isinstance(s, (int, float)):
+        return float(s)
+    s = str(s)
+    m = re.search(r'([-+]?[0-9]*[\\.,]?[0-9]+)', s)
+    if not m:
+        return None
+    num = m.group(1).replace(",", ".")
+    try:
+        return float(num)
+    except Exception:
+        return None
+
+def _safe_float(v, default=0.0):
+    try:
+        if v in (None, ""):
+            return default
+        if isinstance(v, (int, float)):
+            return float(v)
+        return float(str(v).strip())
+    except Exception:
+        return default
+
+# ---------- Emergency scoring (Weights + Presets) ----------
+DEFAULT_WEIGHTS = {
+    "w_anc_lt500": 1.0, "w_anc_500_999": 1.0,
+    "w_temp_38_0_38_4": 1.0, "w_temp_ge_38_5": 1.0,
+    "w_plt_lt20k": 1.0, "w_hb_lt7": 1.0, "w_crp_ge10": 1.0, "w_hr_gt130": 1.0,
+    "w_hematuria": 1.0, "w_melena": 1.0, "w_hematochezia": 1.0,
+    "w_chest_pain": 1.0, "w_dyspnea": 1.0, "w_confusion": 1.0,
+    "w_oliguria": 1.0, "w_persistent_vomit": 1.0, "w_petechiae": 1.0,
+    "w_thunderclap": 1.0, "w_visual_change": 1.0,
+}
+PRESETS = {
+    "기본(Default)": DEFAULT_WEIGHTS,
+    "발열·감염 민감": {**DEFAULT_WEIGHTS, "w_temp_ge_38_5": 2.0, "w_temp_38_0_38_4": 1.5, "w_crp_ge10": 1.5, "w_anc_lt500": 2.0, "w_anc_500_999": 1.5},
+    "출혈 위험 민감": {**DEFAULT_WEIGHTS, "w_plt_lt20k": 2.5, "w_petechiae": 2.0, "w_hematochezia": 2.0, "w_melena": 2.0},
+    "신경계 위중 민감": {**DEFAULT_WEIGHTS, "w_thunderclap": 3.0, "w_visual_change": 2.5, "w_confusion": 2.5, "w_chest_pain": 1.2},
+}
+
+def get_weights():
+    key = st.session_state.get("key", "guest#PIN")
+    store = st.session_state.setdefault("weights", {})
+    return store.setdefault(key, dict(DEFAULT_WEIGHTS))
+
+def set_weights(new_w):
+    key = st.session_state.get("key", "guest#PIN")
+    st.session_state.setdefault("weights", {})
+    st.session_state["weights"][key] = dict(new_w)
+
+def anc_band(anc: float) -> str:
+    if anc is None:
+        return "(미입력)"
+    try:
+        anc = float(anc)
+    except Exception:
+        return "(값 오류)"
+    if anc < 500:
+        return "🚨 중증 호중구감소(<500)"
+    if anc < 1000:
+        return "🟧 중등도 호중구감소(500~999)"
+    if anc < 1500:
+        return "🟡 경도 호중구감소(1000~1499)"
+    return "🟢 정상(≥1500)"
+
+def emergency_level(labs: dict, temp_c, hr, symptoms: dict):
+    a = _try_float((labs or {}).get("ANC"))
+    p = _try_float((labs or {}).get("PLT"))
+    c = _try_float((labs or {}).get("CRP"))
+    h = _try_float((labs or {}).get("Hb"))
+    t = _try_float(temp_c)
+    heart = _try_float(hr)
+
+    W = get_weights()
+    reasons = []
+    contrib = []
+
+    def add(name, base, wkey):
+        w = W.get(wkey, 1.0)
+        s = base * w
+        contrib.append({"factor": name, "base": base, "weight": w, "score": s})
+        reasons.append(name)
+
+    if a is not None and a < 500:
+        add("ANC<500", 3, "w_anc_lt500")
+    elif a is not None and a < 1000:
+        add("ANC 500~999", 2, "w_anc_500_999")
+    if t is not None and t >= 38.5:
+        add("고열 ≥38.5℃", 2, "w_temp_ge_38_5")
+    elif t is not None and t >= 38.0:
+        add("발열 38.0~38.4℃", 1, "w_temp_38_0_38_4")
+    if p is not None and p < 20000:
+        add("혈소판 <20k", 2, "w_plt_lt20k")
+    if h is not None and h < 7.0:
+        add("중증 빈혈(Hb<7)", 1, "w_hb_lt7")
+    if c is not None and c >= 10:
+        add("CRP ≥10", 1, "w_crp_ge10")
+    if heart and heart > 130:
+        add("빈맥(HR>130)", 1, "w_hr_gt130")
+
+    if symptoms.get("hematuria"):
+        add("혈뇨", 1, "w_hematuria")
+    if symptoms.get("melena"):
+        add("흑색변", 2, "w_melena")
+    if symptoms.get("hematochezia"):
+        add("혈변", 2, "w_hematochezia")
+    if symptoms.get("chest_pain"):
+        add("흉통", 2, "w_chest_pain")
+    if symptoms.get("dyspnea"):
+        add("호흡곤란", 2, "w_dyspnea")
+    if symptoms.get("confusion"):
+        add("의식저하/혼돈", 3, "w_confusion")
+    if symptoms.get("oliguria"):
+        add("소변량 급감", 2, "w_oliguria")
+    if symptoms.get("persistent_vomit"):
+        add("지속 구토", 2, "w_persistent_vomit")
+    if symptoms.get("petechiae"):
+        add("점상출혈", 2, "w_petechiae")
+    if symptoms.get("thunderclap"):
+        add("번개치는 듯한 두통(Thunderclap)", 3, "w_thunderclap")
+    if symptoms.get("visual_change"):
+        add("시야 이상/복시/암점", 2, "w_visual_change")
+
+    risk = sum(item["score"] for item in contrib)
+    level = "🚨 응급" if risk >= 5 else ("🟧 주의" if risk >= 2 else "🟢 안심")
+    return level, reasons, contrib
+
+# ---------- Preload ----------
+ensure_onco_drug_db(DRUG_DB)
+ONCO = build_onco_map() or {}
+
+# ---------- Sidebar ----------
+with st.sidebar:
+    st.header("프로필")
+    raw_key = st.text_input("별명#PIN", value=st.session_state.get("key", "guest#PIN"), key="user_key_raw")
+    unique_key, was_modified, msg = ensure_unique_pin(raw_key, auto_suffix=True)
+    st.session_state["key"] = unique_key
+    if was_modified:
+        st.warning(msg + f" → 현재 키: {unique_key}")
+    else:
+        st.caption("PIN 확인됨")
+
+    st.subheader("활력징후")
+    temp = st.text_input("현재 체온(℃)", value=st.session_state.get(wkey("cur_temp"), ""), key=wkey("cur_temp"), placeholder="36.8")
+    hr = st.text_input("심박수(bpm)", value=st.session_state.get(wkey("cur_hr"), ""), key=wkey("cur_hr"), placeholder="0")
+
+    st.subheader("연령/모드")
+    age_years = st.number_input(
+        "나이(년)",
+        min_value=0.0,
+        max_value=120.0,
+        value=_safe_float(st.session_state.get(wkey("age_years"), 0.0), 0.0),
+        step=0.5,
+        key=wkey("age_years_num"),
+    )
+    st.session_state[wkey("age_years")] = age_years
+    auto_peds = age_years < 18.0
+    manual_override = st.checkbox("소아/성인 수동 선택", value=False, key=wkey("mode_override"))
+    if manual_override:
+        is_peds = st.toggle("소아 모드", value=bool(st.session_state.get(wkey("is_peds"), auto_peds)), key=wkey("is_peds_tgl"))
+    else:
+        is_peds = auto_peds
+    st.session_state[wkey("is_peds")] = is_peds
+    st.caption(("현재 모드: **소아**" if is_peds else "현재 모드: **성인**") + (" (자동)" if not manual_override else " (수동)"))
+
+# ---------- Caregiver notes ----------
+def render_caregiver_notes_peds(
+    *,
+    stool,
+    fever,
+    persistent_vomit,
+    oliguria,
+    cough,
+    nasal,
+    eye,
+    abd_pain,
+    ear_pain,
+    rash,
+    hives,
+    migraine,
+    hfmd,
+):
+    st.markdown("---")
+
+    # 증상별 보호자 설명 상세 렌더 + 세션 저장
+    render_symptom_explain_peds(
+        stool=stool, fever=fever, persistent_vomit=persistent_vomit, oliguria=oliguria,
+        cough=cough, nasal=nasal, eye=eye, abd_pain=abd_pain, ear_pain=ear_pain,
+        rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, max_temp=max_temp
+    )
+    st.subheader("보호자 설명 (증상별)")
+
+    def bullet(title, body):
+        st.markdown(f"**{title}**")
+        st.markdown(body.strip())
+
+    if stool in ["3~4회", "5~6회", "7회 이상"]:
+        bullet(
+            "💧 설사/장염 의심",
+            """
+- 하루 **3회 이상 묽은 변** → 장염 가능성
+- **노란/초록 변**, **거품 많고 냄새 심함** → 로타/노로바이러스 고려
+- **대처**: ORS·미음/쌀죽 등 수분·전해질 보충
+- **즉시 진료**: 피 섞인 변, 고열, 소변 거의 없음/축 늘어짐
+            """,
+        )
+    if fever in ["38~38.5", "38.5~39", "39 이상"]:
+        bullet(
+            "🌡️ 발열 대처",
+            """
+- 옷은 가볍게, 실내 시원하게(과도한 땀내기 X)
+- **미온수 마사지**는 잠깐만
+- **해열제 간격**: 아세트아미노펜 ≥4h, 이부프로펜 ≥6h
+            """,
+        )
+    if persistent_vomit:
+        bullet(
+            "🤢 구토 지속",
+            """
+- 10~15분마다 **소량씩 수분**(ORS/미지근한 물)
+- 우유·기름진 음식 일시 회피
+- **즉시 진료**: 6시간 이상 물도 못 마심 / 초록·커피색 토물 / 혈토
+            """,
+        )
+    if oliguria:
+        bullet(
+            "🚨 탈수 의심(소변량 급감)",
+            """
+- 입술 마름, 눈물 없음, 피부 탄력 저하, 축 늘어짐 동반 시 **중등~중증** 가능
+- **ORS 빠르게 보충**, 호전 없으면 진료
+            """,
+        )
+    if cough in ["조금", "보통", "심함"] or nasal in ["진득", "누런"]:
+        bullet(
+            "🤧 기침·콧물(상기도감염)",
+            """
+- **생리식염수/흡인기**로 콧물 제거, 수면 시 머리 높이기
+- **즉시 진료**: 숨차함/청색증/가슴함몰
+            """,
+        )
+    if eye in ["노랑-농성", "양쪽"]:
+        bullet(
+            "👀 결막염 의심",
+            """
+- 손 위생 철저, 분비물은 깨끗이 닦기
+- **양쪽·고열·눈 통증/빛 통증** → 진료 권장
+            """,
+        )
+    if abd_pain:
+        bullet(
+            "😣 복통/배 마사지 거부",
+            """
+- 우하복부 통증·보행 악화·구토/발열 동반 → **충수염 평가**
+- 혈변/흑변 동반 → **즉시 진료**
+            """,
+        )
+    if ear_pain:
+        bullet(
+            "👂 귀 통증(중이염 의심)",
+            """
+- 눕기 불편 시 **머리 살짝 높이기**
+- 38.5℃↑, 지속 통증, **귀 분비물** → 진료 필요
+            """,
+        )
+    if rash:
+        bullet(
+            "🩹 발진/두드러기(가벼움)",
+            """
+- **미온 샤워**, 면 소재 옷, 시원한 로션
+- 새로운 음식/약 후 시작했는지 확인
+            """,
+        )
+    if hives:
+        bullet(
+            "⚠️ 두드러기/알레르기(주의)",
+            """
+- 전신 두드러기/입술·눈 주위 부종/구토·복통 동반 시 알레르기 가능
+- **호흡곤란/쌕쌕/목 조임** → **즉시 응급실**
+            """,
+        )
+    if migraine:
+        bullet(
+            "🧠 편두통 의심",
+            """
+- **한쪽·박동성 두통**, **빛/소리 민감**, **구역감**
+- 어두운 곳 휴식, 수분 보충
+- **번개치듯 새로 시작한 극심한 두통**/신경학적 이상 → 응급평가
+            """,
+        )
+    if hfmd:
+        bullet(
+            "✋👣 수족구 의심(HFMD)",
+            """
+- **손·발·입 안** 물집/궤양 + 발열
+- 전염성: 손 씻기/식기 구분
+- **탈수(소변 감소·축 늘어짐)**, **고열 >3일**, **경련/무기력** → 진료 필요
+            """,
+        )
+    st.info("❗ 즉시 병원 평가: 번개치는 두통 · 시야 이상/복시/암점 · 경련 · 의식저하 · 심한 목 통증 · 호흡곤란/입술부종")
+
+def build_peds_notes(
+    *, stool, fever, persistent_vomit, oliguria, cough, nasal, eye, abd_pain, ear_pain, rash, hives, migraine, hfmd,
+    duration=None, score=None, max_temp=None, red_seizure=False, red_bloodstool=False, red_night=False, red_dehydration=False
+) -> str:
+    """소아 증상 선택을 요약하여 보고서용 텍스트를 생성."""
+    lines = []
+    if duration:
+        lines.append(f"[지속일수] {duration}")
+    if max_temp is not None:
+        try:
+            lines.append(f"[최고 체온] {float(max_temp):.1f}℃")
+        except Exception:
+            lines.append(f"[최고 체온] {max_temp}")
+    sx = []
+    if fever != "없음":
+        sx.append(f"발열:{fever}")
+    if cough != "없음":
+        sx.append(f"기침:{cough}")
+    if nasal != "없음":
+        sx.append(f"콧물:{nasal}")
+    if stool != "없음":
+        sx.append(f"설사:{stool}")
+    if eye != "없음":
+        sx.append(f"눈:{eye}")
+    if persistent_vomit:
+        sx.append("지속 구토")
+    if oliguria:
+        sx.append("소변량 급감")
+    if abd_pain:
+        sx.append("복통/배마사지 거부")
+    if ear_pain:
+        sx.append("귀 통증")
+    if rash:
+        sx.append("발진/두드러기")
+    if hives:
+        sx.append("알레르기 의심")
+    if migraine:
+        sx.append("편두통 의심")
+    if hfmd:
+        sx.append("수족구 의심")
+    if red_seizure:
+        lines.append("[위험 징후] 경련/의식저하")
+    if red_bloodstool:
+        lines.append("[위험 징후] 혈변/검은변")
+    if red_night:
+        lines.append("[위험 징후] 야간 악화/새벽 악화")
+    if red_dehydration:
+        lines.append("[위험 징후] 탈수 의심(눈물 감소/구강 건조/소변 급감)")
+    if sx:
+        lines.append("[증상] " + ", ".join(sx))
+    # 상위 점수 3개 요약
+    if isinstance(score, dict):
+        top3 = sorted(score.items(), key=lambda x: x[1], reverse=True)[:3]
+        top3 = [(k, v) for k, v in top3 if v > 0]
+        if top3:
+            lines.append("[상위 점수] " + " / ".join([f"{k}:{v}" for k, v in top3]))
+    if not lines:
+        lines.append("(특이 소견 없음)")
+    return "\\n".join(lines)
+
+# ---------- Tabs ----------
+tab_labels = ["🏠 홈", "🧪 피수치 입력", "🧬 암 선택", "💊 항암제(진단 기반)", "👶 소아 증상", "🔬 특수검사", "📄 보고서"]
+
+# ---------- Tabs (안전 맵 방식) ----------
+TAB_TITLES = [
+    "홈",
+    "소아",
+    "검사결과",
+    "보고서",
+    "복약/용법",
+    "교육/가이드",
+    "설정",
+]
+_tabs = st.tabs(TAB_TITLES)
+TAB_MAP = {title: tab for title, tab in zip(TAB_TITLES, _tabs)}
+t_home     = TAB_MAP.get("홈", st.container())
+t_peds     = TAB_MAP.get("소아", st.container())
+t_labs     = TAB_MAP.get("검사결과", st.container())
+t_report   = TAB_MAP.get("보고서", st.container())
+t_meds     = TAB_MAP.get("복약/용법", st.container())
+t_edu      = TAB_MAP.get("교육/가이드", st.container())
+t_settings = TAB_MAP.get("설정", st.container())
+for _maybe in ["t_emerg", "t_admin", "t_weights"]:
+    if _maybe not in globals():
+        globals()[_maybe] = st.container()
+
+
+# HOME
+with t_home:
+    # (hidden) 홈 탭 가중치 UI
+    if DEV_SHOW_WEIGHTS:
+    
+
+    
+
+        # --- 홈 탭: 보호자용 응급도 가중치(쉬운) ---
+
+        st.markdown("### 🧭 빠른 설정: 응급도 가중치(보호자용)")
+
+        try:
+
+            weights = render_emerg_weights_ui()   # 보호자용 3단(낮음/보통/높음) + 전문가 슬라이더(접기)
+
+            st.caption("설정은 자동 저장됩니다. (st.session_state['emerg_weights'])")
+
+        except Exception as e:
+
+            st.warning(f"가중치 UI를 불러오지 못했습니다: {e}")
+
+        st.subheader("응급도 요약")
+    labs = st.session_state.get("labs_dict", {})
+    level_tmp, reasons_tmp, contrib_tmp = emergency_level(
+        labs, st.session_state.get(wkey("cur_temp")), st.session_state.get(wkey("cur_hr")), {}
+    )
+    if level_tmp.startswith("🚨"):
+        st.error("현재 상태: " + level_tmp)
+    elif level_tmp.startswith("🟧"):
+        st.warning("현재 상태: " + level_tmp)
+    else:
+        st.info("현재 상태: " + level_tmp)
+
+    st.markdown("---")
+    st.subheader("응급도 체크(증상 기반)")
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
+    with c1:
+        hematuria = st.checkbox("혈뇨", key=wkey("sym_hematuria"))
+    with c2:
+        melena = st.checkbox("흑색변", key=wkey("sym_melena"))
+    with c3:
+        hematochezia = st.checkbox("혈변", key=wkey("sym_hematochezia"))
+    with c4:
+        chest_pain = st.checkbox("흉통", key=wkey("sym_chest"))
+    with c5:
+        dyspnea = st.checkbox("호흡곤란", key=wkey("sym_dyspnea"))
+    with c6:
+        confusion = st.checkbox("의식저하", key=wkey("sym_confusion"))
+    d1, d2, d3 = st.columns(3)
+    with d1:
+        oliguria = st.checkbox("소변량 급감", key=wkey("sym_oliguria"))
+    with d2:
+        persistent_vomit = st.checkbox("지속 구토(>6시간)", key=wkey("sym_pvomit"))
+    with d3:
+        petechiae = st.checkbox("점상출혈", key=wkey("sym_petechiae"))
+    e1, e2 = st.columns(2)
+    with e1:
+        thunderclap = st.checkbox("번개치는 듯한 두통(Thunderclap)", key=wkey("sym_thunderclap"))
+    with e2:
+        visual_change = st.checkbox("시야 이상/복시/암점", key=wkey("sym_visual_change"))
+
+    sym = dict(
+        hematuria=hematuria,
+        melena=melena,
+        hematochezia=hematochezia,
+        chest_pain=chest_pain,
+        dyspnea=dyspnea,
+        confusion=confusion,
+        oliguria=oliguria,
+        persistent_vomit=persistent_vomit,
+        petechiae=petechiae,
+        thunderclap=thunderclap,
+        visual_change=visual_change,
+    )
+
+    alerts = []
+    a = _try_float((labs or {}).get("ANC"))
+    p = _try_float((labs or {}).get("PLT"))
+    if thunderclap or (visual_change and (confusion or chest_pain or dyspnea)):
+        alerts.append("🧠 **신경계 위중 의심** — 번개치듯 두통/시야 이상/의식장애 → 즉시 응급평가")
+    if (a is not None and a < 500) and (_try_float(st.session_state.get(wkey("cur_temp"))) and _try_float(st.session_state.get(wkey("cur_temp"))) >= 38.0):
+        alerts.append("🔥 **발열성 호중구감소증 의심** — ANC<500 + 발열 → 즉시 항생제 평가")
+    if (p is not None and p < 20000) and (melena or hematochezia or petechiae):
+        alerts.append("🩸 **출혈 고위험** — 혈소판<20k + 출혈징후 → 즉시 병원")
+    if oliguria and persistent_vomit:
+        alerts.append("💧 **중등~중증 탈수 가능** — 소변 급감 + 지속 구토 → 수액 고려")
+    if chest_pain and dyspnea:
+        alerts.append("❤️ **흉통+호흡곤란** — 응급평가 권장")
+    if alerts:
+        for msg in alerts:
+            st.error(msg)
+    else:
+        st.info("위험 조합 경고 없음")
+
+    level, reasons, contrib = emergency_level(
+        labs, st.session_state.get(wkey("cur_temp")), st.session_state.get(wkey("cur_hr")), sym
+    )
+    if level.startswith("🚨"):
+        st.error("응급도: " + level + " — " + " · ".join(reasons))
+    elif level.startswith("🟧"):
+        st.warning("응급도: " + level + " — " + " · ".join(reasons))
+    else:
+        st.info("응급도: " + level + (" — " + " · ".join(reasons) if reasons else ""))
+
+    st.markdown("---")
+    st.subheader("응급도 가중치 (편집 + 프리셋)")
+    colp = st.columns(3)
+    with colp[0]:
+        preset_name = st.selectbox("프리셋 선택", list(PRESETS.keys()), key=wkey("preset_sel"))
+    with colp[1]:
+        if st.button("프리셋 적용", key=wkey("preset_apply")):
+            set_weights(PRESETS[preset_name])
+            st.success(f"'{preset_name}' 가중치를 적용했습니다.")
+    with colp[2]:
+        if st.button("기본값으로 초기화", key=wkey("preset_reset")):
+            set_weights(DEFAULT_WEIGHTS)
+            st.info("가중치를 기본값으로 되돌렸습니다.")
+    W = get_weights()
+    grid = [
+        ("ANC<500", "w_anc_lt500"),
+        ("ANC 500~999", "w_anc_500_999"),
+        ("발열 38.0~38.4", "w_temp_38_0_38_4"),
+        ("고열 ≥38.5", "w_temp_ge_38_5"),
+        ("혈소판 <20k", "w_plt_lt20k"),
+        ("중증빈혈 Hb<7", "w_hb_lt7"),
+        ("CRP ≥10", "w_crp_ge10"),
+        ("HR>130", "w_hr_gt130"),
+        ("혈뇨", "w_hematuria"),
+        ("흑색변", "w_melena"),
+        ("혈변", "w_hematochezia"),
+        ("흉통", "w_chest_pain"),
+        ("호흡곤란", "w_dyspnea"),
+        ("의식저하", "w_confusion"),
+        ("소변량 급감", "w_oliguria"),
+        ("지속 구토", "w_persistent_vomit"),
+        ("점상출혈", "w_petechiae"),
+        ("번개두통", "w_thunderclap"),
+        ("시야 이상", "w_visual_change"),
+    ]
+    cols = st.columns(3)
+    newW = dict(W)
+    for i, (label, keyid) in enumerate(grid):
+        with cols[i % 3]:
+            newW[keyid] = st.slider(label, 0.0, 3.0, float(W.get(keyid, 1.0)), 0.1, key=wkey(f"w_{keyid}"))
+    if newW != W:
+        set_weights(newW)
+        st.success("가중치 변경 사항 저장됨.")
 
 # LABS
 
