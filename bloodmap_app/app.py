@@ -205,17 +205,48 @@ def render_special_tests():
         st.error(f"특수검사 로드 오류: {e}")
 
 # ---------- Labs (validation) ----------
-LAB_FIELDS=[("WBC","x10^3/µL"),("ANC","/µL"),("Hb","g/dL"),("Plt","x10^3/µL"),
-            ("Creatinine","mg/dL"),("eGFR","mL/min/1.73m²"),("AST","U/L"),
-            ("ALT","U/L"),("T.bil","mg/dL"),("Na","mmol/L"),("K","mmol/L"),
-            ("Cl","mmol/L"),("CRP","mg/L"),("ESR","mm/hr"),("Ferritin","ng/mL"),
-            ("Procalcitonin","ng/mL"),("UPCR","mg/g"),("ACR","mg/g")]
+
+LAB_FIELDS=[
+    ("WBC","x10^3/µL"),
+    ("Hb","g/dL"),
+    ("Plt","x10^3/µL"),
+    ("ANC","/µL"),
+    ("Ca","mg/dL"),
+    ("P","mg/dL"),
+    ("Na","mmol/L"),
+    ("K","mmol/L"),
+    ("Alb","g/dL"),
+    ("Glu","mg/dL"),
+    ("TP","g/dL"),
+    ("AST","U/L"),
+    ("ALT","U/L"),
+    ("LD","U/L"),
+    ("CRP","mg/L"),
+    ("Cr","mg/dL"),
+    ("UA","mg/dL"),
+    ("Tb","mg/dL"),
+]
+
 
 REF_RANGE = {
-    "WBC": (4.0, 10.0), "ANC": (1500, 8000), "Hb": (12.0, 16.0), "Plt": (150, 400),
-    "Creatinine": (0.5, 1.2), "eGFR": (60, None), "AST": (0, 40), "ALT": (0, 40),
-    "T.bil": (0.2, 1.2), "Na": (135, 145), "K": (3.5, 5.1), "Cl": (98, 107),
-    "CRP": (0, 5), "ESR": (0, 20), "Ferritin": (15, 150), "Procalcitonin": (0, 0.5),
+    "WBC": (4.0, 10.0),
+    "Hb": (12.0, 16.0),
+    "Plt": (150, 400),
+    "ANC": (1500, 8000),
+    "Ca": (8.6, 10.2),
+    "P": (2.5, 4.5),
+    "Na": (135, 145),
+    "K": (3.5, 5.1),
+    "Alb": (3.5, 5.2),
+    "Glu": (70, 140),          # 일반 외래 상황 고려해 약간 넓힘
+    "TP": (6.0, 8.3),
+    "AST": (0, 40),
+    "ALT": (0, 40),
+    "LD": (120, 250),          # 검사실마다 다름 → 보편 범위
+    "CRP": (0, 5),
+    "Cr": (0.5, 1.2),
+    "UA": (3.5, 7.2),
+    "Tb": (0.2, 1.2),
 }
 
 def _parse_float(x):
