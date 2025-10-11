@@ -326,10 +326,13 @@ def _render_diet_fallback(context=None):
         st.markdown("**ANC 낮음(호중구 감소) — 식품 위생/안전**")
         for x in DIET_DEFAULT["ANC_low_food_safety"]:
             st.markdown(f"- {x}"); notes.append(f"ANC낮음: {x}")
-    # Diarrhea
-    st.markdown("**설사/탈수 예방**")
-    for x in DIET_DEFAULT["diarrhea"]:
-        st.markdown(f"- {x}"); notes.append(f"설사: {x}")
+    # Diarrhea — only if explicitly indicated by context
+    stool = (context or {}).get("stool")
+    diarrhea_flag = bool((context or {}).get("diarrhea")) or (stool in ["3~4회","5~6회","7회 이상"])
+    if diarrhea_flag:
+        st.markdown("**설사/탈수 예방**")
+        for x in DIET_DEFAULT["diarrhea"]:
+            st.markdown(f"- {x}"); notes.append(f"설사: {x}")
     # Constipation
     if constipation:
         st.markdown("**변비 식이가이드**")
@@ -472,10 +475,24 @@ def render_diet_guides(context=None):
                 except Exception as _e:
                     st.caption(f"lab_diet.get_guides_by_values 호출 실패: {_e}")
         # 4) 외부가 전혀 없으면 폴백
-        if not used_external and not st.session_state.get('diet_notes'):
+
+        signals = []
+        try:
+            anc = ctx.get("ANC")
+            if anc is not None and anc < 500: signals.append("anc_low")
+            fever = ctx.get("fever")
+            if fever and fever != "37.x": signals.append("fever")
+            constipation = bool(ctx.get("constipation"))
+            if constipation: signals.append("constipation")
+            stool = ctx.get("stool")
+            diarrhea_flag = bool(ctx.get("diarrhea")) or (stool in ["3~4회","5~6회","7회 이상"])
+            if diarrhea_flag: signals.append("diarrhea")
+        except Exception:
+            pass
+        if not used_external and not st.session_state.get('diet_notes') and signals:
             notes = _render_diet_fallback(ctx)
             st.session_state['diet_notes'] = notes
-            st.info('lab_diet 외부 모듈에서 UI/데이터를 찾지 못해, **내장 기본 식이가이드**를 표시합니다.')
+            st.info('lab_diet 외부 모듈이 없어서 **내장 식이가이드**를 표시합니다. (사용자 입력 기반)')
         # 5) 내장 수치 규칙 항상 병합/표시
         try:
             labs = st.session_state.get("labs_dict", {}) or {}
@@ -595,7 +612,10 @@ def bp_ui():
     sbp_val = _parse_float(sbp); dbp_val = _parse_float(dbp)
     cat,note = classify_bp(sbp_val, dbp_val)
     st.info(f"분류: **{cat}** — {note}")
-    st.session_state["bp_summary"] = f"{cat} (SBP {sbp or '?'} / DBP {dbp or '?'}) — {note}"
+    if sbp_val is not None and dbp_val is not None:
+        st.session_state["bp_summary"] = f"{cat} (SBP {sbp} / DBP {dbp}) — {note}"
+    else:
+        st.session_state["bp_summary"] = None
     return cat,note
 
 # ---------- Pediatric guide ----------
@@ -998,6 +1018,8 @@ with tabs[0]:
             "ANC": _parse_float(st.session_state.get("labs_dict", {}).get("ANC")) if st.session_state.get("labs_dict") else None,
             "fever": st.session_state.get("fever") or st.session_state.get("home_fever"),
             "constipation": st.session_state.get("constipation") or st.session_state.get("home_constipation"),
+            "stool": st.session_state.get("home_stool"),
+            "diarrhea": True if st.session_state.get("home_stool") in ["3~4회","5~6회","7회 이상"] else False,
         }
         render_diet_guides(context=ctx)
 
@@ -1050,6 +1072,8 @@ with tabs[6]:
             "ANC": _parse_float(st.session_state.get("labs_dict", {}).get("ANC")) if st.session_state.get("labs_dict") else None,
             "fever": st.session_state.get("fever"),
             "constipation": st.session_state.get("constipation"),
+            "stool": st.session_state.get("stool"),
+            "diarrhea": True if st.session_state.get("stool") in ["3~4회","5~6회","7회 이상"] else False,
         }
         render_diet_guides(context=ctx)
     autosave_state()
