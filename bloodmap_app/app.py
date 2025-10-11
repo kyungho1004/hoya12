@@ -175,6 +175,85 @@ def render_special_tests():
     except Exception as e:
         st.error(f"특수검사 로드 오류: {e}")
 
+
+
+# ---------- lab_diet loader (식이가이드) ----------
+def _candidate_diet_paths():
+    cands = []
+    try:
+        here = Path(__file__).resolve().parent
+        cands += [here / "lab_diet.py"]
+    except Exception:
+        pass
+    cands += [
+        Path("/mount/src/hoya12/bloodmap_app/lab_diet.py"),
+        Path("/mnt/data/lab_diet.py"),
+        Path.cwd() / "lab_diet.py",
+        Path("lab_diet.py"),
+    ]
+    out, seen = [], set()
+    for p in cands:
+        s = str(p.resolve()) if p.exists() else str(p)
+        if s not in seen:
+            seen.add(s); out.append(p)
+    return out
+
+def _load_diet_module():
+    last_err = None
+    for p in _candidate_diet_paths():
+        try:
+            if not p.exists(): continue
+            spec = importlib.util.spec_from_file_location("lab_diet", str(p))
+            mod = importlib.util.module_from_spec(spec)
+            sys.modules["lab_diet"] = mod
+            spec.loader.exec_module(mod)  # type: ignore
+            return mod, p
+        except Exception as e:
+            last_err = e
+    return None, last_err
+
+def render_diet_guides(context=None):
+    st.header("🥗 식이가이드")
+    try:
+        mod, info = _load_diet_module()
+        if not mod:
+            st.error(f"lab_diet 모듈을 찾지 못했습니다. {'에러: '+str(info) if info else ''}")
+            return
+        # Try known UI functions
+        for fn in ["diet_ui","render_diet_ui","build_diet_ui","ui"]:
+            f = getattr(mod, fn, None)
+            if callable(f):
+                res = f(context) if context is not None else f()
+                # If UI function returns list of strings, save as notes
+                if isinstance(res, (list, tuple)):
+                    st.session_state['diet_notes'] = [str(x) for x in res]
+                return
+        # Try data structures
+        for name in ["DIET_GUIDES","GUIDES","DATA"]:
+            if hasattr(mod, name):
+                data = getattr(mod, name)
+                out_lines = []
+                if isinstance(data, dict):
+                    st.markdown("### 가이드 목록")
+                    for k,v in data.items():
+                        st.markdown(f"**{k}**")
+                        if isinstance(v, (list,tuple)):
+                            for x in v:
+                                st.markdown(f"- {x}")
+                                out_lines.append(f"{k}: {x}")
+                        else:
+                            st.markdown(f"- {v}")
+                            out_lines.append(f"{k}: {v}")
+                elif isinstance(data, (list,tuple)):
+                    for ln in data:
+                        st.markdown(f"- {ln}")
+                        out_lines.append(str(ln))
+                st.session_state['diet_notes'] = out_lines
+                st.caption(f"lab_diet 연결: {info}")
+                return
+        st.warning("lab_diet에서 사용할 수 있는 UI/데이터를 찾지 못했습니다. (허용: diet_ui/render_diet_ui/build_diet_ui/ui 또는 DIET_GUIDES 등)")
+    except Exception as e:
+        st.error(f"식이가이드 로드 오류: {e}")
 # ---------- Labs (validation) ----------
 
 LAB_FIELDS=[
@@ -446,6 +525,8 @@ def build_report():
     if peds: parts.append("## 소아가이드"); parts.extend([f"- {x}" for x in peds])
     lines=st.session_state.get("special_interpretations",[])
     if lines: parts.append("## 특수검사 해석"); parts.extend([f"- {ln}" for ln in lines])
+    diet=st.session_state.get("diet_notes",[])
+    if diet: parts.append("## 식이가이드"); parts.extend([f"- {x}" for x in diet])
     agents=st.session_state.get("selected_agents",[]); warns=st.session_state.get("onco_warnings",[])
     if agents: parts.append("## 항암제(선택)"); parts.extend([f"- {a}" for a in agents])
     if warns: parts.append("## 항암제 부작용 요약(위험)"); parts.extend([f"- {w}" for w in warns])
@@ -570,6 +651,13 @@ def diagnostics_panel():
         st.write(f"- special_tests: **{'✅ 로드됨' if mod else '❌ 실패'}** — 경로: `{sp_info}`")
     except Exception as e:
         st.write(f"- special_tests: ❌ 오류 — {e}")
+
+# lab_diet
+try:
+    dmod, dpath = _load_diet_module()
+    st.write(f"- lab_diet: **{'✅ 로드됨' if dmod else '❌ 실패'}** — 경로: `{dpath}`")
+except Exception as e:
+    st.write(f"- lab_diet: ❌ 오류 — {e}")
     # pdf_export
     try:
         cands = [str(p) for p in _find_pdf_export_paths()]
@@ -628,6 +716,13 @@ with tabs[0]:
                                     rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, constipation=constipation)
     st.markdown("---")
     feedback_form()
+    with st.expander("🥗 식이가이드 열기 (lab_diet 연동)"):
+        ctx = {
+            "ANC": _parse_float(st.session_state.get("labs_dict", {}).get("ANC")) if st.session_state.get("labs_dict") else None,
+            "fever": st.session_state.get("fever") or st.session_state.get("home_fever"),
+            "constipation": st.session_state.get("constipation") or st.session_state.get("home_constipation"),
+        }
+        render_diet_guides(context=ctx)
 
 with tabs[1]:
     onco_select_ui(); autosave_state()
@@ -673,6 +768,13 @@ with tabs[6]:
     render_caregiver_notes_peds(stool=stool, fever=fever, persistent_vomit=persistent_vomit, oliguria=oliguria,
                                 cough=cough, nasal=nasal, eye=eye, abd_pain=abd_pain, ear_pain=ear_pain,
                                 rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, constipation=constipation)
+    with st.expander("🥗 식이가이드 (lab_diet 연동)"):
+        ctx = {
+            "ANC": _parse_float(st.session_state.get("labs_dict", {}).get("ANC")) if st.session_state.get("labs_dict") else None,
+            "fever": st.session_state.get("fever"),
+            "constipation": st.session_state.get("constipation"),
+        }
+        render_diet_guides(context=ctx)
     autosave_state()
 
 with tabs[7]:
