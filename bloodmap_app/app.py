@@ -1,5 +1,13 @@
-
 # -*- coding: utf-8 -*-
+"""
+피수치 홈페이지 프로젝트 — 최종 통합본 (검증판)
+- 요청사항 반영: 탭 순서, onco_map/special_tests/lab_diet 연동, 피수치 리스트(사용자 지정 순서),
+  자동저장/복원, 진단 패널, TXT/PDF 내보내기, 소아가이드(변비 포함), 항암제 AEs, RA증후군,
+  홈에서 소아가이드 바로보기, 피드백 폼/지표, 수치 기반 식이가이드(전해질/신장/간/영양/혈당/요산/빈혈)
+- 안전 가드 포함(NameError 방지)
+- 4-space 들여쓰기 / 문법 점검을 통과하도록 작성
+"""
+
 # ---- Safe guards (no-op if real functions exist later) ----
 try:
     autosave_state
@@ -51,6 +59,7 @@ ESSENTIAL_KEYS = [
     "special_interpretations","selected_agents","onco_warnings",
     "show_peds_on_home","diet_notes"
 ]
+
 def restore_state():
     try:
         if AUTOSAVE_PATH.exists():
@@ -103,7 +112,8 @@ def load_onco():
     last_err = None
     for p in _candidate_onco_paths():
         try:
-            if not p.exists(): continue
+            if not p.exists():
+                continue
             spec = importlib.util.spec_from_file_location("onco_map", str(p))
             mod = importlib.util.module_from_spec(spec)
             sys.modules["onco_map"] = mod
@@ -111,9 +121,12 @@ def load_onco():
             build = getattr(mod, "build_onco_map", None)
             disp = getattr(mod, "dx_display", None)
             omap = None
-            if callable(build): omap = build()
-            elif hasattr(mod, "OM"): omap = getattr(mod, "OM")
-            elif hasattr(mod, "ONCO_MAP"): omap = getattr(mod, "ONCO_MAP")
+            if callable(build):
+                omap = build()
+            elif hasattr(mod, "OM"):
+                omap = getattr(mod, "OM")
+            elif hasattr(mod, "ONCO_MAP"):
+                omap = getattr(mod, "ONCO_MAP")
             if isinstance(omap, dict) and omap:
                 return omap, disp, p
         except Exception as e:
@@ -148,10 +161,12 @@ def onco_select_ui():
         recs = []
         for sec in ["chemo","targeted","maintenance","support","abx"]:
             arr = dmap.get(sec, [])
-            if arr: recs.append(f"{sec}: " + ", ".join(arr[:12]))
+            if arr:
+                recs.append(f"{sec}: " + ", ".join(arr[:12]))
         if recs:
             st.markdown("#### onco_map 권장 약물")
-            for r in recs: st.write("- " + r)
+            for r in recs:
+                st.write("- " + r)
     else:
         st.warning("해당 그룹에 진단이 없습니다.")
         st.session_state["onco_group"] = group
@@ -183,7 +198,8 @@ def _load_special_module():
     last_err = None
     for p in _candidate_special_paths():
         try:
-            if not p.exists(): continue
+            if not p.exists():
+                continue
             spec = importlib.util.spec_from_file_location("special_tests", str(p))
             mod = importlib.util.module_from_spec(spec)
             sys.modules["special_tests"] = mod
@@ -196,17 +212,21 @@ def _load_special_module():
 def _call_special_ui(mod):
     for fn in ["special_tests_ui", "render_special_tests_ui", "build_special_tests_ui", "ui"]:
         f = getattr(mod, fn, None)
-        if callable(f): return f()
+        if callable(f):
+            return f()
     for name in ["SPECIAL_TESTS","SPECIAL_RESULTS","DATA"]:
         if hasattr(mod, name):
             data = getattr(mod, name)
-            if isinstance(data, (list, tuple)): return list(data)
+            if isinstance(data, (list, tuple)):
+                return list(data)
             if isinstance(data, dict):
                 out = []
                 for k,v in data.items():
                     if isinstance(v,(list,tuple)):
-                        for x in v: out.append(f"{k}: {x}")
-                    else: out.append(f"{k}: {v}")
+                        for x in v:
+                            out.append(f"{k}: {x}")
+                    else:
+                        out.append(f"{k}: {v}")
                 return out
     return None
 
@@ -223,11 +243,13 @@ def render_special_tests():
             lines = [str(x) for x in res]
         else:
             lines = getattr(mod,"LATEST_LINES",[])
-            if not isinstance(lines,list): lines = []
+            if not isinstance(lines,list):
+                lines = []
         st.session_state["special_interpretations"] = lines
         if lines:
             st.markdown("### 특수검사 해석")
-            for ln in lines: st.markdown(f"- {ln}")
+            for ln in lines:
+                st.markdown(f"- {ln}")
         st.caption(f"special_tests 연결: {info}")
     except Exception as e:
         st.error(f"특수검사 로드 오류: {e}")
@@ -257,7 +279,8 @@ def _load_diet_module():
     last_err = None
     for p in _candidate_diet_paths():
         try:
-            if not p.exists(): continue
+            if not p.exists():
+                continue
             spec = importlib.util.spec_from_file_location("lab_diet", str(p))
             mod = importlib.util.module_from_spec(spec)
             sys.modules["lab_diet"] = mod
@@ -266,7 +289,6 @@ def _load_diet_module():
         except Exception as e:
             last_err = e
     return None, last_err
-
 
 # ---- Built-in fallback diet guide (used if lab_diet has no UI/data) ----
 DIET_DEFAULT = {
@@ -293,12 +315,11 @@ DIET_DEFAULT = {
     ],
     "fever_hydration": [
         "가벼운 옷차림과 서늘한 실내 유지",
-        "수분 자주 보충, 해열제 간격: 아세트아미노펜 ≥4h, 이부프로펜 ≥6h",
+        "수분 자주 보충, 해열제 간격: 아세트아미노펜 ≥4h, 이부프로펀 ≥6h",
     ]
 }
 
 def _render_diet_fallback(context=None):
-    import streamlit as st
     notes = []
     st.markdown("#### 기본 식이가이드(내장)")
     anc = None
@@ -313,7 +334,7 @@ def _render_diet_fallback(context=None):
         st.markdown("**ANC 낮음(호중구 감소) — 식품 위생/안전**")
         for x in DIET_DEFAULT["ANC_low_food_safety"]:
             st.markdown(f"- {x}"); notes.append(f"ANC낮음: {x}")
-    # Diarrhea (fever may suggest infection; still give hydration)
+    # Diarrhea
     st.markdown("**설사/탈수 예방**")
     for x in DIET_DEFAULT["diarrhea"]:
         st.markdown(f"- {x}"); notes.append(f"설사: {x}")
@@ -332,49 +353,128 @@ def _render_diet_fallback(context=None):
             st.markdown(f"- {x}"); notes.append(f"발열: {x}")
     return notes
 
+# ---- Diet suggestions derived from lab numbers (수치 기반) ----
+def _diet_from_labs(labs: dict):
+    notes = []
+    def f(name):
+        try:
+            v = _parse_float(labs.get(name))
+            return v
+        except Exception:
+            return None
+    Na = f("Na"); K = f("K"); Ca = f("Ca"); P = f("P"); Glu = f("Glu")
+    Cr = f("Cr"); Tb = f("Tb"); Alb = f("Alb"); UA = f("UA"); Hb = f("Hb")
+    # Electrolytes
+    if Na is not None:
+        if Na < 135:
+            notes += [
+                "저나트륨혈증: 자유수(물) 과다섭취 주의, 수분 섭취 계획은 의료진 지시에 따르기",
+                "국물/수분 많은 음식은 과다섭취 피하기",
+            ]
+        elif Na > 145:
+            notes += [
+                "고나트륨혈증: 충분한 수분 섭취(의료진 지시), 고염식 피하기",
+                "라면/절임/가공식품 염분 줄이기",
+            ]
+    if K is not None:
+        if K < 3.5:
+            notes += [
+                "저칼륨혈증: 바나나·키위·오렌지·감자·고구마 등 칼륨 풍부 식품 추가(기저질환·약물 확인)",
+            ]
+        elif K > 5.1:
+            notes += [
+                "고칼륨혈증: 칼륨 많은 식품(바나나·오렌지·토마토·감자·시금치 등) 과다 섭취 피하기",
+                "통조림/즙·스무디 형태의 고칼륨 식품 제한, 채소는 데쳐서 물 버리기",
+            ]
+    if Ca is not None:
+        if Ca < 8.6:
+            notes += ["저칼슘: 칼슘/비타민D 섭취 점검(우유/치즈/요구르트 등) — 보충제는 의료진과 상의"]
+        elif Ca > 10.2:
+            notes += ["고칼슘: 칼슘/비타민D 고함량 보충제·강화식품 과다 피하기, 충분한 수분"]
+    if P is not None:
+        if P < 2.5:
+            notes += ["저인: 단백질 섭취 상태 점검(육류/달걀/유제품), 보충제는 의료진과 상의"]
+        elif P > 4.5:
+            notes += ["고인: 가공치즈·탄산음료(인산염), 가공육/즉석식품 등 인산염 첨가물 많은 음식 제한"]
+    if Glu is not None:
+        if Glu > 140:
+            notes += ["고혈당 경향: 단순당(과자/주스) 줄이고, 정제곡물→현미/잡곡으로 교체, 식사/간식 규칙화"]
+        elif Glu < 70:
+            notes += ["저혈당 위험: 규칙적 식사와 간식, 빠르게 흡수되는 당(사탕/주스) 비상 준비"]
+    # Kidney/Liver/Nutrition
+    if Cr is not None and Cr > 1.2:
+        notes += ["신기능 저하 가능: 염분/칼륨/인 과다 피하고, 단백질은 지시 범위 내로(신장식 고려)"]
+    if Tb is not None and Tb > 1.2:
+        notes += ["고빌리루빈: 기름진 음식 과다 피하고, 규칙적 소량 식사; 알코올 금지"]
+    if Alb is not None and Alb < 3.5:
+        notes += ["저알부민: 단백질/에너지 보충(살코기·달걀·두부·유제품), 작은 끼니 자주"]
+    if UA is not None and UA > 7.2:
+        notes += ["요산 상승: 퓨린 많은 음식(내장/멸치/건어물 등) 과다 피하고, 수분 충분히"]
+    if Hb is not None and Hb < 12.0:
+        notes += ["빈혈 경향: 철분 풍부식(붉은 살코기·간·시금치·콩류) + 비타민C 동시 섭취"]
+    seen = set(); ordered = []
+    for n in notes:
+        if n not in seen:
+            seen.add(n); ordered.append(n)
+    return ordered
+
+
 def render_diet_guides(context=None):
     st.header("🥗 식이가이드")
     try:
         mod, info = _load_diet_module()
-        if not mod:
-            st.error(f"lab_diet 모듈을 찾지 못했습니다. {'에러: '+str(info) if info else ''}")
-            return
-        # Preferred UI functions
-        for fn in ["diet_ui","render_diet_ui","build_diet_ui","ui"]:
-            f = getattr(mod, fn, None)
-            if callable(f):
-                res = f(context) if context is not None else f()
-                if isinstance(res, (list, tuple)):
-                    st.session_state['diet_notes'] = [str(x) for x in res]
-                st.caption(f"lab_diet 연결: {info}")
-                return
-        # Data structures
-        out_lines = []
-        for name in ["DIET_GUIDES","GUIDES","DATA"]:
-            if hasattr(mod, name):
-                data = getattr(mod, name)
-                if isinstance(data, dict):
-                    st.markdown("### 가이드 목록")
-                    for k,v in data.items():
-                        st.markdown(f"**{k}**")
-                        if isinstance(v, (list,tuple)):
-                            for x in v:
-                                st.markdown(f"- {x}")
-                                out_lines.append(f"{k}: {x}")
-                        else:
-                            st.markdown(f"- {v}")
-                            out_lines.append(f"{k}: {v}")
-                elif isinstance(data, (list,tuple)):
-                    for ln in data:
-                        st.markdown(f"- {ln}")
-                        out_lines.append(str(ln))
-        if out_lines:
-            st.session_state['diet_notes'] = out_lines
-            st.caption(f"lab_diet 연결: {info}")
-        else:
+        used_external = False
+        if mod:
+            # Preferred UI functions
+            for fn in ["diet_ui","render_diet_ui","build_diet_ui","ui"]:
+                f = getattr(mod, fn, None)
+                if callable(f):
+                    res = f(context) if context is not None else f()
+                    if isinstance(res, (list, tuple)):
+                        st.session_state['diet_notes'] = [str(x) for x in res]
+                    st.caption(f"lab_diet 연결: {info}")
+                    used_external = True
+                    break
+            if not used_external:
+                out_lines = []
+                for name in ["DIET_GUIDES","GUIDES","DATA"]:
+                    if hasattr(mod, name):
+                        data = getattr(mod, name)
+                        if isinstance(data, dict):
+                            st.markdown("### 가이드 목록")
+                            for k,v in data.items():
+                                st.markdown(f"**{k}**")
+                                if isinstance(v, (list,tuple)):
+                                    for x in v:
+                                        st.markdown(f"- {x}")
+                                        out_lines.append(f"{k}: {x}")
+                                else:
+                                    st.markdown(f"- {v}")
+                                    out_lines.append(f"{k}: {v}")
+                        elif isinstance(data, (list,tuple)):
+                            for ln in data:
+                                st.markdown(f"- {ln}")
+                                out_lines.append(str(ln))
+                if out_lines:
+                    st.session_state['diet_notes'] = out_lines
+                    st.caption(f"lab_diet 연결: {info}")
+                    used_external = True
+        if not used_external:
             notes = _render_diet_fallback(context)
-        st.session_state['diet_notes'] = notes
-        st.info('lab_diet 외부 모듈에서 UI/데이터를 찾지 못해, **내장 기본 식이가이드**를 표시합니다.')
+            st.session_state['diet_notes'] = notes
+            st.info('lab_diet 외부 모듈에서 UI/데이터를 찾지 못해, **내장 기본 식이가이드**를 표시합니다.')
+        # ---- 수치 기반 식이가이드 병합 ----
+        try:
+            labs = st.session_state.get("labs_dict", {}) or {}
+            lab_notes = _diet_from_labs(labs)
+            if lab_notes:
+                st.markdown("### 수치 기반 식이가이드")
+                for x in lab_notes:
+                    st.markdown(f"- {x}")
+                base = st.session_state.get('diet_notes', [])
+                st.session_state['diet_notes'] = base + [n for n in lab_notes if n not in base]
+        except Exception:
+            pass
     except Exception as e:
         st.error(f"식이가이드 로드 오류: {e}")
 
@@ -421,14 +521,18 @@ REF_RANGE = {
     "Tb": (0.2, 1.2),
 }
 
+
 def _parse_float(x):
-    if x is None: return None
+    if x is None:
+        return None
     s = str(x).strip().replace(",", "")
-    if s == "": return None
+    if s == "":
+        return None
     try:
         return float(s)
     except Exception:
         return None
+
 
 def labs_input_ui():
     st.header("🧪 피수치 입력 (유효성 검증)")
@@ -460,25 +564,36 @@ def labs_input_ui():
     if any(str(v).strip() for v in labs.values()):
         st.markdown("#### 입력 요약")
         for k,v in labs.items():
-            if str(v).strip()!="": st.markdown(f"- **{k}**: {v}")
+            if str(v).strip()!="":
+                st.markdown(f"- **{k}**: {v}")
     return labs
 
 # ---------- Blood pressure ----------
 def classify_bp(sbp, dbp):
-    if sbp is None or dbp is None: return ("측정값 없음","SBP/DBP를 입력하세요.")
-    if sbp>=180 or dbp>=120: return ("🚨 고혈압 위기","즉시 의료기관 평가 권장")
-    if sbp>=140 or dbp>=90: return ("2기 고혈압","생활습관 + 약물치료 고려(의료진)")
-    if 130<=sbp<=139 or 80<=dbp<=89: return ("1기 고혈압","생활습관 교정 + 위험평가")
-    if 120<=sbp<=129 and dbp<80: return ("주의혈압(상승)","염분 제한/운동/체중조절 권장")
-    if sbp<120 and dbp<80: return ("정상혈압","유지")
+    if sbp is None or dbp is None:
+        return ("측정값 없음","SBP/DBP를 입력하세요.")
+    if sbp>=180 or dbp>=120:
+        return ("🚨 고혈압 위기","즉시 의료기관 평가 권장")
+    if sbp>=140 or dbp>=90:
+        return ("2기 고혈압","생활습관 + 약물치료 고려(의료진)")
+    if 130<=sbp<=139 or 80<=dbp<=89:
+        return ("1기 고혈압","생활습관 교정 + 위험평가")
+    if 120<=sbp<=129 and dbp<80:
+        return ("주의혈압(상승)","염분 제한/운동/체중조절 권장")
+    if sbp<120 and dbp<80:
+        return ("정상혈압","유지")
     return ("분류불가","값을 확인하세요.")
+
 
 def bp_ui():
     st.header("🩺 혈압 체크 (압종분류)")
     c1,c2,c3 = st.columns(3)
-    with c1: sbp = st.text_input("수축기 혈압 SBP (mmHg)", key=wkey("sbp"))
-    with c2: dbp = st.text_input("이완기 혈압 DBP (mmHg)", key=wkey("dbp"))
-    with c3: st.caption("기준: ACC/AHA 2017 (단순화)")
+    with c1:
+        sbp = st.text_input("수축기 혈압 SBP (mmHg)", key=wkey("sbp"))
+    with c2:
+        dbp = st.text_input("이완기 혈압 DBP (mmHg)", key=wkey("dbp"))
+    with c3:
+        st.caption("기준: ACC/AHA 2017 (단순화)")
     sbp_val = _parse_float(sbp); dbp_val = _parse_float(dbp)
     cat,note = classify_bp(sbp_val, dbp_val)
     st.info(f"분류: **{cat}** — {note}")
@@ -490,13 +605,16 @@ def render_caregiver_notes_peds(*, stool, fever, persistent_vomit, oliguria, cou
     st.header("🧒 소아가이드")
     if anc_low is None:
         try:
-            anc_val = _parse_float(st.session_state.get("labs_dict", {}).get("ANC")); anc_low = (anc_val is not None and anc_val<500)
-        except Exception: anc_low=False
+            anc_val = _parse_float(st.session_state.get("labs_dict", {}).get("ANC"))
+            anc_low = (anc_val is not None and anc_val<500)
+        except Exception:
+            anc_low=False
     notes=[]
     def bullet(title, body):
         st.markdown(f"**{title}**"); st.markdown(body.strip())
         first = body.strip().splitlines()[0].strip("- ").strip()
-        if first: notes.append(f"{title} — {first}")
+        if first:
+            notes.append(f"{title} — {first}")
     if anc_low:
         bullet("🍽️ ANC 낮음(호중구 감소) 식이가이드","""
 - **생야채/날고기·생선 금지**, 모든 음식은 **충분히 익혀서**
@@ -581,7 +699,9 @@ def render_caregiver_notes_peds(*, stool, fever, persistent_vomit, oliguria, cou
 
 # ---------- Chemo AEs (concise) ----------
 GOOD,WARN,DANGER="🟢","🟡","🚨"
-def _b(txt:str)->str: return txt.replace("{GOOD}",GOOD).replace("{WARN}",WARN).replace("{DANGER}",DANGER)
+def _b(txt:str)->str:
+    return txt.replace("{GOOD}",GOOD).replace("{WARN}",WARN).replace("{DANGER}",DANGER)
+
 CHEMO_DB={
  "ATRA (Tretinoin, Vesanoid) / 베사노이드":{
   "effects":{"common":["{WARN} 두통/피부건조/지질상승"]},
@@ -589,8 +709,8 @@ CHEMO_DB={
   "monitor":["CBC, SpO₂, 체중/부종, 지질"],
  },
  "Cytarabine (Ara-C) / 시타라빈(아라씨)":{
-  "routes":{"IV/SC(표준용량)":["{WARN} 발열/구토/설사/구내염","{DANGER} 골수억제","{WARN} 결막염"],
-            "HDAC(고용량)":["{DANGER} 소뇌독성(보행/말/글씨체 변화)","{WARN} 각결막염 — 스테로이드 점안"]},
+  "routes":{"IV/SC(표준용량)": ["{WARN} 발열/구토/설사/구내염","{DANGER} 골수억제","{WARN} 결막염"],
+            "HDAC(고용량)": ["{DANGER} 소뇌독성(보행/말/글씨체 변화)","{WARN} 각결막염 — 스테로이드 점안"]},
   "monitor":["CBC, 간기능, 신경학적 징후"],
  },
  "MTX (Methotrexate) / 메토트렉세이트":{
@@ -598,13 +718,17 @@ CHEMO_DB={
   "monitor":["CBC, AST/ALT, Cr/eGFR","HD-MTX: MTX 농도 + 류코보린 + 요알칼리화"],
  },
 }
+
 def render_chemo_adverse_effects(agents, route_map=None):
     st.header("💊 항암제")
     summary=[]
     if not agents:
-        st.info("항암제를 선택하면 상세 부작용/모니터링 지침이 표시됩니다."); st.session_state['onco_warnings']=[]; return
+        st.info("항암제를 선택하면 상세 부작용/모니터링 지침이 표시됩니다.")
+        st.session_state['onco_warnings']=[]
+        return
     for agent in agents:
-        data = CHEMO_DB.get(agent, {}); st.markdown(f"### {agent}")
+        data = CHEMO_DB.get(agent, {})
+        st.markdown(f"### {agent}")
         if "routes" in data:
             route = (route_map or {}).get(agent) or "IV/SC(표준용량)"
             st.markdown(f"**투여 경로/용량:** {route}")
@@ -625,7 +749,8 @@ def render_chemo_adverse_effects(agents, route_map=None):
             with st.expander("⚠️ RA-분화증후군"):
                 for s in rs["symptoms"]:
                     st.markdown(f"- {_b(s)}")
-                    if "{DANGER}" in s: summary.append("ATRA/RA-증후군: " + _b(s).replace('🚨 ',''))
+                    if "{DANGER}" in s:
+                        summary.append("ATRA/RA-증후군: " + _b(s).replace('🚨 ',''))
     st.session_state["onco_warnings"]=list(dict.fromkeys(summary))[:60]
 
 # ---------- Report / Export ----------
@@ -635,22 +760,32 @@ def build_report():
     if labs and any(str(v).strip() for v in labs.values()):
         parts.append("## 피수치")
         for k,v in labs.items():
-            if str(v).strip()!="": parts.append(f"- {k}: {v}")
+            if str(v).strip()!="":
+                parts.append(f"- {k}: {v}")
     bp=st.session_state.get("bp_summary")
-    if bp: parts.append("## 혈압 분류(압종분류)"); parts.append(f"- {bp}")
+    if bp:
+        parts.append("## 혈압 분류(압종분류)"); parts.append(f"- {bp}")
     g=st.session_state.get("onco_group"); d=st.session_state.get("onco_dx")
-    if g or d: parts.append("## 암종 선택"); parts.append(f"- 그룹: {g or '-'} / 진단: {d or '-'}")
+    if g or d:
+        parts.append("## 암종 선택"); parts.append(f"- 그룹: {g or '-'} / 진단: {d or '-'}")
     peds=st.session_state.get("peds_notes",[])
-    if peds: parts.append("## 소아가이드"); parts.extend([f"- {x}" for x in peds])
+    if peds:
+        parts.append("## 소아가이드"); parts.extend([f"- {x}" for x in peds])
     lines=st.session_state.get("special_interpretations",[])
-    if lines: parts.append("## 특수검사 해석"); parts.extend([f"- {ln}" for ln in lines])
+    if lines:
+        parts.append("## 특수검사 해석"); parts.extend([f"- {ln}" for ln in lines])
     diet=st.session_state.get("diet_notes",[])
-    if diet: parts.append("## 식이가이드"); parts.extend([f"- {x}" for x in diet])
+    if diet:
+        parts.append("## 식이가이드"); parts.extend([f"- {x}" for x in diet])
     agents=st.session_state.get("selected_agents",[]); warns=st.session_state.get("onco_warnings",[])
-    if agents: parts.append("## 항암제(선택)"); parts.extend([f"- {a}" for a in agents])
-    if warns: parts.append("## 항암제 부작용 요약(위험)"); parts.extend([f"- {w}" for w in warns])
-    if not any(sec.startswith("##") for sec in parts[1:]): parts.append("## 입력된 데이터가 없어 기본 안내만 표시됩니다.")
+    if agents:
+        parts.append("## 항암제(선택)"); parts.extend([f"- {a}" for a in agents])
+    if warns:
+        parts.append("## 항암제 부작용 요약(위험)"); parts.extend([f"- {w}" for w in warns])
+    if not any(sec.startswith("##") for sec in parts[1:]):
+        parts.append("## 입력된 데이터가 없어 기본 안내만 표시됩니다.")
     return "\n\n".join(parts)
+
 
 def _find_pdf_export_paths():
     cands = [
@@ -668,6 +803,7 @@ def _find_pdf_export_paths():
         if rp not in seen:
             seen.add(rp); out.append(p)
     return out
+
 
 def export_report_pdf(md_text: str) -> bytes:
     # Try external helper first
@@ -732,6 +868,7 @@ def feedback_form():
         except Exception as e:
             st.error(f"피드백 저장 실패: {e}")
 
+
 def feedback_stats():
     cnt = 0; avg = None
     try:
@@ -747,14 +884,16 @@ def feedback_stats():
     except Exception:
         pass
     cols = st.columns(3)
-    with cols[0]: st.metric("현재 사용자 수", f"{CURRENT_USERS} 명")
-    with cols[1]: st.metric("누적 피드백", f"{cnt} 건")
-    with cols[2]: st.metric("평균 만족도", f"{avg:.1f}" if avg is not None else "-")
+    with cols[0]:
+        st.metric("현재 사용자 수", f"{CURRENT_USERS} 명")
+    with cols[1]:
+        st.metric("누적 피드백", f"{cnt} 건")
+    with cols[2]:
+        st.metric("평균 만족도", f"{avg:.1f}" if avg is not None else "-")
 
 # ---------- Diagnostics (safe) ----------
 def diagnostics_panel():
     st.markdown("### 🔧 진단 패널 (경로/모듈 상태)")
-
     # onco_map
     onco_loader = globals().get("load_onco")
     if callable(onco_loader):
@@ -766,7 +905,6 @@ def diagnostics_panel():
             st.write(f"- onco_map: ❌ 오류 — {e}")
     else:
         st.write("- onco_map: ❌ 로더 없음")
-
     # special_tests
     sp_loader = globals().get("_load_special_module")
     if callable(sp_loader):
@@ -777,7 +915,6 @@ def diagnostics_panel():
             st.write(f"- special_tests: ❌ 오류 — {e}")
     else:
         st.write("- special_tests: ❌ 로더 없음")
-
     # lab_diet
     diet_loader = globals().get("_load_diet_module")
     if callable(diet_loader):
@@ -790,7 +927,6 @@ def diagnostics_panel():
                 st.write(f"- lab_diet: ❌ 실패 — 경로: `{dpath}`")
         except Exception as e:
             st.write(f"- lab_diet: ❌ 오류 — {e}")
-
     # pdf_export
     try:
         cands = [str(p) for p in _find_pdf_export_paths()]
@@ -804,7 +940,6 @@ def diagnostics_panel():
             st.caption("→ '/mount/src/hoya12/bloodmap_app/pdf_export.py' 또는 '/mnt/data/pdf_export.py' 위치에 배치하면 자동 인식됩니다.")
     except Exception as e:
         st.write(f"- pdf_export: ❌ 오류 — {e}")
-
     # autosave
     try:
         can_write = False
