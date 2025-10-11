@@ -289,7 +289,7 @@ def render_special_tests():
         st.error(f"특수검사 로드 오류: {e}")
 
 # ---------------- UI: Diet (lab_diet + labs only by default) ----------------
-def render_diet_guides(context=None):
+def render_diet_guides(context=None, key_prefix: str = ""):
     st.header("🥗 식이가이드")
     # 혈액암 보충제 경고
     if is_heme_cancer():
@@ -299,9 +299,11 @@ def render_diet_guides(context=None):
         st.session_state['heme_warning'] = None
 
     # 증상 기반 가이드는 혼선 방지: 기본 비표시(옵션)
-    st.session_state.setdefault("show_symptom_guides", False)
-    show_symptom = st.checkbox("증상 기반 가이드 표시(설사/변비/발열/위생수칙)", value=st.session_state["show_symptom_guides"], key=wkey("symptom_toggle"))
-    st.session_state["show_symptom_guides"] = show_symptom
+    state_key = f"show_symptom_guides_{key_prefix}" if key_prefix else "show_symptom_guides"
+    widget_key = wkey(f"{key_prefix}symptom_toggle") if key_prefix else wkey("symptom_toggle")
+    st.session_state.setdefault(state_key, False)
+    show_symptom = st.checkbox("증상 기반 가이드 표시(설사/변비/발열/위생수칙)", value=st.session_state[state_key], key=widget_key)
+    st.session_state[state_key] = show_symptom
 
     # lab_diet 호출
     ctx = dict(context or {})
@@ -828,7 +830,7 @@ with tabs[0]:
             "constipation": st.session_state.get("home_constipation"),
             "diarrhea": st.session_state.get("home_diarrhea"),
         }
-        render_diet_guides(context=ctx)
+        render_diet_guides(context=ctx, key_prefix="home_")
 
 with tabs[1]:
     onco_select_ui(); autosave_state()
@@ -884,7 +886,7 @@ with tabs[6]:
             "constipation": st.session_state.get("constipation"),
             "diarrhea": st.session_state.get("diarrhea"),
         }
-        render_diet_guides(context=ctx)
+        render_diet_guides(context=ctx, key_prefix="peds_")
     autosave_state()
 
 with tabs[7]:
