@@ -422,196 +422,186 @@ def render_caregiver_notes_peds(
         )
     st.info("❗ 즉시 병원 평가: 번개치는 두통 · 시야 이상/복시/암점 · 경련 · 의식저하 · 심한 목 통증 · 호흡곤란/입술부종")
 
-# ---------- Tabs ----------
-tab_labels = ["🏠 홈", "🧪 피수치 입력", "🧬 암 선택", "💊 항암제(진단 기반)", "👶 소아 증상", "🔬 특수검사", "📄 보고서"]
-t_home, t_labs, t_dx, t_chemo, t_peds, t_special, t_report = st.tabs(tab_labels)
 
-# HOME
-with t_home:
-    st.subheader("응급도 요약")
-    labs = st.session_state.get("labs_dict", {})
-    level_tmp, reasons_tmp, contrib_tmp = emergency_level(
-        labs, st.session_state.get(wkey("cur_temp")), st.session_state.get(wkey("cur_hr")), {}
-    )
-    if level_tmp.startswith("🚨"):
-        st.error("현재 상태: " + level_tmp)
-    elif level_tmp.startswith("🟧"):
-        st.warning("현재 상태: " + level_tmp)
-    else:
-        st.info("현재 상태: " + level_tmp)
+def render_peds_score_guidance(score: dict | None, *, max_temp=None):
+    """증상 점수(score) 기준으로 보호자 가이드(가정관리/병원기준)를 가중도별로 정리해 보여준다.
+    점수 dict의 키는 아래 한국어 카테고리(예시)를 사용한다.
+    - "장염 의심", "상기도/독감 계열", "결막염 의심", "탈수/신장 문제", "출혈성 경향",
+      "중이염/귀질환", "피부발진/경미한 알레르기", "복통 평가", "알레르기 주의", "편두통 의심", "수족구 의심"
+    """
+    import streamlit as st
 
-    st.markdown("---")
-    st.subheader("응급도 체크(증상 기반)")
-    c1, c2, c3, c4, c5, c6 = st.columns(6)
-    with c1:
-        hematuria = st.checkbox("혈뇨", key=wkey("sym_hematuria"))
-    with c2:
-        melena = st.checkbox("흑색변", key=wkey("sym_melena"))
-    with c3:
-        hematochezia = st.checkbox("혈변", key=wkey("sym_hematochezia"))
-    with c4:
-        chest_pain = st.checkbox("흉통", key=wkey("sym_chest"))
-    with c5:
-        dyspnea = st.checkbox("호흡곤란", key=wkey("sym_dyspnea"))
-    with c6:
-        confusion = st.checkbox("의식저하", key=wkey("sym_confusion"))
-    d1, d2, d3 = st.columns(3)
-    with d1:
-        oliguria = st.checkbox("소변량 급감", key=wkey("sym_oliguria"))
-    with d2:
-        persistent_vomit = st.checkbox("지속 구토(>6시간)", key=wkey("sym_pvomit"))
-    with d3:
-        petechiae = st.checkbox("점상출혈", key=wkey("sym_petechiae"))
-    e1, e2 = st.columns(2)
-    with e1:
-        thunderclap = st.checkbox("번개치는 듯한 두통(Thunderclap)", key=wkey("sym_thunderclap"))
-    with e2:
-        visual_change = st.checkbox("시야 이상/복시/암점", key=wkey("sym_visual_change"))
+    if not isinstance(score, dict) or not score:
+        st.caption("증상 점수 정보가 없어 기본 설명만 제공합니다.")
+        return
 
-    sym = dict(
-        hematuria=hematuria,
-        melena=melena,
-        hematochezia=hematochezia,
-        chest_pain=chest_pain,
-        dyspnea=dyspnea,
-        confusion=confusion,
-        oliguria=oliguria,
-        persistent_vomit=persistent_vomit,
-        petechiae=petechiae,
-        thunderclap=thunderclap,
-        visual_change=visual_change,
-    )
+    # 임계값 (필요 시 조정)
+    HIGH = 2.0
+    MID  = 1.0
 
-    alerts = []
-    a = _try_float((labs or {}).get("ANC"))
-    p = _try_float((labs or {}).get("PLT"))
-    if thunderclap or (visual_change and (confusion or chest_pain or dyspnea)):
-        alerts.append("🧠 **신경계 위중 의심** — 번개치듯 두통/시야 이상/의식장애 → 즉시 응급평가")
-    if (a is not None and a < 500) and (_try_float(st.session_state.get(wkey("cur_temp"))) and _try_float(st.session_state.get(wkey("cur_temp"))) >= 38.0):
-        alerts.append("🔥 **발열성 호중구감소증 의심** — ANC<500 + 발열 → 즉시 항생제 평가")
-    if (p is not None and p < 20000) and (melena or hematochezia or petechiae):
-        alerts.append("🩸 **출혈 고위험** — 혈소판<20k + 출혈징후 → 즉시 병원")
-    if oliguria and persistent_vomit:
-        alerts.append("💧 **중등~중증 탈수 가능** — 소변 급감 + 지속 구토 → 수액 고려")
-    if chest_pain and dyspnea:
-        alerts.append("❤️ **흉통+호흡곤란** — 응급평가 권장")
-    if alerts:
-        for msg in alerts:
-            st.error(msg)
-    else:
-        st.info("위험 조합 경고 없음")
+    tiers = {"높음": [], "보통": [], "낮음": []}
 
-    level, reasons, contrib = emergency_level(
-        labs, st.session_state.get(wkey("cur_temp")), st.session_state.get(wkey("cur_hr")), sym
-    )
-    if level.startswith("🚨"):
-        st.error("응급도: " + level + " — " + " · ".join(reasons))
-    elif level.startswith("🟧"):
-        st.warning("응급도: " + level + " — " + " · ".join(reasons))
-    else:
-        st.info("응급도: " + level + (" — " + " · ".join(reasons) if reasons else ""))
+    def add(title, home_tips, visit_rules, level):
+        tiers[level].append((title, home_tips, visit_rules))
 
-    st.markdown("---")
-    st.subheader("응급도 가중치 (편집 + 프리셋)")
-    colp = st.columns(3)
-    with colp[0]:
-        preset_name = st.selectbox("프리셋 선택", list(PRESETS.keys()), key=wkey("preset_sel"))
-    with colp[1]:
-        if st.button("프리셋 적용", key=wkey("preset_apply")):
-            set_weights(PRESETS[preset_name])
-            st.success(f"'{preset_name}' 가중치를 적용했습니다.")
-    with colp[2]:
-        if st.button("기본값으로 초기화", key=wkey("preset_reset")):
-            set_weights(DEFAULT_WEIGHTS)
-            st.info("가중치를 기본값으로 되돌렸습니다.")
-    W = get_weights()
-    grid = [
-        ("ANC<500", "w_anc_lt500"),
-        ("ANC 500~999", "w_anc_500_999"),
-        ("발열 38.0~38.4", "w_temp_38_0_38_4"),
-        ("고열 ≥38.5", "w_temp_ge_38_5"),
-        ("혈소판 <20k", "w_plt_lt20k"),
-        ("중증빈혈 Hb<7", "w_hb_lt7"),
-        ("CRP ≥10", "w_crp_ge10"),
-        ("HR>130", "w_hr_gt130"),
-        ("혈뇨", "w_hematuria"),
-        ("흑색변", "w_melena"),
-        ("혈변", "w_hematochezia"),
-        ("흉통", "w_chest_pain"),
-        ("호흡곤란", "w_dyspnea"),
-        ("의식저하", "w_confusion"),
-        ("소변량 급감", "w_oliguria"),
-        ("지속 구토", "w_persistent_vomit"),
-        ("점상출혈", "w_petechiae"),
-        ("번개두통", "w_thunderclap"),
-        ("시야 이상", "w_visual_change"),
+    def level_of(v):
+        if v >= HIGH: return "높음"
+        if v >= MID:  return "보통"
+        return "낮음"
+
+    # 각 카테고리별 가정관리 & 병원 방문 기준
+    mapping = [
+        ("장염 의심", "장염 의심",
+         [
+             "🥤 ORS(경구수분보충)를 5~10분 간격으로 **소량씩 자주** 마시게 해요.",
+             "기름진 음식·생야채·우유는 **일시적으로 줄이기**.",
+             "구토가 멎으면 **양을 천천히 늘리기**(바로 많이 먹이지 않기).",
+             "항문 주위는 미온수로 씻고 **충분히 건조** 후 필요 시 보습막 바르기."
+         ],
+         [
+             "혈변/검은변, **지속 구토**, **2시간 이상 소변 없음**이면 병원.",
+             "아이가 축 처지고 입이 마르거나 눈물이 잘 안 나면 탈수 의심 → 진료."
+         ]),
+        ("상기도/독감 계열", "상기도/독감 계열",
+         [
+             "가습·통풍·미온수 샤워로 점액 배출을 돕기.",
+             "코막힘은 생리식염수 **분무형** 사용 권장(소아).",
+             "수면 시 머리 쪽을 **약간 높여** 호흡 편하게.",
+             "해열제는 **간격 준수**(APAP ≥4h, IBU ≥6h)."
+         ],
+         [
+             "숨이 차 보이거나 입술이 파래지면 **즉시 병원**.",
+             "기침이 2주 이상 지속되거나 흉통·쌕쌕거림 동반 시 진료."
+         ]),
+        ("결막염 의심", "결막염 의심",
+         [
+             "눈곱은 끓였다 식힌 **미온수**로 안쪽→바깥쪽 방향으로 닦기(1회 1거즈).",
+             "손 위생 철저, **수건·베개 공유 금지**.",
+         ],
+         [
+             "빛에 민감·통증 심함·눈 붓는 느낌이 있으면 진료.",
+             "농성 분비물 + 고열이면 병원."
+         ]),
+        ("탈수/신장 문제", "탈수/신장 문제",
+         [
+             "수분을 **자주 조금씩** 보충(ORS 권장).",
+             "소변 양·색과 체중을 간단히 기록.",
+             "고열 시 미온수 닦기 + 휴식."
+         ],
+         [
+             "**2시간 이상 소변 없음**, 입마름·울 때 눈물 적음 등은 병원.",
+             "어지럼/무기력 심하면 진료."
+         ]),
+        ("출혈성 경향", "출혈성 경향",
+         [
+             "강한 마찰·딱딱한 음식·코 푸는 동작을 **줄이기**.",
+             "칫솔은 **부드러운 모**로 바꾸고, 치실은 조심스럽게.",
+         ],
+         [
+             "지속되는 코피/잇몸 출혈, 흑색변/혈변은 병원.",
+             "큰 멍이 쉽게 생기면 진료."
+         ]),
+        ("중이염/귀질환", "중이염/귀질환",
+         [
+             "누우면 통증 악화 가능 → **머리 쪽 약간 높여** 수면.",
+             "코막힘 동반 시 비염 관리(생리식염수, 가습)."
+         ],
+         [
+             "고열·구토 동반, **48시간 이상 통증 지속** 시 진료.",
+             "귀 뒤 붓고 심한 통증이면 즉시 병원."
+         ]),
+        ("피부발진/경미한 알레르기", "피부발진/경미한 알레르기",
+         [
+             "시원한 환경 유지, **땀·마찰 줄이기**, 보습제 도포.",
+             "의심 음식·약물은 **일시 중단**하고 기록해 두기."
+         ],
+         [
+             "**얼굴·입술·혀 붓기** 또는 **호흡곤란**은 즉시 병원(아나필락시스 우려).",
+             "수포·고열 동반 전신 발진은 진료."
+         ]),
+        ("복통 평가", "복통 평가",
+         [
+             "복부 따뜻하게, **자극적 음식 제한**(튀김/매운맛).",
+             "통증 위치·시간·식사/배변과의 연관성을 **간단히 기록**."
+         ],
+         [
+             "**오른쪽 아랫배 지속 통증**, 보행 시 악화, 구토/발열 동반 시 즉시 진료(충수염 감별).",
+             "복부 팽만·혈변/검은변 동반 시 병원."
+         ]),
+        ("알레르기 주의", "알레르기 주의",
+         [
+             "유발 의심 음식·약물 **중단**.",
+             "시원한 환경·보습, 필요 시 냉찜질."
+         ],
+         [
+             "호흡곤란/얼굴·입술·혀 붓기/전신 두드러기 → **즉시 병원**."
+         ]),
+        ("편두통 의심", "편두통 의심",
+         [
+             "어두운 **조용한 환경**에서 휴식, 수분 보충.",
+             "진통제 간격 **엄수**(중복 성분 주의)."
+         ],
+         [
+             "갑작스런 '**번개**' 같은 두통, 구음장애·편측마비·경련 등 **신경학적 이상**은 즉시 병원.",
+             "두통이 점점 악화하고 구토/시야 이상 동반 시 진료."
+         ]),
+        ("수족구 의심", "수족구 의심",
+         [
+             "입안 통증 시 **차갑거나 미지근한 부드러운 음식** 권장.",
+             "수분 보충, **부드러운 양치**로 구강 위생 유지."
+         ],
+         [
+             "침 흘림·음식/물 거부로 섭취 거의 못하면 병원.",
+             "고열 3일 이상 지속·무기력 심하면 진료."
+         ]),
     ]
-    
-    # --- 초보자용 간단 설정 ---
-    st.markdown("#### 🔰 초보자용 간단 설정")
-    st.caption("어려우면 이 부분만 조정해도 충분합니다. 세밀한 값은 아래 '전문가용'에서 바꿀 수 있어요.")
-    W_simple = dict(W)
 
-    def _apply_group(level, keys, base=1.0):
-        mapping = {"낮음": 0.9, "보통": 1.0, "높음": 1.2}
-        w = mapping.get(level, 1.0)
-        for k in keys:
-            W_simple[k] = round(base * w, 2)
+    # 점수값으로 가중도 분류
+    for key, title, home_tips, visit_rules in mapping:
+        v = float(score.get(key, 0) or 0)
+        lvl = level_of(v)
+        add(title, home_tips, visit_rules, lvl)
 
-    colS1, colS2, colS3 = st.columns(3)
-    with colS1:
-        inf_lvl = st.select_slider("발열·감염 민감도", options=["낮음","보통","높음"], value="보통", help="고열/CRP/호중구 감소에 대한 가중치")
-    with colS2:
-        bleed_lvl = st.select_slider("출혈 위험 민감도", options=["낮음","보통","높음"], value="보통", help="혈소판 감소/출혈 징후에 대한 가중치")
-    with colS3:
-        neuro_lvl = st.select_slider("신경·호흡 민감도", options=["낮음","보통","높음"], value="보통", help="의식저하/흉통/호흡곤란/번개두통/시야이상")
+    # 최고체온 보정 메시지
+    if max_temp is not None:
+        try:
+            mt = float(max_temp)
+            if mt >= 39.0:
+                tiers["높음"].insert(0, ("최고 체온", [], [f"현재 최고 {mt:.1f}℃ → 즉시 병원 권고 수준입니다."]))
+            elif mt >= 38.5:
+                tiers["보통"].insert(0, ("최고 체온", [], [f"현재 최고 {mt:.1f}℃ → 해열/수분 보충 후 면밀 관찰 필요."]))
+        except Exception:
+            pass
 
-    _apply_group(inf_lvl, ["w_temp_ge_38_5","w_temp_38_0_38_4","w_crp_ge10","w_anc_lt500","w_anc_500_999"])
-    _apply_group(bleed_lvl, ["w_plt_lt20k","w_petechiae","w_melena","w_hematochezia"])
-    _apply_group(neuro_lvl, ["w_confusion","w_chest_pain","w_dyspnea","w_thunderclap","w_visual_change","w_hr_gt130"])
-
-    if W_simple != W:
-        set_weights(W_simple)
-        st.success("초보자용 설정이 적용되었습니다.")
-
-    with st.expander("전문가용 세밀 조정(슬라이더)", expanded=False):
-        W = get_weights()
-        grid = [
-            ("ANC<500", "w_anc_lt500"),
-            ("ANC 500~999", "w_anc_500_999"),
-            ("발열 38.0~38.4", "w_temp_38_0_38_4"),
-            ("고열 ≥38.5", "w_temp_ge_38_5"),
-            ("혈소판 <20k", "w_plt_lt20k"),
-            ("중증빈혈 Hb<7", "w_hb_lt7"),
-            ("CRP ≥10", "w_crp_ge10"),
-            ("HR>130", "w_hr_gt130"),
-            ("혈뇨", "w_hematuria"),
-            ("흑색변", "w_melena"),
-            ("혈변", "w_hematochezia"),
-            ("흉통", "w_chest_pain"),
-            ("호흡곤란", "w_dyspnea"),
-            ("의식저하", "w_confusion"),
-            ("소변량 급감", "w_oliguria"),
-            ("지속 구토", "w_persistent_vomit"),
-            ("점상출혈", "w_petechiae"),
-            ("번개두통", "w_thunderclap"),
-            ("시야 이상", "w_visual_change"),
-        ]
-        cols = st.columns(3)
-        newW = dict(W)
-        for i, (label, keyid) in enumerate(grid):
-            with cols[i % 3]:
-                newW[keyid] = st.slider(label, 0.0, 3.0, float(W.get(keyid, 1.0)), 0.1, key=wkey(f"w_{keyid}"))
-        if newW != W:
-            set_weights(newW)
-            st.success("가중치 변경 사항 저장됨.")
-
-# LABS
-
+    # ANC 기반 식품 안전(저호중구) 알림(있으면 상단에)
     try:
-        st.info("활력징후(맥박·호흡·의식)를 확인해 주세요. 아이가 축 늘어지거나, 경련 병력이 있거나, 경련이 의심될 때는 지체 없이 병원 진료를 권합니다.")
+        anc_val = float(str(st.session_state.get("labs_dict", {}).get("ANC", "")).replace(",", "."))
     except Exception:
-        pass
+        anc_val = None
+    if anc_val is not None and anc_val < 1000:
+        tiers["높음"].insert(0, ("저호중구 음식 안전", [
+            "생야채/껍질 과일 피하기, **완전 가열** 후 섭취",
+            "남은 음식은 **2시간 이후 섭취 비권장**, 멸균·살균 식품 권장"
+        ], ["38.0℃ 이상 발열 시 병원 연락, 38.5~39℃ 이상은 상위 조치"]))
+
+    # 렌더
+    with st.expander("👪 증상 점수 기반 보호자 가이드", expanded=False):
+        for lvl in ["높음", "보통", "낮음"]:
+            items = tiers[lvl]
+            if not items:
+                continue
+            st.markdown(f"### {lvl} 우선 순위")
+            for title, home_tips, visit_rules in items:
+                st.markdown(f"**{title}**")
+                if home_tips:
+                    st.markdown("가정 관리")
+                    for x in home_tips:
+                        st.markdown(f"- {x}")
+                if visit_rules:
+                    st.markdown("병원 방문 기준")
+                    for x in visit_rules:
+                        st.markdown(f"- {x}")
+                st.markdown("---")
 
 
 def _normalize_abbr(k: str) -> str:
@@ -1056,6 +1046,16 @@ with t_peds:
         migraine=migraine,
         hfmd=hfmd,
     )
+    # 점수 기반 보호자 가이드 렌더
+    try:
+        _score_obj = score if isinstance(score, dict) else st.session_state.get("peds_score") or {}
+    except Exception:
+        _score_obj = {}
+    try:
+        render_peds_score_guidance(_score_obj, max_temp=locals().get("max_temp") or st.session_state.get("max_temp"))
+    except Exception as _e:
+        st.caption(f"점수 가이드 로딩 중: {_e}")
+
 
     score = {
         "장염 의심": 0,
