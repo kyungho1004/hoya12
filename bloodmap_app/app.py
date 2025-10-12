@@ -1891,9 +1891,25 @@ def render_graph_panel():
             st.caption("팁: 기간 필터를 지정해 필요한 구간만 내보낼 수 있습니다.")
 
 # --- 기록 그래프 단독 탭 ---
-with tab_graphlog:
+# 어떤 화면 구성에서는 tab_graphlog가 없을 수 있으므로 안전 가드
+try:
+    tab_graphlog  # 생성되어 있나 확인
+except NameError:
+    tab_graphlog = None
+
+def _render_graph_panel_safe():
     st.subheader("📈 기록 그래프")
     try:
-        render_graph_panel()
+        render_graph_panel()   # 우리가 분리해둔 함수
+    except NameError:
+        st.info("그래프 패널 함수가 아직 없어요. 기존 그래프 함수를 알려주면 연결할게요.")
     except Exception as e:
         st.warning(f"기록 그래프 렌더 중 오류: {e}")
+
+if tab_graphlog is not None:
+    with tab_graphlog:
+        _render_graph_panel_safe()
+else:
+    # 탭이 없는 레이아웃에서는 단독 섹션으로 출력
+    st.markdown("---")
+    _render_graph_panel_safe()
