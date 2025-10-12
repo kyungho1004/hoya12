@@ -1257,8 +1257,6 @@ with t_peds:
         fever = st.selectbox("발열", ["없음", "37~37.5 (미열)", "37.5~38", "38~38.5", "38.5~39", "39 이상"], key=wkey("p_fever"))
     with c5:
         eye = st.selectbox("눈꼽/결막", ["없음", "맑음", "노랑-농성", "양쪽"], key=wkey("p_eye"))
-    with c6:
-        eye = st.selectbox("변비", ["없음", "토끼똥", "무변", "무변2일차"], key=wkey("p_eye"))
 
     d1, d2, d3 = st.columns(3)
     with d1:
