@@ -1238,7 +1238,6 @@ with t_chemo:
 # PEDS
 
 # --- 🏠 집에서 대처법(보호자용) ---
-
 with st.expander("🏠 집에서 대처법(선택한 증상 기준)", expanded=False):
     # 안전 가드: 증상 변수 미정의 시 세션/기본값으로 대체
     try:
