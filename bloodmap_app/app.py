@@ -583,7 +583,35 @@ with t_home:
         st.info("응급도: " + level + (" — " + " · ".join(reasons) if reasons else ""))
 
     st.markdown("---")
-    st.subheader("응급도 전문가용  (편집 + 프리셋)")
+st.subheader("응급도 설정")
+pro_mode = st.toggle(
+    "👨‍⚕️ 전문가 모드(가중치 세부 편집)",
+    value=bool(st.session_state.get(wkey("pro_mode"), False)),
+    key=wkey("pro_mode")
+)
+
+if not pro_mode:
+    # 보호자용(간단) — 프리셋만 고르고 슬라이더는 숨김
+    simple_preset_name = st.selectbox(
+        "모드(보호자용)",
+        ["보호자용(간단)", "발열·감염 민감", "출혈 위험 민감", "신경계 위중 민감"],
+        key=wkey("simple_preset")
+    )
+    if st.button("선택 적용", key=wkey("simple_preset_apply")):
+        if simple_preset_name == "보호자용(간단)":
+            set_weights(PRESETS["기본(Default)"])
+        else:
+            name_map = {
+                "발열·감염 민감": "발열·감염 민감",
+                "출혈 위험 민감": "출혈 위험 민감",
+                "신경계 위중 민감": "신경계 위중 민감",
+            }
+            set_weights(PRESETS[name_map[simple_preset_name]])
+        st.success(f"'{simple_preset_name}' 설정을 적용했습니다.")
+    st.caption("※ 보호자용 모드에서는 가중치 슬라이더를 숨기고, 선택한 모드에 맞춰 자동 계산만 합니다.")
+else:
+    # 기존 고급(전문가) UI 유지: 프리셋 + 슬라이더
+    st.subheader("응급도 가중치 (편집 + 프리셋)")
     colp = st.columns(3)
     with colp[0]:
         preset_name = st.selectbox("프리셋 선택", list(PRESETS.keys()), key=wkey("preset_sel"))
@@ -861,13 +889,6 @@ def lab_validate(abbr: str, val, is_peds: bool):
         return f"⬆️ 기준치 초과({lo}~{hi})"
     return "정상범위"
 
-st.markdown("---")
-st.markdown("### 🔗 공유")
-share_url = "https://bloodmap.streamlit.app/"
-st.text_input("공식 주소", share_url, key="share_url")
-st.caption("카카오톡 등 메신저에 위 링크를 붙여넣어 공유할 수 있습니다. (정식 SDK 연동 전 간편 공유)")
-
-
 with t_labs:
     st.subheader("피수치 입력 — 붙여넣기 지원 (견고)")
     st.caption("예: 'WBC: 4.5', 'Hb 12.3', 'PLT, 200', 'Na 140 mmol/L'…")
@@ -945,19 +966,6 @@ with t_labs:
     st.session_state["labs_dict"] = labs_dict
     st.markdown(f"**참조범위 기준:** {'소아' if use_peds else '성인'} / **ANC 분류:** {anc_band(values.get('ANC'))}")
 
-st.markdown("---")
-st.subheader("🍚 영양/식이 가이드")
-try:
-    guides = lab_diet_guides(labs_dict, heme_flag=True)
-    if guides:
-        for g in guides:
-            st.write(f"- {g}")
-    else:
-        st.caption("입력값 기준, 추가 가이드가 없습니다.")
-except Exception:
-    st.warning("식이가이드 모듈 호출 실패.")
-
-# DX
 # DX
 with t_dx:
     st.subheader("암 선택")
