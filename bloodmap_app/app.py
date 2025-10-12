@@ -324,9 +324,9 @@ def render_caregiver_notes_peds(
         rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, max_temp=max_temp
     )
 
-st.subheader("보호자 설명 (증상별)")
-
-def bullet(title, body):
+   st.subheader("보호자 설명 (증상별)")
+ 
+  def bullet(title, body):
     st.markdown(f"**{title}**")
     st.markdown(body.strip())
 
