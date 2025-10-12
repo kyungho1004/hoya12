@@ -494,8 +494,11 @@ def build_peds_notes(
     return "\\n".join(lines)
 
 # ---------- Tabs ----------
+# 상단 메인 탭 선언부 (기존 줄 교체)
 tab_home, tab_labs, tab_cancer, tab_chemo, tab_peds, tab_special, tab_report, tab_graphlog = st.tabs(
-    ["홈", "피수치 입력", "암 선택", "항암제(진단 기반)", "소아 증상", "특수검사", "보고서", "기록 그래프"]  # ⬅ 마지막에 추가
+    ["홈", "피수치 입력", "암 선택", "항암제(진단 기반)", "소아 증상", "특수검사", "보고서", "기록 그래프"]
+)
+
 # HOME
 with t_home:
     st.subheader("응급도 요약")
