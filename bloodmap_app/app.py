@@ -353,6 +353,7 @@ def render_caregiver_notes_peds(
   **아세트아미노펜과 이부프로펜 사이 간격은 최소 2시간**을 반드시 지키세요.
 - **중요:** 총 24시간 복용량은 초과하지 마세요(앱 가드레일 준수).  
   38.5 ℃ 이상 지속/의식 저하/호흡곤란/경련 등 **위험 신호**가 있으면 즉시 병원에 연락하세요.
+            """
         )
     if persistent_vomit:
         bullet(
@@ -1444,6 +1445,123 @@ with t_peds:
             st.write("- 호흡곤란/청색증/입술부종")
             st.write("- 소변량 급감·축 늘어짐(탈수)")
             st.write("- 피 섞인 변/검은 변, 점상출혈 지속")
+
+
+# === 보호자 가이드 모듈 ===
+
+def render_redflags_banner():
+    import streamlit as st
+    st.warning(
+        "이 안내는 **참고용**이며, 정확한 진단과 처치는 의료진의 판단에 따릅니다. "
+        "다음 **위험 신호**가 있으면 즉시 병원에 연락하세요: "
+        "의식 저하/경련, 호흡곤란·청색증, 반복 구토로 탈수 의심, "
+        "지속 고열(≥ 38.5 ℃), 심한 복통·혈변·흑색변, 점상출혈·멍이 쉽게 생김."
+    )
+
+def render_fever_quickguide():
+    import streamlit as st
+    st.markdown("### 🌡️ 발열 관리(보호자용)")
+    st.markdown(
+        """
+- **옷은 가볍게**, 땀복처럼 과도하게 덥히지 마세요.  
+- **실내 온도는 24~26 ℃로 유지**하면 열을 내리는 데 도움이 됩니다. *(과도한 땀내기 X)*
+- **미온수 마사지(미지근한 물수건 닦기)는 짧게만** 시행하세요. 장시간 목욕은 피합니다.
+- **해열제 간격**
+  - 아세트아미노펜(파라세타몰): **≥ 4시간 간격**
+  - 이부프로펜: **≥ 6시간 간격**
+- **해열제 복용 1시간 후에도 반응이 없으면** (의사가 허용한 경우에 한해) **교차 복용을 고려**할 수 있으나,  
+  **아세트아미노펜과 이부프로펜 사이 간격은 최소 2시간**을 반드시 지키세요.
+- **중요:** 총 24시간 복용량은 초과하지 마세요(앱 가드레일 준수).  
+  38.5 ℃ 이상 지속/의식 저하/호흡곤란/경련 등 **위험 신호**가 있으면 즉시 병원에 연락하세요.
+        """.strip()
+    )
+
+def render_diarrhea_quickguide():
+    import streamlit as st
+    st.markdown("### 💧 설사 관리(보호자용)")
+    st.markdown(
+        """
+- **수분 보충이 최우선**입니다. 소량씩 자주 마시게 하세요(ORS 권장).  
+- **미지근한 물/보리차/ORS** 위주. 당분 많은 음료·탄산은 피하세요.
+- **식사**: 기름진 음식·생채소는 피하고 **죽·바나나·감자·호박죽** 같이 부드러운 음식.
+- **색·혈변 확인**: 녹색(담즙)/노란 설사/피 섞임은 기록해두고, **혈변·검은 변**이면 병원 연락.
+- **탈수 신호**: 소변량 감소, 입마름, 눈물 감소, 기운 없음 → 병원 상담.
+- **주의**: **고열(≥ 38.5 ℃)**, 심한 복통/반복 구토/혈변이면 즉시 병원.
+        """.strip()
+    )
+
+def render_vomit_quickguide():
+    import streamlit as st
+    st.markdown("### 🤢 구토 관리(보호자용)")
+    st.markdown(
+        """
+- **30분 휴식 후** 소량의 물/ORS를 **2~3분 간격**으로 천천히. 한 번에 많이 주지 마세요.
+- **구토가 가라앉으면** 묽은 미음·죽부터 시작, 기름진 음식은 피합니다.
+- **담즙색(초록)/혈성 구토/커피색 토**는 기록하고 즉시 병원 상담.
+- **탈수 신호**(소변량 감소/입마름/무기력) 보이면 병원 연락.
+- **반복 구토 + 두통/의식 저하/목덜미 뻣뻣함** 동반 시 즉시 병원.
+        """.strip()
+    )
+
+def render_cough_cold_quickguide():
+    import streamlit as st
+    st.markdown("### 🤧 기침/감기 관리(보호자용)")
+    st.markdown(
+        """
+- **수분섭취/가습**으로 점액을 묽게. **미지근한 물**을 자주.
+- **고열(≥ 38.5 ℃)** 지속/호흡 곤란/가슴 통증/청색증(입술 파래짐) → 즉시 병원.
+- **기침이 3주 이상** 지속되거나, **쌕쌕거림**/호흡 시 함몰이 보이면 병원 상담.
+- **꿀**은 1세 이상에서 야간기침에 도움(1세 미만 금지).
+- 처방 없는 **해열제 외 감기약 남용 금지**(중복성분 주의).
+        """.strip()
+    )
+
+def render_pain_antipyretic_guardrails():
+    import streamlit as st
+    st.markdown("### 💊 해열·진통제 가드레일")
+    st.markdown(
+        """
+- **아세트아미노펜(파라세타몰)**: **최소 4시간 간격**  
+- **이부프로펜**: **최소 6시간 간격**
+- **교차 복용 시** 두 약물 간 **최소 2시간** 간격을 지키세요.
+- **24시간 총량 초과 금지**(앱의 계산/경고를 기준으로 관리).
+- **소아 용량**은 **체중 기준** 전문지시를 따르세요. 임의 증량/병용 금지.
+        """.strip()
+    )
+
+def render_neutropenia_foodguide():
+    import streamlit as st
+    st.markdown("### 🥗 호중구 감소 시 식이/위생 안내")
+    st.markdown(
+        """
+- **생채소/생고기/생달걀 금지**. **익힌 음식** 또는 **전자레인지 30초 이상 재가열**.
+- **멸균식품(살균식품) 권장**. **조리 후 2시간 이후 남은 음식은 섭취 금지**.
+- **껍질 있는 과일**은 **주치의와 상담 후** 섭취 여부 결정.
+- **개별 도마/칼** 구분, 손 씻기·주방 청결 유지.
+- **외식/뷔페/길거리 음식 회피**.
+        """.strip()
+    )
+
+def render_guardian_guides():
+    import streamlit as st
+    with st.expander("⚠️ 위험 신호(반드시 확인)", expanded=True):
+        render_redflags_banner()
+    st.markdown("---")
+    st.subheader("보호자 가이드 모음")
+    tabs = st.tabs(["발열", "설사", "구토", "기침/감기", "해열·진통제 가드레일", "호중구 감소 식이"])
+    with tabs[0]:
+        render_fever_quickguide()
+    with tabs[1]:
+        render_diarrhea_quickguide()
+    with tabs[2]:
+        render_vomit_quickguide()
+    with tabs[3]:
+        render_cough_cold_quickguide()
+    with tabs[4]:
+        render_pain_antipyretic_guardrails()
+    with tabs[5]:
+        render_neutropenia_foodguide()
+
 
 # SPECIAL (notes + pitfalls)
 def _annotate_special_notes(lines):
