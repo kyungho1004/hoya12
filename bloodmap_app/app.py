@@ -1602,11 +1602,11 @@ def render_guardian_guides():
     with tabs[5]:
         render_neutropenia_foodguide()
 
-with tabs[6]:
+    with tabs[6]:
         render_constipation_quickguide()
-with tabs[7]:
+    with tabs[7]:
         render_abdominal_pain_quickguide()
-with tabs[8]:
+    with tabs[8]:
         render_skin_care_quickguide()
 
 
