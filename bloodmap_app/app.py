@@ -499,6 +499,26 @@ tab_home, tab_labs, tab_cancer, tab_chemo, tab_peds, tab_special, tab_report, ta
     ["홈", "피수치 입력", "암 선택", "항암제(진단 기반)", "소아 증상", "특수검사", "보고서", "기록 그래프"]
 )
 
+
+# tab_* → t_* 별칭(호환용)
+try: t_home
+except NameError: t_home = tab_home
+try: t_labs
+except NameError: t_labs = tab_labs
+try: t_cancer
+except NameError: t_cancer = tab_cancer
+try: t_chemo
+except NameError: t_chemo = tab_chemo
+try: t_peds
+except NameError: t_peds = tab_peds
+try: t_special
+except NameError: t_special = tab_special
+try: t_report
+except NameError: t_report = tab_report
+try: t_graphlog
+except NameError: t_graphlog = tab_graphlog
+
+
 # HOME
 with t_home:
     st.subheader("응급도 요약")
