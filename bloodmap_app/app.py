@@ -343,7 +343,6 @@ def render_caregiver_notes_peds(
         bullet(
             "🌡️ 발열 대처",
             """
-- ***3개월 미안 소아는 꼭 주치의와 상담후 해열제를 사용해주세요**
 - **옷은 가볍게**, 땀복처럼 과도하게 덥히지 마세요.  
 - **실내 온도는 24~26 ℃로 유지**하면 열을 내리는 데 도움이 됩니다. *(과도한 땀내기 X)*
 - **미온수 마사지(미지근한 물수건 닦기)는 짧게만** 시행하세요. 장시간 목욕은 피합니다.
@@ -1246,7 +1245,7 @@ with t_chemo:
 # PEDS
 with t_peds:
     st.subheader("소아 증상 기반 점수 + 보호자 설명 + 해열제 계산")
-    c1, c2, c3, c4, c5 c6 = st.columns(6)
+    c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
         nasal = st.selectbox("콧물", ["없음", "투명", "진득", "누런"], key=wkey("p_nasal"))
     with c2:
