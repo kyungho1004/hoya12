@@ -2044,7 +2044,6 @@ with tab_graphlog:
     _render_graph_panel_safe()
 
 with t_peds:
-with t_peds:
     # --- 소아 증상 UI (정식) ---
     st.markdown("### 소아 증상 기반 점수 + 보호자 설명 + 해열제 계산")
 
