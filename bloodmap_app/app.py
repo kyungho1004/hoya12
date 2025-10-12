@@ -2044,14 +2044,28 @@ with tab_graphlog:
     _render_graph_panel_safe()
 
 with t_peds:
-    import streamlit as st
-    st.header("👶 소아 증상")
-    # 기존 렌더 함수가 있으면 자동 호출
-    _called = False
-    for fn in ["render_peds_ui", "render_pediatric_ui", "render_peds_tab", "build_peds_section"]:
-        if fn in globals():
-            globals()[fn]()
-            _called = True
-            break
-    if not _called:
-        st.info("소아 증상 UI가 일시적으로 비활성화되어 간단 안내만 표시합니다.")
+# --- 소아 증상 UI (정식) ---
+st.markdown("### 소아 증상 기반 점수 + 보호자 설명 + 해열제 계산")
+
+# 6열: 콧물/기침/설사/발열/눈꼽·결막/변비
+c1, c2, c3, c4, c5, c6 = st.columns(6)
+with c1:
+    nasal = st.selectbox("콧물", ["없음", "약간", "중간", "심함"], key=wkey("p_nasal"))
+with c2:
+    cough = st.selectbox("기침", ["없음", "약간", "중간", "심함"], key=wkey("p_cough"))
+with c3:
+    stool = st.selectbox("설사", ["없음", "1~2회/일", "3~4회/일", "5회 이상/일"], key=wkey("p_stool"))
+with c4:
+    fever = st.selectbox("발열", ["없음", "37.5~38.0", "38.0~38.5", "≥38.5"], key=wkey("p_fever"))
+with c5:
+    eye = st.selectbox("눈꼽/결막", ["없음", "가벼움", "중간", "심함"], key=wkey("p_eye"))
+with c6:
+    constip = st.selectbox("변비", ["없음", "1~2일", "3~4일", "5일 이상"], key=wkey("p_constip"))
+
+# 선택값을 세션에 보관(아래 '집에서 대처법'과 기록/보고서 연동용)
+st.session_state[wkey("p_nasal")] = nasal
+st.session_state[wkey("p_cough")] = cough
+st.session_state[wkey("p_stool")] = stool
+st.session_state[wkey("p_fever")] = fever
+st.session_state[wkey("p_eye")]   = eye
+st.session_state[wkey("p_constip")] = constip
