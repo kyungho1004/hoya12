@@ -2042,3 +2042,16 @@ def _render_graph_panel_safe():
 
 with tab_graphlog:
     _render_graph_panel_safe()
+
+with t_peds:
+    import streamlit as st
+    st.header("👶 소아 증상")
+    # 기존 렌더 함수가 있으면 자동 호출
+    _called = False
+    for fn in ["render_peds_ui", "render_pediatric_ui", "render_peds_tab", "build_peds_section"]:
+        if fn in globals():
+            globals()[fn]()
+            _called = True
+            break
+    if not _called:
+        st.info("소아 증상 UI가 일시적으로 비활성화되어 간단 안내만 표시합니다.")
