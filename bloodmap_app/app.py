@@ -518,6 +518,21 @@ except NameError: t_report = tab_report
 try: t_graphlog
 except NameError: t_graphlog = tab_graphlog
 
+# 호환용: t_dx가 쓰인 구간 대응
+try:
+    t_dx
+except NameError:
+    try:
+        t_dx = t_cancer
+    except NameError:
+        try:
+            t_dx = tab_cancer
+        except NameError:
+            # 최후 폴백: 홈 탭으로 연결
+            t_dx = t_home if 't_home' in globals() else tab_home
+
+
+
 
 # HOME
 with t_home:
