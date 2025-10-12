@@ -583,7 +583,34 @@ with t_home:
         st.info("응급도: " + level + (" — " + " · ".join(reasons) if reasons else ""))
 
     st.markdown("---")
-    st.subheader("응급도 전문가용  (편집 + 프리셋)")
+
+# --- 응급도 설정: 초보자/전문가 모드 ---
+st.markdown("---")
+st.subheader("응급도 설정")
+pro_mode = st.toggle("👨‍⚕️ 전문가 모드(가중치 세부 편집)", value=bool(st.session_state.get(wkey("pro_mode"), False)), key=wkey("pro_mode"))
+if not pro_mode:
+    simple_preset_name = st.selectbox("모드(초보자용)", ["보호자용(간단)", "발열·감염 민감", "출혈 위험 민감", "신경계 위중 민감"], key=wkey("simple_preset"))
+    if st.button("선택 적용", key=wkey("simple_preset_apply")):
+        try:
+            if simple_preset_name == "보호자용(간단)":
+                set_weights(PRESETS.get("기본(Default)", DEFAULT_WEIGHTS))
+            else:
+                name_map = {
+                    "발열·감염 민감": "발열·감염 민감",
+                    "출혈 위험 민감": "출혈 위험 민감",
+                    "신경계 위중 민감": "신경계 위중 민감",
+                }
+                set_weights(PRESETS.get(name_map[simple_preset_name], DEFAULT_WEIGHTS))
+            st.success(f"'{simple_preset_name}' 설정을 적용했습니다.")
+        except Exception as e:
+            st.warning(f"프리셋 적용 중 문제가 발생했어요: {e}")
+    st.caption("※ 초보자용에서는 가중치 슬라이더를 숨기고 선택한 모드로 자동 계산합니다.")
+else:
+    # 아래의 기존 '응급도 가중치 (편집 + 프리셋)' 슬라이더 블록이 그대로 이어집니다.
+    pass
+
+
+    st.subheader("응급도 가중치 (편집 + 프리셋)")
     colp = st.columns(3)
     with colp[0]:
         preset_name = st.selectbox("프리셋 선택", list(PRESETS.keys()), key=wkey("preset_sel"))
@@ -861,13 +888,6 @@ def lab_validate(abbr: str, val, is_peds: bool):
         return f"⬆️ 기준치 초과({lo}~{hi})"
     return "정상범위"
 
-st.markdown("---")
-st.markdown("### 🔗 공유")
-share_url = "https://bloodmap.streamlit.app/"
-st.text_input("공식 주소", share_url, key="share_url")
-st.caption("카카오톡 등 메신저에 위 링크를 붙여넣어 공유할 수 있습니다. (정식 SDK 연동 전 간편 공유)")
-
-
 with t_labs:
     st.subheader("피수치 입력 — 붙여넣기 지원 (견고)")
     st.caption("예: 'WBC: 4.5', 'Hb 12.3', 'PLT, 200', 'Na 140 mmol/L'…")
@@ -945,19 +965,6 @@ with t_labs:
     st.session_state["labs_dict"] = labs_dict
     st.markdown(f"**참조범위 기준:** {'소아' if use_peds else '성인'} / **ANC 분류:** {anc_band(values.get('ANC'))}")
 
-st.markdown("---")
-st.subheader("🍚 영양/식이 가이드")
-try:
-    guides = lab_diet_guides(labs_dict, heme_flag=True)
-    if guides:
-        for g in guides:
-            st.write(f"- {g}")
-    else:
-        st.caption("입력값 기준, 추가 가이드가 없습니다.")
-except Exception:
-    st.warning("식이가이드 모듈 호출 실패.")
-
-# DX
 # DX
 with t_dx:
     st.subheader("암 선택")
@@ -1533,175 +1540,13 @@ with t_report:
 
     # ---------- 오른쪽: 기록/그래프/내보내기 ----------
     with col_side:
-        st.markdown("### 📊 기록/그래프 패널")
-
-        st.session_state.setdefault("lab_history", [])
-        hist = st.session_state["lab_history"]
-
-        tab_log, tab_plot, tab_export = st.tabs(["📝 기록", "📈 그래프", "⬇️ 내보내기"])
-
-        with tab_log:
-            cols_btn = st.columns([1, 1, 1])
-            with cols_btn[0]:
-                if st.button("➕ 현재 값을 기록에 추가", key=wkey("add_history_tab")):
-                    snap = {
-                        "ts": _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        "temp": temp or "",
-                        "hr": hr or "",
-                        "labs": {k: ("" if labs.get(k) in (None, "") else labs.get(k)) for k in labs.keys()},
-                        "mode": "peds" if bool(st.session_state.get(wkey("is_peds"), False)) else "adult",
-                        "ref": lab_ref(bool(st.session_state.get(wkey("is_peds"), False))),
-                    }
-                    weird = []
-                    for k, v in (snap["labs"] or {}).items():
-                        try:
-                            fv = float(v)
-                            if k == "Na" and not (110 <= fv <= 170):
-                                weird.append(f"Na {fv}")
-                            if k == "K" and not (1.0 <= fv <= 8.0):
-                                weird.append(f"K {fv}")
-                            if k == "Hb" and not (3.0 <= fv <= 25.0):
-                                weird.append(f"Hb {fv}")
-                            if k == "PLT" and fv > 0 and fv < 1:
-                                weird.append(f"PLT {fv} (단위 확인)")
-                        except Exception:
-                            pass
-                    hist.append(snap)
-                    st.success("현재 값이 기록에 추가되었습니다.")
-                    if weird:
-                        st.warning("비정상적으로 보이는 값 감지: " + ", ".join(weird) + " — 단위/오타를 확인하세요.")
-            with cols_btn[1]:
-                if st.button("🗑️ 기록 비우기", key=wkey("clear_history")) and hist:
-                    st.session_state["lab_history"] = []
-                    hist = st.session_state["lab_history"]
-                    st.warning("기록을 모두 비웠습니다.")
-            with cols_btn[2]:
-                st.caption(f"총 {len(hist)}건")
-
-            if not hist:
-                st.info("기록이 없습니다.")
-            else:
-                try:
-                    import pandas as pd
-                    rows = []
-                    for h in hist[-10:]:
-                        row = {
-                            "시각": h.get("ts", ""),
-                            "T(℃)": h.get("temp", ""),
-                            "HR": h.get("hr", ""),
-                            "WBC": (h.get("labs", {}) or {}).get("WBC", ""),
-                            "Hb": (h.get("labs", {}) or {}).get("Hb", ""),
-                            "PLT": (h.get("labs", {}) or {}).get("PLT", ""),
-                            "ANC": (h.get("labs", {}) or {}).get("ANC", ""),
-                            "CRP": (h.get("labs", {}) or {}).get("CRP", ""),
-                        }
-                        rows.append(row)
-                    df = pd.DataFrame(rows)
-                    st.dataframe(df, use_container_width=True, height=280)
-                except Exception:
-                    st.write(hist[-5:])
-
-        with tab_plot:
-            default_metrics = ["WBC", "Hb", "PLT", "ANC", "CRP", "Na", "Cr", "BUN", "AST", "ALT", "Glu"]
-            all_metrics = sorted({*default_metrics, *list(labs.keys())})
-            pick = st.multiselect("그래프 항목 선택", options=all_metrics, default=default_metrics[:4], key=wkey("chart_metrics_tab"))
-
-            if not hist:
-                st.info("기록이 없습니다. 먼저 '기록' 탭에서 추가하세요.")
-            elif not pick:
-                st.info("표시할 항목을 선택하세요.")
-            else:
-                x = [h.get("ts", "") for h in hist]
-                if _HAS_MPL:
-                    for m in pick:
-                        y, band = [], None
-                        for h in hist:
-                            v = (h.get("labs", {}) or {}).get(m, "")
-                            try:
-                                v = float(str(v).replace(",", "."))
-                            except Exception:
-                                v = None
-                            y.append(v)
-                        for h in reversed(hist):
-                            ref = (h.get("ref") or {})
-                            if m in ref:
-                                band = ref[m]
-                                break
-                        if all(v is None for v in y):
-                            continue
-                        fig = plt.figure()
-                        plt.plot(x, [vv if vv is not None else float("nan") for vv in y], marker="o")
-                        plt.title(m)
-                        plt.xlabel("기록 시각")
-                        plt.ylabel(m)
-                        plt.xticks(rotation=45, ha="right")
-                        if band and isinstance(band, (tuple, list)) and len(band) == 2:
-                            lo, hi = band
-                            try:
-                                plt.axhspan(lo, hi, alpha=0.15)
-                            except Exception:
-                                pass
-                        plt.tight_layout()
-                        st.pyplot(fig)
-                else:
-                    try:
-                        import pandas as pd
-                        df_rows = []
-                        for i, h in enumerate(hist):
-                            row = {"ts": x[i]}
-                            for m in pick:
-                                v = (h.get("labs", {}) or {}).get(m, None)
-                                try:
-                                    v = float(str(v).replace(",", "."))
-                                except Exception:
-                                    v = None
-                                row[m] = v
-                            df_rows.append(row)
-                        if df_rows:
-                            df = pd.DataFrame(df_rows).set_index("ts")
-                            for m in pick:
-                                st.line_chart(df[[m]])
-                        else:
-                            st.info("표시할 데이터가 없습니다.")
-                    except Exception:
-                        st.warning("matplotlib/pandas 미설치 → 간단 표로 폴백합니다.")
-                        for m in pick:
-                            st.write(m, [(x[i], (hist[i].get("labs", {}) or {}).get(m, None)) for i in range(len(hist))])
-
-        with tab_export:
-            if not hist:
-                st.info("기록이 없습니다.")
-            else:
-                since = st.text_input("시작 시각(YYYY-MM-DD)", value="")
-                until = st.text_input("종료 시각(YYYY-MM-DD)", value="")
-
-                def _in_range(ts):
-                    if not ts:
-                        return False
-                    d = ts[:10]
-                    if since and d < since:
-                        return False
-                    if until and d > until:
-                        return False
-                    return True
-
-                sel = [h for h in hist if _in_range(h.get("ts", ""))] if (since or until) else hist
-
-                output = io.StringIO()
-                writer = csv.writer(output)
-                all_keys = set()
-                for h in sel:
-                    all_keys |= set((h.get("labs", {}) or {}).keys())
-                all_keys = sorted(all_keys)
-                headers = ["ts", "temp", "hr"] + all_keys
-                writer.writerow(headers)
-                for h in sel:
-                    row = [h.get("ts", ""), h.get("temp", ""), h.get("hr", "")]
-                    for m in all_keys:
-                        row.append((h.get("labs", {}) or {}).get(m, ""))
-                    writer.writerow(row)
-                st.download_button("CSV 다운로드", data=output.getvalue().encode("utf-8"), file_name="bloodmap_history.csv", mime="text/csv")
-                st.caption("팁: 기간 필터를 지정해 필요한 구간만 내보낼 수 있습니다.")
+        st.info("이 패널은 상단 탭 📈 기록 그래프로 이동했습니다.")
+        # 필요 시 다음 줄의 guard를 True로 바꾸면 임시로 이 자리에서도 보입니다.
+        if st.session_state.get('_debug_show_graph_in_report', False):
+            try:
+                render_graph_panel()
+            except NameError:
+                st.warning('render_graph_panel 함수가 아직 정의되지 않았습니다.')
 
     # ---------- 왼쪽: 보고서 본문 ----------
     with col_report:
@@ -1873,3 +1718,182 @@ with t_report:
             st.download_button("📄 보고서 .pdf 다운로드", data=pdf_bytes, file_name="bloodmap_report.pdf", mime="application/pdf")
         except Exception:
             st.caption("PDF 변환 모듈을 불러오지 못했습니다. .md 또는 .txt를 사용해주세요.")
+# ==== 기록/그래프 패널: 분리된 렌더 함수 ====
+def render_graph_panel():
+    st.markdown("### 📊 기록/그래프 패널")
+
+    st.session_state.setdefault("lab_history", [])
+    hist = st.session_state["lab_history"]
+
+    tab_log, tab_plot, tab_export = st.tabs(["📝 기록", "📈 그래프", "⬇️ 내보내기"])
+
+    with tab_log:
+        cols_btn = st.columns([1, 1, 1])
+        with cols_btn[0]:
+            if st.button("➕ 현재 값을 기록에 추가", key=wkey("add_history_tab")):
+                snap = {
+                    "ts": _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "temp": temp or "",
+                    "hr": hr or "",
+                    "labs": {k: ("" if labs.get(k) in (None, "") else labs.get(k)) for k in labs.keys()},
+                    "mode": "peds" if bool(st.session_state.get(wkey("is_peds"), False)) else "adult",
+                    "ref": lab_ref(bool(st.session_state.get(wkey("is_peds"), False))),
+                }
+                weird = []
+                for k, v in (snap["labs"] or {}).items():
+                    try:
+                        fv = float(v)
+                        if k == "Na" and not (110 <= fv <= 170):
+                            weird.append(f"Na {fv}")
+                        if k == "K" and not (1.0 <= fv <= 8.0):
+                            weird.append(f"K {fv}")
+                        if k == "Hb" and not (3.0 <= fv <= 25.0):
+                            weird.append(f"Hb {fv}")
+                        if k == "PLT" and fv > 0 and fv < 1:
+                            weird.append(f"PLT {fv} (단위 확인)")
+                    except Exception:
+                        pass
+                hist.append(snap)
+                st.success("현재 값이 기록에 추가되었습니다.")
+                if weird:
+                    st.warning("비정상적으로 보이는 값 감지: " + ", ".join(weird) + " — 단위/오타를 확인하세요.")
+        with cols_btn[1]:
+            if st.button("🗑️ 기록 비우기", key=wkey("clear_history")) and hist:
+                st.session_state["lab_history"] = []
+                hist = st.session_state["lab_history"]
+                st.warning("기록을 모두 비웠습니다.")
+        with cols_btn[2]:
+            st.caption(f"총 {len(hist)}건")
+
+        if not hist:
+            st.info("기록이 없습니다.")
+        else:
+            try:
+                import pandas as pd
+                rows = []
+                for h in hist[-10:]:
+                    row = {
+                        "시각": h.get("ts", ""),
+                        "T(℃)": h.get("temp", ""),
+                        "HR": h.get("hr", ""),
+                        "WBC": (h.get("labs", {}) or {}).get("WBC", ""),
+                        "Hb": (h.get("labs", {}) or {}).get("Hb", ""),
+                        "PLT": (h.get("labs", {}) or {}).get("PLT", ""),
+                        "ANC": (h.get("labs", {}) or {}).get("ANC", ""),
+                        "CRP": (h.get("labs", {}) or {}).get("CRP", ""),
+                    }
+                    rows.append(row)
+                df = pd.DataFrame(rows)
+                st.dataframe(df, use_container_width=True, height=280)
+            except Exception:
+                st.write(hist[-5:])
+
+    with tab_plot:
+        default_metrics = ["WBC", "Hb", "PLT", "ANC", "CRP", "Na", "Cr", "BUN", "AST", "ALT", "Glu"]
+        all_metrics = sorted({*default_metrics, *list(labs.keys())})
+        pick = st.multiselect("그래프 항목 선택", options=all_metrics, default=default_metrics[:4], key=wkey("chart_metrics_tab"))
+
+        if not hist:
+            st.info("기록이 없습니다. 먼저 '기록' 탭에서 추가하세요.")
+        elif not pick:
+            st.info("표시할 항목을 선택하세요.")
+        else:
+            x = [h.get("ts", "") for h in hist]
+            if _HAS_MPL:
+                for m in pick:
+                    y, band = [], None
+                    for h in hist:
+                        v = (h.get("labs", {}) or {}).get(m, "")
+                        try:
+                            v = float(str(v).replace(",", "."))
+                        except Exception:
+                            v = None
+                        y.append(v)
+                    for h in reversed(hist):
+                        ref = (h.get("ref") or {})
+                        if m in ref:
+                            band = ref[m]
+                            break
+                    if all(v is None for v in y):
+                        continue
+                    fig = plt.figure()
+                    plt.plot(x, [vv if vv is not None else float("nan") for vv in y], marker="o")
+                    plt.title(m)
+                    plt.xlabel("기록 시각")
+                    plt.ylabel(m)
+                    plt.xticks(rotation=45, ha="right")
+                    if band and isinstance(band, (tuple, list)) and len(band) == 2:
+                        lo, hi = band
+                        try:
+                            plt.axhspan(lo, hi, alpha=0.15)
+                        except Exception:
+                            pass
+                    plt.tight_layout()
+                    st.pyplot(fig)
+            else:
+                try:
+                    import pandas as pd
+                    df_rows = []
+                    for i, h in enumerate(hist):
+                        row = {"ts": x[i]}
+                        for m in pick:
+                            v = (h.get("labs", {}) or {}).get(m, None)
+                            try:
+                                v = float(str(v).replace(",", "."))
+                            except Exception:
+                                v = None
+                            row[m] = v
+                        df_rows.append(row)
+                    if df_rows:
+                        df = pd.DataFrame(df_rows).set_index("ts")
+                        for m in pick:
+                            st.line_chart(df[[m]])
+                    else:
+                        st.info("표시할 데이터가 없습니다.")
+                except Exception:
+                    st.warning("matplotlib/pandas 미설치 → 간단 표로 폴백합니다.")
+                    for m in pick:
+                        st.write(m, [(x[i], (hist[i].get("labs", {}) or {}).get(m, None)) for i in range(len(hist))])
+
+    with tab_export:
+        if not hist:
+            st.info("기록이 없습니다.")
+        else:
+            since = st.text_input("시작 시각(YYYY-MM-DD)", value="")
+            until = st.text_input("종료 시각(YYYY-MM-DD)", value="")
+
+            def _in_range(ts):
+                if not ts:
+                    return False
+                d = ts[:10]
+                if since and d < since:
+                    return False
+                if until and d > until:
+                    return False
+                return True
+
+            sel = [h for h in hist if _in_range(h.get("ts", ""))] if (since or until) else hist
+
+            output = io.StringIO()
+            writer = csv.writer(output)
+            all_keys = set()
+            for h in sel:
+                all_keys |= set((h.get("labs", {}) or {}).keys())
+            all_keys = sorted(all_keys)
+            headers = ["ts", "temp", "hr"] + all_keys
+            writer.writerow(headers)
+            for h in sel:
+                row = [h.get("ts", ""), h.get("temp", ""), h.get("hr", "")]
+                for m in all_keys:
+                    row.append((h.get("labs", {}) or {}).get(m, ""))
+                writer.writerow(row)
+            st.download_button("CSV 다운로드", data=output.getvalue().encode("utf-8"), file_name="bloodmap_history.csv", mime="text/csv")
+            st.caption("팁: 기간 필터를 지정해 필요한 구간만 내보낼 수 있습니다.")
+
+# --- 기록 그래프 단독 탭 ---
+with tab_graphlog:
+    st.subheader("📈 기록 그래프")
+    try:
+        render_graph_panel()
+    except Exception as e:
+        st.warning(f"기록 그래프 렌더 중 오류: {e}")
