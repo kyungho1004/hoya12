@@ -2070,20 +2070,20 @@ with t_peds:
 with st.expander("✅ 추가 증상(필요한 항목만 체크)", expanded=False):
     col1, col2, col3 = st.columns(3)
     with col1:
-        cb_rash = st.checkbox("피부 발진/두드러기", key=wkey("p_cb_rash"))
-        cb_vomit = st.checkbox("구토", key=wkey("p_cb_vomit"))
-        cb_abdpain = st.checkbox("복통", key=wkey("p_cb_abdpain"))
-        cb_diaph = st.checkbox("식은땀/창백", key=wkey("p_cb_diaph"))
+        cb_rash = st.checkbox("피부 발진/두드러기", key=wkey("peds_cb_rash"))
+        cb_vomit = st.checkbox("구토", key=wkey("peds_cb_vomit"))
+        cb_abdpain = st.checkbox("복통", key=wkey("peds_cb_abdpain"))
+        cb_diaph = st.checkbox("식은땀/창백", key=wkey("peds_cb_diaph"))
     with col2:
-        cb_breath = st.checkbox("호흡곤란/쌕쌕거림", key=wkey("p_cb_breath"))
-        cb_lethargy = st.checkbox("기면/무기력", key=wkey("p_cb_lethargy"))
-        cb_bloody = st.checkbox("혈변/검은 변", key=wkey("p_cb_bloody"))
-        cb_dehydr = st.checkbox("탈수 의심(소변↓/입마름)", key=wkey("p_cb_dehydr"))
+        cb_breath = st.checkbox("호흡곤란/쌕쌕거림", key=wkey("peds_cb_breath"))
+        cb_lethargy = st.checkbox("기면/무기력", key=wkey("peds_cb_lethargy"))
+        cb_bloody = st.checkbox("혈변/검은 변", key=wkey("peds_cb_bloody"))
+        cb_dehydr = st.checkbox("탈수 의심(소변↓/입마름)", key=wkey("peds_cb_dehydr"))
     with col3:
-        cb_ear = st.checkbox("귀 통증/고막염 의심", key=wkey("p_cb_ear"))
-        cb_throat = st.checkbox("인후통/연하통", key=wkey("p_cb_throat"))
-        cb_antibiotic = st.checkbox("항생제 복용 중", key=wkey("p_cb_antibiotic"))
-        cb_exposure = st.checkbox("전염병 노출(수두/홍역 등)", key=wkey("p_cb_exposure"))
+        cb_ear = st.checkbox("귀 통증/고막염 의심", key=wkey("peds_cb_ear"))
+        cb_throat = st.checkbox("인후통/연하통", key=wkey("peds_cb_throat"))
+        cb_antibiotic = st.checkbox("항생제 복용 중", key=wkey("peds_cb_antibiotic"))
+        cb_exposure = st.checkbox("전염병 노출(수두/홍역 등)", key=wkey("peds_cb_exposure"))
     selected = [label for label, val in {
         "피부 발진/두드러기": cb_rash, "구토": cb_vomit, "복통": cb_abdpain, "식은땀/창백": cb_diaph,
         "호흡곤란/쌕쌕거림": cb_breath, "기면/무기력": cb_lethargy, "혈변/검은 변": cb_bloody, "탈수 의심(소변↓/입마름)": cb_dehydr,
@@ -2093,59 +2093,16 @@ with st.expander("✅ 추가 증상(필요한 항목만 체크)", expanded=False
         st.markdown("**선택된 추가 증상:** " + ", ".join(selected))
     else:
         st.caption("필요한 항목만 체크하세요. 미선택 시 표시되지 않습니다.")
-# --- ✅ 추가 증상(체크박스) ---
-with st.expander("✅ 추가 증상(필요한 항목만 체크)", expanded=False):
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        cb_rash = st.checkbox("피부 발진/두드러기", key=wkey("p_cb_rash"))
-        cb_vomit = st.checkbox("구토", key=wkey("p_cb_vomit"))
-        cb_abdpain = st.checkbox("복통", key=wkey("p_cb_abdpain"))
-        cb_diaph = st.checkbox("식은땀/창백", key=wkey("p_cb_diaph"))
-    with col2:
-        cb_breath = st.checkbox("호흡곤란/쌕쌕거림", key=wkey("p_cb_breath"))
-        cb_lethargy = st.checkbox("기면/무기력", key=wkey("p_cb_lethargy"))
-        cb_bloody = st.checkbox("혈변/검은 변", key=wkey("p_cb_bloody"))
-        cb_dehydr = st.checkbox("탈수 의심(소변↓/입마름)", key=wkey("p_cb_dehydr"))
-    with col3:
-        cb_ear = st.checkbox("귀 통증/고막염 의심", key=wkey("p_cb_ear"))
-        cb_throat = st.checkbox("인후통/연하통", key=wkey("p_cb_throat"))
-        cb_antibiotic = st.checkbox("항생제 복용 중", key=wkey("p_cb_antibiotic"))
-        cb_exposure = st.checkbox("전염병 노출(수두/홍역 등)", key=wkey("p_cb_exposure"))
-    # 선택 요약 표시(선택된 항목만)
-    selected = []
-    labels = {
-        "피부 발진/두드러기": cb_rash,
-        "구토": cb_vomit,
-        "복통": cb_abdpain,
-        "식은땀/창백": cb_diaph,
-        "호흡곤란/쌕쌕거림": cb_breath,
-        "기면/무기력": cb_lethargy,
-        "혈변/검은 변": cb_bloody,
-        "탈수 의심(소변↓/입마름)": cb_dehydr,
-        "귀 통증/고막염 의심": cb_ear,
-        "인후통/연하통": cb_throat,
-        "항생제 복용 중": cb_antibiotic,
-        "전염병 노출(수두/홍역 등)": cb_exposure,
-    }
-    for k, v in labels.items():
-        if v:
-            selected.append(k)
-    if selected:
-        st.markdown("**선택된 추가 증상:** " + ", ".join(selected))
-    else:
-        st.caption("필요한 항목만 체크하세요. 미선택 시 표시되지 않습니다.")
-
-
 # --- 🚨 자동 레드 플래그 경고 ---
 try:
     # 읽기 (세션 또는 직전 변수)
     _fever_val = fever if 'fever' in locals() else st.session_state.get(wkey("p_fever"), "없음")
     _cb = { 
-        "breath": st.session_state.get(wkey("p_cb_breath"), False),
-        "bloody": st.session_state.get(wkey("p_cb_bloody"), False),
-        "lethargy": st.session_state.get(wkey("p_cb_lethargy"), False),
-        "dehydr": st.session_state.get(wkey("p_cb_dehydr"), False),
-        "vomit": st.session_state.get(wkey("p_cb_vomit"), False),
+        "breath": (st.session_state.get(wkey("peds_cb_breath"), st.session_state.get(wkey("p_cb_breath"), False))),
+        "bloody": (st.session_state.get(wkey("peds_cb_bloody"), st.session_state.get(wkey("p_cb_bloody"), False))),
+        "lethargy": (st.session_state.get(wkey("peds_cb_lethargy"), st.session_state.get(wkey("p_cb_lethargy"), False))),
+        "dehydr": (st.session_state.get(wkey("peds_cb_dehydr"), st.session_state.get(wkey("p_cb_dehydr"), False))),
+        "vomit": (st.session_state.get(wkey("peds_cb_vomit"), st.session_state.get(wkey("p_cb_vomit"), False))),
     }
     redflags = []
     if _fever_val in ["≥38.5", "38.5 이상", "고열", "≥ 38.5"]:
