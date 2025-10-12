@@ -537,6 +537,15 @@ except NameError:
             t_dx = t_home if 't_home' in globals() else tab_home
 
 # HOME
+
+def is_expert_mode():
+    import streamlit as st
+    try:
+        return bool(st.session_state.get(wkey("is_expert_mode()"), False))
+    except Exception:
+        return False
+
+
 with t_home:
     st.subheader("응급도 요약")
     labs = st.session_state.get("labs_dict", {})
