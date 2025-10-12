@@ -2044,28 +2044,45 @@ with tab_graphlog:
     _render_graph_panel_safe()
 
 with t_peds:
-# --- 소아 증상 UI (정식) ---
-st.markdown("### 소아 증상 기반 점수 + 보호자 설명 + 해열제 계산")
+with t_peds:
+    # --- 소아 증상 UI (정식) ---
+    st.markdown("### 소아 증상 기반 점수 + 보호자 설명 + 해열제 계산")
 
-# 6열: 콧물/기침/설사/발열/눈꼽·결막/변비
-c1, c2, c3, c4, c5, c6 = st.columns(6)
-with c1:
-    nasal = st.selectbox("콧물", ["없음", "약간", "중간", "심함"], key=wkey("p_nasal"))
-with c2:
-    cough = st.selectbox("기침", ["없음", "약간", "중간", "심함"], key=wkey("p_cough"))
-with c3:
-    stool = st.selectbox("설사", ["없음", "1~2회/일", "3~4회/일", "5회 이상/일"], key=wkey("p_stool"))
-with c4:
-    fever = st.selectbox("발열", ["없음", "37.5~38.0", "38.0~38.5", "≥38.5"], key=wkey("p_fever"))
-with c5:
-    eye = st.selectbox("눈꼽/결막", ["없음", "가벼움", "중간", "심함"], key=wkey("p_eye"))
-with c6:
-    constip = st.selectbox("변비", ["없음", "1~2일", "3~4일", "5일 이상"], key=wkey("p_constip"))
+    # 6열: 콧물/기침/설사/발열/눈꼽·결막/변비
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
+    with c1:
+        nasal = st.selectbox("콧물", ["없음", "약간", "중간", "심함"], key=wkey("p_nasal"))
+    with c2:
+        cough = st.selectbox("기침", ["없음", "약간", "중간", "심함"], key=wkey("p_cough"))
+    with c3:
+        stool = st.selectbox("설사", ["없음", "1~2회/일", "3~4회/일", "5회 이상/일"], key=wkey("p_stool"))
+    with c4:
+        fever = st.selectbox("발열", ["없음", "37.5~38.0", "38.0~38.5", "≥38.5"], key=wkey("p_fever"))
+    with c5:
+        eye = st.selectbox("눈꼽/결막", ["없음", "가벼움", "중간", "심함"], key=wkey("p_eye"))
+    with c6:
+        constip = st.selectbox("변비", ["없음", "1~2일", "3~4일", "5일 이상"], key=wkey("p_constip"))
 
-# 선택값을 세션에 보관(아래 '집에서 대처법'과 기록/보고서 연동용)
-st.session_state[wkey("p_nasal")] = nasal
-st.session_state[wkey("p_cough")] = cough
-st.session_state[wkey("p_stool")] = stool
-st.session_state[wkey("p_fever")] = fever
-st.session_state[wkey("p_eye")]   = eye
-st.session_state[wkey("p_constip")] = constip
+    # 선택값 세션 저장 (아래 ‘집에서 대처법/계산기/가이드’에서 사용)
+    st.session_state[wkey("p_nasal")]   = nasal
+    st.session_state[wkey("p_cough")]   = cough
+    st.session_state[wkey("p_stool")]   = stool
+    st.session_state[wkey("p_fever")]   = fever
+    st.session_state[wkey("p_eye")]     = eye
+    st.session_state[wkey("p_constip")] = constip
+
+    # (선택) 기존 추가 위젯이 있으면 여기에 이어서 배치
+    # d1, d2, d3 = st.columns(3)
+    # with d1:
+    #     duration = st.selectbox("증상 지속일수", ["선택 안 함","1일","2일","3일","4일 이상"], key=wkey("p_duration"))
+    # with d2:
+    #     max_temp = st.number_input("최고 체온(℃)", min_value=33.0, max_value=42.5, value=36.5, step=0.1, key=wkey("p_max_temp"))
+    # with d3:
+    #     night = st.checkbox("야간/새벽 악화", key=wkey("p_worse_night"))
+
+    # 아래에는 이미 연결된
+    #  - 🏠 집에서 대처법(선택한 증상 기준)
+    #  - ⏱️ 다음 해열제 시간 계산기(+ .ics)
+    #  - 🥤 ORS 권장량 계산
+    #  - 보호자 가이드
+    # 섹션이 그대로 이어지면 됩니다.
