@@ -583,6 +583,33 @@ with t_home:
         st.info("응급도: " + level + (" — " + " · ".join(reasons) if reasons else ""))
 
     st.markdown("---")
+
+# --- 응급도 설정: 초보자/전문가 모드 ---
+st.markdown("---")
+st.subheader("응급도 설정")
+pro_mode = st.toggle("👨‍⚕️ 전문가 모드(가중치 세부 편집)", value=bool(st.session_state.get(wkey("pro_mode"), False)), key=wkey("pro_mode"))
+if not pro_mode:
+    simple_preset_name = st.selectbox("모드(초보자용)", ["보호자용(간단)", "발열·감염 민감", "출혈 위험 민감", "신경계 위중 민감"], key=wkey("simple_preset"))
+    if st.button("선택 적용", key=wkey("simple_preset_apply")):
+        try:
+            if simple_preset_name == "보호자용(간단)":
+                set_weights(PRESETS.get("기본(Default)", DEFAULT_WEIGHTS))
+            else:
+                name_map = {
+                    "발열·감염 민감": "발열·감염 민감",
+                    "출혈 위험 민감": "출혈 위험 민감",
+                    "신경계 위중 민감": "신경계 위중 민감",
+                }
+                set_weights(PRESETS.get(name_map[simple_preset_name], DEFAULT_WEIGHTS))
+            st.success(f"'{simple_preset_name}' 설정을 적용했습니다.")
+        except Exception as e:
+            st.warning(f"프리셋 적용 중 문제가 발생했어요: {e}")
+    st.caption("※ 초보자용에서는 가중치 슬라이더를 숨기고 선택한 모드로 자동 계산합니다.")
+else:
+    # 아래의 기존 '응급도 가중치 (편집 + 프리셋)' 슬라이더 블록이 그대로 이어집니다.
+    pass
+
+
     st.subheader("응급도 가중치 (편집 + 프리셋)")
     colp = st.columns(3)
     with colp[0]:
