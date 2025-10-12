@@ -1603,11 +1603,11 @@ def render_guardian_guides():
         render_neutropenia_foodguide()
 
 with tabs[6]:
-    render_constipation_quickguide()
+        render_constipation_quickguide()
 with tabs[7]:
-    render_abdominal_pain_quickguide()
+        render_abdominal_pain_quickguide()
 with tabs[8]:
-    render_skin_care_quickguide()
+        render_skin_care_quickguide()
 
 
 # SPECIAL (notes + pitfalls)
@@ -2110,4 +2110,3 @@ def _render_graph_panel_safe():
 
 with tab_graphlog:
     _render_graph_panel_safe()
-
