@@ -1245,10 +1245,38 @@ with t_chemo:
 # PEDS
 
 # --- 🏠 집에서 대처법(보호자용) ---
+
 with st.expander("🏠 집에서 대처법(선택한 증상 기준)", expanded=False):
+    # 안전 가드: 증상 변수 미정의 시 세션/기본값으로 대체
+    try:
+        nasal
+    except NameError:
+        nasal = st.session_state.get(wkey("p_nasal"), "없음")
+    try:
+        cough
+    except NameError:
+        cough = st.session_state.get(wkey("p_cough"), "없음")
+    try:
+        stool
+    except NameError:
+        stool = st.session_state.get(wkey("p_stool"), "없음")
+    try:
+        fever
+    except NameError:
+        fever = st.session_state.get(wkey("p_fever"), "없음")
+    try:
+        eye
+    except NameError:
+        eye = st.session_state.get(wkey("p_eye"), "없음")
+    try:
+        constip
+    except NameError:
+        constip = st.session_state.get(wkey("p_constip"), "없음")
+
     def _bullet(items):
         for it in items:
             st.markdown(f"- {it}")
+
     # 콧물/기침
     if nasal != "없음" or cough != "없음":
         st.markdown("**🤧 콧물/기침**")
@@ -1294,160 +1322,6 @@ with st.expander("🏠 집에서 대처법(선택한 증상 기준)", expanded=F
             "혈변/검은 변·심한 복통/구토 동반·1주 이상 지속 시 병원"
         ])
         st.markdown("")
-with t_peds:
-    st.subheader("소아 증상 기반 점수 + 보호자 설명 + 해열제 계산")
-    c1, c2, c3, c4, c5, c6 = st.columns(6)
-    with c1:
-        nasal = st.selectbox("콧물", ["없음", "투명", "진득", "누런"], key=wkey("p_nasal"))
-    with c2:
-        cough = st.selectbox("기침", ["없음", "조금", "보통", "심함"], key=wkey("p_cough"))
-    with c3:
-        stool = st.selectbox("설사", ["없음", "1~2회", "3~4회", "5~6회", "7회 이상"], key=wkey("p_stool"))
-    with c4:
-        fever = st.selectbox("발열", ["없음", "37~37.5 (미열)", "37.5~38", "38~38.5", "38.5~39", "39 이상"], key=wkey("p_fever"))
-    with c5:
-        eye = st.selectbox("눈꼽/결막", ["없음", "맑음", "노랑-농성", "양쪽"], key=wkey("p_eye"))
-
-
-    with c6:
-
-        constip = st.selectbox("변비", ["없음", "1~2일", "3~4일", "5일 이상"], key=wkey("p_constip"))
-
-    d1, d2, d3 = st.columns(3)
-    with d1:
-        oliguria = st.checkbox("소변량 급감", key=wkey("p_oliguria"))
-    with d2:
-        persistent_vomit = st.checkbox("지속 구토(>6시간)", key=wkey("p_pvomit"))
-    with d3:
-        petechiae = st.checkbox("점상출혈", key=wkey("p_petechiae"))
-
-    e1, e2, e3 = st.columns(3)
-    with e1:
-        abd_pain = st.checkbox("복통/배마사지 거부", key=wkey("p_abd_pain"))
-    with e2:
-        ear_pain = st.checkbox("귀 통증/만지면 울음", key=wkey("p_ear_pain"))
-    with e3:
-        rash = st.checkbox("가벼운 발진/두드러기", key=wkey("p_rash"))
-
-    f1, f2, f3 = st.columns(3)
-    with f1:
-        hives = st.checkbox("두드러기·알레르기 의심(전신/입술부종 등)", key=wkey("p_hives"))
-    with f2:
-        migraine = st.checkbox("편두통 의심(한쪽·박동성·빛/소리 민감)", key=wkey("p_migraine"))
-    with f3:
-        hfmd = st.checkbox("수족구 의심(손발·입 병변)", key=wkey("p_hfmd"))
-    # 추가: 증상 지속 기간(보고서/로직 활용 가능)
-    duration = st.selectbox("증상 지속일수", ["선택 안 함", "1일", "2일", "3일 이상"], key=wkey("p_duration"))
-    if duration == "선택 안 함":
-        duration_val = None
-    else:
-        duration_val = duration
-
-    # ANC 기반 음식 안전 가이드(저호중구 시)
-    try:
-        anc_val = float(str(st.session_state.get("labs_dict", {}).get("ANC", "")).replace(",", "."))
-    except Exception:
-        anc_val = None
-    if anc_val is not None and anc_val < 1000:
-        st.warning("🍽️ 저호중구 시 음식 안전: **생야채/생과일 껍질**은 피하고, **완전 가열** 후 섭취하세요. 남은 음식은 **2시간 이후 섭취 비권장**. 멸균·살균 식품 권장.")
-
-    # 추가: 최고 체온(°C)와 레드 플래그 체크
-    max_temp = st.number_input("최고 체온(°C)", min_value=34.0, max_value=43.5, step=0.1, format="%.1f", key=wkey("p_max_temp"))
-    col_rf1, col_rf2, col_rf3, col_rf4 = st.columns(4)
-    with col_rf1:
-        red_seizure = st.checkbox("경련/의식저하", key=wkey("p_red_seizure"))
-    with col_rf2:
-        red_bloodstool = st.checkbox("혈변/검은변", key=wkey("p_red_blood"))
-    with col_rf3:
-        red_night = st.checkbox("야간/새벽 악화", key=wkey("p_red_night"))
-    with col_rf4:
-        red_dehydration = st.checkbox("탈수 의심(눈물↓·입마름)", key=wkey("p_red_dehyd"))
-
-    # 간단 위험 배지 산정
-    fever_flag = (max_temp is not None and max_temp >= 38.5)
-    danger_count = sum([1 if x else 0 for x in [red_seizure, red_bloodstool, red_night, red_dehydration, fever_flag]])
-    if red_seizure or red_bloodstool or (max_temp is not None and max_temp >= 39.0):
-        risk_badge = "🚨"
-        st.error("🚨 고위험 신호가 있습니다. 즉시 병원(응급실) 평가를 권합니다.")
-    elif danger_count >= 2:
-        risk_badge = "🟡"
-        st.warning("🟡 주의가 필요합니다. 수분 보충/해열제 가이드 준수하며 경과를 면밀히 관찰하세요.")
-    else:
-        risk_badge = "🟢"
-        st.info("🟢 현재는 비교적 안정 신호입니다. 악화 시 바로 상위 단계 조치를 따르세요.")
-
-    # ORS(경구수분보충) 가이드 — 설사/지속구토/소변감소 시 노출
-    if (stool != "없음") or persistent_vomit or oliguria or red_dehydration:
-        with st.expander("🥤 ORS 경구 수분 보충 가이드", expanded=False):
-            st.markdown("- 5~10분마다 소량씩, 구토가 멎으면 양을 서서히 늘립니다.")
-            st.markdown("- 차가운 온도보다는 **미지근한 온도**가 흡수에 유리할 수 있습니다.")
-            st.markdown("- 2시간 내 소변이 없거나, 입이 마르고 눈물이 잘 나오지 않으면 의료진과 상의하세요.")
-            st.markdown("- 스포츠음료는 보충에 한계가 있으니, 가능하면 **ORS 용액**을 사용하세요.")
-
-
-    score = {
-        "장염 의심": 0,
-        "상기도/독감 계열": 0,
-        "결막염 의심": 0,
-        "탈수/신장 문제": 0,
-        "출혈성 경향": 0,
-        "중이염/귀질환": 0,
-        "피부발진/경미한 알레르기": 0,
-        "복통 평가": 0,
-        "알레르기 주의": 0,
-        "편두통 의심": 0,
-        "수족구 의심": 0,
-    }
-    if stool in ["3~4회", "5~6회", "7회 이상"]:
-        score["장염 의심"] += {"3~4회": 40, "5~6회": 55, "7회 이상": 70}[stool]
-    if fever in ["38~38.5", "38.5~39", "39 이상"]:
-        score["상기도/독감 계열"] += 25
-    if cough in ["조금", "보통", "심함"]:
-        score["상기도/독감 계열"] += 20
-    if eye in ["노랑-농성", "양쪽"]:
-        score["결막염 의심"] += 30
-    if oliguria:
-        score["탈수/신장 문제"] += 40
-        score["장염 의심"] += 10
-    if persistent_vomit:
-        score["장염 의심"] += 25
-        score["탈수/신장 문제"] += 15
-        score["복통 평가"] += 10
-    if petechiae:
-        score["출혈성 경향"] += 60
-    if ear_pain:
-        score["중이염/귀질환"] += 35
-    if rash:
-        score["피부발진/경미한 알레르기"] += 25
-    if abd_pain:
-        score["복통 평가"] += 25
-    if hives:
-        score["알레르기 주의"] += 60
-    if migraine:
-        score["편두통 의심"] += 35
-    if hfmd:
-        score["수족구 의심"] += 40
-
-    ordered = sorted(score.items(), key=lambda x: x[1], reverse=True)
-    st.write("• " + " / ".join([f"{k}: {v}" for k, v in ordered if v > 0]) if any(v > 0 for _, v in ordered) else "• 특이 점수 없음")
-    # 보호자 설명 렌더 + peds_notes 저장
-    render_caregiver_notes_peds(
-        stool=stool, fever=fever, persistent_vomit=persistent_vomit, oliguria=oliguria,
-        cough=cough, nasal=nasal, eye=eye, abd_pain=abd_pain, ear_pain=ear_pain,
-        rash=rash, hives=hives, migraine=migraine, hfmd=hfmd
-    )
-    try:
-        notes = build_peds_notes(
-            stool=stool, fever=fever, persistent_vomit=persistent_vomit, oliguria=oliguria,
-            cough=cough, nasal=nasal, eye=eye, abd_pain=abd_pain, ear_pain=ear_pain,
-            rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, duration=duration_val, score=score, max_temp=max_temp, red_seizure=red_seizure, red_bloodstool=red_bloodstool, red_night=red_night, red_dehydration=red_dehydration
-        )
-    except Exception:
-        notes = ""
-    st.session_state["peds_notes"] = notes
-    with st.expander(f"{risk_badge} 소아 증상 요약(보고서용 저장됨)", expanded=False):
-        st.text_area("요약 내용", value=notes, height=160, key=wkey("peds_notes_preview"))
-
 
     st.markdown("---")
     st.subheader("해열제 계산기")
