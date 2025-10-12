@@ -5,105 +5,6 @@ from pathlib import Path
 import importlib.util
 import streamlit as st
 
-# --- Feature flag: show weights UI (hidden by default) ---
-DEV_SHOW_WEIGHTS = False
-
-def render_emerg_weights_ui():
-    import streamlit as st
-    st.subheader("응급도 가중치 (편집 + 프리셋)")
-    st.caption("숫자 슬라이더 대신 **낮음/보통/높음**으로 쉽게 조정할 수 있어요. 필요하면 전문가 슬라이더도 열 수 있습니다.")
-
-    col_p1, col_p2, col_p3 = st.columns([2,1,1])
-    with col_p1:
-        preset = st.selectbox(
-            "프리셋 선택",
-            ["기본(권장)", "보수적(민감도↑)", "적극적(특이도↑)"],
-            help="보호자에게는 '기본(권장)'이 가장 쉬워요.",
-            key="ew_preset"
-        )
-    with col_p2:
-        lock_preset = st.toggle("프리셋 값 보호", value=True, help="실수로 바뀌지 않게 잠가요.", key="ew_lock")
-    with col_p3:
-        reset = st.button("기본값으로 초기화", key="ew_reset")
-
-    base = {
-        "anc_lt_500": 1.0, "anc_500_999": 0.7, "crp_ge_10": 0.6,
-        "hb_lt_7": 0.8, "plt_lt_20k": 0.9,
-        "fever_38_0_38_4": 0.6, "fever_ge_38_5": 1.0, "hr_gt_130": 0.7,
-        "resp_distress": 1.0, "loc_altered": 1.0,
-        "melena": 1.0, "hematochezia": 1.0, "persistent_vomit": 0.9, "oliguria": 0.8, "migraine_severe": 0.6,
-    }
-    conservative = {k: min(1.0, v + 0.15) for k, v in base.items()}
-    aggressive   = {k: max(0.0, v - 0.15) for k, v in base.items()}
-    preset_map = {"기본(권장)": base, "보수적(민감도↑)": conservative, "적극적(특이도↑)": aggressive}
-
-    if "emerg_weights" not in st.session_state or reset:
-        st.session_state["emerg_weights"] = preset_map["기본(권장)"].copy()
-
-    col_apply1, col_apply2 = st.columns([1,5])
-    with col_apply1:
-        if st.button("프리셋 적용", key="ew_apply") or lock_preset:
-            st.session_state["emerg_weights"].update(preset_map.get(preset, base))
-
-    def lvl_select(label, key, why, default=None):
-        levels = {"낮음": 0.4, "보통": 0.7, "높음": 1.0}
-        if default is None:
-            default = {1.0:"높음",0.7:"보통",0.4:"낮음"}.get(st.session_state["emerg_weights"].get(key,0.7),"보통")
-        col1, col2 = st.columns([2,3])
-        with col1:
-            st.markdown(f"**{label}**")
-            st.caption(why)
-        with col2:
-            choice = st.select_slider("가중치", options=list(levels.keys()), value=default, key=f"lv_{key}",
-                                      help="긴급도 계산에서 이 항목의 영향력을 고릅니다.")
-        st.session_state["emerg_weights"][key] = levels[choice]
-
-    with st.container():
-        st.markdown("#### 🩸 혈액/감염")
-        lvl_select("호중구 **매우 낮음** (ANC<500)", "anc_lt_500", "감염 위험이 매우 큽니다.")
-        lvl_select("호중구 낮음 (ANC 500~999)", "anc_500_999", "감염 위험이 큽니다.")
-        lvl_select("염증 수치 높음 (CRP≥10)", "crp_ge_10", "감염·염증 가능성 시사.")
-
-        st.markdown("#### ❤️ 활력/고위험 신호")
-        lvl_select("고열 ≥38.5℃", "fever_ge_38_5", "고열은 탈수·세균성 감염 위험 신호.")
-        lvl_select("미열 38.0~38.4℃", "fever_38_0_38_4", "경과 관찰이 필요합니다.")
-        lvl_select("호흡곤란", "resp_distress", "숨이 차 보이거나, 흉부 함몰/청색증.")
-        lvl_select("의식 저하/이상", "loc_altered", "무기력/반응 둔화/경련 등.")
-
-        st.markdown("#### 🍽️ 소화/출혈")
-        lvl_select("검은 변(흑색변)", "melena", "상부위장관 출혈 의심.")
-        lvl_select("혈변", "hematochezia", "하부위장관 출혈 의심.")
-        lvl_select("지속 구토", "persistent_vomit", "탈수·전해질 이상 위험.")
-        lvl_select("소변량 급감", "oliguria", "탈수/신장 기능 저하 의심.")
-
-    with st.expander("전문가(의료진) 설정 — 세밀 조정", expanded=False):
-        st.caption("의료진/숙련 보호자를 위한 세밀 슬라이더입니다.")
-        cols = st.columns(3)
-        keys = [
-            ("anc_lt_500","ANC<500"),("anc_500_999","ANC 500–999"),("fever_38_0_38_4","발열 38.0–38.4"),
-            ("fever_ge_38_5","고열 ≥38.5"),("hb_lt_7","중증빈혈 Hb<7"),("plt_lt_20k","혈소판 <20k"),
-            ("crp_ge_10","CRP ≥10"),("hr_gt_130","HR>130"),("resp_distress","호흡곤란"),
-            ("melena","흑색변"),("hematochezia","혈변"),("persistent_vomit","지속 구토"),
-            ("oliguria","소변량 급감"),("loc_altered","의식저하"),("migraine_severe","번개두통")
-        ]
-        for i, (k, label) in enumerate(keys):
-            with cols[i % 3]:
-                st.session_state["emerg_weights"][k] = st.slider(
-                    label, 0.0, 1.0, float(st.session_state["emerg_weights"].get(k, 0.7)), 0.05,
-                    help="가중치가 높을수록 긴급도 점수에 더 크게 반영됩니다.", key=f"sl_{k}"
-                )
-
-    st.markdown("---")
-    w = st.session_state["emerg_weights"]
-    preview = []
-    score1 = w["fever_ge_38_5"] + w["resp_distress"]
-    preview.append(f"• **고열(≥38.5℃) + 호흡곤란** → 가중치 합 {score1:.2f} (응급 권고 가능성 매우 높음)")
-    score2 = w["anc_lt_500"] + w["fever_ge_38_5"] + w["crp_ge_10"]
-    preview.append(f"• **호중구<500 + 고열 + CRP≥10** → 가중치 합 {score2:.2f} (패혈증 위험 평가 우선)")
-    st.info("**현재 설정 미리보기**\n\n" + "\n".join(preview))
-
-    return st.session_state["emerg_weights"]
-
 # --- Session defaults to prevent NameError on first load ---
 if 'peds_notes' not in st.session_state:
     st.session_state['peds_notes'] = ''
@@ -214,22 +115,6 @@ except Exception:
     _HAS_MPL = False
 
 # ---------- Page & Banner ----------
-
-
-# --- 친절 모드 & 배너 ---
-try:
-    from branding import render_deploy_banner
-    try:
-        render_deploy_banner()
-    except Exception:
-        st.caption("한국시간 기준(KST). 세포·면역치료 항목은 혼돈 방지를 위해 표기하지 않습니다. 제작·자문: Hoya/GPT")
-except Exception:
-    st.caption("한국시간 기준(KST). 제작·자문: Hoya/GPT")
-
-col_friendly, col_blank = st.columns([1,3])
-with col_friendly:
-    st.toggle("친절 모드(쉬운말)", key="friendly_mode", help="어려운 용어를 줄이고, 더 쉬운 설명을 함께 보여줍니다.", value=True)
-
 st.set_page_config(page_title=f"Bloodmap {APP_VERSION}", layout="wide")
 st.title(f"Bloodmap {APP_VERSION}")
 st.markdown(
@@ -614,27 +499,7 @@ t_home, t_labs, t_dx, t_chemo, t_peds, t_special, t_report = st.tabs(tab_labels)
 
 # HOME
 with t_home:
-    # (hidden) 홈 탭 가중치 UI
-    if DEV_SHOW_WEIGHTS:
-    
-
-    
-
-        # --- 홈 탭: 보호자용 응급도 가중치(쉬운) ---
-
-        st.markdown("### 🧭 빠른 설정: 응급도 가중치(보호자용)")
-
-        try:
-
-            weights = render_emerg_weights_ui()   # 보호자용 3단(낮음/보통/높음) + 전문가 슬라이더(접기)
-
-            st.caption("설정은 자동 저장됩니다. (st.session_state['emerg_weights'])")
-
-        except Exception as e:
-
-            st.warning(f"가중치 UI를 불러오지 못했습니다: {e}")
-
-        st.subheader("응급도 요약")
+    st.subheader("응급도 요약")
     labs = st.session_state.get("labs_dict", {})
     level_tmp, reasons_tmp, contrib_tmp = emergency_level(
         labs, st.session_state.get(wkey("cur_temp")), st.session_state.get(wkey("cur_hr")), {}
@@ -718,7 +583,7 @@ with t_home:
         st.info("응급도: " + level + (" — " + " · ".join(reasons) if reasons else ""))
 
     st.markdown("---")
-    st.subheader("응급도 가중치 (편집 + 프리셋)")
+    st.subheader("응급도 전문가용  (편집 + 프리셋)")
     colp = st.columns(3)
     with colp[0]:
         preset_name = st.selectbox("프리셋 선택", list(PRESETS.keys()), key=wkey("preset_sel"))
@@ -996,6 +861,13 @@ def lab_validate(abbr: str, val, is_peds: bool):
         return f"⬆️ 기준치 초과({lo}~{hi})"
     return "정상범위"
 
+st.markdown("---")
+st.markdown("### 🔗 공유")
+share_url = "https://bloodmap.streamlit.app/"
+st.text_input("공식 주소", share_url, key="share_url")
+st.caption("카카오톡 등 메신저에 위 링크를 붙여넣어 공유할 수 있습니다. (정식 SDK 연동 전 간편 공유)")
+
+
 with t_labs:
     st.subheader("피수치 입력 — 붙여넣기 지원 (견고)")
     st.caption("예: 'WBC: 4.5', 'Hb 12.3', 'PLT, 200', 'Na 140 mmol/L'…")
@@ -1073,6 +945,19 @@ with t_labs:
     st.session_state["labs_dict"] = labs_dict
     st.markdown(f"**참조범위 기준:** {'소아' if use_peds else '성인'} / **ANC 분류:** {anc_band(values.get('ANC'))}")
 
+st.markdown("---")
+st.subheader("🍚 영양/식이 가이드")
+try:
+    guides = lab_diet_guides(labs_dict, heme_flag=True)
+    if guides:
+        for g in guides:
+            st.write(f"- {g}")
+    else:
+        st.caption("입력값 기준, 추가 가이드가 없습니다.")
+except Exception:
+    st.warning("식이가이드 모듈 호출 실패.")
+
+# DX
 # DX
 with t_dx:
     st.subheader("암 선택")
@@ -1345,7 +1230,7 @@ with t_peds:
     with f3:
         hfmd = st.checkbox("수족구 의심(손발·입 병변)", key=wkey("p_hfmd"))
     # 추가: 증상 지속 기간(보고서/로직 활용 가능)
-    duration = st.selectbox("증상 지속일수", ["선택 안 함", "1일", "2일", "3일 이상"], key=wkey("p_duration"), help="대략적인 기간만 선택해도 괜찮아요.")
+    duration = st.selectbox("증상 지속일수", ["선택 안 함", "1일", "2일", "3일 이상"], key=wkey("p_duration"))
     if duration == "선택 안 함":
         duration_val = None
     else:
@@ -1360,16 +1245,16 @@ with t_peds:
         st.warning("🍽️ 저호중구 시 음식 안전: **생야채/생과일 껍질**은 피하고, **완전 가열** 후 섭취하세요. 남은 음식은 **2시간 이후 섭취 비권장**. 멸균·살균 식품 권장.")
 
     # 추가: 최고 체온(°C)와 레드 플래그 체크
-    max_temp = st.number_input("최고 체온(°C)", min_value=34.0, max_value=43.5, step=0.1, format="%.1f", key=wkey("p_max_temp"), help="하루 중 가장 높았던 체온을 입력해 주세요. 대략값도 괜찮습니다.")
+    max_temp = st.number_input("최고 체온(°C)", min_value=34.0, max_value=43.5, step=0.1, format="%.1f", key=wkey("p_max_temp"))
     col_rf1, col_rf2, col_rf3, col_rf4 = st.columns(4)
     with col_rf1:
-        red_seizure = st.checkbox("경련/의식저하", key=wkey("p_red_seizure"), help="발작처럼 몸이 뻣뻣해지거나 의식이 흐려지는 경우")
+        red_seizure = st.checkbox("경련/의식저하", key=wkey("p_red_seizure"))
     with col_rf2:
-        red_bloodstool = st.checkbox("혈변/검은변", key=wkey("p_red_blood"), help="붉은 피가 섞이거나, 타르처럼 검은 변")
+        red_bloodstool = st.checkbox("혈변/검은변", key=wkey("p_red_blood"))
     with col_rf3:
-        red_night = st.checkbox("야간/새벽 악화", key=wkey("p_red_night"), help="밤에 더 아파하거나 잠을 못 잘 정도의 악화")
+        red_night = st.checkbox("야간/새벽 악화", key=wkey("p_red_night"))
     with col_rf4:
-        red_dehydration = st.checkbox("탈수 의심(눈물↓·입마름)", key=wkey("p_red_dehyd"), help="눈물이 잘 안 나오거나 입안이 바싹 마르는 경우")
+        red_dehydration = st.checkbox("탈수 의심(눈물↓·입마름)", key=wkey("p_red_dehyd"))
 
     # 간단 위험 배지 산정
     fever_flag = (max_temp is not None and max_temp >= 38.5)
@@ -1383,13 +1268,6 @@ with t_peds:
     else:
         risk_badge = "🟢"
         st.info("🟢 현재는 비교적 안정 신호입니다. 악화 시 바로 상위 단계 조치를 따르세요.")
-
-    # 작은 위로와 안내
-    if st.session_state.get("friendly_mode", True):
-        from datetime import datetime, timedelta, timezone
-        kst = timezone(timedelta(hours=9))
-        now_kst = datetime.now(kst).strftime("%Y-%m-%d %H:%M")
-        st.caption(f"지금 시간을 기준으로 정리했어요(KST: {now_kst}). 보호자님, 혼자 아니에요. 작은 변화도 도움이 됩니다.")
 
     # ORS(경구수분보충) 가이드 — 설사/지속구토/소변감소 시 노출
     if (stool != "없음") or persistent_vomit or oliguria or red_dehydration:
@@ -1465,11 +1343,6 @@ with t_peds:
 
 
     st.markdown("---")
-    
-    if st.session_state.get("friendly_mode", True):
-        st.caption("이 도구는 참고용 안내이며, 최종 진단은 의료진의 판단을 따릅니다. 증상이 빠르게 악화되면 즉시 병원을 방문하세요.")
-    
-
     st.subheader("해열제 계산기")
     prev_wt = st.session_state.get(wkey("wt_peds"), 0.0)
     default_wt = _safe_float(prev_wt, 0.0)
