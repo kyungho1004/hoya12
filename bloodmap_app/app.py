@@ -4,6 +4,7 @@ import os, sys, re, io, csv
 from pathlib import Path
 import importlib.util
 import streamlit as st
+from peds_guide import render_peds_extra_inputs, render_symptom_explain_peds as render_symptom_explain_peds_v2, build_peds_notes as build_peds_notes_v2
 
 # --- Session defaults to prevent NameError on first load ---
 if 'peds_notes' not in st.session_state:
@@ -1007,6 +1008,14 @@ with t_labs:
     labs_dict = st.session_state.get("labs_dict", {})
     labs_dict.update(values)
     st.session_state["labs_dict"] = labs_dict
+    # === 피수치 가이드 + 소아 보호자 가이드 패널(통합) ===
+    try:
+        from lab_diet_patched import lab_diet_panel
+        st.markdown("---")
+        _diets, _peds = lab_diet_panel(labs_dict, heme_flag=False, show_peds=True)
+    except Exception as _e:
+        pass
+
     st.markdown(f"**참조범위 기준:** {'소아' if use_peds else '성인'} / **ANC 분류:** {anc_band(values.get('ANC'))}")
 
 # DX
@@ -1380,6 +1389,30 @@ with t_peds:
         cough=cough, nasal=nasal, eye=eye, abd_pain=abd_pain, ear_pain=ear_pain,
         rash=rash, hives=hives, migraine=migraine, hfmd=hfmd
     )
+    # === 추가: 가래/쌕쌕/변비 & RSV/아데노/파라인플루엔자/모세기관지염 — 보호자 설명 확장 ===
+    try:
+        extra = render_peds_extra_inputs(key_prefix="p")
+        render_symptom_explain_peds_v2(
+            stool=stool, fever=fever, persistent_vomit=persistent_vomit, oliguria=oliguria,
+            cough=cough, nasal=nasal, eye=eye, abd_pain=abd_pain, ear_pain=ear_pain,
+            rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, max_temp=max_temp,
+            sputum=extra["sputum"], wheeze=extra["wheeze"], constipation=extra["constipation"],
+            flag_adeno=extra["flag_adeno"], flag_rsv=extra["flag_rsv"],
+            flag_para=extra["flag_para"], flag_bronchiolitis=extra["flag_bronchiolitis"],
+            age_years=st.session_state.get(wkey("age_years"), None),
+        )
+        notes_v2 = build_peds_notes_v2(
+            stool=stool, fever=fever, persistent_vomit=persistent_vomit, oliguria=oliguria,
+            cough=cough, nasal=nasal, eye=eye, abd_pain=abd_pain, ear_pain=ear_pain,
+            rash=rash, hives=hives, migraine=migraine, hfmd=hfmd,
+            duration=duration, score=score, max_temp=max_temp,
+            red_seizure=red_seizure, red_bloodstool=red_bloodstool, red_night=red_night, red_dehydration=red_dehydration,
+            sputum=extra["sputum"], wheeze=extra["wheeze"], constipation=extra["constipation"],
+            flag_adeno=extra["flag_adeno"], flag_rsv=extra["flag_rsv"], flag_para=extra["flag_para"], flag_bronchiolitis=extra["flag_bronchiolitis"],
+        )
+        st.session_state["peds_notes_v2"] = notes_v2
+    except Exception:
+        st.info("확장 보호자 가이드를 부분 적용했습니다. 일부 값이 비어있으면 기본 모드로 노출됩니다.")
     try:
         notes = build_peds_notes(
             stool=stool, fever=fever, persistent_vomit=persistent_vomit, oliguria=oliguria,
