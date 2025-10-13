@@ -1265,6 +1265,23 @@ with t_peds:
         fever = st.selectbox("발열", ["없음", "37~37.5 (미열)", "37.5~38", "38~38.5", "38.5~39", "39 이상"], key=wkey("p_fever"))
     with c5:
         eye = st.selectbox("눈꼽/결막", ["없음", "맑음", "노랑-농성", "양쪽"], key=wkey("p_eye"))
+            # === 추가: 콧물 바로 아래 행 (쌕쌕/가래/변비/바이러스의심) ===
+    r1, r2, r3, r4 = st.columns(4)
+    with r1:
+        wheeze = st.checkbox("쌕쌕거림/천명", key=wkey("p_wheeze"))
+    with r2:
+        sputum = st.selectbox("가래", ["없음", "조금", "누런/초록", "끈적"], key=wkey("p_sputum"))
+    with r3:
+        constipation = st.selectbox("변비", ["없음", "2~3일", "4일 이상", "딱딱·토끼변"], key=wkey("p_constipation"))
+    with r4:
+        col_v1, col_v2 = st.columns(2)
+        with col_v1:
+            sus_adeno = st.checkbox("아데노 의심", key=wkey("p_v_adeno"))
+            sus_rsv   = st.checkbox("RSV 의심", key=wkey("p_v_rsv"))
+        with col_v2:
+            sus_para  = st.checkbox("파라인플루엔자 의심", key=wkey("p_v_para"))
+            sus_bron  = st.checkbox("모세기관지염 의심", key=wkey("p_v_bron"))
+
 
     d1, d2, d3 = st.columns(3)
     with d1:
@@ -1380,6 +1397,16 @@ with t_peds:
         score["편두통 의심"] += 35
     if hfmd:
         score["수족구 의심"] += 40
+            # 하기도/바이러스성 하기도 감염 점수 반영
+    if wheeze:
+        score["하기도(천명/모세기관지염)"] = score.get("하기도(천명/모세기관지염)", 0) + 45
+    if sputum in ["누런/초록", "끈적"]:
+        score["하기도(천명/모세기관지염)"] = score.get("하기도(천명/모세기관지염)", 0) + 20
+    if sus_bron or sus_rsv:
+        score["하기도(천명/모세기관지염)"] = score.get("하기도(천명/모세기관지염)", 0) + 20
+    if constipation in ["4일 이상", "딱딱·토끼변"]:
+        score["변비 관리"] = score.get("변비 관리", 0) + (30 if constipation == "4일 이상" else 40)
+
 
     ordered = sorted(score.items(), key=lambda x: x[1], reverse=True)
     st.write("• " + " / ".join([f"{k}: {v}" for k, v in ordered if v > 0]) if any(v > 0 for _, v in ordered) else "• 특이 점수 없음")
