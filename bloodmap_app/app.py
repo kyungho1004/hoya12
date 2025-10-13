@@ -12,7 +12,7 @@ if 'peds_actions' not in st.session_state:
     st.session_state['peds_actions'] = []
 
 
-APP_VERSION = "v7.24 (Graphs Bands • Peds Checklist+Schedule • Onco-DB Guard • Special Notes+)"
+APP_VERSION = "지금까지 160명의 이용자가 사용하였으며 지속적으로 업데이트중이니 많은 관심 부탁드립니다"
 
 # ---------- Safe Import Helper ----------
 def _load_local_module(mod_name: str, rel_paths):
