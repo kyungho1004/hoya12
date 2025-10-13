@@ -301,99 +301,148 @@ with st.sidebar:
 # ---------- Caregiver notes ----------
 def render_caregiver_notes_peds(
     *,
-    stool, fever, persistent_vomit, oliguria, cough, nasal, eye, abd_pain, ear_pain,
-    rash, hives, migraine, hfmd, max_temp=None,
-    wheeze="없음", sputum="없음", constipation="없음",
-    adeno=False, rsv=False, influenza=False, rota=False, covid=False,
+    stool,
+    fever,
+    persistent_vomit,
+    oliguria,
+    cough,
+    nasal,
+    eye,
+    abd_pain,
+    ear_pain,
+    rash,
+    hives,
+    migraine,
+    hfmd,
 ):
-    import streamlit as st
-    tips = {}
-    fever_threshold, er_threshold = 38.5, 39.0
-    common_tips = [
-        "실내 온도는 **24~26℃**로 유지하고, 과도한 이불 덮지 않기.",
-        "수분은 **자주, 조금씩** 섭취(토하면 10~15분 쉬었다 재시작).",
-        "3개월 이하(≤90일) 영아는 어떤 **해열제든 복용 전 반드시 주치의와 상담**."
-    ]
-    with st.expander("🏠 공통 안내(발열·탈수 시 가정 관리)", expanded=False):
-        for x in common_tips: st.markdown(f"- {x}")
-    if fever != "없음":
-        t = ["체온은 같은 부위에서 재세요(겨드랑이↔이마 혼용 금지).","미온수 닦기, 얇은 옷 입히기.","APAP ≥ 4시간, IBU ≥ 6시간 간격 준수(중복 성분 주의).","수분 섭취는 **자주·조금씩**.","실내 온도 **24~26℃** 권장.","3개월 이하(≤90일) 영아는 해열제 복용 전 **반드시 주치의 상담**."]
-        w = [f"{fever_threshold}℃ 이상 지속 또는 {er_threshold}℃ 이상이면 의료진 상담.","경련·의식저하·지속 구토·발진 동반 고열은 즉시 병원.","3~5일 이상 지속 발열은 진료 권장."]
-        if max_temp is not None:
-            try:
-                mt = float(max_temp)
-                if mt >= er_threshold: w.insert(0, f"현재 최고 체온 **{mt:.1f}℃** → **즉시 병원 권고**.")
-                elif mt >= fever_threshold: w.insert(0, f"현재 최고 체온 **{mt:.1f}℃** → 해열/수분 보충 후 면밀 관찰.")
-            except Exception: pass
-        tips["발열"] = (t, w)
-    if any([cough != "없음", nasal != "없음", sputum != "없음", wheeze != "없음"]):
-        t = ["가습·통풍 유지, 미온수 샤워로 점액 배출 돕기.","생리식염수 비강 세척/흡인(소아는 분무형 권장).","수면 시 머리를 약간 높여주기.","따뜻한 음료를 **자주·조금씩**(탄산/카페인 음료는 피함)."]
-        if sputum != "없음": t.append("따뜻한 물을 자주 마시게 해 점액을 묽게 유지.")
-        w = ["숨차보임/청색증/가슴함몰(흉벽 들어감) 시 즉시 병원.","기침 2주 이상 지속, 흉통·고열 동반 시 진료."]
-        tips["호흡기(기침/콧물/가래)"] = (t, w)
-    if wheeze != "없음":
-        t = ["차분한 호흡 유도, 울음/과호흡 진정.","알레르기 유발 가능 물질(먼지/애완동물 털/향 제품) 일시 회피.","흡연/간접흡연 완전 금지."]
-        w = ["숨이 가빠 보이거나 말이 끊기고, **가슴·갈비뼈 사이가 들어가면(함몰호흡)** 응급 평가.","입술/손톱 푸르스름(청색증), 보채거나 축 늘어지면 즉시 병원."]
-        tips["쌕쌕거림(천명)"] = (t, w)
-    if stool != "없음" or persistent_vomit or oliguria:
-        t = ["ORS 용액으로 5~10분마다 **소량씩 자주**(토하면 10~15분 쉬고 재시도).","과당 많은 주스/탄산음료는 피하고, 기름진 음식·생야채·우유는 일시 제한.","항문 주위는 미온수 세정 후 완전 건조, 보습막 얇게.","3개월 이하(≤90일) 영아의 구토·설사는 **탈수 위험**이 높아 즉시 상담 권장."]
-        w = ["혈변/검은변, 심한 복통·지속 구토, **2시간 이상 소변 없음**은 병원.","탈수(입마름/눈물 감소/축 늘어짐) 의심 시 진료."]
-        tips["장 증상(설사/구토/소변감소)"] = (t, w)
-    if eye != "없음":
-        t = ["끓였다 식힌 미온수로 안→바깥쪽 닦기(1거즈 1회).","손 위생 철저, 수건/베개 공유 금지.","콘택트렌즈는 증상 호전 전까지 중단."]
-        w = ["빛 통증·눈 붓고 통증·농성 분비물+고열 시 진료."]
-        tips["눈 증상"] = (t, w)
+    st.markdown("---")
+
+    # 증상별 보호자 설명 상세 렌더 + 세션 저장
+    render_symptom_explain_peds(
+        stool=stool, fever=fever, persistent_vomit=persistent_vomit, oliguria=oliguria,
+        cough=cough, nasal=nasal, eye=eye, abd_pain=abd_pain, ear_pain=ear_pain,
+        rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, max_temp=max_temp
+    )
+    st.subheader("보호자 설명 (증상별)")
+
+    def bullet(title, body):
+        st.markdown(f"**{title}**")
+        st.markdown(body.strip())
+
+    if stool in ["3~4회", "5~6회", "7회 이상"]:
+        bullet(
+            "💧 설사/장염 의심",
+            """
+- 하루 **3회 이상 묽은 변** → 장염 가능성
+- **노란/초록 변**, **거품 많고 냄새 심함** → 로타/노로바이러스 고려
+- **대처**: ORS·미음/쌀죽 등 수분·전해질 보충
+- **즉시 진료**: 피 섞인 변, 고열, 소변 거의 없음/축 늘어짐
+            """,
+        )
+    if fever in ["38~38.5", "38.5~39", "39 이상"]:
+        bullet(
+            "🌡️ 발열 대처",
+            """
+- **옷은 가볍게**, 땀복처럼 과도하게 덥히지 마세요.  
+- **실내 온도는 24~26 ℃로 유지**하면 열을 내리는 데 도움이 됩니다. *(과도한 땀내기 X)*
+- **미온수 마사지(미지근한 물수건 닦기)는 짧게만** 시행하세요. 장시간 목욕은 피합니다.
+- **해열제 간격**
+  - 아세트아미노펜(파라세타몰): **≥ 4시간 간격**
+  - 이부프로펜: **≥ 6시간 간격**
+- **해열제 복용 1시간 후에도 반응이 없으면** (의사가 허용한 경우에 한해) **교차 복용을 고려**할 수 있으나,  
+  **아세트아미노펜과 이부프로펜 사이 간격은 최소 2시간**을 반드시 지키세요.
+- **중요:** 총 24시간 복용량은 초과하지 마세요(앱 가드레일 준수).  
+  38.5 ℃ 이상 지속/의식 저하/호흡곤란/경련 등 **위험 신호**가 있으면 즉시 병원에 연락하세요.
+            """
+        )
+    if persistent_vomit:
+        bullet(
+            "🤢 구토 지속",
+            """
+- 10~15분마다 **소량씩 수분**(ORS/미지근한 물)
+- 우유·기름진 음식 일시 회피
+- **즉시 진료**: 6시간 이상 물도 못 마심 / 초록·커피색 토물 / 혈토
+            """,
+        )
+    if oliguria:
+        bullet(
+            "🚨 탈수 의심(소변량 급감)",
+            """
+- 입술 마름, 눈물 없음, 피부 탄력 저하, 축 늘어짐 동반 시 **중등~중증** 가능
+- **ORS 빠르게 보충**, 호전 없으면 진료
+            """,
+        )
+    if cough in ["조금", "보통", "심함"] or nasal in ["진득", "누런"]:
+        bullet(
+            "🤧 기침·콧물(상기도감염)",
+            """
+- **생리식염수/흡인기**로 콧물 제거, 수면 시 머리 높이기
+- **즉시 진료**: 숨차함/청색증/가슴함몰
+            """,
+        )
+    if eye in ["노랑-농성", "양쪽"]:
+        bullet(
+            "👀 결막염 의심",
+            """
+- 손 위생 철저, 분비물은 깨끗이 닦기
+- **양쪽·고열·눈 통증/빛 통증** → 진료 권장
+            """,
+        )
     if abd_pain:
-        t = ["복부를 따뜻하게, 자극적 음식 일시 제한.","통증 위치/시간/식사·배변 연관성 기록.","수분은 **자주·조금씩** 섭취."]
-        w = ["우하복부 지속 통증·보행 악화·구토/발열 동반 시 즉시 진료(충수염 감별).","복부 팽만·혈변/흑변 동반 시 병원."]
-        tips["복통"] = (t, w)
+        bullet(
+            "😣 복통/배 마사지 거부",
+            """
+- 우하복부 통증·보행 악화·구토/발열 동반 → **충수염 평가**
+- 혈변/흑변 동반 → **즉시 진료**
+            """,
+        )
     if ear_pain:
-        t = ["누우면 악화 가능 → 머리 약간 높여 수면.","코막힘 동반 시 비염 관리(생리식염수, 가습).","의료진 지시 없이 귀약(점이액) 임의 사용 금지."]
-        w = ["고열·구토 동반, 48시간 이상 통증 지속, 귀 분비물 시 진료.","귀 뒤 붓고 심한 통증은 즉시 병원."]
-        tips["귀 통증"] = (t, w)
-    if rash or hives:
-        t = ["시원한 환경, 땀/마찰 줄이기, 보습제 도포.","따뜻한 목욕은 짧게, 뜨거운 물/사우나는 피함.","항히스타민제는 **처방/상담 후** 복용."]
-        w = ["얼굴·입술·혀 붓기/호흡곤란/전신 두드러기 → 즉시 병원(아나필락시스 우려).","수포·고열 동반 전신 발진은 진료."]
-        tips["피부(발진/두드러기)"] = (t, w)
+        bullet(
+            "👂 귀 통증(중이염 의심)",
+            """
+- 눕기 불편 시 **머리 살짝 높이기**
+- 38.5℃↑, 지속 통증, **귀 분비물** → 진료 필요
+            """,
+        )
+    if rash:
+        bullet(
+            "🩹 발진/두드러기(가벼움)",
+            """
+- **미온 샤워**, 면 소재 옷, 시원한 로션
+- 새로운 음식/약 후 시작했는지 확인
+            """,
+        )
+    if hives:
+        bullet(
+            "⚠️ 두드러기/알레르기(주의)",
+            """
+- 전신 두드러기/입술·눈 주위 부종/구토·복통 동반 시 알레르기 가능
+- **호흡곤란/쌕쌕/목 조임** → **즉시 응급실**
+            """,
+        )
     if migraine:
-        t = ["어두운 조용한 환경에서 휴식, 수분 보충.","카페인/과도한 스크린타임 줄이기.","진통제 간격 준수(성분 중복 주의)."]
-        w = ["번개치듯 극심 두통·신경학적 이상(언어/마비/경련) 시 즉시 병원.","점점 악화하는 두통+구토/시야 이상은 진료."]
-        tips["두통/편두통"] = (t, w)
-    if adeno:
-        tips["아데노(의심/접촉력)"] = (["항생제는 효과 없음(의료진 지시 없이 복용 금지).","발열 관리: **24~26℃**, 얇은 옷, 미온수 닦기, 수분 **자주·조금씩**.","설사/구토 시 ORS **소량·자주**.","결막염 동반 가능 → 손 위생 철저, 수건/세면대 **공유 금지**."],
-                                         ["탈수, 3일↑ 고열, 의식저하/경련 시 즉시 진료.","면역저하·3개월 이하 영아는 **초기 상담 권장**."])
-    if rsv:
-        tips["RSV(의심/접촉력)"] = (["가습/통풍, 생리식염수 분무, 수면 시 머리 높이기.","수분 **자주·조금씩**."],
-                                     ["함몰호흡/호흡수 증가/청색증은 **즉시 병원**.","6개월 이하·미숙아·심폐 기저질환은 **저역치 상담**."])
-    if influenza:
-        tips["인플루엔자(의심/접촉력)"] = (["발열·근육통 → 해열 간격 준수(APAP/IBU 중복 주의).","수분 **자주·조금씩**, 실내 **24~26℃**."],
-                                          ["고위험군(5세 미만/만성질환/임신/면역저하) **초기 진료 권장**.","호흡곤란/의식저하/경련/탈수는 즉시 병원."])
-    if rota:
-        tips["로타(의심/접촉력)"] = (["구토·수양성 설사 → ORS **소량·자주** 보충.","기저귀 후 손 위생, 표면 소독."],
-                                     ["소변 급감/무기력/입마름 등 **탈수** 의심 시 진료.","혈변/고열 지속 시 병원."])
-    if covid:
-        tips["코로나(의심/접촉력)"] = (["발열·기침·인후통 → 해열 간격 준수, 수분 **자주·조금씩**.","환기/마스크(연령·협조 고려), 분리 식기·수건."],
-                                      ["호흡곤란/SpO₂ 저하 의심 시 즉시 병원.","기저질환/면역저하 소아는 **조기 상담**."])
-    if tips:
-        with st.expander("👪 증상별 보호자 설명", expanded=False):
-            for k, (t, w) in tips.items():
-                st.markdown(f"### {k}")
-                if t: 
-                    st.markdown("**가정 관리 팁**")
-                    for x in t: st.markdown(f"- {x}")
-                if w:
-                    st.markdown("**병원 방문 기준**")
-                    for x in w: st.markdown(f"- {x}")
-                st.markdown("---")
-    st.session_state['peds_explain'] = tips
-
-
+        bullet(
+            "🧠 편두통 의심",
+            """
+- **한쪽·박동성 두통**, **빛/소리 민감**, **구역감**
+- 어두운 곳 휴식, 수분 보충
+- **번개치듯 새로 시작한 극심한 두통**/신경학적 이상 → 응급평가
+            """,
+        )
+    if hfmd:
+        bullet(
+            "✋👣 수족구 의심(HFMD)",
+            """
+- **손·발·입 안** 물집/궤양 + 발열
+- 전염성: 손 씻기/식기 구분
+- **탈수(소변 감소·축 늘어짐)**, **고열 >3일**, **경련/무기력** → 진료 필요
+            """,
+        )
+    st.info("❗ 즉시 병원 평가: 번개치는 두통 · 시야 이상/복시/암점 · 경련 · 의식저하 · 심한 목 통증 · 호흡곤란/입술부종")
 
 def build_peds_notes(
     *, stool, fever, persistent_vomit, oliguria, cough, nasal, eye, abd_pain, ear_pain, rash, hives, migraine, hfmd,
-    duration=None, score=None, max_temp=None, red_seizure=False, red_bloodstool=False, red_night=False, red_dehydration=False,
-    wheeze="없음", sputum="없음", constipation="없음",
-    adeno=False, rsv=False, influenza=False, rota=False, covid=False,
+    duration=None, score=None, max_temp=None, red_seizure=False, red_bloodstool=False, red_night=False, red_dehydration=False
 ) -> str:
     """소아 증상 선택을 요약하여 보고서용 텍스트를 생성."""
     lines = []
@@ -405,33 +454,43 @@ def build_peds_notes(
         except Exception:
             lines.append(f"[최고 체온] {max_temp}")
     sx = []
-    if fever != "없음": sx.append(f"발열:{fever}")
-    if cough != "없음": sx.append(f"기침:{cough}")
-    if nasal != "없음": sx.append(f"콧물:{nasal}")
-    if stool != "없음": sx.append(f"설사:{stool}")
-    if eye != "없음": sx.append(f"눈:{eye}")
-    if wheeze != "없음": sx.append(f"쌕쌕거림:{wheeze}")
-    if sputum != "없음": sx.append(f"가래:{sputum}")
-    if constipation != "없음": sx.append(f"변비:{constipation}")
-    if adeno: sx.append("아데노 의심/접촉력")
-    if rsv: sx.append("RSV 의심/접촉력")
-    if influenza: sx.append("인플루엔자 의심/접촉력")
-    if rota: sx.append("로타 의심/접촉력")
-    if covid: sx.append("코로나 의심/접촉력")
-    if persistent_vomit: sx.append("지속 구토")
-    if oliguria: sx.append("소변량 급감")
-    if abd_pain: sx.append("복통/배마사지 거부")
-    if ear_pain: sx.append("귀 통증")
-    if rash: sx.append("발진/두드러기")
-    if hives: sx.append("알레르기 의심")
-    if migraine: sx.append("편두통 의심")
-    if hfmd: sx.append("수족구 의심")
-    if red_seizure: lines.append("[위험 징후] 경련/의식저하")
-    if red_bloodstool: lines.append("[위험 징후] 혈변/검은변")
-    if red_night: lines.append("[위험 징후] 야간 악화/새벽 악화")
-    if red_dehydration: lines.append("[위험 징후] 탈수 의심(눈물 감소/구강 건조/소변 급감)")
+    if fever != "없음":
+        sx.append(f"발열:{fever}")
+    if cough != "없음":
+        sx.append(f"기침:{cough}")
+    if nasal != "없음":
+        sx.append(f"콧물:{nasal}")
+    if stool != "없음":
+        sx.append(f"설사:{stool}")
+    if eye != "없음":
+        sx.append(f"눈:{eye}")
+    if persistent_vomit:
+        sx.append("지속 구토")
+    if oliguria:
+        sx.append("소변량 급감")
+    if abd_pain:
+        sx.append("복통/배마사지 거부")
+    if ear_pain:
+        sx.append("귀 통증")
+    if rash:
+        sx.append("발진/두드러기")
+    if hives:
+        sx.append("알레르기 의심")
+    if migraine:
+        sx.append("편두통 의심")
+    if hfmd:
+        sx.append("수족구 의심")
+    if red_seizure:
+        lines.append("[위험 징후] 경련/의식저하")
+    if red_bloodstool:
+        lines.append("[위험 징후] 혈변/검은변")
+    if red_night:
+        lines.append("[위험 징후] 야간 악화/새벽 악화")
+    if red_dehydration:
+        lines.append("[위험 징후] 탈수 의심(눈물 감소/구강 건조/소변 급감)")
     if sx:
         lines.append("[증상] " + ", ".join(sx))
+    # 상위 점수 3개 요약
     if isinstance(score, dict):
         top3 = sorted(score.items(), key=lambda x: x[1], reverse=True)[:3]
         top3 = [(k, v) for k, v in top3 if v > 0]
@@ -439,9 +498,206 @@ def build_peds_notes(
             lines.append("[상위 점수] " + " / ".join([f"{k}:{v}" for k, v in top3]))
     if not lines:
         lines.append("(특이 소견 없음)")
-    return "\n".join(lines)
+    return "\\n".join(lines)
+
+# ---------- Tabs ----------
+# 상단 메인 탭 선언부 (기존 줄 교체)
+tab_home, tab_labs, tab_cancer, tab_chemo, tab_peds, tab_special, tab_report, tab_graphlog = st.tabs(
+    ["홈", "피수치 입력", "암 선택", "항암제(진단 기반)", "소아 증상", "특수검사", "보고서", "기록 그래프"]
+)
 
 
+# tab_* → t_* 별칭(호환용)
+try: t_home
+except NameError: t_home = tab_home
+try: t_labs
+except NameError: t_labs = tab_labs
+try: t_cancer
+except NameError: t_cancer = tab_cancer
+try: t_chemo
+except NameError: t_chemo = tab_chemo
+try: t_peds
+except NameError: t_peds = tab_peds
+try: t_special
+except NameError: t_special = tab_special
+try: t_report
+except NameError: t_report = tab_report
+try: t_graphlog
+except NameError: t_graphlog = tab_graphlog
+
+# 호환용: t_dx가 쓰인 구간 대응
+try:
+    t_dx
+except NameError:
+    try:
+        t_dx = t_cancer
+    except NameError:
+        try:
+            t_dx = tab_cancer
+        except NameError:
+            # 최후 폴백: 홈 탭으로 연결
+            t_dx = t_home if 't_home' in globals() else tab_home
+
+
+
+
+# HOME
+with t_home:
+    st.subheader("응급도 요약")
+    labs = st.session_state.get("labs_dict", {})
+    level_tmp, reasons_tmp, contrib_tmp = emergency_level(
+        labs, st.session_state.get(wkey("cur_temp")), st.session_state.get(wkey("cur_hr")), {}
+    )
+    if level_tmp.startswith("🚨"):
+        st.error("현재 상태: " + level_tmp)
+    elif level_tmp.startswith("🟧"):
+        st.warning("현재 상태: " + level_tmp)
+    else:
+        st.info("현재 상태: " + level_tmp)
+
+    st.markdown("---")
+    st.subheader("응급도 체크(증상 기반)")
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
+    with c1:
+        hematuria = st.checkbox("혈뇨", key=wkey("sym_hematuria"))
+    with c2:
+        melena = st.checkbox("흑색변", key=wkey("sym_melena"))
+    with c3:
+        hematochezia = st.checkbox("혈변", key=wkey("sym_hematochezia"))
+    with c4:
+        chest_pain = st.checkbox("흉통", key=wkey("sym_chest"))
+    with c5:
+        dyspnea = st.checkbox("호흡곤란", key=wkey("sym_dyspnea"))
+    with c6:
+        confusion = st.checkbox("의식저하", key=wkey("sym_confusion"))
+    d1, d2, d3 = st.columns(3)
+    with d1:
+        oliguria = st.checkbox("소변량 급감", key=wkey("sym_oliguria"))
+    with d2:
+        persistent_vomit = st.checkbox("지속 구토(>6시간)", key=wkey("sym_pvomit"))
+    with d3:
+        petechiae = st.checkbox("점상출혈", key=wkey("sym_petechiae"))
+    e1, e2 = st.columns(2)
+    with e1:
+        thunderclap = st.checkbox("번개치는 듯한 두통(Thunderclap)", key=wkey("sym_thunderclap"))
+    with e2:
+        visual_change = st.checkbox("시야 이상/복시/암점", key=wkey("sym_visual_change"))
+
+    sym = dict(
+        hematuria=hematuria,
+        melena=melena,
+        hematochezia=hematochezia,
+        chest_pain=chest_pain,
+        dyspnea=dyspnea,
+        confusion=confusion,
+        oliguria=oliguria,
+        persistent_vomit=persistent_vomit,
+        petechiae=petechiae,
+        thunderclap=thunderclap,
+        visual_change=visual_change,
+    )
+
+    alerts = []
+    a = _try_float((labs or {}).get("ANC"))
+    p = _try_float((labs or {}).get("PLT"))
+    if thunderclap or (visual_change and (confusion or chest_pain or dyspnea)):
+        alerts.append("🧠 **신경계 위중 의심** — 번개치듯 두통/시야 이상/의식장애 → 즉시 응급평가")
+    if (a is not None and a < 500) and (_try_float(st.session_state.get(wkey("cur_temp"))) and _try_float(st.session_state.get(wkey("cur_temp"))) >= 38.0):
+        alerts.append("🔥 **발열성 호중구감소증 의심** — ANC<500 + 발열 → 즉시 항생제 평가")
+    if (p is not None and p < 20000) and (melena or hematochezia or petechiae):
+        alerts.append("🩸 **출혈 고위험** — 혈소판<20k + 출혈징후 → 즉시 병원")
+    if oliguria and persistent_vomit:
+        alerts.append("💧 **중등~중증 탈수 가능** — 소변 급감 + 지속 구토 → 수액 고려")
+    if chest_pain and dyspnea:
+        alerts.append("❤️ **흉통+호흡곤란** — 응급평가 권장")
+    if alerts:
+        for msg in alerts:
+            st.error(msg)
+    else:
+        st.info("위험 조합 경고 없음")
+
+    level, reasons, contrib = emergency_level(
+        labs, st.session_state.get(wkey("cur_temp")), st.session_state.get(wkey("cur_hr")), sym
+    )
+    if level.startswith("🚨"):
+        st.error("응급도: " + level + " — " + " · ".join(reasons))
+    elif level.startswith("🟧"):
+        st.warning("응급도: " + level + " — " + " · ".join(reasons))
+    else:
+        st.info("응급도: " + level + (" — " + " · ".join(reasons) if reasons else ""))
+
+    st.markdown("---")
+
+# --- 응급도 설정: 초보자/전문가 모드 ---
+st.markdown("---")
+st.subheader("응급도 설정")
+pro_mode = st.toggle("👨‍⚕️ 전문가 모드(가중치 세부 편집)", value=bool(st.session_state.get(wkey("pro_mode"), False)), key=wkey("pro_mode"))
+if not pro_mode:
+    simple_preset_name = st.selectbox("모드(초보자용)", ["보호자용(간단)", "발열·감염 민감", "출혈 위험 민감", "신경계 위중 민감"], key=wkey("simple_preset"))
+    if st.button("선택 적용", key=wkey("simple_preset_apply")):
+        try:
+            if simple_preset_name == "보호자용(간단)":
+                set_weights(PRESETS.get("기본(Default)", DEFAULT_WEIGHTS))
+            else:
+                name_map = {
+                    "발열·감염 민감": "발열·감염 민감",
+                    "출혈 위험 민감": "출혈 위험 민감",
+                    "신경계 위중 민감": "신경계 위중 민감",
+                }
+                set_weights(PRESETS.get(name_map[simple_preset_name], DEFAULT_WEIGHTS))
+            st.success(f"'{simple_preset_name}' 설정을 적용했습니다.")
+        except Exception as e:
+            st.warning(f"프리셋 적용 중 문제가 발생했어요: {e}")
+    st.caption("※ 초보자용에서는 가중치 슬라이더를 숨기고 선택한 모드로 자동 계산합니다.")
+else:
+    # 아래의 기존 '응급도 가중치 (편집 + 프리셋)' 슬라이더 블록이 그대로 이어집니다.
+    pass
+
+
+    st.subheader("응급도 가중치 (편집 + 프리셋)")
+    colp = st.columns(3)
+    with colp[0]:
+        preset_name = st.selectbox("프리셋 선택", list(PRESETS.keys()), key=wkey("preset_sel"))
+    with colp[1]:
+        if st.button("프리셋 적용", key=wkey("preset_apply")):
+            set_weights(PRESETS[preset_name])
+            st.success(f"'{preset_name}' 가중치를 적용했습니다.")
+    with colp[2]:
+        if st.button("기본값으로 초기화", key=wkey("preset_reset")):
+            set_weights(DEFAULT_WEIGHTS)
+            st.info("가중치를 기본값으로 되돌렸습니다.")
+    W = get_weights()
+    grid = [
+        ("ANC<500", "w_anc_lt500"),
+        ("ANC 500~999", "w_anc_500_999"),
+        ("발열 38.0~38.4", "w_temp_38_0_38_4"),
+        ("고열 ≥38.5", "w_temp_ge_38_5"),
+        ("혈소판 <20k", "w_plt_lt20k"),
+        ("중증빈혈 Hb<7", "w_hb_lt7"),
+        ("CRP ≥10", "w_crp_ge10"),
+        ("HR>130", "w_hr_gt130"),
+        ("혈뇨", "w_hematuria"),
+        ("흑색변", "w_melena"),
+        ("혈변", "w_hematochezia"),
+        ("흉통", "w_chest_pain"),
+        ("호흡곤란", "w_dyspnea"),
+        ("의식저하", "w_confusion"),
+        ("소변량 급감", "w_oliguria"),
+        ("지속 구토", "w_persistent_vomit"),
+        ("점상출혈", "w_petechiae"),
+        ("번개두통", "w_thunderclap"),
+        ("시야 이상", "w_visual_change"),
+    ]
+    cols = st.columns(3)
+    newW = dict(W)
+    for i, (label, keyid) in enumerate(grid):
+        with cols[i % 3]:
+            newW[keyid] = st.slider(label, 0.0, 3.0, float(W.get(keyid, 1.0)), 0.1, key=wkey(f"w_{keyid}"))
+    if newW != W:
+        set_weights(newW)
+        st.success("가중치 변경 사항 저장됨.")
+
+# LABS
 
 def render_symptom_explain_peds(*, stool, fever, persistent_vomit, oliguria, cough, nasal, eye, abd_pain, ear_pain, rash, hives, migraine, hfmd, max_temp=None):
     """선택된 증상에 대한 보호자 설명(가정 관리 팁 + 병원 방문 기준)을 상세 렌더."""
@@ -676,23 +932,6 @@ def lab_validate(abbr: str, val, is_peds: bool):
         return f"⬆️ 기준치 초과({lo}~{hi})"
     return "정상범위"
 
-# 메인 탭(피수치/진단/소아)
-t_labs, t_dx, t_peds = st.tabs(["🧪 피수치", "🧬 진단", "👶 소아"])
-
-
-# --- 안전 가드: 탭 미정의 시 초기화 ---
-try:
-    t_labs
-except NameError:
-    t_labs, t_dx, t_peds = st.tabs(["🧪 피수치", "🧬 진단", "👶 소아"])
-# ---------------------------------------
-# --- 탭 변수 안전 가드: 미정의 시 초기화 ---
-try:
-    t_labs
-except NameError:
-    t_labs, t_dx, t_peds, t_chemo, t_special, t_report = st.tabs(['🧪 피수치', '🧬 진단', '👶 소아', '💊 항암/투약', 'SPECIAL', 'REPORT'])
-# -----------------------------------------
-
 with t_labs:
     st.subheader("피수치 입력 — 붙여넣기 지원 (견고)")
     st.caption("예: 'WBC: 4.5', 'Hb 12.3', 'PLT, 200', 'Na 140 mmol/L'…")
@@ -920,16 +1159,6 @@ def _aggregate_all_aes(meds, db):
     return result
 
 # CHEMO
-# --- t_chemo 안전 가드 (근접) ---
-try:
-    t_chemo
-except NameError:
-    try:
-        t_labs, t_dx, t_peds, t_chemo = st.tabs(["🧪 피수치", "🧬 진단", "👶 소아", "💊 항암/투약"]) 
-    except Exception:
-        pass
-# ---------------------------------
-
 with t_chemo:
     st.subheader("항암제(진단 기반)")
     group = st.session_state.get("onco_group")
@@ -1028,19 +1257,6 @@ with t_peds:
     with c5:
         eye = st.selectbox("눈꼽/결막", ["없음", "맑음", "노랑-농성", "양쪽"], key=wkey("p_eye"))
 
-    # 추가: 아데노(의심/접촉력)
-    cb_adeno = st.checkbox("아데노(의심/접촉력)", key=wkey("p_cb_adeno"))
-
-v1, v2, v3, v4 = st.columns(4)
-with v1:
-    cb_rsv = st.checkbox("RSV(의심/접촉력)", key=wkey("p_cb_rsv"))
-with v2:
-    cb_flu = st.checkbox("인플루엔자(의심/접촉력)", key=wkey("p_cb_flu"))
-with v3:
-    cb_rota = st.checkbox("로타(의심/접촉력)", key=wkey("p_cb_rota"))
-with v4:
-    cb_covid = st.checkbox("코로나(의심/접촉력)", key=wkey("p_cb_covid"))
-
     d1, d2, d3 = st.columns(3)
     with d1:
         oliguria = st.checkbox("소변량 급감", key=wkey("p_oliguria"))
@@ -1126,92 +1342,6 @@ with v4:
         "편두통 의심": 0,
         "수족구 의심": 0,
     }
-
-# 추가 가산: 바이러스 의심/접촉력 (RSV/Flu/Rota/COVID/AdV)
-try:
-    cb_adeno
-except NameError:
-    cb_adeno = False
-try:
-    cb_rsv
-except NameError:
-    cb_rsv = False
-try:
-    cb_flu
-except NameError:
-    cb_flu = False
-try:
-    cb_rota
-except NameError:
-    cb_rota = False
-try:
-    cb_covid
-except NameError:
-    cb_covid = False
-
-if cb_adeno:
-    score.setdefault("바이러스성 장/호흡기 감염 의심(아데노)", 0)
-    score["바이러스성 장/호흡기 감염 의심(아데노)"] += 20
-
-if cb_rsv:
-    score.setdefault("RSV 의심", 0)
-    score["RSV 의심"] += 30
-    # 천명/호흡곤란 동반 시 추가 가산(있을 경우)
-    try:
-        wheeze
-    except NameError:
-        wheeze = "없음"
-    if wheeze in ["보통", "심함"]:
-        score["RSV 의심"] += 10
-
-if cb_flu:
-    score.setdefault("인플루엔자 의심", 0)
-    score["인플루엔자 의심"] += 30
-    # 고열 동반 시 약간 가산 (최고 체온 기반 가능)
-    try:
-        max_temp
-    except NameError:
-        max_temp = None
-    try:
-        mt = float(max_temp) if max_temp is not None else None
-    except Exception:
-        mt = None
-    if mt is not None and mt >= 39.0:
-        score["인플루엔자 의심"] += 5
-
-if cb_rota:
-    score.setdefault("로타 바이러스 장염 의심", 0)
-    score["로타 바이러스 장염 의심"] += 25
-    # 설사/구토 동반 시 추가 가산
-    try:
-        stool
-    except NameError:
-        stool = "없음"
-    try:
-        persistent_vomit
-    except NameError:
-        persistent_vomit = False
-    if stool != "없음":
-        score["로타 바이러스 장염 의심"] += 5
-    if persistent_vomit:
-        score["로타 바이러스 장염 의심"] += 5
-
-if cb_covid:
-    score.setdefault("코로나 의심", 0)
-    score["코로나 의심"] += 30
-    # 기침/콧물 동반 시 소폭 가산
-    try:
-        cough
-    except NameError:
-        cough = "없음"
-    try:
-        nasal
-    except NameError:
-        nasal = "없음"
-    if cough != "없음":
-        score["코로나 의심"] += 5
-    if nasal != "없음":
-        score["코로나 의심"] += 3
     if stool in ["3~4회", "5~6회", "7회 이상"]:
         score["장염 의심"] += {"3~4회": 40, "5~6회": 55, "7회 이상": 70}[stool]
     if fever in ["38~38.5", "38.5~39", "39 이상"]:
@@ -1251,9 +1381,10 @@ if cb_covid:
         rash=rash, hives=hives, migraine=migraine, hfmd=hfmd
     )
     try:
-        notes = build_peds_notes(stool=stool, fever=fever, persistent_vomit=persistent_vomit, oliguria=oliguria,
+        notes = build_peds_notes(
+            stool=stool, fever=fever, persistent_vomit=persistent_vomit, oliguria=oliguria,
             cough=cough, nasal=nasal, eye=eye, abd_pain=abd_pain, ear_pain=ear_pain,
-            rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, duration=duration_val, score=score, max_temp=max_temp, red_seizure=red_seizure, red_bloodstool=red_bloodstool, red_night=red_night, red_dehydration=red_dehydration, adeno=cb_adeno, rsv=cb_rsv, influenza=cb_flu, rota=cb_rota, covid=cb_covid
+            rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, duration=duration_val, score=score, max_temp=max_temp, red_seizure=red_seizure, red_bloodstool=red_bloodstool, red_night=red_night, red_dehydration=red_dehydration
         )
     except Exception:
         notes = ""
@@ -1314,6 +1445,170 @@ if cb_covid:
             st.write("- 호흡곤란/청색증/입술부종")
             st.write("- 소변량 급감·축 늘어짐(탈수)")
             st.write("- 피 섞인 변/검은 변, 점상출혈 지속")
+
+
+
+
+def render_constipation_quickguide():
+    import streamlit as st
+    st.markdown("### 🚽 변비 관리(보호자용)")
+    st.markdown(
+        """
+- **수분 섭취 증가**: 미지근한 물을 자주, 섬유소 섭취(과일·채소·통곡물) 천천히 늘리기.
+- **활동 유도**: 가능한 범위에서 **걷기/가벼운 스트레칭**.
+- **배변 습관 만들기**: 매일 같은 시간(식후 15~30분)에 **화장실 앉기 습관**.
+- **피해야 할 것**: 과도한 우유/치즈, 과자류 위주 식사.
+- **경고 신호**: **혈변/검은 변**, 심한 복통·구토 동반, 1주 이상 지속 시 병원 상담.
+        """.strip()
+    )
+
+def render_abdominal_pain_quickguide():
+    import streamlit as st
+    st.markdown("### 🤕 복통 관리(보호자용)")
+    st.markdown(
+        """
+- **열·구토·설사·소변 통증** 동반 여부를 함께 관찰/기록하세요.
+- **복부 압통 심함/우하복부 통증 지속**, 보행 시 통증 악화 → **의료진 상담**.
+- **금식이 필요한 경우**가 있으므로, **구토/심한 통증** 시 **음식은 일단 중단**하고 수분 소량씩.
+- 진통제는 **의사 지시에 따라** 사용(복통 원인 가리기 주의).
+- **경고 신호**: 지속 악화, 복부 팽만, **혈변/흑색변**, **발열 ≥ 38.5 ℃**, **탈수** → 즉시 병원.
+        """.strip()
+    )
+
+def render_skin_care_quickguide():
+    import streamlit as st
+    st.markdown("### 🧴 피부 관리(보호자용)")
+    st.markdown(
+        """
+- **미지근한 물로 짧게 샤워**, 자극 적은 **무향 보습제**를 목욕 후 3분 이내 충분히.
+- 옷은 **면 소재**로, **태그·거친 섬유** 피하기. 손톱은 짧게 유지.
+- **상처/발진**은 긁지 않도록 하고, **2차 감염** 의심 시(고름·열감·심한 통증) 병원 상담.
+- **햇빛 민감** 시 **자외선 차단**, 모자/긴 소매 활용.
+- **알레르기 반응**(숨 가쁨·안면 부종·전신 두드러기) 시 즉시 병원.
+        """.strip()
+    )
+# === 보호자 가이드 모듈 ===
+
+def render_redflags_banner():
+    import streamlit as st
+    st.warning(
+        "이 안내는 **참고용**이며, 정확한 진단과 처치는 의료진의 판단에 따릅니다. "
+        "다음 **위험 신호**가 있으면 즉시 병원에 연락하세요: "
+        "의식 저하/경련, 호흡곤란·청색증, 반복 구토로 탈수 의심, "
+        "지속 고열(≥ 38.5 ℃), 심한 복통·혈변·흑색변, 점상출혈·멍이 쉽게 생김."
+    )
+
+def render_fever_quickguide():
+    import streamlit as st
+    st.markdown("### 🌡️ 발열 관리(보호자용)")
+    st.markdown(
+        """
+- **옷은 가볍게**, 땀복처럼 과도하게 덥히지 마세요.  
+- **실내 온도는 24~26 ℃로 유지**하면 열을 내리는 데 도움이 됩니다. *(과도한 땀내기 X)*
+- **미온수 마사지(미지근한 물수건 닦기)는 짧게만** 시행하세요. 장시간 목욕은 피합니다.
+- **해열제 간격**
+  - 아세트아미노펜(파라세타몰): **≥ 4시간 간격**
+  - 이부프로펜: **≥ 6시간 간격**
+- **해열제 복용 1시간 후에도 반응이 없으면** (의사가 허용한 경우에 한해) **교차 복용을 고려**할 수 있으나,  
+  **아세트아미노펜과 이부프로펜 사이 간격은 최소 2시간**을 반드시 지키세요.
+- **중요:** 총 24시간 복용량은 초과하지 마세요(앱 가드레일 준수).  
+  38.5 ℃ 이상 지속/의식 저하/호흡곤란/경련 등 **위험 신호**가 있으면 즉시 병원에 연락하세요.
+        """.strip()
+    )
+
+def render_diarrhea_quickguide():
+    import streamlit as st
+    st.markdown("### 💧 설사 관리(보호자용)")
+    st.markdown(
+        """
+- **수분 보충이 최우선**입니다. 소량씩 자주 마시게 하세요(ORS 권장).  
+- **미지근한 물/보리차/ORS** 위주. 당분 많은 음료·탄산은 피하세요.
+- **식사**: 기름진 음식·생채소는 피하고 **죽·바나나·감자·호박죽** 같이 부드러운 음식.
+- **색·혈변 확인**: 녹색(담즙)/노란 설사/피 섞임은 기록해두고, **혈변·검은 변**이면 병원 연락.
+- **탈수 신호**: 소변량 감소, 입마름, 눈물 감소, 기운 없음 → 병원 상담.
+- **주의**: **고열(≥ 38.5 ℃)**, 심한 복통/반복 구토/혈변이면 즉시 병원.
+        """.strip()
+    )
+
+def render_vomit_quickguide():
+    import streamlit as st
+    st.markdown("### 🤢 구토 관리(보호자용)")
+    st.markdown(
+        """
+- **30분 휴식 후** 소량의 물/ORS를 **2~3분 간격**으로 천천히. 한 번에 많이 주지 마세요.
+- **구토가 가라앉으면** 묽은 미음·죽부터 시작, 기름진 음식은 피합니다.
+- **담즙색(초록)/혈성 구토/커피색 토**는 기록하고 즉시 병원 상담.
+- **탈수 신호**(소변량 감소/입마름/무기력) 보이면 병원 연락.
+- **반복 구토 + 두통/의식 저하/목덜미 뻣뻣함** 동반 시 즉시 병원.
+        """.strip()
+    )
+
+def render_cough_cold_quickguide():
+    import streamlit as st
+    st.markdown("### 🤧 기침/감기 관리(보호자용)")
+    st.markdown(
+        """
+- **수분섭취/가습**으로 점액을 묽게. **미지근한 물**을 자주.
+- **고열(≥ 38.5 ℃)** 지속/호흡 곤란/가슴 통증/청색증(입술 파래짐) → 즉시 병원.
+- **기침이 3주 이상** 지속되거나, **쌕쌕거림**/호흡 시 함몰이 보이면 병원 상담.
+- **꿀**은 1세 이상에서 야간기침에 도움(1세 미만 금지).
+- 처방 없는 **해열제 외 감기약 남용 금지**(중복성분 주의).
+        """.strip()
+    )
+
+def render_pain_antipyretic_guardrails():
+    import streamlit as st
+    st.markdown("### 💊 해열·진통제 가드레일")
+    st.markdown(
+        """
+- **아세트아미노펜(파라세타몰)**: **최소 4시간 간격**  
+- **이부프로펜**: **최소 6시간 간격**
+- **교차 복용 시** 두 약물 간 **최소 2시간** 간격을 지키세요.
+- **24시간 총량 초과 금지**(앱의 계산/경고를 기준으로 관리).
+- **소아 용량**은 **체중 기준** 전문지시를 따르세요. 임의 증량/병용 금지.
+        """.strip()
+    )
+
+def render_neutropenia_foodguide():
+    import streamlit as st
+    st.markdown("### 🥗 호중구 감소 시 식이/위생 안내")
+    st.markdown(
+        """
+- **생채소/생고기/생달걀 금지**. **익힌 음식** 또는 **전자레인지 30초 이상 재가열**.
+- **멸균식품(살균식품) 권장**. **조리 후 2시간 이후 남은 음식은 섭취 금지**.
+- **껍질 있는 과일**은 **주치의와 상담 후** 섭취 여부 결정.
+- **개별 도마/칼** 구분, 손 씻기·주방 청결 유지.
+- **외식/뷔페/길거리 음식 회피**.
+        """.strip()
+    )
+
+def render_guardian_guides():
+    import streamlit as st
+    with st.expander("⚠️ 위험 신호(반드시 확인)", expanded=True):
+        render_redflags_banner()
+    st.markdown("---")
+    st.subheader("보호자 가이드 모음")
+    tabs = st.tabs(["발열", "설사", "구토", "기침/감기", "해열·진통제 가드레일", "호중구 감소 식이", "변비", "복통", "피부 관리"])
+    with tabs[0]:
+        render_fever_quickguide()
+    with tabs[1]:
+        render_diarrhea_quickguide()
+    with tabs[2]:
+        render_vomit_quickguide()
+    with tabs[3]:
+        render_cough_cold_quickguide()
+    with tabs[4]:
+        render_pain_antipyretic_guardrails()
+    with tabs[5]:
+        render_neutropenia_foodguide()
+
+    with tabs[6]:
+        render_constipation_quickguide()
+    with tabs[7]:
+        render_abdominal_pain_quickguide()
+    with tabs[8]:
+        render_skin_care_quickguide()
+
 
 # SPECIAL (notes + pitfalls)
 def _annotate_special_notes(lines):
@@ -1453,175 +1748,13 @@ with t_report:
 
     # ---------- 오른쪽: 기록/그래프/내보내기 ----------
     with col_side:
-        st.markdown("### 📊 기록/그래프 패널")
-
-        st.session_state.setdefault("lab_history", [])
-        hist = st.session_state["lab_history"]
-
-        tab_log, tab_plot, tab_export = st.tabs(["📝 기록", "📈 그래프", "⬇️ 내보내기"])
-
-        with tab_log:
-            cols_btn = st.columns([1, 1, 1])
-            with cols_btn[0]:
-                if st.button("➕ 현재 값을 기록에 추가", key=wkey("add_history_tab")):
-                    snap = {
-                        "ts": _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        "temp": temp or "",
-                        "hr": hr or "",
-                        "labs": {k: ("" if labs.get(k) in (None, "") else labs.get(k)) for k in labs.keys()},
-                        "mode": "peds" if bool(st.session_state.get(wkey("is_peds"), False)) else "adult",
-                        "ref": lab_ref(bool(st.session_state.get(wkey("is_peds"), False))),
-                    }
-                    weird = []
-                    for k, v in (snap["labs"] or {}).items():
-                        try:
-                            fv = float(v)
-                            if k == "Na" and not (110 <= fv <= 170):
-                                weird.append(f"Na {fv}")
-                            if k == "K" and not (1.0 <= fv <= 8.0):
-                                weird.append(f"K {fv}")
-                            if k == "Hb" and not (3.0 <= fv <= 25.0):
-                                weird.append(f"Hb {fv}")
-                            if k == "PLT" and fv > 0 and fv < 1:
-                                weird.append(f"PLT {fv} (단위 확인)")
-                        except Exception:
-                            pass
-                    hist.append(snap)
-                    st.success("현재 값이 기록에 추가되었습니다.")
-                    if weird:
-                        st.warning("비정상적으로 보이는 값 감지: " + ", ".join(weird) + " — 단위/오타를 확인하세요.")
-            with cols_btn[1]:
-                if st.button("🗑️ 기록 비우기", key=wkey("clear_history")) and hist:
-                    st.session_state["lab_history"] = []
-                    hist = st.session_state["lab_history"]
-                    st.warning("기록을 모두 비웠습니다.")
-            with cols_btn[2]:
-                st.caption(f"총 {len(hist)}건")
-
-            if not hist:
-                st.info("기록이 없습니다.")
-            else:
-                try:
-                    import pandas as pd
-                    rows = []
-                    for h in hist[-10:]:
-                        row = {
-                            "시각": h.get("ts", ""),
-                            "T(℃)": h.get("temp", ""),
-                            "HR": h.get("hr", ""),
-                            "WBC": (h.get("labs", {}) or {}).get("WBC", ""),
-                            "Hb": (h.get("labs", {}) or {}).get("Hb", ""),
-                            "PLT": (h.get("labs", {}) or {}).get("PLT", ""),
-                            "ANC": (h.get("labs", {}) or {}).get("ANC", ""),
-                            "CRP": (h.get("labs", {}) or {}).get("CRP", ""),
-                        }
-                        rows.append(row)
-                    df = pd.DataFrame(rows)
-                    st.dataframe(df, use_container_width=True, height=280)
-                except Exception:
-                    st.write(hist[-5:])
-
-        with tab_plot:
-            default_metrics = ["WBC", "Hb", "PLT", "ANC", "CRP", "Na", "Cr", "BUN", "AST", "ALT", "Glu"]
-            all_metrics = sorted({*default_metrics, *list(labs.keys())})
-            pick = st.multiselect("그래프 항목 선택", options=all_metrics, default=default_metrics[:4], key=wkey("chart_metrics_tab"))
-
-            if not hist:
-                st.info("기록이 없습니다. 먼저 '기록' 탭에서 추가하세요.")
-            elif not pick:
-                st.info("표시할 항목을 선택하세요.")
-            else:
-                x = [h.get("ts", "") for h in hist]
-                if _HAS_MPL:
-                    for m in pick:
-                        y, band = [], None
-                        for h in hist:
-                            v = (h.get("labs", {}) or {}).get(m, "")
-                            try:
-                                v = float(str(v).replace(",", "."))
-                            except Exception:
-                                v = None
-                            y.append(v)
-                        for h in reversed(hist):
-                            ref = (h.get("ref") or {})
-                            if m in ref:
-                                band = ref[m]
-                                break
-                        if all(v is None for v in y):
-                            continue
-                        fig = plt.figure()
-                        plt.plot(x, [vv if vv is not None else float("nan") for vv in y], marker="o")
-                        plt.title(m)
-                        plt.xlabel("기록 시각")
-                        plt.ylabel(m)
-                        plt.xticks(rotation=45, ha="right")
-                        if band and isinstance(band, (tuple, list)) and len(band) == 2:
-                            lo, hi = band
-                            try:
-                                plt.axhspan(lo, hi, alpha=0.15)
-                            except Exception:
-                                pass
-                        plt.tight_layout()
-                        st.pyplot(fig)
-                else:
-                    try:
-                        import pandas as pd
-                        df_rows = []
-                        for i, h in enumerate(hist):
-                            row = {"ts": x[i]}
-                            for m in pick:
-                                v = (h.get("labs", {}) or {}).get(m, None)
-                                try:
-                                    v = float(str(v).replace(",", "."))
-                                except Exception:
-                                    v = None
-                                row[m] = v
-                            df_rows.append(row)
-                        if df_rows:
-                            df = pd.DataFrame(df_rows).set_index("ts")
-                            for m in pick:
-                                st.line_chart(df[[m]])
-                        else:
-                            st.info("표시할 데이터가 없습니다.")
-                    except Exception:
-                        st.warning("matplotlib/pandas 미설치 → 간단 표로 폴백합니다.")
-                        for m in pick:
-                            st.write(m, [(x[i], (hist[i].get("labs", {}) or {}).get(m, None)) for i in range(len(hist))])
-
-        with tab_export:
-            if not hist:
-                st.info("기록이 없습니다.")
-            else:
-                since = st.text_input("시작 시각(YYYY-MM-DD)", value="")
-                until = st.text_input("종료 시각(YYYY-MM-DD)", value="")
-
-                def _in_range(ts):
-                    if not ts:
-                        return False
-                    d = ts[:10]
-                    if since and d < since:
-                        return False
-                    if until and d > until:
-                        return False
-                    return True
-
-                sel = [h for h in hist if _in_range(h.get("ts", ""))] if (since or until) else hist
-
-                output = io.StringIO()
-                writer = csv.writer(output)
-                all_keys = set()
-                for h in sel:
-                    all_keys |= set((h.get("labs", {}) or {}).keys())
-                all_keys = sorted(all_keys)
-                headers = ["ts", "temp", "hr"] + all_keys
-                writer.writerow(headers)
-                for h in sel:
-                    row = [h.get("ts", ""), h.get("temp", ""), h.get("hr", "")]
-                    for m in all_keys:
-                        row.append((h.get("labs", {}) or {}).get(m, ""))
-                    writer.writerow(row)
-                st.download_button("CSV 다운로드", data=output.getvalue().encode("utf-8"), file_name="bloodmap_history.csv", mime="text/csv")
-                st.caption("팁: 기간 필터를 지정해 필요한 구간만 내보낼 수 있습니다.")
+        st.info("이 패널은 상단 탭 📈 기록 그래프로 이동했습니다.")
+        # 필요 시 다음 줄의 guard를 True로 바꾸면 임시로 이 자리에서도 보입니다.
+        if st.session_state.get('_debug_show_graph_in_report', False):
+            try:
+                render_graph_panel()
+            except NameError:
+                st.warning('render_graph_panel 함수가 아직 정의되지 않았습니다.')
 
     # ---------- 왼쪽: 보고서 본문 ----------
     with col_report:
@@ -1793,299 +1926,187 @@ with t_report:
             st.download_button("📄 보고서 .pdf 다운로드", data=pdf_bytes, file_name="bloodmap_report.pdf", mime="application/pdf")
         except Exception:
             st.caption("PDF 변환 모듈을 불러오지 못했습니다. .md 또는 .txt를 사용해주세요.")
+# ==== 기록/그래프 패널: 분리된 렌더 함수 ====
+def render_graph_panel():
+    st.markdown("### 📊 기록/그래프 패널")
 
+    st.session_state.setdefault("lab_history", [])
+    hist = st.session_state["lab_history"]
 
+    tab_log, tab_plot, tab_export = st.tabs(["📝 기록", "📈 그래프", "⬇️ 내보내기"])
 
-# =========================
-# 🔧 패널 보기 (탭과 독립)
-# =========================
-import streamlit as _st_for_sidebar  # alias to avoid name shadowing if any
-try:
-    _st_for_sidebar.sidebar.subheader("패널 보기")
-    _panel_choice = _st_for_sidebar.sidebar.radio("열 패널 선택", ["기본 패널", "소아 패널(독립)"], index=0, key="panel_switch")
-    if _panel_choice == "소아 패널(독립)":
-        render_peds_panel()
-except Exception:
-    # If sidebar not available in current context, fail silently
-    pass
+    with tab_log:
+        cols_btn = st.columns([1, 1, 1])
+        with cols_btn[0]:
+            if st.button("➕ 현재 값을 기록에 추가", key=wkey("add_history_tab")):
+                snap = {
+                    "ts": _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "temp": temp or "",
+                    "hr": hr or "",
+                    "labs": {k: ("" if labs.get(k) in (None, "") else labs.get(k)) for k in labs.keys()},
+                    "mode": "peds" if bool(st.session_state.get(wkey("is_peds"), False)) else "adult",
+                    "ref": lab_ref(bool(st.session_state.get(wkey("is_peds"), False))),
+                }
+                weird = []
+                for k, v in (snap["labs"] or {}).items():
+                    try:
+                        fv = float(v)
+                        if k == "Na" and not (110 <= fv <= 170):
+                            weird.append(f"Na {fv}")
+                        if k == "K" and not (1.0 <= fv <= 8.0):
+                            weird.append(f"K {fv}")
+                        if k == "Hb" and not (3.0 <= fv <= 25.0):
+                            weird.append(f"Hb {fv}")
+                        if k == "PLT" and fv > 0 and fv < 1:
+                            weird.append(f"PLT {fv} (단위 확인)")
+                    except Exception:
+                        pass
+                hist.append(snap)
+                st.success("현재 값이 기록에 추가되었습니다.")
+                if weird:
+                    st.warning("비정상적으로 보이는 값 감지: " + ", ".join(weird) + " — 단위/오타를 확인하세요.")
+        with cols_btn[1]:
+            if st.button("🗑️ 기록 비우기", key=wkey("clear_history")) and hist:
+                st.session_state["lab_history"] = []
+                hist = st.session_state["lab_history"]
+                st.warning("기록을 모두 비웠습니다.")
+        with cols_btn[2]:
+            st.caption(f"총 {len(hist)}건")
 
-
-def build_peds_notes(
-    *, stool, fever, persistent_vomit, oliguria, cough, nasal, eye, abd_pain, ear_pain,
-    rash, hives, migraine, hfmd,
-    duration=None, score=None, max_temp=None, red_seizure=False, red_bloodstool=False,
-    red_night=False, red_dehydration=False,
-    wheeze="없음", sputum="없음", constipation="없음",
-    adeno=False, rsv=False, influenza=False, rota=False, covid=False,
-) -> str:
-    lines = []
-    if duration: lines.append(f"[지속일수] {duration}")
-    if max_temp is not None:
-        try: lines.append(f"[최고 체온] {float(max_temp):.1f}℃")
-        except Exception: lines.append(f"[최고 체온] {max_temp}")
-    sx = []
-    if fever != "없음": sx.append(f"발열:{fever}")
-    if cough != "없음": sx.append(f"기침:{cough}")
-    if nasal != "없음": sx.append(f"콧물:{nasal}")
-    if stool != "없음": sx.append(f"설사:{stool}")
-    if eye != "없음": sx.append(f"눈:{eye}")
-    if wheeze != "없음": sx.append(f"쌕쌕거림:{wheeze}")
-    if sputum != "없음": sx.append(f"가래:{sputum}")
-    if constipation != "없음": sx.append(f"변비:{constipation}")
-    if adeno: sx.append("아데노 의심/접촉력")
-    if rsv: sx.append("RSV 의심/접촉력")
-    if influenza: sx.append("인플루엔자 의심/접촉력")
-    if rota: sx.append("로타 의심/접촉력")
-    if covid: sx.append("코로나 의심/접촉력")
-    if persistent_vomit: sx.append("지속 구토")
-    if oliguria: sx.append("소변량 급감")
-    if abd_pain: sx.append("복통/배마사지 거부")
-    if ear_pain: sx.append("귀 통증")
-    if rash: sx.append("발진/두드러기")
-    if hives: sx.append("알레르기 의심")
-    if migraine: sx.append("편두통 의심")
-    if hfmd: sx.append("수족구 의심")
-    if red_seizure: lines.append("[위험 징후] 경련/의식저하")
-    if red_bloodstool: lines.append("[위험 징후] 혈변/검은변")
-    if red_night: lines.append("[위험 징후] 야간 악화/새벽 악화")
-    if red_dehydration: lines.append("[위험 징후] 탈수 의심(눈물 감소/구강 건조/소변 급감)")
-    if sx: lines.append("[증상] " + ", ".join(sx))
-    if isinstance(score, dict):
-        top3 = sorted(score.items(), key=lambda x: x[1], reverse=True)[:3]
-        top3 = [(k, v) for k, v in top3 if v > 0]
-        if top3: lines.append("[상위 점수] " + " / ".join([f"{k}:{v}" for k, v in top3]))
-    if not lines: lines.append("(특이 소견 없음)")
-    return "\n".join(lines)
-
-
-def render_peds_panel():
-    import streamlit as st
-    st.header("👶 소아 패널 (독립)")
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        fever = st.selectbox("발열", ["없음", "미열", "38도대", "39도↑"], key="pp_fever")
-    with c2:
-        cough = st.selectbox("기침", ["없음", "조금", "보통", "심함"], key="pp_cough")
-    with c3:
-        nasal = st.selectbox("콧물/코막힘", ["없음", "조금", "보통", "심함"], key="pp_nasal")
-    c4, c5, c6 = st.columns(3)
-    with c4:
-        stool = st.selectbox("설사", ["없음", "1~2회", "≥4회", "혈변·검은변"], key="pp_stool")
-    with c5:
-        eye = st.selectbox("눈꼽/결막", ["없음", "조금", "보통", "심함"], key="pp_eye")
-    with c6:
-        max_temp = st.text_input("최고 체온(℃, 선택)", value="", key="pp_maxtemp")
-    g1, g2, g3 = st.columns(3)
-    with g1:
-        constipation = st.selectbox("변비", ["없음", "또끼똥", "보통", "심함"], key="pp_constipation")
-    with g2:
-        wheeze = st.selectbox("쌕쌕거림(천명)", ["없음", "조금", "보통", "심함"], key="pp_wheeze")
-    with g3:
-        sputum = st.selectbox("가래", ["없음", "조금", "보통", "심함"], key="pp_sputum")
-    f1, f2, f3, f4 = st.columns(4)
-    with f1:
-        red_seizure = st.checkbox("경련/의식저하", key="pp_red_seizure")
-    with f2:
-        red_bloodstool = st.checkbox("혈변/검은변", key="pp_red_bloodstool")
-    with f3:
-        red_night = st.checkbox("야간/새벽 악화", key="pp_red_night")
-    with f4:
-        red_dehydration = st.checkbox("탈수 의심", key="pp_red_dehydration")
-    x1, x2, x3, x4 = st.columns(4)
-    with x1:
-        persistent_vomit = st.checkbox("지속 구토", key="pp_pvomit")
-    with x2:
-        oliguria = st.checkbox("소변량 급감", key="pp_oliguria")
-    with x3:
-        abd_pain = st.checkbox("복통/배마사지 거부", key="pp_abdpain")
-    with x4:
-        ear_pain = st.checkbox("귀 통증", key="pp_earpain")
-    v1, v2, v3, v4, v5 = st.columns(5)
-    with v1:
-        cb_adeno = st.checkbox("아데노", key="pp_adeno")
-    with v2:
-        cb_rsv = st.checkbox("RSV", key="pp_rsv")
-    with v3:
-        cb_flu = st.checkbox("인플루엔자", key="pp_flu")
-    with v4:
-        cb_rota = st.checkbox("로타", key="pp_rota")
-    with v5:
-        cb_covid = st.checkbox("코로나", key="pp_covid")
-    score = {}
-    if wheeze in ["조금", "보통", "심함"]:
-        score.setdefault("천명/기관지 과민", 0)
-        score["천명/기관지 과민"] += {"조금": 25, "보통": 40, "심함": 55}[wheeze]
-    if sputum in ["조금", "보통", "심함"]:
-        score.setdefault("호흡기 점액 증가", 0)
-        score["호흡기 점액 증가"] += {"조금": 15, "보통": 25, "심함": 35}[sputum]
-    if constipation in ["또끼똥", "보통", "심함"]:
-        score.setdefault("변비 관리 필요", 0)
-        score["변비 관리 필요"] += {"또끼똥": 15, "보통": 25, "심함": 35}[constipation]
-    if cb_adeno:
-        score.setdefault("바이러스성 장/호흡기 감염 의심(아데노)", 0)
-        score["바이러스성 장/호흡기 감염 의심(아데노)"] += 20
-    if cb_rsv:
-        score.setdefault("RSV 의심", 0)
-        base = 30
-        if wheeze in ["보통", "심함"]: base += 10
-        score["RSV 의심"] += base
-    if cb_flu:
-        score.setdefault("인플루엔자 의심", 0)
-        add = 30
-        try:
-            mt = float(max_temp) if max_temp else None
-            if mt is not None and mt >= 39.0: add += 5
-        except Exception:
-            pass
-        score["인플루엔자 의심"] += add
-    if cb_rota:
-        score.setdefault("로타 바이러스 장염 의심", 0)
-        add = 25
-        if stool != "없음": add += 5
-        if persistent_vomit: add += 5
-        score["로타 바이러스 장염 의심"] += add
-    if cb_covid:
-        score.setdefault("코로나 의심", 0)
-        add = 30
-        if cough != "없음": add += 5
-        if nasal != "없음": add += 3
-        score["코로나 의심"] += add
-    notes = build_peds_notes(
-        stool=stool, fever=fever, persistent_vomit=persistent_vomit, oliguria=oliguria,
-        cough=cough, nasal=nasal, eye=eye, abd_pain=abd_pain, ear_pain=ear_pain,
-        rash=False, hives=False, migraine=False, hfmd=False, duration=None, score=score, max_temp=max_temp,
-        red_seizure=red_seizure, red_bloodstool=red_bloodstool, red_night=red_night, red_dehydration=red_dehydration,
-        wheeze=wheeze, sputum=sputum, constipation=constipation,
-        adeno=cb_adeno, rsv=cb_rsv, influenza=cb_flu, rota=cb_rota, covid=cb_covid
-    )
-    st.markdown("### 📝 요약")
-    st.code(notes, language="markdown")
-    render_caregiver_notes_peds(
-        stool=stool, fever=fever, persistent_vomit=persistent_vomit, oliguria=oliguria,
-        cough=cough, nasal=nasal, eye=eye, abd_pain=abd_pain, ear_pain=ear_pain,
-        rash=False, hives=False, migraine=False, hfmd=False, max_temp=max_temp,
-        wheeze=wheeze, sputum=sputum, constipation=constipation,
-        adeno=cb_adeno, rsv=cb_rsv, influenza=cb_flu, rota=cb_rota, covid=cb_covid
-    )
-
-
-
-import re as _re_paste
-
-def _normalize_lab_key(raw: str) -> str:
-    raw = (raw or "").strip().upper().replace(" ", "").replace(".", "")
-    aliases = {
-        "WBC": "WBC",
-        "HGB": "Hb", "HB": "Hb", "HCT": "Hct",
-        "PLT": "PLT", "PLATELET": "PLT",
-        "ANC": "ANC", "NEUT": "ANC", "ABSNEUT": "ANC",
-        "NA": "Na", "SODIUM": "Na",
-        "K": "K", "POTASSIUM": "K",
-        "CL": "Cl", "CHLORIDE": "Cl",
-        "CA": "Ca", "CALCIUM": "Ca",
-        "P": "P", "PHOS": "P", "PHOSPHORUS": "P",
-        "MG": "Mg", "MAGNESIUM": "Mg",
-        "ALB": "Alb", "ALBUMIN": "Alb",
-        "GLU": "Glu", "GLUCOSE": "Glu",
-        "TP": "T.P", "TOTALPROTEIN": "T.P", "TPROT": "T.P",
-        "AST": "AST", "SGOT": "AST",
-        "ALT": "ALT", "SGPT": "ALT",
-        "CRP": "CRP",
-        "CR": "Cr", "CREATININE": "Cr",
-        "TB": "T.B", "TBIL": "T.B", "BILITOTAL": "T.B", "TBILI": "T.B",
-        "BUN": "BUN",
-        "ESR": "ESR"
-    }
-    return aliases.get(raw, raw)
-
-def parse_lab_paste(text: str) -> dict:
-    if not text:
-        return {}
-    out = {}
-    lines = _re_paste.split(r"[\\r\\n;]+", text)
-    for line in lines:
-        if not line.strip():
-            continue
-        m = _re_paste.match(r"\\s*([A-Za-z\\. ]{1,10})\\s*[:,-]?\\s*([-+]?\\d+[.,]?\\d*)", line)
-        if not m:
-            m2 = _re_paste.match(r"\\s*([-+]?\\d+[.,]?\\d*)\\s*([A-Za-z\\. ]{1,10})\\s*$", line)
-            if not m2:
-                continue
-            val_str, key_raw = m2.group(1), m2.group(2)
+        if not hist:
+            st.info("기록이 없습니다.")
         else:
-            key_raw, val_str = m.group(1), m.group(2)
-        key = _normalize_lab_key(key_raw)
-        val_str = val_str.replace(",", ".")
-        try:
-            val = float(val_str)
-        except Exception:
-            continue
-        if len(key) > 0:
-            out[key] = val
-    return out
+            try:
+                import pandas as pd
+                rows = []
+                for h in hist[-10:]:
+                    row = {
+                        "시각": h.get("ts", ""),
+                        "T(℃)": h.get("temp", ""),
+                        "HR": h.get("hr", ""),
+                        "WBC": (h.get("labs", {}) or {}).get("WBC", ""),
+                        "Hb": (h.get("labs", {}) or {}).get("Hb", ""),
+                        "PLT": (h.get("labs", {}) or {}).get("PLT", ""),
+                        "ANC": (h.get("labs", {}) or {}).get("ANC", ""),
+                        "CRP": (h.get("labs", {}) or {}).get("CRP", ""),
+                    }
+                    rows.append(row)
+                df = pd.DataFrame(rows)
+                st.dataframe(df, use_container_width=True, height=280)
+            except Exception:
+                st.write(hist[-5:])
 
-def apply_parsed_labs_to_state(parsed: dict):
-    import streamlit as st
-    if not parsed:
-        return
-    labs = st.session_state.get("labs_dict", {}).copy()
-    labs.update(parsed)
-    st.session_state["labs_dict"] = labs
+    with tab_plot:
+        default_metrics = ["WBC", "Hb", "PLT", "ANC", "CRP", "Na", "Cr", "BUN", "AST", "ALT", "Glu"]
+        all_metrics = sorted({*default_metrics, *list(labs.keys())})
+        pick = st.multiselect("그래프 항목 선택", options=all_metrics, default=default_metrics[:4], key=wkey("chart_metrics_tab"))
 
-def render_lab_paste_panel():
-    import streamlit as st
-    with st.sidebar:
-        st.subheader("📋 검사값 붙여넣기(자동 인식)")
-        sample = "예: WBC: 4.5\\nHb 12.3\\nPLT, 200\\nNa 140 mmol/L\\nCr 0.8 mg/dL"
-        txt = st.text_area("붙여넣기", value="", height=140, help=sample, key="lab_paste_text")
-        if txt:
-            parsed = parse_lab_paste(txt)
-            if parsed:
-                st.success("인식: " + ", ".join([f"{k}:{v}" for k, v in parsed.items()]))
-                if st.button("적용(세션에 반영)"):
-                    apply_parsed_labs_to_state(parsed)
-                    st.toast("세션에 반영 완료")
+        if not hist:
+            st.info("기록이 없습니다. 먼저 '기록' 탭에서 추가하세요.")
+        elif not pick:
+            st.info("표시할 항목을 선택하세요.")
+        else:
+            x = [h.get("ts", "") for h in hist]
+            if _HAS_MPL:
+                for m in pick:
+                    y, band = [], None
+                    for h in hist:
+                        v = (h.get("labs", {}) or {}).get(m, "")
+                        try:
+                            v = float(str(v).replace(",", "."))
+                        except Exception:
+                            v = None
+                        y.append(v)
+                    for h in reversed(hist):
+                        ref = (h.get("ref") or {})
+                        if m in ref:
+                            band = ref[m]
+                            break
+                    if all(v is None for v in y):
+                        continue
+                    fig = plt.figure()
+                    plt.plot(x, [vv if vv is not None else float("nan") for vv in y], marker="o")
+                    plt.title(m)
+                    plt.xlabel("기록 시각")
+                    plt.ylabel(m)
+                    plt.xticks(rotation=45, ha="right")
+                    if band and isinstance(band, (tuple, list)) and len(band) == 2:
+                        lo, hi = band
+                        try:
+                            plt.axhspan(lo, hi, alpha=0.15)
+                        except Exception:
+                            pass
+                    plt.tight_layout()
+                    st.pyplot(fig)
             else:
-                st.info("인식된 항목이 없습니다. 표기(키워드/숫자) 확인해주세요.")
+                try:
+                    import pandas as pd
+                    df_rows = []
+                    for i, h in enumerate(hist):
+                        row = {"ts": x[i]}
+                        for m in pick:
+                            v = (h.get("labs", {}) or {}).get(m, None)
+                            try:
+                                v = float(str(v).replace(",", "."))
+                            except Exception:
+                                v = None
+                            row[m] = v
+                        df_rows.append(row)
+                    if df_rows:
+                        df = pd.DataFrame(df_rows).set_index("ts")
+                        for m in pick:
+                            st.line_chart(df[[m]])
+                    else:
+                        st.info("표시할 데이터가 없습니다.")
+                except Exception:
+                    st.warning("matplotlib/pandas 미설치 → 간단 표로 폴백합니다.")
+                    for m in pick:
+                        st.write(m, [(x[i], (hist[i].get("labs", {}) or {}).get(m, None)) for i in range(len(hist))])
 
-try:
-    render_lab_paste_panel()
-except Exception:
-    pass
-
-
-def _render_targeted_auto_summary(default_targets=None):
-    import streamlit as st
-    st.subheader("🧩 자동 추천 요약 · 표적치료")
-    if default_targets is None:
-        default_targets = ["Imatinib", "Sunitinib", "Regorafenib", "Ripretinib"]
-    options = ["Imatinib", "Sunitinib", "Regorafenib", "Ripretinib", "Avapritinib", "Dasatinib", "Nilotinib", "Sorafenib", "Pazopanib"]
-    sel = st.multiselect("Targeted agents", options, default_targets, key="tgts_sel")
-    # 간단 템플릿
-    bullets = []
-    for d in sel:
-        if d == "Imatinib":
-            bullets.append("- **Imatinib**: 1차 표준; KIT/PDGFRA 변이 기반. 용량/내약성 고려, 모니터링: CBC/LFT/부종.")
-        elif d == "Sunitinib":
-            bullets.append("- **Sunitinib**: Imatinib 불응/내성 시 2차 선택지; 고혈압/피로/핸드풋 모니터.")
-        elif d == "Regorafenib":
-            bullets.append("- **Regorafenib**: 3차 선택; HFSR·고혈압·피로 관리, 용량 조절 옵션 고려.")
-        elif d == "Ripretinib":
-            bullets.append("- **Ripretinib**: 4차 이후; 탈모·근육통·피부 건조 등 모니터, 내성 시 용량 상향 검토.")
-        elif d == "Avapritinib":
-            bullets.append("- **Avapritinib**: PDGFRA D842V 변이 대상; 인지 부작용/부종 주의.")
+    with tab_export:
+        if not hist:
+            st.info("기록이 없습니다.")
         else:
-            bullets.append(f"- **{d}**: 환자 변이/내약성/이전 라인 고려하여 개별화.")
-    st.markdown("### 📝 요약 제안")
-    st.markdown("\n".join(bullets))
+            since = st.text_input("시작 시각(YYYY-MM-DD)", value="")
+            until = st.text_input("종료 시각(YYYY-MM-DD)", value="")
 
+            def _in_range(ts):
+                if not ts:
+                    return False
+                d = ts[:10]
+                if since and d < since:
+                    return False
+                if until and d > until:
+                    return False
+                return True
 
+            sel = [h for h in hist if _in_range(h.get("ts", ""))] if (since or until) else hist
 
-# ---- 항암/표적치료 자동 요약(사이드바 버튼) ----
-try:
-    with st.sidebar:
-        if st.toggle("자동 추천 요약(표적치료)", value=False, key="tgts_toggle"):
-            _render_targeted_auto_summary(["Imatinib", "Sunitinib", "Regorafenib", "Ripretinib"])
-except Exception:
-    pass
+            output = io.StringIO()
+            writer = csv.writer(output)
+            all_keys = set()
+            for h in sel:
+                all_keys |= set((h.get("labs", {}) or {}).keys())
+            all_keys = sorted(all_keys)
+            headers = ["ts", "temp", "hr"] + all_keys
+            writer.writerow(headers)
+            for h in sel:
+                row = [h.get("ts", ""), h.get("temp", ""), h.get("hr", "")]
+                for m in all_keys:
+                    row.append((h.get("labs", {}) or {}).get(m, ""))
+                writer.writerow(row)
+            st.download_button("CSV 다운로드", data=output.getvalue().encode("utf-8"), file_name="bloodmap_history.csv", mime="text/csv")
+            st.caption("팁: 기간 필터를 지정해 필요한 구간만 내보낼 수 있습니다.")
 
+# --- 기록 그래프 단독 탭 ---
+def _render_graph_panel_safe():
+    st.subheader("📈 기록 그래프")
+    try:
+        render_graph_panel()   # 우리가 분리해둔 함수
+    except NameError:
+        st.info("그래프 패널 함수가 아직 없어요. 기존 그래프 함수를 알려주면 연결할게요.")
+    except Exception as e:
+        st.warning(f"기록 그래프 렌더 중 오류: {e}")
+
+with tab_graphlog:
+    _render_graph_panel_safe()
