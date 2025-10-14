@@ -1586,132 +1586,132 @@ with t_report:
     
 # 보고서 옆 패널 제거됨 (기록/그래프 전용 탭으로 이동)
 
-            if not hist:
-                st.info("기록이 없습니다.")
-            else:
-                try:
-                    import pandas as pd
-                    rows = []
-                    for h in hist[-10:]:
-                        row = {
-                            "시각": h.get("ts", ""),
-                            "T(℃)": h.get("temp", ""),
-                            "HR": h.get("hr", ""),
-                            "WBC": (h.get("labs", {}) or {}).get("WBC", ""),
-                            "Hb": (h.get("labs", {}) or {}).get("Hb", ""),
-                            "PLT": (h.get("labs", {}) or {}).get("PLT", ""),
-                            "ANC": (h.get("labs", {}) or {}).get("ANC", ""),
-                            "CRP": (h.get("labs", {}) or {}).get("CRP", ""),
-                        }
-                        rows.append(row)
-                    df = pd.DataFrame(rows)
-                    st.dataframe(df, use_container_width=True, height=280)
-                except Exception:
-                    st.write(hist[-5:])
-
-        with tab_plot:
-            default_metrics = ["WBC", "Hb", "PLT", "ANC", "CRP", "Na", "Cr", "BUN", "AST", "ALT", "Glu"]
-            all_metrics = sorted({*default_metrics, *list(labs.keys())})
-            pick = st.multiselect("그래프 항목 선택", options=all_metrics, default=default_metrics[:4], key=wkey("chart_metrics_tab"))
-
-            if not hist:
-                st.info("기록이 없습니다. 먼저 '기록' 탭에서 추가하세요.")
-            elif not pick:
-                st.info("표시할 항목을 선택하세요.")
-            else:
-                x = [h.get("ts", "") for h in hist]
-                if _HAS_MPL:
-                    for m in pick:
-                        y, band = [], None
-                        for h in hist:
-                            v = (h.get("labs", {}) or {}).get(m, "")
-                            try:
-                                v = float(str(v).replace(",", "."))
-                            except Exception:
-                                v = None
-                            y.append(v)
-                        for h in reversed(hist):
-                            ref = (h.get("ref") or {})
-                            if m in ref:
-                                band = ref[m]
-                                break
-                        if all(v is None for v in y):
-                            continue
-                        fig = plt.figure()
-                        plt.plot(x, [vv if vv is not None else float("nan") for vv in y], marker="o")
-                        plt.title(m)
-                        plt.xlabel("기록 시각")
-                        plt.ylabel(m)
-                        plt.xticks(rotation=45, ha="right")
-                        if band and isinstance(band, (tuple, list)) and len(band) == 2:
-                            lo, hi = band
-                            try:
-                                plt.axhspan(lo, hi, alpha=0.15)
-                            except Exception:
-                                pass
-                        plt.tight_layout()
-                        st.pyplot(fig)
-                else:
-                    try:
-                        import pandas as pd
-                        df_rows = []
-                        for i, h in enumerate(hist):
-                            row = {"ts": x[i]}
-                            for m in pick:
-                                v = (h.get("labs", {}) or {}).get(m, None)
-                                try:
-                                    v = float(str(v).replace(",", "."))
-                                except Exception:
-                                    v = None
-                                row[m] = v
-                            df_rows.append(row)
-                        if df_rows:
-                            df = pd.DataFrame(df_rows).set_index("ts")
-                            for m in pick:
-                                st.line_chart(df[[m]])
-                        else:
-                            st.info("표시할 데이터가 없습니다.")
-                    except Exception:
-                        st.warning("matplotlib/pandas 미설치 → 간단 표로 폴백합니다.")
-                        for m in pick:
-                            st.write(m, [(x[i], (hist[i].get("labs", {}) or {}).get(m, None)) for i in range(len(hist))])
-
-        with tab_export:
-            if not hist:
-                st.info("기록이 없습니다.")
-            else:
-                since = st.text_input("시작 시각(YYYY-MM-DD)", value="")
-                until = st.text_input("종료 시각(YYYY-MM-DD)", value="")
-
-                def _in_range(ts):
-                    if not ts:
-                        return False
-                    d = ts[:10]
-                    if since and d < since:
-                        return False
-                    if until and d > until:
-                        return False
-                    return True
-
-                sel = [h for h in hist if _in_range(h.get("ts", ""))] if (since or until) else hist
-
-                output = io.StringIO()
-                writer = csv.writer(output)
-                all_keys = set()
-                for h in sel:
-                    all_keys |= set((h.get("labs", {}) or {}).keys())
-                all_keys = sorted(all_keys)
-                headers = ["ts", "temp", "hr"] + all_keys
-                writer.writerow(headers)
-                for h in sel:
-                    row = [h.get("ts", ""), h.get("temp", ""), h.get("hr", "")]
-                    for m in all_keys:
-                        row.append((h.get("labs", {}) or {}).get(m, ""))
-                    writer.writerow(row)
-                st.download_button("CSV 다운로드", data=output.getvalue().encode("utf-8"), file_name="bloodmap_history.csv", mime="text/csv")
-                st.caption("팁: 기간 필터를 지정해 필요한 구간만 내보낼 수 있습니다.")
-
-    # ---------- 왼쪽: 보고서 본문 ----------
+#             if not hist:
+#                 st.info("기록이 없습니다.")
+#             else:
+#                 try:
+#                     import pandas as pd
+#                     rows = []
+#                     for h in hist[-10:]:
+#                         row = {
+#                             "시각": h.get("ts", ""),
+#                             "T(℃)": h.get("temp", ""),
+#                             "HR": h.get("hr", ""),
+#                             "WBC": (h.get("labs", {}) or {}).get("WBC", ""),
+#                             "Hb": (h.get("labs", {}) or {}).get("Hb", ""),
+#                             "PLT": (h.get("labs", {}) or {}).get("PLT", ""),
+#                             "ANC": (h.get("labs", {}) or {}).get("ANC", ""),
+#                             "CRP": (h.get("labs", {}) or {}).get("CRP", ""),
+#                         }
+#                         rows.append(row)
+#                     df = pd.DataFrame(rows)
+#                     st.dataframe(df, use_container_width=True, height=280)
+#                 except Exception:
+#                     st.write(hist[-5:])
+# 
+#         with tab_plot:
+#             default_metrics = ["WBC", "Hb", "PLT", "ANC", "CRP", "Na", "Cr", "BUN", "AST", "ALT", "Glu"]
+#             all_metrics = sorted({*default_metrics, *list(labs.keys())})
+#             pick = st.multiselect("그래프 항목 선택", options=all_metrics, default=default_metrics[:4], key=wkey("chart_metrics_tab"))
+# 
+#             if not hist:
+#                 st.info("기록이 없습니다. 먼저 '기록' 탭에서 추가하세요.")
+#             elif not pick:
+#                 st.info("표시할 항목을 선택하세요.")
+#             else:
+#                 x = [h.get("ts", "") for h in hist]
+#                 if _HAS_MPL:
+#                     for m in pick:
+#                         y, band = [], None
+#                         for h in hist:
+#                             v = (h.get("labs", {}) or {}).get(m, "")
+#                             try:
+#                                 v = float(str(v).replace(",", "."))
+#                             except Exception:
+#                                 v = None
+#                             y.append(v)
+#                         for h in reversed(hist):
+#                             ref = (h.get("ref") or {})
+#                             if m in ref:
+#                                 band = ref[m]
+#                                 break
+#                         if all(v is None for v in y):
+#                             continue
+#                         fig = plt.figure()
+#                         plt.plot(x, [vv if vv is not None else float("nan") for vv in y], marker="o")
+#                         plt.title(m)
+#                         plt.xlabel("기록 시각")
+#                         plt.ylabel(m)
+#                         plt.xticks(rotation=45, ha="right")
+#                         if band and isinstance(band, (tuple, list)) and len(band) == 2:
+#                             lo, hi = band
+#                             try:
+#                                 plt.axhspan(lo, hi, alpha=0.15)
+#                             except Exception:
+#                                 pass
+#                         plt.tight_layout()
+#                         st.pyplot(fig)
+#                 else:
+#                     try:
+#                         import pandas as pd
+#                         df_rows = []
+#                         for i, h in enumerate(hist):
+#                             row = {"ts": x[i]}
+#                             for m in pick:
+#                                 v = (h.get("labs", {}) or {}).get(m, None)
+#                                 try:
+#                                     v = float(str(v).replace(",", "."))
+#                                 except Exception:
+#                                     v = None
+#                                 row[m] = v
+#                             df_rows.append(row)
+#                         if df_rows:
+#                             df = pd.DataFrame(df_rows).set_index("ts")
+#                             for m in pick:
+#                                 st.line_chart(df[[m]])
+#                         else:
+#                             st.info("표시할 데이터가 없습니다.")
+#                     except Exception:
+#                         st.warning("matplotlib/pandas 미설치 → 간단 표로 폴백합니다.")
+#                         for m in pick:
+#                             st.write(m, [(x[i], (hist[i].get("labs", {}) or {}).get(m, None)) for i in range(len(hist))])
+# 
+#         with tab_export:
+#             if not hist:
+#                 st.info("기록이 없습니다.")
+#             else:
+#                 since = st.text_input("시작 시각(YYYY-MM-DD)", value="")
+#                 until = st.text_input("종료 시각(YYYY-MM-DD)", value="")
+# 
+#                 def _in_range(ts):
+#                     if not ts:
+#                         return False
+#                     d = ts[:10]
+#                     if since and d < since:
+#                         return False
+#                     if until and d > until:
+#                         return False
+#                     return True
+# 
+#                 sel = [h for h in hist if _in_range(h.get("ts", ""))] if (since or until) else hist
+# 
+#                 output = io.StringIO()
+#                 writer = csv.writer(output)
+#                 all_keys = set()
+#                 for h in sel:
+#                     all_keys |= set((h.get("labs", {}) or {}).keys())
+#                 all_keys = sorted(all_keys)
+#                 headers = ["ts", "temp", "hr"] + all_keys
+#                 writer.writerow(headers)
+#                 for h in sel:
+#                     row = [h.get("ts", ""), h.get("temp", ""), h.get("hr", "")]
+#                     for m in all_keys:
+#                         row.append((h.get("labs", {}) or {}).get(m, ""))
+#                     writer.writerow(row)
+#                 st.download_button("CSV 다운로드", data=output.getvalue().encode("utf-8"), file_name="bloodmap_history.csv", mime="text/csv")
+#                 st.caption("팁: 기간 필터를 지정해 필요한 구간만 내보낼 수 있습니다.")
+# 
+#     # ---------- 왼쪽: 보고서 본문 ----------
     with col_report:
         use_dflt = st.checkbox("기본(모두 포함)", True, key=wkey("rep_all"))
         colp1, colp2 = st.columns(2)
