@@ -2222,3 +2222,19 @@ def _augment_caregiver_tips_more(tips_dict):
     except Exception:
         return tips_dict
 
+
+
+# --- Safe shims for caregiver augmentation (avoid NameError before real defs) ---
+try:
+    _augment_caregiver_tips_env
+except NameError:
+    def _augment_caregiver_tips_env(tips_dict):
+        return tips_dict
+
+try:
+    _augment_caregiver_tips_more
+except NameError:
+    def _augment_caregiver_tips_more(tips_dict):
+        return tips_dict
+# --- end shims ---
+
