@@ -1409,6 +1409,36 @@ if (wheeze and wheeze != "없음") and (cough != "없음" or nasal != "없음"):
     st.info("🌬️ **RSV/모세기관지염 의심**: 쌕쌕거림 + 호흡기 증상. **숨이 차면 즉시 진료**.")
 
     st.write("• " + " / ".join([f"{k}: {v}" for k, v in ordered if v > 0]) if any(v > 0 for _, v in ordered) else "• 특이 점수 없음")
+
+
+# === 보호자 설명: 항상 표시 ===
+st.markdown("### 👪 보호자 설명")
+try:
+    render_caregiver_notes_peds(
+        stool=stool, fever=fever, persistent_vomit=persistent_vomit, oliguria=oliguria,
+        cough=cough, nasal=nasal, eye=eye, abd_pain=abd_pain, ear_pain=ear_pain,
+        rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, constip=constip,
+        sputum=sputum, wheeze=wheeze
+    )
+except Exception as e:
+    st.warning(f"보호자 설명을 생성하는 중 문제가 발생했지만, 다른 기능은 계속 사용할 수 있습니다. ({str(e)[:80]})")
+
+# === 요약(보고서 저장) ===
+try:
+    notes = build_peds_notes(
+        stool=stool, fever=fever, persistent_vomit=persistent_vomit, oliguria=oliguria,
+        cough=cough, nasal=nasal, eye=eye, abd_pain=abd_pain, ear_pain=ear_pain,
+        rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, constip=constip,
+        sputum=sputum, wheeze=wheeze,
+        duration=duration_val, score=score, max_temp=max_temp,
+        red_seizure=red_seizure, red_bloodstool=red_bloodstool, red_night=red_night, red_dehydration=red_dehydration
+    )
+except Exception as e:
+    notes = ""
+st.session_state["peds_notes"] = notes
+with st.expander(f"{risk_badge} 소아 증상 요약(보고서용 저장됨)", expanded=False):
+    st.text_area("요약 내용", value=notes, height=160, key=wkey("peds_notes_preview"))
+
     # 보호자 설명 렌더 + peds_notes 저장
     render_caregiver_notes_peds(
         stool=stool, fever=fever, persistent_vomit=persistent_vomit, oliguria=oliguria,
