@@ -357,6 +357,8 @@ def render_caregiver_notes_peds(
     hives,
     migraine,
     hfmd,
+    sputum=None,
+    wheeze=None,
 ):
     st.markdown("---")
 
@@ -364,7 +366,8 @@ def render_caregiver_notes_peds(
     render_symptom_explain_peds(
         stool=stool, fever=fever, persistent_vomit=persistent_vomit, oliguria=oliguria,
         cough=cough, nasal=nasal, eye=eye, abd_pain=abd_pain, ear_pain=ear_pain,
-        rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, max_temp=max_temp
+        rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, max_temp=max_temp,
+        sputum=sputum, wheeze=wheeze
     )
     st.subheader("보호자 설명 (증상별)")
 
@@ -477,7 +480,7 @@ def render_caregiver_notes_peds(
     st.info("❗ 즉시 병원 평가: 번개치는 두통 · 시야 이상/복시/암점 · 경련 · 의식저하 · 심한 목 통증 · 호흡곤란/입술부종")
 
 def build_peds_notes(
-    *, stool, fever, persistent_vomit, oliguria, cough, nasal, eye, abd_pain, ear_pain, rash, hives, migraine, hfmd,
+    *, stool, fever, persistent_vomit, oliguria, cough, nasal, eye, abd_pain, ear_pain, rash, hives, migraine, hfmd, sputum=None, wheeze=None,
     duration=None, score=None, max_temp=None, red_seizure=False, red_bloodstool=False, red_night=False, red_dehydration=False
 ) -> str:
     """소아 증상 선택을 요약하여 보고서용 텍스트를 생성."""
@@ -500,6 +503,10 @@ def build_peds_notes(
         sx.append(f"설사:{stool}")
     if eye != "없음":
         sx.append(f"눈:{eye}")
+    if sputum and sputum != "없음":
+        sx.append(f"가래:{sputum}")
+    if wheeze and wheeze != "없음":
+        sx.append(f"쌕쌕거림:{wheeze}")
     if persistent_vomit:
         sx.append("지속 구토")
     if oliguria:
@@ -537,8 +544,8 @@ def build_peds_notes(
     return "\\n".join(lines)
 
 # ---------- Tabs ----------
-tab_labels = ["🏠 홈", "🧪 피수치 입력", "🧬 암 선택", "💊 항암제(진단 기반)", "👶 소아 증상", "🔬 특수검사", "📄 보고서"]
-t_home, t_labs, t_dx, t_chemo, t_peds, t_special, t_report = st.tabs(tab_labels)
+tab_labels = ["🏠 홈", "🧪 피수치 입력", "🧬 암 선택", "💊 항암제(진단 기반)", "👶 소아 증상", "🔬 특수검사", "📄 보고서", "📊 기록/그래프"]
+t_home, t_labs, t_dx, t_chemo, t_peds, t_special, t_report, t_graph = st.tabs(tab_labels)
 
 # HOME
 with t_home:
@@ -626,6 +633,9 @@ with t_home:
         st.info("응급도: " + level + (" — " + " · ".join(reasons) if reasons else ""))
 
     st.markdown("---")
+    
+show_prof = st.toggle("전문가용: 응급도 가중치 편집", value=False, key=wkey("prof_weights"))
+if show_prof:
     st.subheader("응급도 가중치 (편집 + 프리셋)")
     colp = st.columns(3)
     with colp[0]:
@@ -668,10 +678,13 @@ with t_home:
     if newW != W:
         set_weights(newW)
         st.success("가중치 변경 사항 저장됨.")
+else:
+    st.caption("전문가용 토글을 켜면 응급도 가중치를 편집할 수 있습니다.")
+
 
 # LABS
 
-def render_symptom_explain_peds(*, stool, fever, persistent_vomit, oliguria, cough, nasal, eye, abd_pain, ear_pain, rash, hives, migraine, hfmd, max_temp=None):
+def render_symptom_explain_peds(*, stool, fever, persistent_vomit, oliguria, cough, nasal, eye, abd_pain, ear_pain, rash, hives, migraine, hfmd, max_temp=None, sputum=None, wheeze=None):
     """선택된 증상에 대한 보호자 설명(가정 관리 팁 + 병원 방문 기준)을 상세 렌더."""
     import streamlit as st
 
@@ -714,7 +727,11 @@ def render_symptom_explain_peds(*, stool, fever, persistent_vomit, oliguria, cou
             "숨이 차 보이거나, 입술이 퍼렇게 보이면 즉시 병원.",
             "기침이 2주 이상 지속되거나, 쌕쌕거림/흉통이 동반되면 진료.",
         ]
-        tips["호흡기(기침/콧물)"] = (t, w)
+        if sputum and sputum in ["보통", "많음"]:
+            t.append("생리식염수 분무/흡인기로 **가래 제거**를 보조하세요.")
+        if wheeze and wheeze != "없음":
+            w.insert(0, "쌕쌕거림이 들리면 **하기도 협착/천식 악화 가능** — 호흡곤란 시 즉시 병원.")
+        tips["호흡기(기침/콧물/가래/천명)"] = (t, w)
 
     if stool != "없음" or persistent_vomit or oliguria:
         t = [
@@ -1228,7 +1245,12 @@ with t_peds:
         fever = st.selectbox("발열", ["없음", "37~37.5 (미열)", "37.5~38", "38~38.5", "38.5~39", "39 이상"], key=wkey("p_fever"))
     with c5:
         eye = st.selectbox("눈꼽/결막", ["없음", "맑음", "노랑-농성", "양쪽"], key=wkey("p_eye"))
-
+    # 추가: 가래/쌕쌕거림(천명)
+    g1, g2 = st.columns(2)
+    with g1:
+        sputum = st.selectbox("가래", ["없음", "조금", "보통", "많음"], key=wkey("p_sputum"))
+    with g2:
+        wheeze = st.selectbox("쌕쌕거림(천명)", ["없음", "조금", "보통", "심함"], key=wkey("p_wheeze"))
     d1, d2, d3 = st.columns(3)
     with d1:
         oliguria = st.checkbox("소변량 급감", key=wkey("p_oliguria"))
@@ -1313,6 +1335,8 @@ with t_peds:
         "알레르기 주의": 0,
         "편두통 의심": 0,
         "수족구 의심": 0,
+        "하기도/천명 주의": 0,
+        "가래 동반 호흡기": 0,
     }
     if stool in ["3~4회", "5~6회", "7회 이상"]:
         score["장염 의심"] += {"3~4회": 40, "5~6회": 55, "7회 이상": 70}[stool]
@@ -1320,6 +1344,10 @@ with t_peds:
         score["상기도/독감 계열"] += 25
     if cough in ["조금", "보통", "심함"]:
         score["상기도/독감 계열"] += 20
+    if sputum in ["조금", "보통", "많음"]:
+        score["가래 동반 호흡기"] += {"조금": 10, "보통": 20, "많음": 30}[sputum]
+    if wheeze in ["조금", "보통", "심함"]:
+        score["하기도/천명 주의"] += {"조금": 25, "보통": 40, "심함": 60}[wheeze]
     if eye in ["노랑-농성", "양쪽"]:
         score["결막염 의심"] += 30
     if oliguria:
@@ -1350,13 +1378,13 @@ with t_peds:
     render_caregiver_notes_peds(
         stool=stool, fever=fever, persistent_vomit=persistent_vomit, oliguria=oliguria,
         cough=cough, nasal=nasal, eye=eye, abd_pain=abd_pain, ear_pain=ear_pain,
-        rash=rash, hives=hives, migraine=migraine, hfmd=hfmd
+        rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, sputum=sputum, wheeze=wheeze
     )
     try:
         notes = build_peds_notes(
             stool=stool, fever=fever, persistent_vomit=persistent_vomit, oliguria=oliguria,
             cough=cough, nasal=nasal, eye=eye, abd_pain=abd_pain, ear_pain=ear_pain,
-            rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, duration=duration_val, score=score, max_temp=max_temp, red_seizure=red_seizure, red_bloodstool=red_bloodstool, red_night=red_night, red_dehydration=red_dehydration
+            rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, sputum=sputum, wheeze=wheeze, duration=duration_val, score=score, max_temp=max_temp, red_seizure=red_seizure, red_bloodstool=red_bloodstool, red_night=red_night, red_dehydration=red_dehydration
         )
     except Exception:
         notes = ""
@@ -1732,8 +1760,10 @@ with t_report:
         colp1, colp2 = st.columns(2)
         with colp1:
             sec_profile = st.checkbox("프로필/활력/모드", True if use_dflt else False, key=wkey("sec_profile"))
-            sec_symptom = st.checkbox("증상 체크(홈)", True if use_dflt else False, key=wkey("sec_symptom"))
-            sec_emerg = st.checkbox("응급도 평가(기여도/가중치 포함)", True if use_dflt else False, key=wkey("sec_emerg"))
+            sec_symptom = st.checkbox("증상 체크(홈) — (보고서에서 제외됨)", False, key=wkey("sec_symptom"))
+            sec_symptom = False
+            sec_emerg = st.checkbox("응급도 평가(기여도/가중치 포함) — (보고서에서 제외됨)", False, key=wkey("sec_emerg"))
+            sec_emerg = False
             sec_dx = st.checkbox("진단명(암 선택)", True if use_dflt else False, key=wkey("sec_dx"))
         with colp2:
             sec_meds = st.checkbox("항암제 요약/부작용/병용경고", True if use_dflt else False, key=wkey("sec_meds"))
@@ -1770,30 +1800,8 @@ with t_report:
             lines.append(f"- 체온(℃): {temp if temp not in (None, '') else '—'}")
             lines.append(f"- 심박수(bpm): {hr if hr not in (None, '') else '—'}")
             lines.append("")
-
-        if sec_symptom:
-            lines.append("## 증상 체크(홈)")
-            for k, v in sym_map.items():
-                lines.append(f"- {k}: {'예' if v else '아니오'}")
-            lines.append("")
-
-        if sec_emerg:
-            lines.append("## 응급도 평가")
-            lines.append(f"- 현재 응급도: {level}")
-            if reasons:
-                for r in reasons:
-                    lines.append(f"  - {r}")
-            if contrib:
-                lines.append("### 응급도 기여도(Why)")
-                total = sum(x["score"] for x in contrib) or 1.0
-                for it in sorted(contrib, key=lambda x: -x["score"]):
-                    pct = round(100.0 * it["score"] / total, 1)
-                    lines.append(f"- {it['factor']}: 점수 {round(it['score'], 2)} (기본{it['base']}×가중치{it['weight']}, {pct}%)")
-            lines.append("")
-            lines.append("### 사용한 가중치")
-            for k, v in get_weights().items():
-                lines.append(f"- {k}: {v}")
-            lines.append("")
+        # (제외됨) 증상 체크(홈) 섹션은 보고서에서 제거되었습니다.
+        # (제외됨) 응급도 평가(기여도/가중치 포함) 섹션은 보고서에서 제거되었습니다.
 
         if sec_dx:
             lines.append("## 진단명(암)")
@@ -1896,3 +1904,114 @@ with t_report:
             st.download_button("📄 보고서 .pdf 다운로드", data=pdf_bytes, file_name="bloodmap_report.pdf", mime="application/pdf")
         except Exception:
             st.caption("PDF 변환 모듈을 불러오지 못했습니다. .md 또는 .txt를 사용해주세요.")
+
+
+# ---------------- Graph/Log Panel (separate tab) ----------------
+def render_graph_panel():
+    import os, io, datetime as _dt
+    import pandas as pd
+    import streamlit as st
+    try:
+        import matplotlib.pyplot as plt
+    except Exception:
+        plt = None
+
+    st.markdown("### 📊 기록/그래프")
+    base_dir = "/mnt/data/bloodmap_graph"
+    try:
+        os.makedirs(base_dir, exist_ok=True)
+    except Exception:
+        pass
+
+    csv_files = []
+    try:
+        csv_files = [os.path.join(base_dir, f) for f in os.listdir(base_dir) if f.lower().endswith(".csv")]
+    except Exception:
+        csv_files = []
+
+    if not csv_files:
+        st.info("표시할 CSV가 없습니다. 폴더에 WBC/Hb/PLT/ANC/CRP 컬럼이 포함된 CSV를 넣어주세요.")
+        return
+
+    file_map = {os.path.basename(p): p for p in csv_files}
+    sel_name = st.selectbox("기록 파일 선택", sorted(file_map.keys()), key=wkey("graph_csv_select_tab"))
+    path = file_map[sel_name]
+
+    try:
+        df = pd.read_csv(path)
+    except Exception as e:
+        st.error(f"CSV를 읽을 수 없습니다: {e}")
+        return
+
+    candidates = ["WBC", "Hb", "PLT", "CRP", "ANC"]
+    cols = [c for c in candidates if c in df.columns]
+    if not cols:
+        st.info("표준 항목(WBC/Hb/PLT/CRP/ANC)이 없습니다.")
+        st.dataframe(df.head(20))
+        return
+
+    sel_cols = st.multiselect("표시할 항목", default=cols, options=cols, key=wkey("graph_cols_tab"))
+
+    # 시간 컬럼 탐색 및 정렬
+    time_col = None
+    for cand in ["date", "Date", "timestamp", "Timestamp", "time", "Time", "sample_time"]:
+        if cand in df.columns:
+            time_col = cand
+            break
+    if time_col is not None:
+        try:
+            df["_ts"] = pd.to_datetime(df[time_col])
+            df = df.sort_values("_ts")
+        except Exception:
+            df["_ts"] = df.index
+    else:
+        df["_ts"] = df.index
+
+    # 기간 필터
+    period = st.radio("기간", ("전체", "최근 7일", "최근 14일", "최근 30일"), horizontal=True, key=wkey("graph_period_tab"))
+    if period != "전체":
+        days = {"최근 7일": 7, "최근 14일": 14, "최근 30일": 30}[period]
+        cutoff = _dt.datetime.now() - _dt.timedelta(days=days)
+        try:
+            mask = pd.to_datetime(df["_ts"]) >= cutoff
+            df = df[mask]
+        except Exception:
+            pass
+
+    # 그래프
+    if sel_cols:
+        if plt is None:
+            st.warning("matplotlib이 없어 간단 표로 대체합니다.")
+            st.dataframe(df[["_ts"] + sel_cols].tail(50))
+        else:
+            fig, ax = plt.subplots()
+            for col in sel_cols:
+                try:
+                    ax.plot(df["_ts"], pd.to_numeric(df[col], errors="coerce"), label=col)
+                except Exception:
+                    continue
+            ax.set_xlabel("시점")
+            ax.set_ylabel("값")
+            ax.legend()
+            st.pyplot(fig)
+
+            # PNG 저장 버튼
+            buf = io.BytesIO()
+            fig.savefig(buf, format="png", bbox_inches="tight")
+            buf.seek(0)
+            st.download_button(
+                label="PNG로 저장",
+                data=buf,
+                file_name="bloodmap_graph.png",
+                mime="image/png",
+                key=wkey("graph_png_dl_tab")
+            )
+    else:
+        st.info("표시할 항목을 선택해 주세요.")
+
+    # 원자료
+    with st.expander("원자료(최근 50행)"):
+        st.dataframe(df.tail(50))
+
+with t_graph:
+    render_graph_panel()
