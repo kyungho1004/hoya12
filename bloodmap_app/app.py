@@ -942,7 +942,8 @@ t, w)
     tips = _augment_constipation(tips, constip)
     compiled = {}
     if tips:
-        with st.expander("👪 증상별 보호자 설명", expanded=False):
+        st.markdown("### 👪 보호자 설명")
+        with st.expander("👪 증상별 보호자 설명", expanded=True):
             for k, (t, w) in tips.items():
                 st.markdown(f"### {k}")
                 if t:
