@@ -43,6 +43,12 @@ if "wkey" not in globals():
 
 # ===== End import guard =====
 import datetime as _dt
+from zoneinfo import ZoneInfo as _ZoneInfo
+KST = _ZoneInfo("Asia/Seoul")
+
+def now_kst():
+    return _dt.datetime.now(tz=KST)
+
 import os, sys, re, io, csv
 from pathlib import Path
 import importlib.util
@@ -310,14 +316,37 @@ ONCO = build_onco_map() or {}
 # ---------- Sidebar ----------
 with st.sidebar:
     st.header("프로필")
-    raw_key = st.text_input("별명#PIN", value=st.session_state.get("key", "guest#PIN"), key="user_key_raw")
-    unique_key, was_modified, msg = ensure_unique_pin(raw_key, auto_suffix=True)
-    st.session_state["key"] = unique_key
-    if was_modified:
-        st.warning(msg + f" → 현재 키: {unique_key}")
+    raw_key = st.text_input("별명#PIN (또는 별명만)", value=st.session_state.get("key", "guest#PIN"), key="user_key_raw")
+    pin_field = st.text_input("PIN 숫자 (별명만 입력한 경우)", value=st.session_state.get("_pin_raw",""), key="_pin_raw", type="password", help="숫자 4~8자리")
+    # PIN 추출
+    if "#" in raw_key:
+        nickname, pin = raw_key.split("#", 1)[0].strip(), raw_key.split("#", 1)[1].strip()
     else:
-        st.caption("PIN 확인됨")
-
+        nickname, pin = raw_key.strip(), pin_field.strip()
+    def _is_valid_pin(p):
+        return p.isdigit() and 4 <= len(p) <= 8
+    unique_key, was_modified, msg = ensure_unique_pin(f"{nickname}#{pin if pin else '0000'}", auto_suffix=True)
+    st.session_state["key"] = unique_key
+    pin_timeout_min = st.number_input("PIN 재인증 타임아웃(분)", min_value=5, max_value=240, value=int(st.session_state.get("_pin_to",30) or 30), key="_pin_to")
+    last_auth = st.session_state.get("_pin_last_auth_ts")
+    need_auth = True
+    if _is_valid_pin(pin):
+        if last_auth:
+            elapsed = (now_kst() - last_auth).total_seconds() / 60.0
+            need_auth = elapsed > float(pin_timeout_min)
+        else:
+            need_auth = True
+    else:
+        need_auth = True
+    if _is_valid_pin(pin):
+        if st.button("PIN 인증", key="btn_pin_auth") or (not need_auth and st.session_state.get("_pin_ok", False)):
+            st.session_state["_pin_last_auth_ts"] = now_kst()
+            st.session_state["_pin_ok"] = True
+            need_auth = False
+    if need_auth:
+        st.warning("PIN 재인증 필요(기능 사용은 가능). 숫자 4~8자리 입력 후 [PIN 인증]을 눌러 주세요.")
+    else:
+        st.caption(f"PIN 인증됨 · 유효 시간 남음 ≈ {int(pin_timeout_min)}분")
     st.subheader("활력징후")
     temp = st.text_input("현재 체온(℃)", value=st.session_state.get(wkey("cur_temp"), ""), key=wkey("cur_temp"), placeholder="36.8")
     hr = st.text_input("심박수(bpm)", value=st.session_state.get(wkey("cur_hr"), ""), key=wkey("cur_hr"), placeholder="0")
@@ -369,6 +398,21 @@ def render_caregiver_notes_peds(
         rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, max_temp=max_temp,
         sputum=sputum, wheeze=wheeze
     )
+    
+    # 아데노바이러스 의심 안내
+    try:
+        _mt = float(max_temp) if max_temp is not None else None
+    except Exception:
+        _mt = None
+    if (_mt is not None and _mt >= 39.0) and (eye in ["노랑-농성","양쪽"]) and (cough in ["보통","심함"] or stool != "없음"):
+        bullet(
+            "🧬 아데노바이러스 의심",
+            """
+- 특징: **높은 열**, **양측 결막충혈/농성 눈곱**, **인후통/기침** 또는 **설사**
+- 가정관리: 수분 충분히, 해열 간격 준수(APAP ≥4h, IBU ≥6h), 눈 분비물 위생 관리
+- 진료 기준: **고열 3일↑**, **호흡곤란/무기력**, **탈수(소변감소/입마름)**, **심한 결막통증/시야 이상**
+            """,
+        )
     st.subheader("보호자 설명 (증상별)")
 
     def bullet(title, body):
@@ -1337,7 +1381,19 @@ with t_peds:
         "수족구 의심": 0,
         "하기도/천명 주의": 0,
         "가래 동반 호흡기": 0,
+       "아데노바이러스 의심": 0,
     }
+
+    
+    # 아데노바이러스 의심 가중 (고열 + 결막 + 호흡기/장 증상)
+    try:
+        _mt = float(max_temp) if max_temp is not None else None
+    except Exception:
+        _mt = None
+    if (_mt is not None and _mt >= 39.0) and (eye in ["노랑-농성","양쪽"]) and (cough in ["보통","심함"] or stool in ["1~2회","3~4회","5~6회","7회 이상"]):
+        score["아데노바이러스 의심"] += 60
+    elif (eye in ["노랑-농성","양쪽"]) and (cough in ["보통","심함"] or stool in ["1~2회","3~4회","5~6회","7회 이상"]):
+        score["아데노바이러스 의심"] += 35
     if stool in ["3~4회", "5~6회", "7회 이상"]:
         score["장염 의심"] += {"3~4회": 40, "5~6회": 55, "7회 이상": 70}[stool]
     if fever in ["38~38.5", "38.5~39", "39 이상"]:
@@ -1413,9 +1469,9 @@ with t_peds:
 
     # 3) 해열제 예시 스케줄러
     st.markdown("#### 해열제 예시 스케줄러(교차복용)")
-    start = st.time_input("시작시간", value=_dt.datetime.now().time(), key=wkey("peds_sched_start"))
+    start = st.time_input("시작시간", value=now_kst().time(), key=wkey("peds_sched_start"))
     try:
-        base = _dt.datetime.combine(_dt.date.today(), start)
+        base = _dt.datetime.combine(now_kst().date(), start)
         plan = [
             ("APAP", base),
             ("IBU", base + _dt.timedelta(hours=3)),
@@ -1596,7 +1652,7 @@ with t_report:
             with cols_btn[0]:
                 if st.button("➕ 현재 값을 기록에 추가", key=wkey("add_history_tab")):
                     snap = {
-                        "ts": _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "ts": now_kst().strftime("%Y-%m-%d %H:%M:%S"),
                         "temp": temp or "",
                         "hr": hr or "",
                         "labs": {k: ("" if labs.get(k) in (None, "") else labs.get(k)) for k in labs.keys()},
@@ -1783,7 +1839,7 @@ with t_report:
 
         lines = []
         lines.append("# Bloodmap Report (Full)")
-        lines.append(f"_생성 시각(KST): {_dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}_")
+        lines.append(f"_생성 시각(KST): {now_kst().strftime('%Y-%m-%d %H:%M:%S')}_")
         lines.append("")
         lines.append("> In memory of Eunseo, a little star now shining in the sky.")
         lines.append("> This app is made with the hope that she is no longer in pain,")
@@ -1971,7 +2027,7 @@ def render_graph_panel():
     period = st.radio("기간", ("전체", "최근 7일", "최근 14일", "최근 30일"), horizontal=True, key=wkey("graph_period_tab"))
     if period != "전체":
         days = {"최근 7일": 7, "최근 14일": 14, "최근 30일": 30}[period]
-        cutoff = _dt.datetime.now() - _dt.timedelta(days=days)
+        cutoff = now_kst() - _dt.timedelta(days=days)
         try:
             mask = pd.to_datetime(df["_ts"]) >= cutoff
             df = df[mask]
