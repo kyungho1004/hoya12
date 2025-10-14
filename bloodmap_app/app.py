@@ -825,6 +825,7 @@ def render_symptom_explain_peds(*, stool, fever, persistent_vomit, oliguria, cou
         ]
         tips["저호중구 음식 안전"] = (t, w)
     tips = _augment_caregiver_tips_env(tips)
+    tips = _augment_caregiver_tips_more(tips)
 
     compiled = {}
     if tips:
@@ -2066,6 +2067,157 @@ def _augment_caregiver_tips_env(tips_dict):
                 if item not in w:
                     w.append(item)
             tips_dict["발열"] = (t, w)
+        return tips_dict
+    except Exception:
+        return tips_dict
+
+
+
+
+# --- Caregiver tips augmentation (non-fever categories) ---
+def _augment_caregiver_tips_more(tips_dict):
+    try:
+        if not isinstance(tips_dict, dict):
+            return tips_dict
+
+        def _ensure_lists(entry):
+            t, w = entry if isinstance(entry, (tuple, list)) and len(entry) == 2 else ([], [])
+            t = list(t) if isinstance(t, (list, tuple)) else []
+            w = list(w) if isinstance(w, (list, tuple)) else []
+            return t, w
+
+        # 호흡기(기침/콧물/가래/천명)
+        if "호흡기(기침/콧물/가래/천명)" in tips_dict:
+            t, w = _ensure_lists(tips_dict["호흡기(기침/콧물/가래/천명)"])
+            add_t = [
+                "따뜻한 물을 자주 마셔 점액을 묽게 하세요.",
+                "수면 전에 미지근한 샤워로 코막힘을 완화해요.",
+                "기침 시 휴식과 수면을 우선하고, 격한 놀이는 잠시 쉬어요.",
+            ]
+            add_w = [
+                "쌕쌕거림이 반복되거나 밤에 더 심해지면 천식 악화 여부를 진료로 확인하세요.",
+                "가래에 피가 섞이거나 흉통이 심해지면 병원.",
+            ]
+            for s in add_t:
+                if s not in t: t.append(s)
+            for s in add_w:
+                if s not in w: w.append(s)
+            tips_dict["호흡기(기침/콧물/가래/천명)"] = (t, w)
+
+        # 장 증상(설사/구토/소변감소)
+        if "장 증상(설사/구토/소변감소)" in tips_dict:
+            t, w = _ensure_lists(tips_dict["장 증상(설사/구토/소변감소)"])
+            add_t = [
+                "구토가 심하면 **맑은 액체부터 소량씩** 시작해요(물, ORS, 맑은 수프).",
+                "설사 중에는 **기름진/튀김/유제품**을 잠시 피하고, **바나나·쌀죽·사과퓨레·토스트(BRAT)**처럼 부드러운 음식부터 시작해요.",
+                "체중(kg)×50~70ml/일 수준으로 수분 섭취 목표를 잡고, **소변 색이 연한 노랑**이 되는지 확인하세요.",
+            ]
+            add_w = [
+                "복통이 한쪽에 국한되어 지속되거나, 진정 후에도 다시 심해지면 진료.",
+                "의식이 멍하거나 극도로 축 처지면 즉시 병원.",
+            ]
+            for s in add_t:
+                if s not in t: t.append(s)
+            for s in add_w:
+                if s not in w: w.append(s)
+            tips_dict["장 증상(설사/구토/소변감소)"] = (t, w)
+
+        # 눈 증상
+        if "눈 증상" in tips_dict:
+            t, w = _ensure_lists(tips_dict["눈 증상"])
+            add_t = [
+                "잠깐의 냉찜질(깨끗한 차가운 물수건)로 가려움·부종을 완화하세요(직접 얼음 대지 않기).",
+                "분비물이 많을 땐 **한쪽 눈씩** 닦고 손 위생을 철저히 지켜요.",
+            ]
+            add_w = [
+                "시력 저하 느낌이 지속되거나, 눈동자 움직임에 통증이 있으면 즉시 진료.",
+            ]
+            for s in add_t:
+                if s not in t: t.append(s)
+            for s in add_w:
+                if s not in w: w.append(s)
+            tips_dict["눈 증상"] = (t, w)
+
+        # 복통
+        if "복통" in tips_dict:
+            t, w = _ensure_lists(tips_dict["복통"])
+            add_t = [
+                "소량씩 자주 먹고, **가스 유발 음식(탄산/콩류/양배추)**은 일시 제한.",
+                "통증 일지에 **식사·배변·활동**을 함께 적어 연관성을 찾아보세요.",
+            ]
+            add_w = [
+                "구토가 반복되고 물도 못 마시면 탈수 위험 — 병원.",
+            ]
+            for s in add_t:
+                if s not in t: t.append(s)
+            for s in add_w:
+                if s not in w: w.append(s)
+            tips_dict["복통"] = (t, w)
+
+        # 귀 통증
+        if "귀 통증" in tips_dict:
+            t, w = _ensure_lists(tips_dict["귀 통증"])
+            add_t = [
+                "통증이 가라앉을 때까지 수영·잠수는 피하세요.",
+                "비행 등 기압 변화가 있으면 **삼키기/하품하기**로 귀 압력을 완화하세요.",
+            ]
+            add_w = [
+                "귀에서 **고름/피**가 나오면 진료.",
+            ]
+            for s in add_t:
+                if s not in t: t.append(s)
+            for s in add_w:
+                if s not in w: w.append(s)
+            tips_dict["귀 통증"] = (t, w)
+
+        # 피부(발진/두드러기)
+        if "피부(발진/두드러기)" in tips_dict:
+            t, w = _ensure_lists(tips_dict["피부(발진/두드러기)"])
+            add_t = [
+                "면·린넨 같은 **부드러운 옷감**을 입혀 마찰을 줄이세요.",
+                "햇빛에 악화되면 **외출 시 긴 소매**와 **자외선 노출 최소화**.",
+            ]
+            add_w = [
+                "발진이 **물집/고름**으로 변하거나 통증이 심하면 진료.",
+            ]
+            for s in add_t:
+                if s not in t: t.append(s)
+            for s in add_w:
+                if s not in w: w.append(s)
+            tips_dict["피부(발진/두드러기)"] = (t, w)
+
+        # 두통/편두통
+        if "두통/편두통" in tips_dict:
+            t, w = _ensure_lists(tips_dict["두통/편두통"])
+            add_t = [
+                "규칙적인 수면·식사·수분 섭취로 **유발 요인**을 줄이세요.",
+                "카페인 음료는 피하고, 필요 시 **조용한 방에서 20~30분 눈 감고 쉬기**.",
+            ]
+            add_w = [
+                "발열·경부경직(목 경직) 동반 시 수막 자극 징후 감별을 위해 진료.",
+            ]
+            for s in add_t:
+                if s not in t: t.append(s)
+            for s in add_w:
+                if s not in w: w.append(s)
+            tips_dict["두통/편두통"] = (t, w)
+
+        # 수족구 의심
+        if "수족구 의심" in tips_dict:
+            t, w = _ensure_lists(tips_dict["수족구 의심"])
+            add_t = [
+                "통증이 심하면 빨대·스푼으로 **아주 소량씩** 자주 먹이세요.",
+                "상처 자극을 줄이기 위해 **탄산/신맛/매운맛**은 피하세요.",
+            ]
+            add_w = [
+                "탈수 소견(소변 감소/입마름/눈물 감소) 보이면 병원.",
+            ]
+            for s in add_t:
+                if s not in t: t.append(s)
+            for s in add_w:
+                if s not in w: w.append(s)
+            tips_dict["수족구 의심"] = (t, w)
+
         return tips_dict
     except Exception:
         return tips_dict
