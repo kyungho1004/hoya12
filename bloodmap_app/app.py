@@ -10,7 +10,7 @@ from textwrap import dedent
 def _safe_import(name):
     try:
         return __import__(name)
-    except Exception as e:
+    except Exception:
         return None
 
 ui_results = _safe_import("ui_results")
@@ -21,9 +21,8 @@ pdf_export = _safe_import("pdf_export")
 branding = _safe_import("branding")
 core_utils = _safe_import("core_utils")
 peds_dose = _safe_import("peds_dose")
-drug_db = _safe_import("drug_db")
 
-st.set_page_config(page_title="피수치 홈페이지 (합본)", layout="wide")
+st.set_page_config(page_title="피수치 홈페이지 (합본 v2)", layout="wide")
 
 def wkey(s: str) -> str:
     return f"w_{s}"
@@ -60,7 +59,12 @@ def render_symptom_explain_peds(*, nasal, cough, stool, fever, eye, phlegm, whee
     if items:
         st.markdown("\n".join(items))
     else:
-        st.caption("현재 선택된 증상에서 추가 설명이 없습니다.")
+        # 기본 안내(증상이 '없음'이어도 표시)
+        st.markdown(dedent("""
+        - **기본 관리**: 수분 섭취, 실내 환기, 충분한 휴식.
+        - **해열제 안전 간격**: 아세트아미노펜 **4시간 이상**, 이부프로펜 **6시간 이상**.
+        - **즉시 진료 신호**: 호흡 곤란/청색증/경련/의식저하, **혈변/검은변**, 탈수 소견(눈물↓·입마름).
+        """).strip())
 
 def render_constipation_quickguide():
     with st.expander("🚽 변비 관리(보호자용)", expanded=False):
@@ -105,37 +109,49 @@ tabs = ["홈","혈액수치","암/항암","소아","특수검사","보고서","�
 t_home, t_labs, t_onco, t_peds, t_special, t_report, t_graph = st.tabs(tabs)
 
 with t_home:
-    st.markdown("### 피수치 홈페이지 (합본)")
-    if branding and hasattr(branding, "render_header"):
+    st.markdown("### 피수치 홈페이지 (합본 v2)")
+    if branding and hasattr(branding, "render_deploy_banner"):
         try:
-            branding.render_header()
+            branding.render_deploy_banner()
         except Exception:
             pass
-    st.caption("이 버전은 소아(가래/천명, 변비/피부), 보고서(소아 요약 포함), 그래프 탭을 포함한 합본입니다.")
+    st.caption("소아(가래/천명/가이드), 보고서(소아 요약), 그래프 탭 분리를 포함한 합본입니다.")
 
 with t_labs:
     st.markdown("### 혈액수치")
     ran = False
-    if ui_results and hasattr(ui_results, "render_labs"):
+    if ui_results and hasattr(ui_results, "results_only_after_analyze"):
         try:
-            ui_results.render_labs()
+            ui_results.results_only_after_analyze()
             ran = True
         except Exception as e:
-            st.error(f"ui_results.render_labs 실행 오류: {e}")
+            st.error(f"ui_results.results_only_after_analyze 실행 오류: {e}")
+    elif ui_results and hasattr(ui_results, "render_adverse_effects"):
+        try:
+            ui_results.render_adverse_effects()
+            ran = True
+        except Exception as e:
+            st.error(f"ui_results.render_adverse_effects 실행 오류: {e}")
     if not ran:
-        st.info("기존 혈액수치 UI가 연결되지 않았습니다. ui_results.render_labs()를 프로젝트에 맞춰 연결하세요.")
+        st.info("혈액수치 UI 엔트리가 확인되지 않았습니다. ui_results.py의 엔트리 함수를 알려주면 연결해드릴게요.")
 
 with t_onco:
     st.markdown("### 암/항암")
     ran = False
-    if onco_map and hasattr(onco_map, "render_onco"):
+    if onco_map and hasattr(onco_map, "build_onco_map"):
         try:
-            onco_map.render_onco()
+            onco_map.build_onco_map()
             ran = True
         except Exception as e:
-            st.error(f"onco_map.render_onco 실행 오류: {e}")
+            st.error(f"onco_map.build_onco_map 실행 오류: {e}")
+    elif onco_map and hasattr(onco_map, "dx_display"):
+        try:
+            onco_map.dx_display()
+            ran = True
+        except Exception as e:
+            st.error(f"onco_map.dx_display 실행 오류: {e}")
     if not ran:
-        st.info("기존 암/항암 UI가 연결되지 않았습니다. onco_map.render_onco()를 프로젝트에 맞춰 연결하세요.")
+        st.info("암/항암 UI 엔트리가 확인되지 않았습니다. onco_map.py의 엔트리 함수를 알려주면 연결해드릴게요.")
 
 with t_peds:
     st.markdown("### 소아 증상 기반 점수 + 보호자 설명 + 해열제 계산")
@@ -203,25 +219,17 @@ with t_peds:
     render_constipation_quickguide()
     render_skin_care_quickguide()
 
-    # (선택) 프로젝트에 해열제 계산/복약 가이드가 있다면 연결
-    if peds_dose and hasattr(peds_dose, "render_peds_dose"):
-        try:
-            st.divider()
-            peds_dose.render_peds_dose()
-        except Exception:
-            pass
-
 with t_special:
     st.markdown("### 특수검사")
     ran = False
-    if special_tests and hasattr(special_tests, "render_special_tests"):
+    if special_tests and hasattr(special_tests, "special_tests_ui"):
         try:
-            special_tests.render_special_tests()
+            special_tests.special_tests_ui()
             ran = True
         except Exception as e:
-            st.error(f"special_tests.render_special_tests 실행 오류: {e}")
+            st.error(f"special_tests.special_tests_ui 실행 오류: {e}")
     if not ran:
-        st.info("기존 특수검사 UI가 연결되지 않았습니다. special_tests.render_special_tests()를 프로젝트에 맞춰 연결하세요.")
+        st.info("특수검사 UI 엔트리가 확인되지 않았습니다. special_tests.py의 함수를 알려주면 연결해드릴게요.")
 
 with t_report:
     st.markdown("### 보고서 미리보기")
@@ -230,17 +238,13 @@ with t_report:
     now = dt.datetime.now().strftime("%Y-%m-%d %H:%M")
     lines.append(f"- 생성시각: {now}")
     lines.append("")
-    # 👶 소아 요약 포함(있을 때만)
     peds_notes_val = st.session_state.get("peds_notes","").strip()
     if peds_notes_val:
         lines.append("## 👶 소아 증상 요약")
         lines.append(peds_notes_val)
         lines.append("")
-
     md = "\n".join(lines)
     st.markdown(md)
-
-    # PDF/MD 내보내기(프로젝트 모듈이 있으면 연동)
     cols = st.columns(2)
     with cols[0]:
         st.download_button("보고서(.md) 다운로드", md.encode("utf-8"), file_name="report.md")
@@ -270,4 +274,4 @@ with t_graph:
             if col in df.columns:
                 st.line_chart(df[[col]], height=220)
 
-st.caption("© 피수치 홈페이지 프로젝트 - 합본")
+st.caption("© 피수치 홈페이지 프로젝트 - 합본 v2")
