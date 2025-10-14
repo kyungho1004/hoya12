@@ -143,6 +143,12 @@ if "wkey" not in globals():
 
 # ===== End import guard =====
 import datetime as _dt
+from zoneinfo import ZoneInfo as _ZoneInfo
+KST = _ZoneInfo('Asia/Seoul')
+
+def now_kst():
+    return _dt.datetime.now(tz=KST)
+
 import os, sys, re, io, csv
 from pathlib import Path
 import importlib.util
@@ -457,6 +463,7 @@ def render_caregiver_notes_peds(
     hives,
     migraine,
     hfmd,
+    constip=False,
     sputum=None,
     wheeze=None,
 ):
@@ -580,7 +587,7 @@ def render_caregiver_notes_peds(
     st.info("❗ 즉시 병원 평가: 번개치는 두통 · 시야 이상/복시/암점 · 경련 · 의식저하 · 심한 목 통증 · 호흡곤란/입술부종")
 
 def build_peds_notes(
-    *, stool, fever, persistent_vomit, oliguria, cough, nasal, eye, abd_pain, ear_pain, rash, hives, migraine, hfmd, sputum=None, wheeze=None,
+    *, stool, fever, persistent_vomit, oliguria, cough, nasal, eye, abd_pain, ear_pain, rash, hives, migraine, hfmd, constip=False, sputum=None, wheeze=None,
     duration=None, score=None, max_temp=None, red_seizure=False, red_bloodstool=False, red_night=False, red_dehydration=False
 ) -> str:
     """소아 증상 선택을 요약하여 보고서용 텍스트를 생성."""
@@ -784,7 +791,7 @@ else:
 
 # LABS
 
-def render_symptom_explain_peds(*, stool, fever, persistent_vomit, oliguria, cough, nasal, eye, abd_pain, ear_pain, rash, hives, migraine, hfmd, max_temp=None, sputum=None, wheeze=None):
+def render_symptom_explain_peds(*, stool, fever, persistent_vomit, oliguria, cough, nasal, eye, abd_pain, ear_pain, rash, hives, migraine, hfmd, max_temp=None, sputum=None, wheeze=None, constip=False):
     """선택된 증상에 대한 보호자 설명(가정 관리 팁 + 병원 방문 기준)을 상세 렌더."""
     import streamlit as st
 
@@ -932,7 +939,7 @@ t, w)
     tips = _augment_rsv_tips(tips, score if 'score' in locals() else {})
     tips = _augment_hfmd_foods(tips, hfmd if 'hfmd' in locals() else False)
     tips = _augment_global_safety(tips)
-    tips = _augment_constipation(tips, constip if 'constip' in locals() else False)
+    tips = _augment_constipation(tips, constip)
     compiled = {}
     if tips:
         with st.expander("👪 증상별 보호자 설명", expanded=False):
@@ -1382,6 +1389,7 @@ with t_peds:
         migraine = st.checkbox("편두통 의심(한쪽·박동성·빛/소리 민감)", key=wkey("p_migraine"))
     with f3:
         hfmd = st.checkbox("수족구 의심(손발·입 병변)", key=wkey("p_hfmd"))
+    constip = st.checkbox("변비(3일↑/딱딱/배변 통증)", key=wkey("p_constip"))
     # 추가: 증상 지속 기간(보고서/로직 활용 가능)
     duration = st.selectbox("증상 지속일수", ["선택 안 함", "1일", "2일", "3일 이상"], key=wkey("p_duration"))
     if duration == "선택 안 함":
@@ -1480,25 +1488,74 @@ with t_peds:
     if hfmd:
         score["수족구 의심"] += 40
 
-    ordered = sorted(score.items(), key=lambda x: x[1], reverse=True)
+    
+# --- 소아: 아데노/RSV 의심 배너(증상 조합 기반) ---
+try:
+    fever_high = bool((max_temp is not None and max_temp >= 38.5) or (fever in ["38.5~39","39 이상"]))
+except Exception:
+    fever_high = False
+conj = (eye in ["노랑-농성","양쪽"])
+resp = (cough != "없음") or (nasal in ["진득","누런"]) or (sputum in ["조금","보통","많음"])
+gi = (stool != "없음")
+_w_ad_hi = 60
+_w_ad_lo = 35
+_w_rsv_hi = 50
+_w_rsv_lo = 25
+if conj and (resp or gi):
+    add = _w_ad_hi if fever_high else _w_ad_lo
+    score["아데노바이러스 의심"] = score.get("아데노바이러스 의심", 0) + add
+    st.info("👁️‍🗨️ **아데노바이러스 의심**: 결막염 + 호흡기/장 증상 조합" + (" · **고열 동반**" if fever_high else ""))
+if (wheeze and wheeze != "없음") and (cough != "없음" or nasal != "없음"):
+    add = _w_rsv_hi if (wheeze in ["보통","심함"]) else _w_rsv_lo
+    score["모세기관지염/RSV 의심"] = score.get("모세기관지염/RSV 의심", 0) + add
+    st.info("🌬️ **RSV/모세기관지염 의심**: 쌕쌕거림 + 호흡기 증상. **숨이 차면 즉시 진료**.")
+ordered = sorted(score.items(), key=lambda x: x[1], reverse=True)
+
+
+# --- 점수 요약 뱃지 라인 ---
+try:
+    if isinstance(score, dict) and score:
+        # 상위 6개만 깔끔하게 표시
+        parts = []
+        for k, v in sorted(score.items(), key=lambda x: x[1], reverse=True)[:6]:
+            if v and int(v) != 0:
+                parts.append(f"{k}: {int(v)}")
+        if parts:
+            st.markdown("**점수 요약** · " + " / ".join(parts))
+except Exception:
+    pass
     st.write("• " + " / ".join([f"{k}: {v}" for k, v in ordered if v > 0]) if any(v > 0 for _, v in ordered) else "• 특이 점수 없음")
     # 보호자 설명 렌더 + peds_notes 저장
     render_caregiver_notes_peds(
         stool=stool, fever=fever, persistent_vomit=persistent_vomit, oliguria=oliguria,
         cough=cough, nasal=nasal, eye=eye, abd_pain=abd_pain, ear_pain=ear_pain,
-        rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, sputum=sputum, wheeze=wheeze
+        rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, constip=constip, sputum=sputum, wheeze=wheeze
     )
     try:
         notes = build_peds_notes(
             stool=stool, fever=fever, persistent_vomit=persistent_vomit, oliguria=oliguria,
             cough=cough, nasal=nasal, eye=eye, abd_pain=abd_pain, ear_pain=ear_pain,
-            rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, sputum=sputum, wheeze=wheeze, duration=duration_val, score=score, max_temp=max_temp, red_seizure=red_seizure, red_bloodstool=red_bloodstool, red_night=red_night, red_dehydration=red_dehydration
+            rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, constip=constip, sputum=sputum, wheeze=wheeze, duration=duration_val, score=score, max_temp=max_temp, red_seizure=red_seizure, red_bloodstool=red_bloodstool, red_night=red_night, red_dehydration=red_dehydration
         )
     except Exception:
         notes = ""
     st.session_state["peds_notes"] = notes
     with st.expander(f"{risk_badge} 소아 증상 요약(보고서용 저장됨)", expanded=False):
-        st.text_area("요약 내용", value=notes, height=160, key=wkey("peds_notes_preview"))
+            
+        # 점수 미니 테이블/뱃지
+        try:
+            if isinstance(score, dict) and score:
+                top = sorted(score.items(), key=lambda x: x[1], reverse=True)
+                # 숫자만 있는 dict는 길게 보이면 지저분하니 상위 8개만 표시
+                view = [f"- **{k}**: {int(v)}" for k, v in top[:8] if int(v) != 0]
+                if view:
+                    st.markdown("**점수 상세**")
+                    for row in view:
+                        st.write(row)
+        except Exception:
+            pass
+        
+            st.text_area("요약 내용", value=notes, height=160, key=wkey("peds_notes_preview"))
 
 
     st.markdown("---")
@@ -1520,21 +1577,32 @@ with t_peds:
     st.caption("쿨다운: APAP ≥4h, IBU ≥6h. 중복 복용 주의.")
 
     # 3) 해열제 예시 스케줄러
-    st.markdown("#### 해열제 예시 스케줄러(교차복용)")
-    start = st.time_input("시작시간", value=_dt.datetime.now().time(), key=wkey("peds_sched_start"))
-    try:
-        base = _dt.datetime.combine(_dt.date.today(), start)
-        plan = [
-            ("APAP", base),
-            ("IBU", base + _dt.timedelta(hours=3)),
-            ("APAP", base + _dt.timedelta(hours=6)),
-            ("IBU", base + _dt.timedelta(hours=9)),
-        ]
-        st.caption("※ 실제 복용 간격: APAP≥4h, IBU≥6h. 예시는 간단 참고용.")
-        for drug, t in plan:
-            st.write(f"- {drug} @ {t.strftime('%H:%M')}")
-    except Exception:
-        st.info("시간 형식을 확인하세요.")
+
+st.markdown("#### 해열제 타임라인(한국시간)")
+colT1, colT2 = st.columns(2)
+with colT1:
+    last_apap = st.time_input("최근 APAP(타이레놀)", value=now_kst().time(), key=wkey("last_apap"))
+with colT2:
+    last_ibu = st.time_input("최근 IBU(이부프로펜)", value=now_kst().time(), key=wkey("last_ibu"))
+ap_next = _dt.datetime.combine(now_kst().date(), last_apap).replace(tzinfo=KST) + _dt.timedelta(hours=4)
+ib_next = _dt.datetime.combine(now_kst().date(), last_ibu).replace(tzinfo=KST) + _dt.timedelta(hours=6)
+st.info(f"APAP 다음 복용 가능: **{ap_next.strftime('%H:%M')} KST** (≥4h) · IBU 다음: **{ib_next.strftime('%H:%M')} KST** (≥6h)")
+
+st.markdown("#### 해열제 예시 스케줄러(교차복용)")
+start = st.time_input("시작시간", value=_dt.datetime.now().time(), key=wkey("peds_sched_start"))
+try:
+    base = _dt.datetime.combine(_dt.date.today(), start)
+    plan = [
+        ("APAP", base),
+        ("IBU", base + _dt.timedelta(hours=3)),
+        ("APAP", base + _dt.timedelta(hours=6)),
+        ("IBU", base + _dt.timedelta(hours=9)),
+    ]
+    st.caption("※ 실제 복용 간격: APAP≥4h, IBU≥6h. 예시는 간단 참고용.")
+    for drug, t in plan:
+        st.write(f"- {drug} @ {t.strftime('%H:%M')}")
+except Exception:
+    st.info("시간 형식을 확인하세요.")
 
     st.markdown("---")
     st.subheader("보호자 체크리스트")
@@ -1689,180 +1757,8 @@ with t_report:
     )
 
     col_report, col_side = st.columns([2, 1])
+    # (보고서에서 기록/그래프 패널 제거됨 — 별도 탭 사용)
 
-    # ---------- 오른쪽: 기록/그래프/내보내기 ----------
-    with col_side:
-        st.markdown("### 📊 기록/그래프 패널")
-
-        st.session_state.setdefault("lab_history", [])
-        hist = st.session_state["lab_history"]
-
-        tab_log, tab_plot, tab_export = st.tabs(["📝 기록", "📈 그래프", "⬇️ 내보내기"])
-
-        with tab_log:
-            cols_btn = st.columns([1, 1, 1])
-            with cols_btn[0]:
-                if st.button("➕ 현재 값을 기록에 추가", key=wkey("add_history_tab")):
-                    snap = {
-                        "ts": _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        "temp": temp or "",
-                        "hr": hr or "",
-                        "labs": {k: ("" if labs.get(k) in (None, "") else labs.get(k)) for k in labs.keys()},
-                        "mode": "peds" if bool(st.session_state.get(wkey("is_peds"), False)) else "adult",
-                        "ref": lab_ref(bool(st.session_state.get(wkey("is_peds"), False))),
-                    }
-                    weird = []
-                    for k, v in (snap["labs"] or {}).items():
-                        try:
-                            fv = float(v)
-                            if k == "Na" and not (110 <= fv <= 170):
-                                weird.append(f"Na {fv}")
-                            if k == "K" and not (1.0 <= fv <= 8.0):
-                                weird.append(f"K {fv}")
-                            if k == "Hb" and not (3.0 <= fv <= 25.0):
-                                weird.append(f"Hb {fv}")
-                            if k == "PLT" and fv > 0 and fv < 1:
-                                weird.append(f"PLT {fv} (단위 확인)")
-                        except Exception:
-                            pass
-                    hist.append(snap)
-                    st.success("현재 값이 기록에 추가되었습니다.")
-                    if weird:
-                        st.warning("비정상적으로 보이는 값 감지: " + ", ".join(weird) + " — 단위/오타를 확인하세요.")
-            with cols_btn[1]:
-                if st.button("🗑️ 기록 비우기", key=wkey("clear_history")) and hist:
-                    st.session_state["lab_history"] = []
-                    hist = st.session_state["lab_history"]
-                    st.warning("기록을 모두 비웠습니다.")
-            with cols_btn[2]:
-                st.caption(f"총 {len(hist)}건")
-
-            if not hist:
-                st.info("기록이 없습니다.")
-            else:
-                try:
-                    import pandas as pd
-                    rows = []
-                    for h in hist[-10:]:
-                        row = {
-                            "시각": h.get("ts", ""),
-                            "T(℃)": h.get("temp", ""),
-                            "HR": h.get("hr", ""),
-                            "WBC": (h.get("labs", {}) or {}).get("WBC", ""),
-                            "Hb": (h.get("labs", {}) or {}).get("Hb", ""),
-                            "PLT": (h.get("labs", {}) or {}).get("PLT", ""),
-                            "ANC": (h.get("labs", {}) or {}).get("ANC", ""),
-                            "CRP": (h.get("labs", {}) or {}).get("CRP", ""),
-                        }
-                        rows.append(row)
-                    df = pd.DataFrame(rows)
-                    st.dataframe(df, use_container_width=True, height=280)
-                except Exception:
-                    st.write(hist[-5:])
-
-        with tab_plot:
-            default_metrics = ["WBC", "Hb", "PLT", "ANC", "CRP", "Na", "Cr", "BUN", "AST", "ALT", "Glu"]
-            all_metrics = sorted({*default_metrics, *list(labs.keys())})
-            pick = st.multiselect("그래프 항목 선택", options=all_metrics, default=default_metrics[:4], key=wkey("chart_metrics_tab"))
-
-            if not hist:
-                st.info("기록이 없습니다. 먼저 '기록' 탭에서 추가하세요.")
-            elif not pick:
-                st.info("표시할 항목을 선택하세요.")
-            else:
-                x = [h.get("ts", "") for h in hist]
-                if _HAS_MPL:
-                    for m in pick:
-                        y, band = [], None
-                        for h in hist:
-                            v = (h.get("labs", {}) or {}).get(m, "")
-                            try:
-                                v = float(str(v).replace(",", "."))
-                            except Exception:
-                                v = None
-                            y.append(v)
-                        for h in reversed(hist):
-                            ref = (h.get("ref") or {})
-                            if m in ref:
-                                band = ref[m]
-                                break
-                        if all(v is None for v in y):
-                            continue
-                        fig = plt.figure()
-                        plt.plot(x, [vv if vv is not None else float("nan") for vv in y], marker="o")
-                        plt.title(m)
-                        plt.xlabel("기록 시각")
-                        plt.ylabel(m)
-                        plt.xticks(rotation=45, ha="right")
-                        if band and isinstance(band, (tuple, list)) and len(band) == 2:
-                            lo, hi = band
-                            try:
-                                plt.axhspan(lo, hi, alpha=0.15)
-                            except Exception:
-                                pass
-                        plt.tight_layout()
-                        st.pyplot(fig)
-                else:
-                    try:
-                        import pandas as pd
-                        df_rows = []
-                        for i, h in enumerate(hist):
-                            row = {"ts": x[i]}
-                            for m in pick:
-                                v = (h.get("labs", {}) or {}).get(m, None)
-                                try:
-                                    v = float(str(v).replace(",", "."))
-                                except Exception:
-                                    v = None
-                                row[m] = v
-                            df_rows.append(row)
-                        if df_rows:
-                            df = pd.DataFrame(df_rows).set_index("ts")
-                            for m in pick:
-                                st.line_chart(df[[m]])
-                        else:
-                            st.info("표시할 데이터가 없습니다.")
-                    except Exception:
-                        st.warning("matplotlib/pandas 미설치 → 간단 표로 폴백합니다.")
-                        for m in pick:
-                            st.write(m, [(x[i], (hist[i].get("labs", {}) or {}).get(m, None)) for i in range(len(hist))])
-
-        with tab_export:
-            if not hist:
-                st.info("기록이 없습니다.")
-            else:
-                since = st.text_input("시작 시각(YYYY-MM-DD)", value="")
-                until = st.text_input("종료 시각(YYYY-MM-DD)", value="")
-
-                def _in_range(ts):
-                    if not ts:
-                        return False
-                    d = ts[:10]
-                    if since and d < since:
-                        return False
-                    if until and d > until:
-                        return False
-                    return True
-
-                sel = [h for h in hist if _in_range(h.get("ts", ""))] if (since or until) else hist
-
-                output = io.StringIO()
-                writer = csv.writer(output)
-                all_keys = set()
-                for h in sel:
-                    all_keys |= set((h.get("labs", {}) or {}).keys())
-                all_keys = sorted(all_keys)
-                headers = ["ts", "temp", "hr"] + all_keys
-                writer.writerow(headers)
-                for h in sel:
-                    row = [h.get("ts", ""), h.get("temp", ""), h.get("hr", "")]
-                    for m in all_keys:
-                        row.append((h.get("labs", {}) or {}).get(m, ""))
-                    writer.writerow(row)
-                st.download_button("CSV 다운로드", data=output.getvalue().encode("utf-8"), file_name="bloodmap_history.csv", mime="text/csv")
-                st.caption("팁: 기간 필터를 지정해 필요한 구간만 내보낼 수 있습니다.")
-
-    # ---------- 왼쪽: 보고서 본문 ----------
     with col_report:
         use_dflt = st.checkbox("기본(모두 포함)", True, key=wkey("rep_all"))
         colp1, colp2 = st.columns(2)
