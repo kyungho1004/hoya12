@@ -43,12 +43,6 @@ if "wkey" not in globals():
 
 # ===== End import guard =====
 import datetime as _dt
-from zoneinfo import ZoneInfo as _ZoneInfo
-KST = _ZoneInfo("Asia/Seoul")
-
-def now_kst():
-    return _dt.datetime.now(tz=KST)
-
 import os, sys, re, io, csv
 from pathlib import Path
 import importlib.util
@@ -363,7 +357,6 @@ def render_caregiver_notes_peds(
     hives,
     migraine,
     hfmd,
-    constip=False,
     sputum=None,
     wheeze=None,
 ):
@@ -487,7 +480,7 @@ def render_caregiver_notes_peds(
     st.info("❗ 즉시 병원 평가: 번개치는 두통 · 시야 이상/복시/암점 · 경련 · 의식저하 · 심한 목 통증 · 호흡곤란/입술부종")
 
 def build_peds_notes(
-    *, stool, fever, persistent_vomit, oliguria, cough, nasal, eye, abd_pain, ear_pain, rash, hives, migraine, hfmd, constip=False, sputum=None, wheeze=None,
+    *, stool, fever, persistent_vomit, oliguria, cough, nasal, eye, abd_pain, ear_pain, rash, hives, migraine, hfmd, sputum=None, wheeze=None,
     duration=None, score=None, max_temp=None, red_seizure=False, red_bloodstool=False, red_night=False, red_dehydration=False
 ) -> str:
     """소아 증상 선택을 요약하여 보고서용 텍스트를 생성."""
@@ -831,11 +824,6 @@ def render_symptom_explain_peds(*, stool, fever, persistent_vomit, oliguria, cou
             "38.0℃ 이상 발열 시 바로 병원 연락, 38.5℃↑ 또는 39℃↑는 상위 조치.",
         ]
         tips["저호중구 음식 안전"] = (t, w)
-    tips = _augment_caregiver_tips_env(tips)
-    tips = _augment_constipation(tips, constip)
-    tips = _augment_global_safety(tips)
-    tips = _augment_hfmd_foods(tips, hfmd)
-    tips = _augment_rsv_tips(tips, score)
 
     compiled = {}
     if tips:
@@ -1286,7 +1274,6 @@ with t_peds:
         migraine = st.checkbox("편두통 의심(한쪽·박동성·빛/소리 민감)", key=wkey("p_migraine"))
     with f3:
         hfmd = st.checkbox("수족구 의심(손발·입 병변)", key=wkey("p_hfmd"))
-constip = st.checkbox("변비(3일↑/딱딱한 변/배변 통증)", key=wkey("p_constip"))
     # 추가: 증상 지속 기간(보고서/로직 활용 가능)
     duration = st.selectbox("증상 지속일수", ["선택 안 함", "1일", "2일", "3일 이상"], key=wkey("p_duration"))
     if duration == "선택 안 함":
@@ -1386,66 +1373,18 @@ constip = st.checkbox("변비(3일↑/딱딱한 변/배변 통증)", key=wkey("p
         score["수족구 의심"] += 40
 
     ordered = sorted(score.items(), key=lambda x: x[1], reverse=True)
-
-# --- 소아: 증상 조합 기반 의심 배너(항상 평가) ---
-try:
-    fever_high = bool((max_temp and max_temp >= 38.5) or (fever in ["38.5~39","39 이상"]))
-except Exception:
-    fever_high = False
-conjunct = (eye in ["노랑-농성","양쪽"])
-resp = (cough != "없음") or (nasal in ["진득","누런"]) or (sputum in ["조금","보통","많음"]) or (wheeze and wheeze != "없음")
-gi = (stool != "없음")
-# 가중치 기본값/전문가 모드 반영
-_w_ad_hi = int(st.session_state.get("_w_adenovirus_hi", 60))
-_w_ad_lo = int(st.session_state.get("_w_adenovirus_lo", 35))
-_w_rsv_hi = int(st.session_state.get("_w_rsv_hi", 50))
-_w_rsv_lo = int(st.session_state.get("_w_rsv_lo", 25))
-# 아데노바이러스 의심
-if conjunct and (resp or gi):
-    add = _w_ad_hi if fever_high else _w_ad_lo
-    score["아데노바이러스 의심"] = score.get("아데노바이러스 의심", 0) + add
-    st.info("👁️‍🗨️ **아데노바이러스 의심**: 결막염 + 호흡기/장 증상 조합입니다."
-            + (" 고열 동반." if fever_high else " 고열은 미확인."))
-# RSV/모세기관지염 의심
-wheeze_flag = (wheeze and wheeze != "없음")
-if wheeze_flag and (cough != "없음" or nasal != "없음"):
-    add = _w_rsv_hi if (wheeze_flag and cough in ["보통","심함"]) else _w_rsv_lo
-    score["모세기관지염/RSV 의심"] = score.get("모세기관지염/RSV 의심", 0) + add
-    st.info("🌬️ **RSV/모세기관지염 의심**: 쌕쌕거림 + 호흡기 증상. 숨이 차면 즉시 진료.")
-
     st.write("• " + " / ".join([f"{k}: {v}" for k, v in ordered if v > 0]) if any(v > 0 for _, v in ordered) else "• 특이 점수 없음")
-    
-def _augment_caregiver_tips_env(tips_dict):
-    return tips_dict
-
-
-def _augment_rsv_tips(tips_dict, score_dict):
-    return tips_dict
-
-
-def _augment_hfmd_foods(tips_dict, has_hfmd):
-    return tips_dict
-
-
-def _augment_global_safety(tips_dict):
-    return tips_dict
-
-
-def _augment_constipation(tips_dict, constip):
-    if constip: tips_dict["변비"]=(["수분/식이섬유/배마사지/배변습관/발받침"],["5~7일 무배변·복부팽만/구토/열상 시 병원"]); return tips_dict
-    return tips_dict
-
-# 보호자 설명 렌더 + peds_notes 저장
+    # 보호자 설명 렌더 + peds_notes 저장
     render_caregiver_notes_peds(
         stool=stool, fever=fever, persistent_vomit=persistent_vomit, oliguria=oliguria,
         cough=cough, nasal=nasal, eye=eye, abd_pain=abd_pain, ear_pain=ear_pain,
-        rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, constip=constip, sputum=sputum, wheeze=wheeze
+        rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, sputum=sputum, wheeze=wheeze
     )
     try:
         notes = build_peds_notes(
             stool=stool, fever=fever, persistent_vomit=persistent_vomit, oliguria=oliguria,
             cough=cough, nasal=nasal, eye=eye, abd_pain=abd_pain, ear_pain=ear_pain,
-            rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, constip=constip, sputum=sputum, wheeze=wheeze, duration=duration_val, score=score, max_temp=max_temp, red_seizure=red_seizure, red_bloodstool=red_bloodstool, red_night=red_night, red_dehydration=red_dehydration
+            rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, sputum=sputum, wheeze=wheeze, duration=duration_val, score=score, max_temp=max_temp, red_seizure=red_seizure, red_bloodstool=red_bloodstool, red_night=red_night, red_dehydration=red_dehydration
         )
     except Exception:
         notes = ""
@@ -1644,51 +1583,8 @@ with t_report:
     col_report, col_side = st.columns([2, 1])
 
     # ---------- 오른쪽: 기록/그래프/내보내기 ----------
-    with col_side:
-        st.markdown("### 📊 기록/그래프 패널")
-
-        st.session_state.setdefault("lab_history", [])
-        hist = st.session_state["lab_history"]
-
-        tab_log, tab_plot, tab_export = st.tabs(["📝 기록", "📈 그래프", "⬇️ 내보내기"])
-
-        with tab_log:
-            cols_btn = st.columns([1, 1, 1])
-            with cols_btn[0]:
-                if st.button("➕ 현재 값을 기록에 추가", key=wkey("add_history_tab")):
-                    snap = {
-                        "ts": _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        "temp": temp or "",
-                        "hr": hr or "",
-                        "labs": {k: ("" if labs.get(k) in (None, "") else labs.get(k)) for k in labs.keys()},
-                        "mode": "peds" if bool(st.session_state.get(wkey("is_peds"), False)) else "adult",
-                        "ref": lab_ref(bool(st.session_state.get(wkey("is_peds"), False))),
-                    }
-                    weird = []
-                    for k, v in (snap["labs"] or {}).items():
-                        try:
-                            fv = float(v)
-                            if k == "Na" and not (110 <= fv <= 170):
-                                weird.append(f"Na {fv}")
-                            if k == "K" and not (1.0 <= fv <= 8.0):
-                                weird.append(f"K {fv}")
-                            if k == "Hb" and not (3.0 <= fv <= 25.0):
-                                weird.append(f"Hb {fv}")
-                            if k == "PLT" and fv > 0 and fv < 1:
-                                weird.append(f"PLT {fv} (단위 확인)")
-                        except Exception:
-                            pass
-                    hist.append(snap)
-                    st.success("현재 값이 기록에 추가되었습니다.")
-                    if weird:
-                        st.warning("비정상적으로 보이는 값 감지: " + ", ".join(weird) + " — 단위/오타를 확인하세요.")
-            with cols_btn[1]:
-                if st.button("🗑️ 기록 비우기", key=wkey("clear_history")) and hist:
-                    st.session_state["lab_history"] = []
-                    hist = st.session_state["lab_history"]
-                    st.warning("기록을 모두 비웠습니다.")
-            with cols_btn[2]:
-                st.caption(f"총 {len(hist)}건")
+    
+# 보고서 옆 패널 제거됨 (기록/그래프 전용 탭으로 이동)
 
             if not hist:
                 st.info("기록이 없습니다.")
@@ -1968,8 +1864,9 @@ with t_report:
 
 
 # ---------------- Graph/Log Panel (separate tab) ----------------
+
 def render_graph_panel():
-    import os, io, datetime as _dt
+    import os, io, csv, datetime as _dt
     import pandas as pd
     import streamlit as st
     try:
@@ -1977,102 +1874,107 @@ def render_graph_panel():
     except Exception:
         plt = None
 
-    st.markdown("### 📊 기록/그래프")
-    base_dir = "/mnt/data/bloodmap_graph"
-    try:
-        os.makedirs(base_dir, exist_ok=True)
-    except Exception:
-        pass
+    st.markdown("## 📊 기록/그래프")
 
-    csv_files = []
-    try:
-        csv_files = [os.path.join(base_dir, f) for f in os.listdir(base_dir) if f.lower().endswith(".csv")]
-    except Exception:
-        csv_files = []
+    st.session_state.setdefault("lab_history", [])
+    hist = st.session_state["lab_history"]
 
-    if not csv_files:
-        st.info("표시할 CSV가 없습니다. 폴더에 WBC/Hb/PLT/ANC/CRP 컬럼이 포함된 CSV를 넣어주세요.")
-        return
+    tab_log, tab_plot, tab_export = st.tabs(["📝 기록(세션)", "📈 그래프(세션)", "⬇️ 내보내기(세션)"])
 
-    file_map = {os.path.basename(p): p for p in csv_files}
-    sel_name = st.selectbox("기록 파일 선택", sorted(file_map.keys()), key=wkey("graph_csv_select_tab"))
-    path = file_map[sel_name]
+    with tab_log:
+        c1, c2, c3 = st.columns([1,1,1])
+        labs = st.session_state.get("labs_dict", {}) or {}
+        temp = st.session_state.get("cur_temp") or st.session_state.get("cur_temp_num") or ""
+        hr = st.session_state.get("cur_hr") or ""
+        with c1:
+            if st.button("➕ 현재 값을 기록에 추가", key="add_hist_btn"):
+                snap = {
+                    "ts": _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "temp": temp if isinstance(temp, (int, float, str)) else "",
+                    "hr": hr if isinstance(hr, (int, float, str)) else "",
+                    "labs": {k: ("" if labs.get(k) in (None, "") else labs.get(k)) for k in labs.keys()},
+                    "ref": lab_ref(bool(st.session_state.get("is_peds", False))),
+                }
+                hist.append(snap)
+                st.success("현재 값을 기록에 추가했습니다.")
+        with c2:
+            if st.button("🗑️ 기록 비우기", key="clear_hist_btn") and hist:
+                st.session_state["lab_history"] = []
+                hist = st.session_state["lab_history"]
+                st.warning("기록을 모두 비웠습니다.")
+        with c3:
+            st.caption(f"총 {len(hist)}건")
 
-    try:
-        df = pd.read_csv(path)
-    except Exception as e:
-        st.error(f"CSV를 읽을 수 없습니다: {e}")
-        return
-
-    candidates = ["WBC", "Hb", "PLT", "CRP", "ANC"]
-    cols = [c for c in candidates if c in df.columns]
-    if not cols:
-        st.info("표준 항목(WBC/Hb/PLT/CRP/ANC)이 없습니다.")
-        st.dataframe(df.head(20))
-        return
-
-    sel_cols = st.multiselect("표시할 항목", default=cols, options=cols, key=wkey("graph_cols_tab"))
-
-    # 시간 컬럼 탐색 및 정렬
-    time_col = None
-    for cand in ["date", "Date", "timestamp", "Timestamp", "time", "Time", "sample_time"]:
-        if cand in df.columns:
-            time_col = cand
-            break
-    if time_col is not None:
-        try:
-            df["_ts"] = pd.to_datetime(df[time_col])
-            df = df.sort_values("_ts")
-        except Exception:
-            df["_ts"] = df.index
-    else:
-        df["_ts"] = df.index
-
-    # 기간 필터
-    period = st.radio("기간", ("전체", "최근 7일", "최근 14일", "최근 30일"), horizontal=True, key=wkey("graph_period_tab"))
-    if period != "전체":
-        days = {"최근 7일": 7, "최근 14일": 14, "최근 30일": 30}[period]
-        cutoff = _dt.datetime.now() - _dt.timedelta(days=days)
-        try:
-            mask = pd.to_datetime(df["_ts"]) >= cutoff
-            df = df[mask]
-        except Exception:
-            pass
-
-    # 그래프
-    if sel_cols:
-        if plt is None:
-            st.warning("matplotlib이 없어 간단 표로 대체합니다.")
-            st.dataframe(df[["_ts"] + sel_cols].tail(50))
+        if not hist:
+            st.info("기록이 없습니다.")
         else:
-            fig, ax = plt.subplots()
-            for col in sel_cols:
-                try:
-                    ax.plot(df["_ts"], pd.to_numeric(df[col], errors="coerce"), label=col)
-                except Exception:
-                    continue
-            ax.set_xlabel("시점")
-            ax.set_ylabel("값")
-            ax.legend()
-            st.pyplot(fig)
+            rows = []
+            for h in hist[-20:]:
+                row = {
+                    "시각": h.get("ts",""),
+                    "T(℃)": h.get("temp",""),
+                    "HR": h.get("hr",""),
+                }
+                for k in ["WBC","Hb","PLT","ANC","CRP","Na","Cr","BUN","AST","ALT","Glu"]:
+                    row[k] = (h.get("labs",{}) or {}).get(k,"")
+                rows.append(row)
+            df = pd.DataFrame(rows)
+            st.dataframe(df, use_container_width=True, height=300)
 
-            # PNG 저장 버튼
-            buf = io.BytesIO()
-            fig.savefig(buf, format="png", bbox_inches="tight")
-            buf.seek(0)
-            st.download_button(
-                label="PNG로 저장",
-                data=buf,
-                file_name="bloodmap_graph.png",
-                mime="image/png",
-                key=wkey("graph_png_dl_tab")
-            )
-    else:
-        st.info("표시할 항목을 선택해 주세요.")
+    with tab_plot:
+        if not hist:
+            st.info("기록이 없습니다. 먼저 '기록(세션)'에서 추가하세요.")
+        else:
+            default_metrics = ["WBC","Hb","PLT","ANC","CRP"]
+            all_keys = set()
+            for h in hist:
+                all_keys |= set((h.get("labs",{}) or {}).keys())
+            options = sorted({*default_metrics, *all_keys})
+            pick = st.multiselect("표시 항목", options=options, default=[m for m in default_metrics if m in options])
+            if pick:
+                x = [h.get("ts","") for h in hist]
+                for m in pick:
+                    y = []
+                    band = None
+                    for h in hist:
+                        v = (h.get("labs",{}) or {}).get(m, None)
+                        try:
+                            y.append(float(str(v).replace(",",".")))
+                        except Exception:
+                            y.append(None)
+                        # ref band fetch
+                        ref = h.get("ref") or {}
+                        if m in ref:
+                            band = ref[m]
+                    if plt is None:
+                        st.line_chart({"x": x, m: y})
+                    else:
+                        import matplotlib.pyplot as plt
+                        fig = plt.figure()
+                        plt.plot(x, [vv if vv is not None else float("nan") for vv in y], marker="o")
+                        plt.xticks(rotation=45, ha="right")
+                        plt.title(m)
+                        if band and isinstance(band,(tuple,list)) and len(band)==2:
+                            try:
+                                plt.axhspan(band[0], band[1], alpha=0.15)
+                            except Exception:
+                                pass
+                        plt.tight_layout()
+                        st.pyplot(fig)
 
-    # 원자료
-    with st.expander("원자료(최근 50행)"):
-        st.dataframe(df.tail(50))
-
+    with tab_export:
+        if not hist:
+            st.info("기록이 없습니다.")
+        else:
+            output = io.StringIO()
+            writer = csv.writer(output)
+            keys = sorted({k for h in hist for k in (h.get("labs",{}) or {}).keys()})
+            writer.writerow(["ts","temp","hr"] + keys)
+            for h in hist:
+                row = [h.get("ts",""), h.get("temp",""), h.get("hr","")]
+                for k in keys:
+                    row.append((h.get("labs",{}) or {}).get(k,""))
+                writer.writerow(row)
+            st.download_button("CSV 다운로드(세션)", data=output.getvalue().encode("utf-8"), file_name="bloodmap_history_session.csv", mime="text/csv")
 with t_graph:
     render_graph_panel()
