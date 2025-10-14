@@ -463,6 +463,7 @@ def render_caregiver_notes_peds(
     hives,
     migraine,
     hfmd,
+    max_temp=None,
     constip=False,
     sputum=None,
     wheeze=None,
@@ -492,7 +493,7 @@ def render_caregiver_notes_peds(
 - **즉시 진료**: 피 섞인 변, 고열, 소변 거의 없음/축 늘어짐
             """,
         )
-    if fever in ["38~38.5", "38.5~39", "39 이상"]:
+    if fever in ["37.5~38","38~38.5", "38.5~39", "39 이상"]:
         bullet(
             "🌡️ 발열 대처",
             """
@@ -1457,7 +1458,7 @@ with t_peds:
     }
     if stool in ["3~4회", "5~6회", "7회 이상"]:
         score["장염 의심"] += {"3~4회": 40, "5~6회": 55, "7회 이상": 70}[stool]
-    if fever in ["38~38.5", "38.5~39", "39 이상"]:
+    if fever in ["37.5~38","38~38.5", "38.5~39", "39 이상"]:
         score["상기도/독감 계열"] += 25
     if cough in ["조금", "보통", "심함"]:
         score["상기도/독감 계열"] += 20
@@ -1528,7 +1529,7 @@ except Exception:
     st.write("• " + " / ".join([f"{k}: {v}" for k, v in ordered if v > 0]) if any(v > 0 for _, v in ordered) else "• 특이 점수 없음")
     # 보호자 설명 렌더 + peds_notes 저장
     render_caregiver_notes_peds(
-        stool=stool, fever=fever, persistent_vomit=persistent_vomit, oliguria=oliguria,
+        stool=stool, fever=fever, persistent_vomit=persistent_vomit, oliguria=oliguria, max_temp=max_temp,
         cough=cough, nasal=nasal, eye=eye, abd_pain=abd_pain, ear_pain=ear_pain,
         rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, constip=constip, sputum=sputum, wheeze=wheeze
     )
