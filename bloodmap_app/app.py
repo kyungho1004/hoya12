@@ -1286,7 +1286,7 @@ with t_peds:
         migraine = st.checkbox("편두통 의심(한쪽·박동성·빛/소리 민감)", key=wkey("p_migraine"))
     with f3:
         hfmd = st.checkbox("수족구 의심(손발·입 병변)", key=wkey("p_hfmd"))
-constip = st.checkbox("변비(3일↑/딱딱/배변 통증)", key=wkey("p_constip"))
+    constip = st.checkbox("변비(3일↑/딱딱/배변 통증)", key=wkey("p_constip"))
     # 추가: 증상 지속 기간(보고서/로직 활용 가능)
     duration = st.selectbox("증상 지속일수", ["선택 안 함", "1일", "2일", "3일 이상"], key=wkey("p_duration"))
     if duration == "선택 안 함":
