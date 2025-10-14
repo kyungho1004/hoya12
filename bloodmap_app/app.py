@@ -43,6 +43,12 @@ if "wkey" not in globals():
 
 # ===== End import guard =====
 import datetime as _dt
+from zoneinfo import ZoneInfo as _ZoneInfo
+KST = _ZoneInfo("Asia/Seoul")
+
+def now_kst():
+    return _dt.datetime.now(tz=KST)
+
 import os, sys, re, io, csv
 from pathlib import Path
 import importlib.util
@@ -357,6 +363,7 @@ def render_caregiver_notes_peds(
     hives,
     migraine,
     hfmd,
+    constip=False,
     sputum=None,
     wheeze=None,
 ):
@@ -480,7 +487,7 @@ def render_caregiver_notes_peds(
     st.info("❗ 즉시 병원 평가: 번개치는 두통 · 시야 이상/복시/암점 · 경련 · 의식저하 · 심한 목 통증 · 호흡곤란/입술부종")
 
 def build_peds_notes(
-    *, stool, fever, persistent_vomit, oliguria, cough, nasal, eye, abd_pain, ear_pain, rash, hives, migraine, hfmd, sputum=None, wheeze=None,
+    *, stool, fever, persistent_vomit, oliguria, cough, nasal, eye, abd_pain, ear_pain, rash, hives, migraine, hfmd, constip=False, sputum=None, wheeze=None,
     duration=None, score=None, max_temp=None, red_seizure=False, red_bloodstool=False, red_night=False, red_dehydration=False
 ) -> str:
     """소아 증상 선택을 요약하여 보고서용 텍스트를 생성."""
@@ -824,6 +831,11 @@ def render_symptom_explain_peds(*, stool, fever, persistent_vomit, oliguria, cou
             "38.0℃ 이상 발열 시 바로 병원 연락, 38.5℃↑ 또는 39℃↑는 상위 조치.",
         ]
         tips["저호중구 음식 안전"] = (t, w)
+    tips = _augment_caregiver_tips_env(tips)
+    tips = _augment_constipation(tips, constip)
+    tips = _augment_global_safety(tips)
+    tips = _augment_hfmd_foods(tips, hfmd)
+    tips = _augment_rsv_tips(tips, score)
 
     compiled = {}
     if tips:
@@ -1274,6 +1286,7 @@ with t_peds:
         migraine = st.checkbox("편두통 의심(한쪽·박동성·빛/소리 민감)", key=wkey("p_migraine"))
     with f3:
         hfmd = st.checkbox("수족구 의심(손발·입 병변)", key=wkey("p_hfmd"))
+constip = st.checkbox("변비(3일↑/딱딱한 변/배변 통증)", key=wkey("p_constip"))
     # 추가: 증상 지속 기간(보고서/로직 활용 가능)
     duration = st.selectbox("증상 지속일수", ["선택 안 함", "1일", "2일", "3일 이상"], key=wkey("p_duration"))
     if duration == "선택 안 함":
@@ -1373,18 +1386,66 @@ with t_peds:
         score["수족구 의심"] += 40
 
     ordered = sorted(score.items(), key=lambda x: x[1], reverse=True)
+
+# --- 소아: 증상 조합 기반 의심 배너(항상 평가) ---
+try:
+    fever_high = bool((max_temp and max_temp >= 38.5) or (fever in ["38.5~39","39 이상"]))
+except Exception:
+    fever_high = False
+conjunct = (eye in ["노랑-농성","양쪽"])
+resp = (cough != "없음") or (nasal in ["진득","누런"]) or (sputum in ["조금","보통","많음"]) or (wheeze and wheeze != "없음")
+gi = (stool != "없음")
+# 가중치 기본값/전문가 모드 반영
+_w_ad_hi = int(st.session_state.get("_w_adenovirus_hi", 60))
+_w_ad_lo = int(st.session_state.get("_w_adenovirus_lo", 35))
+_w_rsv_hi = int(st.session_state.get("_w_rsv_hi", 50))
+_w_rsv_lo = int(st.session_state.get("_w_rsv_lo", 25))
+# 아데노바이러스 의심
+if conjunct and (resp or gi):
+    add = _w_ad_hi if fever_high else _w_ad_lo
+    score["아데노바이러스 의심"] = score.get("아데노바이러스 의심", 0) + add
+    st.info("👁️‍🗨️ **아데노바이러스 의심**: 결막염 + 호흡기/장 증상 조합입니다."
+            + (" 고열 동반." if fever_high else " 고열은 미확인."))
+# RSV/모세기관지염 의심
+wheeze_flag = (wheeze and wheeze != "없음")
+if wheeze_flag and (cough != "없음" or nasal != "없음"):
+    add = _w_rsv_hi if (wheeze_flag and cough in ["보통","심함"]) else _w_rsv_lo
+    score["모세기관지염/RSV 의심"] = score.get("모세기관지염/RSV 의심", 0) + add
+    st.info("🌬️ **RSV/모세기관지염 의심**: 쌕쌕거림 + 호흡기 증상. 숨이 차면 즉시 진료.")
+
     st.write("• " + " / ".join([f"{k}: {v}" for k, v in ordered if v > 0]) if any(v > 0 for _, v in ordered) else "• 특이 점수 없음")
-    # 보호자 설명 렌더 + peds_notes 저장
+    
+def _augment_caregiver_tips_env(tips_dict):
+    return tips_dict
+
+
+def _augment_rsv_tips(tips_dict, score_dict):
+    return tips_dict
+
+
+def _augment_hfmd_foods(tips_dict, has_hfmd):
+    return tips_dict
+
+
+def _augment_global_safety(tips_dict):
+    return tips_dict
+
+
+def _augment_constipation(tips_dict, constip):
+    if constip: tips_dict["변비"]=(["수분/식이섬유/배마사지/배변습관/발받침"],["5~7일 무배변·복부팽만/구토/열상 시 병원"]); return tips_dict
+    return tips_dict
+
+# 보호자 설명 렌더 + peds_notes 저장
     render_caregiver_notes_peds(
         stool=stool, fever=fever, persistent_vomit=persistent_vomit, oliguria=oliguria,
         cough=cough, nasal=nasal, eye=eye, abd_pain=abd_pain, ear_pain=ear_pain,
-        rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, sputum=sputum, wheeze=wheeze
+        rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, constip=constip, sputum=sputum, wheeze=wheeze
     )
     try:
         notes = build_peds_notes(
             stool=stool, fever=fever, persistent_vomit=persistent_vomit, oliguria=oliguria,
             cough=cough, nasal=nasal, eye=eye, abd_pain=abd_pain, ear_pain=ear_pain,
-            rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, sputum=sputum, wheeze=wheeze, duration=duration_val, score=score, max_temp=max_temp, red_seizure=red_seizure, red_bloodstool=red_bloodstool, red_night=red_night, red_dehydration=red_dehydration
+            rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, constip=constip, sputum=sputum, wheeze=wheeze, duration=duration_val, score=score, max_temp=max_temp, red_seizure=red_seizure, red_bloodstool=red_bloodstool, red_night=red_night, red_dehydration=red_dehydration
         )
     except Exception:
         notes = ""
