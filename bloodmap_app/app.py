@@ -318,6 +318,55 @@ with st.sidebar:
     else:
         st.caption("PIN 확인됨")
 
+# --- PIN 재인증(타임아웃/KST) ---
+_pin_to = st.number_input("재인증 시간(분)", min_value=5, max_value=240, value=int(st.session_state.get("pin_timeout_min", 30)), step=5, key="pin_timeout_min")
+# 마지막 인증시각 세팅/표시
+if "pin_last_auth" not in st.session_state:
+    st.session_state["pin_last_auth"] = now_kst().strftime("%Y-%m-%d %H:%M:%S")
+try:
+    last = st.session_state.get("pin_last_auth")
+    last_dt = _dt.datetime.strptime(last, "%Y-%m-%d %H:%M:%S").replace(tzinfo=KST)
+    diff_min = (now_kst() - last_dt).total_seconds() / 60.0
+    if diff_min >= float(_pin_to):
+        st.warning(f"PIN 재인증 필요({_pin_to}분 경과). [재인증]을 눌러 갱신하세요.")
+        if st.button("재인증", key="btn_pin_reauth"):
+            st.session_state["pin_last_auth"] = now_kst().strftime("%Y-%m-%d %H:%M:%S")
+            st.success("재인증 완료.")
+    else:
+        remain = int(float(_pin_to) - diff_min)
+        st.caption(f"PIN 유효 · 남은 시간 ≈ {remain}분")
+except Exception:
+    st.caption("재인증 상태 확인 중 문제가 있지만, 앱 사용은 계속됩니다.")
+
+
+# --- PIN 재인증(타임아웃) ---
+with st.container():
+    _timeout_min = st.number_input("재인증 시간(분)", min_value=5, max_value=240, value=int(st.session_state.get("pin_timeout_min", 30)), step=5, key="pin_timeout_min")
+    # 최초 인증/변경 시각 기록
+    if st.session_state.get("_last_key_recorded") != unique_key:
+        st.session_state["_last_key_recorded"] = unique_key
+        st.session_state["pin_last_auth"] = _dt.datetime.now(tz=_ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d %H:%M:%S")
+    # 경과 시간 계산
+    try:
+        _last = st.session_state.get("pin_last_auth")
+        _now = _dt.datetime.now(tz=_ZoneInfo("Asia/Seoul"))
+        _elapsed_ok = True
+        if _last:
+            last_dt = _dt.datetime.strptime(_last, "%Y-%m-%d %H:%M:%S").replace(tzinfo=_ZoneInfo("Asia/Seoul"))
+            diff = (_now - last_dt).total_seconds() / 60.0
+            if diff >= float(_timeout_min):
+                _elapsed_ok = False
+        if not _elapsed_ok:
+            st.warning(f"PIN 재인증 필요({_timeout_min}분 경과). 별명#PIN을 다시 확인해주세요.")
+            if st.button("재인증 완료(확인)", key=wkey("pin_reauth_btn")):
+                st.session_state["pin_last_auth"] = _now.strftime("%Y-%m-%d %H:%M:%S")
+                st.success("재인증 완료.")
+        else:
+            st.caption("PIN 유효: 마지막 인증 " + (st.session_state.get("pin_last_auth") or ""))
+    except Exception:
+        st.caption("PIN 재인증 상태 확인 중 오류가 있었지만, 앱 사용은 계속됩니다.")
+
+
     st.subheader("활력징후")
     temp = st.text_input("현재 체온(℃)", value=st.session_state.get(wkey("cur_temp"), ""), key=wkey("cur_temp"), placeholder="36.8")
     hr = st.text_input("심박수(bpm)", value=st.session_state.get(wkey("cur_hr"), ""), key=wkey("cur_hr"), placeholder="0")
@@ -824,6 +873,9 @@ def render_symptom_explain_peds(*, stool, fever, persistent_vomit, oliguria, cou
             "38.0℃ 이상 발열 시 바로 병원 연락, 38.5℃↑ 또는 39℃↑는 상위 조치.",
         ]
         tips["저호중구 음식 안전"] = (t, w)
+    tips = _augment_caregiver_tips_env(tips)
+    tips = _augment_flu_urti_tips(tips, score)
+    tips = _augment_caregiver_tips_more(tips)
 
     compiled = {}
     if tips:
@@ -921,6 +973,17 @@ def lab_validate(abbr: str, val, is_peds: bool):
         return f"⬆️ 기준치 초과({lo}~{hi})"
     return "정상범위"
 
+
+# --- Tab safety guard (prevents NameError on t_labs) ---
+try:
+    t_labs
+except NameError:
+    _tabs = st.tabs(["🏠 홈","🧪 피수치","👶 소아","📄 보고서","📊 기록/그래프"])
+    if len(_tabs) == 5:
+        t_home, t_labs, t_peds, t_report, t_graph = _tabs
+    else:
+        t_home, t_labs = st.tabs(["🏠 홈","🧪 피수치"])
+# --- end guard ---
 with t_labs:
     st.subheader("피수치 입력 — 붙여넣기 지원 (견고)")
     st.caption("예: 'WBC: 4.5', 'Hb 12.3', 'PLT, 200', 'Na 140 mmol/L'…")
@@ -1324,6 +1387,7 @@ with t_peds:
 
 
     score = {
+        "아데노바이러스 의심": 0,
         "장염 의심": 0,
         "상기도/독감 계열": 0,
         "결막염 의심": 0,
@@ -1372,8 +1436,28 @@ with t_peds:
     if hfmd:
         score["수족구 의심"] += 40
 
+
+# --- 아데노바이러스 의심 스코어링 ---
+try:
+    fever_high = bool((max_temp and max_temp >= 38.5) or (fever in ["38.5~39","39 이상"]))
+except Exception:
+    fever_high = False
+conjunct = (eye in ["노랑-농성","양쪽"])
+resp = (cough != "없음") or (nasal in ["진득","누런"]) or (sputum in ["조금","보통","많음"]) or (wheeze in ["조금","보통","심함"])
+gi = (stool != "없음") or bool(persistent_vomit)
+if conjunct and (resp or gi):
+    if fever_high:
+        score["아데노바이러스 의심"] += int(st.session_state.get("_w_adenovirus_hi", 60))
+    else:
+        score["아데노바이러스 의심"] += int(st.session_state.get("_w_adenovirus_lo", 35))
+
     ordered = sorted(score.items(), key=lambda x: x[1], reverse=True)
     st.write("• " + " / ".join([f"{k}: {v}" for k, v in ordered if v > 0]) if any(v > 0 for _, v in ordered) else "• 특이 점수 없음")
+
+# 아데노 의심 메시지
+if score.get("아데노바이러스 의심", 0) >= int(st.session_state.get("_w_adenovirus_lo", 35)):
+    st.info("👁️‍🗨️ **아데노바이러스 의심**: 결막염 + 호흡기/장 증상 조합입니다. 고열 동반 시 진료를 고려하세요.")
+
     # 보호자 설명 렌더 + peds_notes 저장
     render_caregiver_notes_peds(
         stool=stool, fever=fever, persistent_vomit=persistent_vomit, oliguria=oliguria,
@@ -1580,7 +1664,7 @@ with t_report:
         },
     )
 
-    col_report, col_side = st.columns([2, 1])
+    col_report = st.container()
 
     # ---------- 오른쪽: 기록/그래프/내보내기 ----------
     with col_side:
@@ -1907,8 +1991,9 @@ with t_report:
 
 
 # ---------------- Graph/Log Panel (separate tab) ----------------
+
 def render_graph_panel():
-    import os, io, datetime as _dt
+    import os, io, csv, datetime as _dt
     import pandas as pd
     import streamlit as st
     try:
@@ -1917,101 +2002,471 @@ def render_graph_panel():
         plt = None
 
     st.markdown("### 📊 기록/그래프")
-    base_dir = "/mnt/data/bloodmap_graph"
-    try:
-        os.makedirs(base_dir, exist_ok=True)
-    except Exception:
-        pass
 
-    csv_files = []
-    try:
-        csv_files = [os.path.join(base_dir, f) for f in os.listdir(base_dir) if f.lower().endswith(".csv")]
-    except Exception:
-        csv_files = []
+    # --- 세션 기반 기록/그래프/내보내기 ---
+    st.session_state.setdefault("lab_history", [])
+    hist = st.session_state["lab_history"]
 
-    if not csv_files:
-        st.info("표시할 CSV가 없습니다. 폴더에 WBC/Hb/PLT/ANC/CRP 컬럼이 포함된 CSV를 넣어주세요.")
-        return
+    tab_log, tab_plot, tab_export, tab_csv = st.tabs(["📝 기록(세션)", "📈 그래프(세션)", "⬇️ 내보내기(세션)", "📂 CSV 그래프"])
 
-    file_map = {os.path.basename(p): p for p in csv_files}
-    sel_name = st.selectbox("기록 파일 선택", sorted(file_map.keys()), key=wkey("graph_csv_select_tab"))
-    path = file_map[sel_name]
+    with tab_log:
+        cols_btn = st.columns([1, 1, 1])
+        temp = st.session_state.get(wkey("cur_temp"))
+        hr = st.session_state.get(wkey("cur_hr"))
+        labs = st.session_state.get("labs_dict", {}) or {}
+        with cols_btn[0]:
+            if st.button("➕ 현재 값을 기록에 추가", key=wkey("add_history_tab")):
+                snap = {
+                    "ts": _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "temp": temp or "",
+                    "hr": hr or "",
+                    "labs": {k: ("" if labs.get(k) in (None, "") else labs.get(k)) for k in labs.keys()},
+                    "mode": "peds" if bool(st.session_state.get(wkey("is_peds"), False)) else "adult",
+                    "ref": lab_ref(bool(st.session_state.get(wkey("is_peds"), False))),
+                }
+                weird = []
+                for k, v in (snap["labs"] or {}).items():
+                    try:
+                        fv = float(v)
+                        if k == "Na" and not (110 <= fv <= 170): weird.append(f"Na {fv}")
+                        if k == "K" and not (1.0 <= fv <= 8.0): weird.append(f"K {fv}")
+                        if k == "Hb" and not (3.0 <= fv <= 25.0): weird.append(f"Hb {fv}")
+                        if k == "PLT" and fv > 0 and fv < 1: weird.append(f"PLT {fv} (단위 확인)")
+                    except Exception:
+                        pass
+                hist.append(snap)
+                st.success("현재 값이 기록에 추가되었습니다.")
+                if weird:
+                    st.warning("비정상적으로 보이는 값 감지: " + ", ".join(weird) + " — 단위/오타를 확인하세요.")
+        with cols_btn[1]:
+            if st.button("🗑️ 기록 비우기", key=wkey("clear_history")) and hist:
+                st.session_state["lab_history"] = []
+                hist = st.session_state["lab_history"]
+                st.warning("기록을 모두 비웠습니다.")
+        with cols_btn[2]:
+            st.caption(f"총 {len(hist)}건")
 
-    try:
-        df = pd.read_csv(path)
-    except Exception as e:
-        st.error(f"CSV를 읽을 수 없습니다: {e}")
-        return
+        if not hist:
+            st.info("기록이 없습니다.")
+        else:
+            try:
+                rows = []
+                for h in hist[-10:]:
+                    row = {
+                        "시각": h.get("ts", ""),
+                        "T(℃)": h.get("temp", ""),
+                        "HR": h.get("hr", ""),
+                        "WBC": (h.get("labs", {}) or {}).get("WBC", ""),
+                        "Hb": (h.get("labs", {}) or {}).get("Hb", ""),
+                        "PLT": (h.get("labs", {}) or {}).get("PLT", ""),
+                        "ANC": (h.get("labs", {}) or {}).get("ANC", ""),
+                        "CRP": (h.get("labs", {}) or {}).get("CRP", ""),
+                    }
+                    rows.append(row)
+                import pandas as pd
+                df = pd.DataFrame(rows)
+                st.dataframe(df, use_container_width=True, height=280)
+            except Exception:
+                st.write(hist[-5:])
 
-    candidates = ["WBC", "Hb", "PLT", "CRP", "ANC"]
-    cols = [c for c in candidates if c in df.columns]
-    if not cols:
-        st.info("표준 항목(WBC/Hb/PLT/CRP/ANC)이 없습니다.")
-        st.dataframe(df.head(20))
-        return
+    with tab_plot:
+        default_metrics = ["WBC", "Hb", "PLT", "ANC", "CRP", "Na", "Cr", "BUN", "AST", "ALT", "Glu"]
+        labs = st.session_state.get("labs_dict", {}) or {}
+        all_metrics = sorted({*default_metrics, *list(labs.keys())})
+        pick = st.multiselect("그래프 항목 선택", options=all_metrics, default=default_metrics[:4], key=wkey("chart_metrics_tab"))
 
-    sel_cols = st.multiselect("표시할 항목", default=cols, options=cols, key=wkey("graph_cols_tab"))
+        if not hist:
+            st.info("기록이 없습니다. 먼저 '기록' 탭에서 추가하세요.")
+        elif not pick:
+            st.info("표시할 항목을 선택하세요.")
+        else:
+            x = [h.get("ts", "") for h in hist]
+            if plt is None:
+                st.warning("matplotlib이 없어 간단 표로 대체합니다.")
+                try:
+                    import pandas as pd
+                    df_rows = []
+                    for i, h in enumerate(hist):
+                        row = {"ts": x[i]}
+                        for m in pick:
+                            v = (h.get("labs", {}) or {}).get(m, None)
+                            try:
+                                v = float(str(v).replace(",", "."))
+                            except Exception:
+                                v = None
+                            row[m] = v
+                        df_rows.append(row)
+                    if df_rows:
+                        df = pd.DataFrame(df_rows).set_index("ts")
+                        for m in pick:
+                            st.line_chart(df[[m]])
+                except Exception:
+                    st.info("표시할 데이터가 없습니다.")
+            else:
+                # Matplotlib with reference band shading
+                for m in pick:
+                    y, band = [], None
+                    for h in hist:
+                        v = (h.get("labs", {}) or {}).get(m, "")
+                        try:
+                            v = float(str(v).replace(",", "."))
+                        except Exception:
+                            v = None
+                        y.append(v)
+                    for h in reversed(hist):
+                        ref = (h.get("ref") or {})
+                        if m in ref:
+                            band = ref[m]
+                            break
+                    if all(v is None for v in y):
+                        continue
+                    fig = plt.figure()
+                    import matplotlib.pyplot as plt
+                    plt.plot(x, [vv if vv is not None else float("nan") for vv in y], marker="o")
+                    plt.title(m)
+                    plt.xlabel("기록 시각")
+                    plt.ylabel(m)
+                    plt.xticks(rotation=45, ha="right")
+                    if band and isinstance(band, (tuple, list)) and len(band) == 2:
+                        lo, hi = band
+                        try:
+                            plt.axhspan(lo, hi, alpha=0.15)
+                        except Exception:
+                            pass
+                    plt.tight_layout()
+                    st.pyplot(fig)
 
-    # 시간 컬럼 탐색 및 정렬
-    time_col = None
-    for cand in ["date", "Date", "timestamp", "Timestamp", "time", "Time", "sample_time"]:
-        if cand in df.columns:
-            time_col = cand
-            break
-    if time_col is not None:
+    with tab_export:
+        if not hist:
+            st.info("기록이 없습니다.")
+        else:
+            output = io.StringIO()
+            writer = csv.writer(output)
+            all_keys = set()
+            for h in hist:
+                all_keys |= set((h.get("labs", {}) or {}).keys())
+            all_keys = sorted(all_keys)
+            headers = ["ts", "temp", "hr"] + all_keys
+            writer.writerow(headers)
+            for h in hist:
+                row = [h.get("ts", ""), h.get("temp", ""), h.get("hr", "")]
+                for m in all_keys:
+                    row.append((h.get("labs", {}) or {}).get(m, ""))
+                writer.writerow(row)
+            st.download_button("CSV 다운로드(세션)", data=output.getvalue().encode("utf-8"), file_name="bloodmap_history_session.csv", mime="text/csv")
+            st.caption("팁: 세션 기록은 브라우저 메모리에 저장됩니다. 앱 새로고침 시 초기화될 수 있습니다.")
+
+    # --- CSV 기반 그래프 (폴더) ---
+    with tab_csv:
+        base_dir = "/mnt/data/bloodmap_graph"
         try:
-            df["_ts"] = pd.to_datetime(df[time_col])
-            df = df.sort_values("_ts")
-        except Exception:
-            df["_ts"] = df.index
-    else:
-        df["_ts"] = df.index
-
-    # 기간 필터
-    period = st.radio("기간", ("전체", "최근 7일", "최근 14일", "최근 30일"), horizontal=True, key=wkey("graph_period_tab"))
-    if period != "전체":
-        days = {"최근 7일": 7, "최근 14일": 14, "최근 30일": 30}[period]
-        cutoff = _dt.datetime.now() - _dt.timedelta(days=days)
-        try:
-            mask = pd.to_datetime(df["_ts"]) >= cutoff
-            df = df[mask]
+            os.makedirs(base_dir, exist_ok=True)
         except Exception:
             pass
-
-    # 그래프
-    if sel_cols:
-        if plt is None:
-            st.warning("matplotlib이 없어 간단 표로 대체합니다.")
-            st.dataframe(df[["_ts"] + sel_cols].tail(50))
-        else:
-            fig, ax = plt.subplots()
-            for col in sel_cols:
-                try:
-                    ax.plot(df["_ts"], pd.to_numeric(df[col], errors="coerce"), label=col)
-                except Exception:
-                    continue
-            ax.set_xlabel("시점")
-            ax.set_ylabel("값")
-            ax.legend()
-            st.pyplot(fig)
-
-            # PNG 저장 버튼
-            buf = io.BytesIO()
-            fig.savefig(buf, format="png", bbox_inches="tight")
-            buf.seek(0)
-            st.download_button(
-                label="PNG로 저장",
-                data=buf,
-                file_name="bloodmap_graph.png",
-                mime="image/png",
-                key=wkey("graph_png_dl_tab")
-            )
-    else:
-        st.info("표시할 항목을 선택해 주세요.")
-
-    # 원자료
-    with st.expander("원자료(최근 50행)"):
-        st.dataframe(df.tail(50))
+        try:
+            csv_files = [os.path.join(base_dir, f) for f in os.listdir(base_dir) if f.lower().endswith(".csv")]
+        except Exception:
+            csv_files = []
+        if not csv_files:
+            st.info("표시할 CSV가 없습니다. 폴더에 WBC/Hb/PLT/ANC/CRP 컬럼이 포함된 CSV를 넣어주세요.")
+            return
+        file_map = {os.path.basename(p): p for p in csv_files}
+        sel_name = st.selectbox("기록 파일 선택", sorted(file_map.keys()), key=wkey("graph_csv_select_tab"))
+        path = file_map[sel_name]
+        try:
+            df = pd.read_csv(path)
+        except Exception as e:
+            st.error(f"CSV를 읽을 수 없습니다: {e}")
+            return
+        candidates = ["WBC", "Hb", "PLT", "CRP", "ANC"]
+        cols = [c for c in candidates if c in df.columns]
+        if not cols:
+            st.info("표준 항목(WBC/Hb/PLT/CRP/ANC)이 없습니다.")
+            st.dataframe(df.head(20))
+            return
+        sel_cols = st.multiselect("표시할 항목", default=cols, options=cols, key=wkey("graph_cols_tab"))
+        if sel_cols:
+            if plt is None:
+                st.dataframe(df[sel_cols].tail(50))
+            else:
+                fig, ax = plt.subplots()
+                for col in sel_cols:
+                    try:
+                        ax.plot(df.index, pd.to_numeric(df[col], errors="coerce"), label=col)
+                    except Exception:
+                        continue
+                ax.set_xlabel("row#")
+                ax.set_ylabel("value")
+                ax.legend()
+                st.pyplot(fig)
+        with st.expander("원자료(최근 50행)"):
+            st.dataframe(df.tail(50))
 
 with t_graph:
     render_graph_panel()
+
+
+from zoneinfo import ZoneInfo as _ZoneInfo
+import datetime as _dt
+KST = _ZoneInfo("Asia/Seoul")
+def now_kst():
+    return _dt.datetime.now(tz=KST)
+
+
+
+
+# --- Caregiver tips augmentation (fever / environment / dosing guards) ---
+def _augment_caregiver_tips_env(tips_dict):
+    try:
+        if not isinstance(tips_dict, dict):
+            return tips_dict
+        if "발열" in tips_dict:
+            t, w = tips_dict.get("발열", ([], []))
+            t = list(t) if isinstance(t, (list, tuple)) else []
+            w = list(w) if isinstance(w, (list, tuple)) else []
+            add_t = [
+                "실내 **온도 24~26℃**, **습도 40~60%** 유지(가습기 과습 주의).",
+                "**30~60분 간격**으로 상태 점검: 호흡, 무기력, 수분 섭취량.",
+                "환기는 **2~3시간마다 5~10분** 짧게(찬바람 직접 노출 금지).",
+                "해열제 투여 후 **30~60분 뒤 체온 재확인**으로 반응 평가.",
+                "**알코올/찜질팩**으로 급격한 냉온 자극 **금지**(저체온/화상 위험).",
+                "아스피린은 **소아·청소년 금지**(레이증후군 위험).",
+            ]
+            for item in add_t:
+                if item not in t:
+                    t.append(item)
+            add_w = [
+                "해열제 **중복 성분**(감기시럽 등) 동시 복용 **금지**.",
+                "수분 섭취가 **거의 되지 않거나** 소변이 확 줄면 탈수 위험 — 진료.",
+            ]
+            for item in add_w:
+                if item not in w:
+                    w.append(item)
+            tips_dict["발열"] = (t, w)
+        return tips_dict
+    except Exception:
+        return tips_dict
+
+
+
+
+# --- Caregiver tips augmentation (non-fever categories) ---
+def _augment_caregiver_tips_more(tips_dict):
+    try:
+        if not isinstance(tips_dict, dict):
+            return tips_dict
+
+        def _ensure_lists(entry):
+            t, w = entry if isinstance(entry, (tuple, list)) and len(entry) == 2 else ([], [])
+            t = list(t) if isinstance(t, (list, tuple)) else []
+            w = list(w) if isinstance(w, (list, tuple)) else []
+            return t, w
+
+        # 호흡기(기침/콧물/가래/천명)
+        if "호흡기(기침/콧물/가래/천명)" in tips_dict:
+            t, w = _ensure_lists(tips_dict["호흡기(기침/콧물/가래/천명)"])
+            add_t = [
+                "따뜻한 물을 자주 마셔 점액을 묽게 하세요.",
+                "수면 전에 미지근한 샤워로 코막힘을 완화해요.",
+                "기침 시 휴식과 수면을 우선하고, 격한 놀이는 잠시 쉬어요.",
+            ]
+            add_w = [
+                "쌕쌕거림이 반복되거나 밤에 더 심해지면 천식 악화 여부를 진료로 확인하세요.",
+                "가래에 피가 섞이거나 흉통이 심해지면 병원.",
+            ]
+            for s in add_t:
+                if s not in t: t.append(s)
+            for s in add_w:
+                if s not in w: w.append(s)
+            tips_dict["호흡기(기침/콧물/가래/천명)"] = (t, w)
+
+        # 장 증상(설사/구토/소변감소)
+        if "장 증상(설사/구토/소변감소)" in tips_dict:
+            t, w = _ensure_lists(tips_dict["장 증상(설사/구토/소변감소)"])
+            add_t = [
+                "구토가 심하면 **맑은 액체부터 소량씩** 시작해요(물, ORS, 맑은 수프).",
+                "설사 중에는 **기름진/튀김/유제품**을 잠시 피하고, **바나나·쌀죽·사과퓨레·토스트(BRAT)**처럼 부드러운 음식부터 시작해요.",
+                "체중(kg)×50~70ml/일 수준으로 수분 섭취 목표를 잡고, **소변 색이 연한 노랑**이 되는지 확인하세요.",
+            ]
+            add_w = [
+                "복통이 한쪽에 국한되어 지속되거나, 진정 후에도 다시 심해지면 진료.",
+                "의식이 멍하거나 극도로 축 처지면 즉시 병원.",
+            ]
+            for s in add_t:
+                if s not in t: t.append(s)
+            for s in add_w:
+                if s not in w: w.append(s)
+            tips_dict["장 증상(설사/구토/소변감소)"] = (t, w)
+
+        # 눈 증상
+        if "눈 증상" in tips_dict:
+            t, w = _ensure_lists(tips_dict["눈 증상"])
+            add_t = [
+                "잠깐의 냉찜질(깨끗한 차가운 물수건)로 가려움·부종을 완화하세요(직접 얼음 대지 않기).",
+                "분비물이 많을 땐 **한쪽 눈씩** 닦고 손 위생을 철저히 지켜요.",
+            ]
+            add_w = [
+                "시력 저하 느낌이 지속되거나, 눈동자 움직임에 통증이 있으면 즉시 진료.",
+            ]
+            for s in add_t:
+                if s not in t: t.append(s)
+            for s in add_w:
+                if s not in w: w.append(s)
+            tips_dict["눈 증상"] = (t, w)
+
+        # 복통
+        if "복통" in tips_dict:
+            t, w = _ensure_lists(tips_dict["복통"])
+            add_t = [
+                "소량씩 자주 먹고, **가스 유발 음식(탄산/콩류/양배추)**은 일시 제한.",
+                "통증 일지에 **식사·배변·활동**을 함께 적어 연관성을 찾아보세요.",
+            ]
+            add_w = [
+                "구토가 반복되고 물도 못 마시면 탈수 위험 — 병원.",
+            ]
+            for s in add_t:
+                if s not in t: t.append(s)
+            for s in add_w:
+                if s not in w: w.append(s)
+            tips_dict["복통"] = (t, w)
+
+        # 귀 통증
+        if "귀 통증" in tips_dict:
+            t, w = _ensure_lists(tips_dict["귀 통증"])
+            add_t = [
+                "통증이 가라앉을 때까지 수영·잠수는 피하세요.",
+                "비행 등 기압 변화가 있으면 **삼키기/하품하기**로 귀 압력을 완화하세요.",
+            ]
+            add_w = [
+                "귀에서 **고름/피**가 나오면 진료.",
+            ]
+            for s in add_t:
+                if s not in t: t.append(s)
+            for s in add_w:
+                if s not in w: w.append(s)
+            tips_dict["귀 통증"] = (t, w)
+
+        # 피부(발진/두드러기)
+        if "피부(발진/두드러기)" in tips_dict:
+            t, w = _ensure_lists(tips_dict["피부(발진/두드러기)"])
+            add_t = [
+                "면·린넨 같은 **부드러운 옷감**을 입혀 마찰을 줄이세요.",
+                "햇빛에 악화되면 **외출 시 긴 소매**와 **자외선 노출 최소화**.",
+            ]
+            add_w = [
+                "발진이 **물집/고름**으로 변하거나 통증이 심하면 진료.",
+            ]
+            for s in add_t:
+                if s not in t: t.append(s)
+            for s in add_w:
+                if s not in w: w.append(s)
+            tips_dict["피부(발진/두드러기)"] = (t, w)
+
+        # 두통/편두통
+        if "두통/편두통" in tips_dict:
+            t, w = _ensure_lists(tips_dict["두통/편두통"])
+            add_t = [
+                "규칙적인 수면·식사·수분 섭취로 **유발 요인**을 줄이세요.",
+                "카페인 음료는 피하고, 필요 시 **조용한 방에서 20~30분 눈 감고 쉬기**.",
+            ]
+            add_w = [
+                "발열·경부경직(목 경직) 동반 시 수막 자극 징후 감별을 위해 진료.",
+            ]
+            for s in add_t:
+                if s not in t: t.append(s)
+            for s in add_w:
+                if s not in w: w.append(s)
+            tips_dict["두통/편두통"] = (t, w)
+
+        # 수족구 의심
+        if "수족구 의심" in tips_dict:
+            t, w = _ensure_lists(tips_dict["수족구 의심"])
+            add_t = [
+                "통증이 심하면 빨대·스푼으로 **아주 소량씩** 자주 먹이세요.",
+                "상처 자극을 줄이기 위해 **탄산/신맛/매운맛**은 피하세요.",
+            ]
+            add_w = [
+                "탈수 소견(소변 감소/입마름/눈물 감소) 보이면 병원.",
+            ]
+            for s in add_t:
+                if s not in t: t.append(s)
+            for s in add_w:
+                if s not in w: w.append(s)
+            tips_dict["수족구 의심"] = (t, w)
+
+        return tips_dict
+    except Exception:
+        return tips_dict
+
+
+
+# --- Safe shims for caregiver augmentation (avoid NameError before real defs) ---
+try:
+    _augment_caregiver_tips_env
+except NameError:
+    def _augment_caregiver_tips_env(tips_dict):
+        return tips_dict
+
+try:
+    _augment_caregiver_tips_more
+except NameError:
+    def _augment_caregiver_tips_more(tips_dict):
+        return tips_dict
+# --- end shims ---
+
+
+
+# === Append-only: Expert mode (weights editor) ===
+try:
+    with st.sidebar:
+        st.divider()
+        expert_mode = st.toggle("🔧 전문가용 모드", value=bool(st.session_state.get("_expert_mode", False)), key="_expert_mode", help="켜면 응급도 가중치를 직접 조정할 수 있어요.")
+        if expert_mode:
+            st.subheader("응급도 가중치 편집")
+            _w_adenovirus_hi = st.number_input("아데노 의심(고열+결막+호흡/장) 가중치", min_value=0, max_value=200, value=int(st.session_state.get("_w_adenovirus_hi", 60)), step=5, key="_w_adenovirus_hi")
+            _w_adenovirus_lo = st.number_input("아데노 의심(결막+호흡/장) 가중치", min_value=0, max_value=200, value=int(st.session_state.get("_w_adenovirus_lo", 35)), step=5, key="_w_adenovirus_lo")
+            st.caption("※ 가중치는 점수 합산에 사용됩니다. 값이 높을수록 우선度가 올라갑니다.")
+except Exception:
+    pass
+
+
+
+# --- Caregiver tips augmentation: URTI/Influenza threshold ---
+def _augment_flu_urti_tips(tips_dict, score_dict):
+    try:
+        if not isinstance(tips_dict, dict):
+            return tips_dict
+        tot = 0
+        # 합산 기준: 점수 dict에 키가 존재할 경우 사용
+        if isinstance(score_dict, dict):
+            tot = int(score_dict.get("상기도/독감 계열", score_dict.get("상기도/독감", 0)) or 0)
+        if tot >= 20:
+            t, w = tips_dict.get("호흡기(기침/콧물/가래/천명)", ([], []))
+            t = list(t) if isinstance(t, (list, tuple)) else []
+            w = list(w) if isinstance(w, (list, tuple)) else []
+            add_t = [
+                "의심 초기에 **휴식·수분·진통해열제 간격 준수**로 증상 완화를 돕습니다.",
+                "실내 **온도 24~26℃, 습도 40~60%**를 유지하고, 2~3시간마다 5~10분 환기합니다.",
+                "코막힘엔 생리식염수 분무/가습, 취침 시 머리쪽을 약간 높여 **기도 확보**.",
+                "근육통·두통이 심하면 **아세트아미노펜 또는 이부프로펜 간격**을 지키며 사용합니다(성분 중복 금지).",
+            ]
+            add_w = [
+                "고열이 3일 이상 지속되거나, **호흡곤란/흉통/심한 무기력**이 있으면 진료.",
+                "만 5세 미만/만성질환/면역저하/항암치료 중이면 **조기 진료 권고**.",
+            ]
+            for s in add_t:
+                if s not in t: t.append(s)
+            for s in add_w:
+                if s not in w: w.append(s)
+            tips_dict["호흡기(기침/콧물/가래/천명)"] = (t, w)
+            # 별도 요약 섹션도 추가
+            if "상기도/독감 계열" not in tips_dict:
+                tips_dict["상기도/독감 계열"] = (
+                    ["독감 의심 시 **초기 48시간 이내**에는 항바이러스제 고려 대상(의료진 판단).",
+                     "가정 내 전파 방지를 위해 **개인 물품 분리·손 위생**을 철저히 하세요."],
+                    ["의식저하/경련/청색증/탈수 의심 시 즉시 병원."]
+                )
+        return tips_dict
+    except Exception:
+        return tips_dict
+
