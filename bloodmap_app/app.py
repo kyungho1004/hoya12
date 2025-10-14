@@ -2015,3 +2015,195 @@ def render_graph_panel():
 
 with t_graph:
     render_graph_panel()
+
+
+# ---- Time helpers ----
+def kst_now():
+    from datetime import datetime
+    try:
+        from zoneinfo import ZoneInfo
+        return datetime.now(ZoneInfo("Asia/Seoul"))
+    except Exception:
+        # Fallback without tz database
+        return datetime.utcnow()
+
+
+# ---- PIN helpers ----
+def _profile_dir():
+    import os
+    base = "/mnt/data/profile"
+    try:
+        os.makedirs(base, exist_ok=True)
+    except Exception:
+        pass
+    return base
+
+def ensure_pin():
+    """Ask user for PIN and persist under /mnt/data/profile/{pin}.json"""
+    import json, os
+    import streamlit as st
+    pin = st.session_state.get("_pin", "")
+    with st.expander("🔒 개인 PIN 설정 (그래프/기록 분리)", expanded=False):
+        pin = st.text_input("PIN(숫자/문자 조합 가능) — 동일 PIN은 동일 사용자로 간주", value=pin, type="password", key=wkey("pin_input"))
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("PIN 저장", key=wkey("pin_save")):
+                st.session_state["_pin"] = pin.strip()
+                prof = {"pin": st.session_state["_pin"], "saved_at": kst_now().isoformat()}
+                try:
+                    with open(os.path.join(_profile_dir(), f"{st.session_state['_pin'] or 'anonymous'}.json"), "w", encoding="utf-8") as f:
+                        json.dump(prof, f, ensure_ascii=False, indent=2)
+                    st.success("PIN 저장 완료.")
+                except Exception as e:
+                    st.error(f"PIN 저장 실패: {e}")
+        with col2:
+            if st.button("PIN 초기화", key=wkey("pin_reset")):
+                st.session_state["_pin"] = ""
+                st.info("PIN이 초기화되었습니다.")
+    return st.session_state.get("_pin", "").strip()
+
+
+# ---------------- Graph/Log Panel (with PIN & filters) ----------------
+def render_graph_panel():
+    import os, io, datetime as _dt
+    import pandas as pd
+    import streamlit as st
+    try:
+        import matplotlib.pyplot as plt
+    except Exception:
+        plt = None
+
+    st.markdown("### 📊 기록/그래프")
+    pin = ensure_pin()
+    if not pin:
+        st.info("개인별 분리를 위해 PIN을 먼저 저장해 주세요.")
+        return
+
+    base_dir = f"/mnt/data/bloodmap_graph/{pin}"
+    try:
+        os.makedirs(base_dir, exist_ok=True)
+    except Exception:
+        pass
+
+    try:
+        csv_files = [os.path.join(base_dir, f) for f in os.listdir(base_dir) if f.lower().endswith(".csv")]
+    except Exception:
+        csv_files = []
+
+    if not csv_files:
+        st.info(f"표시할 CSV가 없습니다. 폴더에 파일을 추가하세요: {os.path.abspath(base_dir)}")
+        return
+
+    file_map = {os.path.basename(p): p for p in csv_files}
+    sel_name = st.selectbox("기록 파일 선택", sorted(file_map.keys()), key=wkey("graph_csv_select_tab"))
+    path = file_map[sel_name]
+
+    try:
+        df = pd.read_csv(path)
+    except Exception as e:
+        st.error(f"CSV를 읽을 수 없습니다: {e}")
+        return
+
+    candidates = ["WBC", "Hb", "PLT", "CRP", "ANC"]
+    cols = [c for c in candidates if c in df.columns]
+    if not cols:
+        st.info("표준 항목(WBC/Hb/PLT/CRP/ANC)이 없습니다.")
+        st.dataframe(df.head(20))
+        return
+
+    sel_cols = st.multiselect("표시할 항목", default=cols, options=cols, key=wkey("graph_cols_tab"))
+
+    # 시간 컬럼 탐색 및 정렬
+    time_col = None
+    for cand in ["date", "Date", "timestamp", "Timestamp", "time", "Time", "sample_time"]:
+        if cand in df.columns:
+            time_col = cand
+            break
+    if time_col is not None:
+        try:
+            df["_ts"] = pd.to_datetime(df[time_col])
+            df = df.sort_values("_ts")
+        except Exception:
+            df["_ts"] = df.index
+    else:
+        df["_ts"] = df.index
+
+    # 빠른 기간 필터
+    period = st.radio("빠른 기간", ("전체", "최근 7일", "최근 14일", "최근 30일"), horizontal=True, key=wkey("graph_period_tab"))
+    if period != "전체":
+        days = {"최근 7일": 7, "최근 14일": 14, "최근 30일": 30}[period]
+        cutoff = kst_now() - _dt.timedelta(days=days)
+        try:
+            mask = pd.to_datetime(df["_ts"]) >= cutoff
+            df = df[mask]
+        except Exception:
+            pass
+
+    # 사용자 지정 기간 필터(달력)
+    with st.expander("📅 사용자 지정 기간", expanded=False):
+        try:
+            min_d = pd.to_datetime(df["_ts"].min()).date()
+            max_d = pd.to_datetime(df["_ts"].max()).date()
+        except Exception:
+            min_d, max_d = None, None
+
+        dvals = st.date_input("기간 선택", value=(min_d, max_d) if (min_d and max_d) else None, key=wkey("graph_date_range"))
+        if isinstance(dvals, tuple) and len(dvals) == 2 and dvals[0] and dvals[1]:
+            start_d, end_d = dvals
+            try:
+                mask2 = (pd.to_datetime(df["_ts"]).dt.date >= start_d) & (pd.to_datetime(df["_ts"]).dt.date <= end_d)
+                df = df[mask2]
+            except Exception:
+                pass
+
+    # 그래프
+    if sel_cols:
+        if plt is None:
+            st.warning("matplotlib을 사용할 수 없어 표로 대체합니다.")
+            st.dataframe(df[["_ts"] + sel_cols].tail(50))
+        else:
+            fig, ax = plt.subplots()
+            for col in sel_cols:
+                try:
+                    ax.plot(df["_ts"], pd.to_numeric(df[col], errors="coerce"), label=col)
+                except Exception:
+                    continue
+            ax.set_xlabel("시점")
+            ax.set_ylabel("값")
+            ax.legend()
+            st.pyplot(fig)
+
+            # PNG 저장 버튼
+            buf = io.BytesIO()
+            fig.savefig(buf, format="png", bbox_inches="tight")
+            buf.seek(0)
+            st.download_button(
+                label="PNG로 저장",
+                data=buf,
+                file_name=f"{pin}_bloodmap_graph.png",
+                mime="image/png",
+                key=wkey("graph_png_dl_tab")
+            )
+    else:
+        st.info("표시할 항목을 선택해 주세요.")
+
+    with st.expander("원자료(최근 50행)"):
+        st.dataframe(df.tail(50))
+
+
+def render_peds_antipyretic_kst():
+    """Show current KST time and next-dose times for APAP(4h) and IBU(6h)."""
+    import streamlit as st
+    from datetime import timedelta
+    now = kst_now()
+    next_apap = now + timedelta(hours=4)
+    next_ibu = now + timedelta(hours=6)
+    st.markdown("#### 🕒 소아 해열제 시간 (KST 기준)")
+    st.caption("한국시간으로 자동 동기화됩니다.")
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.metric("현재 시각 (KST)", now.strftime("%Y-%m-%d %H:%M"))
+    with c2:
+        st.metric("APAP 다음 가능(+4h)", next_apap.strftime("%Y-%m-%d %H:%M"))
+    with c3:
+        st.metric("IBU 다음 가능(+6h)", next_ibu.strftime("%Y-%m-%d %H:%M"))
