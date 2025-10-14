@@ -314,6 +314,9 @@ def render_caregiver_notes_peds(
     hives,
     migraine,
     hfmd,
+    max_temp=None,
+    phlegm=None,
+    wheeze=None
 ):
     st.markdown("---")
 
@@ -321,7 +324,7 @@ def render_caregiver_notes_peds(
     render_symptom_explain_peds(
         stool=stool, fever=fever, persistent_vomit=persistent_vomit, oliguria=oliguria,
         cough=cough, nasal=nasal, eye=eye, abd_pain=abd_pain, ear_pain=ear_pain,
-        rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, max_temp=max_temp
+        rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, phlegm=phlegm, wheeze=wheeze, phlegm=phlegm, wheeze=wheeze, phlegm=phlegm, wheeze=wheeze, max_temp=max_temp, phlegm=phlegm, wheeze=wheeze
     )
     st.subheader("보호자 설명 (증상별)")
 
@@ -434,7 +437,7 @@ def render_caregiver_notes_peds(
     st.info("❗ 즉시 병원 평가: 번개치는 두통 · 시야 이상/복시/암점 · 경련 · 의식저하 · 심한 목 통증 · 호흡곤란/입술부종")
 
 def build_peds_notes(
-    *, stool, fever, persistent_vomit, oliguria, cough, nasal, eye, abd_pain, ear_pain, rash, hives, migraine, hfmd,
+    *, stool, fever, persistent_vomit, oliguria, cough, nasal, eye, abd_pain, ear_pain, rash, hives, migraine, hfmd, phlegm=None, wheeze=None,
     duration=None, score=None, max_temp=None, red_seizure=False, red_bloodstool=False, red_night=False, red_dehydration=False
 ) -> str:
     """소아 증상 선택을 요약하여 보고서용 텍스트를 생성."""
@@ -481,6 +484,11 @@ def build_peds_notes(
         lines.append("[위험 징후] 야간 악화/새벽 악화")
     if red_dehydration:
         lines.append("[위험 징후] 탈수 의심(눈물 감소/구강 건조/소변 급감)")
+    
+    if phlegm not in [None, "없음"]:
+        sx.append(f"가래:{phlegm}")
+    if wheeze not in [None, "없음"]:
+        sx.append(f"쌕쌕거림:{wheeze}")
     if sx:
         lines.append("[증상] " + ", ".join(sx))
     # 상위 점수 3개 요약
@@ -628,7 +636,7 @@ with t_home:
 
 # LABS
 
-def render_symptom_explain_peds(*, stool, fever, persistent_vomit, oliguria, cough, nasal, eye, abd_pain, ear_pain, rash, hives, migraine, hfmd, max_temp=None):
+def render_symptom_explain_peds(*, stool, fever, persistent_vomit, oliguria, cough, nasal, eye, abd_pain, ear_pain, rash, hives, migraine, hfmd, max_temp=None, phlegm=None, wheeze=None):
     """선택된 증상에 대한 보호자 설명(가정 관리 팁 + 병원 방문 기준)을 상세 렌더."""
     import streamlit as st
 
@@ -672,6 +680,66 @@ def render_symptom_explain_peds(*, stool, fever, persistent_vomit, oliguria, cou
             "기침이 2주 이상 지속되거나, 쌕쌕거림/흉통이 동반되면 진료.",
         ]
         tips["호흡기(기침/콧물)"] = (t, w)
+    # wheeze/phlegm 추가 가이드
+    if wheeze in ["보통", "심함"]:
+        t = [
+            "아이를 세운 자세로 편안하게 하고, 과도한 가습은 피합니다.",
+            "천명(쌕쌕거림)이 심하면 활동을 줄이고 휴식을 취합니다.",
+        ]
+        w = [
+            "숨쉬기 힘들어함/보조호흡(갈비뼈 함몰)/입술 청색증 → **즉시 병원**.",
+        ]
+        tips["쌕쌕거림(천명)"] = (t, w)
+    if phlegm in ["보통", "심함"]:
+        t = [
+            "미지근한 물을 자주, 실내 환기 유지.",
+            "콧물/가래 제거 시 무리한 흡인은 피하고, 분무형 생리식염수 사용을 고려.",
+        ]
+        w = [
+            "가래에 피가 섞이거나, 흉통/고열이 동반되면 진료.",
+        ]
+        tips["가래(분비물)"] = (t, w)
+
+    # wheeze/phlegm 추가 가이드
+    if wheeze in ["보통", "심함"]:
+        t = [
+            "아이를 세운 자세로 편안하게 하고, 과도한 가습은 피합니다.",
+            "천명(쌕쌕거림)이 심하면 활동을 줄이고 휴식을 취합니다.",
+        ]
+        w = [
+            "숨쉬기 힘들어함/보조호흡(갈비뼈 함몰)/입술 청색증 → **즉시 병원**.",
+        ]
+        tips["쌕쌕거림(천명)"] = (t, w)
+    if phlegm in ["보통", "심함"]:
+        t = [
+            "미지근한 물을 자주, 실내 환기 유지.",
+            "콧물/가래 제거 시 무리한 흡인은 피하고, 분무형 생리식염수 사용을 고려.",
+        ]
+        w = [
+            "가래에 피가 섞이거나, 흉통/고열이 동반되면 진료.",
+        ]
+        tips["가래(분비물)"] = (t, w)
+
+    # wheeze/phlegm 추가 가이드
+    if wheeze in ["보통", "심함"]:
+        t = [
+            "아이를 세운 자세로 편안하게 하고, 과도한 가습은 피합니다.",
+            "천명(쌕쌕거림)이 심하면 활동을 줄이고 휴식을 취합니다.",
+        ]
+        w = [
+            "숨쉬기 힘들어함/보조호흡(갈비뼈 함몰)/입술 청색증 → **즉시 병원**.",
+        ]
+        tips["쌕쌕거림(천명)"] = (t, w)
+    if phlegm in ["보통", "심함"]:
+        t = [
+            "미지근한 물을 자주, 실내 환기 유지.",
+            "콧물/가래 제거 시 무리한 흡인은 피하고, 분무형 생리식염수 사용을 고려.",
+        ]
+        w = [
+            "가래에 피가 섞이거나, 흉통/고열이 동반되면 진료.",
+        ]
+        tips["가래(분비물)"] = (t, w)
+
 
     if stool != "없음" or persistent_vomit or oliguria:
         t = [
@@ -1172,6 +1240,9 @@ with t_chemo:
             st.write("- (DB에 상세 부작용 없음)")
 
 # PEDS
+
+    render_constipation_quickguide()
+    render_skin_care_quickguide()
 with t_peds:
     st.subheader("소아 증상 기반 점수 + 보호자 설명 + 해열제 계산")
     c1, c2, c3, c4, c5 = st.columns(5)
@@ -1185,6 +1256,21 @@ with t_peds:
         fever = st.selectbox("발열", ["없음", "37~37.5 (미열)", "37.5~38", "38~38.5", "38.5~39", "39 이상"], key=wkey("p_fever"))
     with c5:
         eye = st.selectbox("눈꼽/결막", ["없음", "맑음", "노랑-농성", "양쪽"], key=wkey("p_eye"))
+    r1a, r1b = st.columns(2)
+    with r1a:
+        phlegm = st.selectbox("가래(객담)", ["없음", "조금", "보통", "심함"], key=wkey("p_phlegm"))
+    with r1b:
+        wheeze = st.selectbox("쌕쌕거림(천명)", ["없음", "조금", "보통", "심함"], key=wkey("p_wheeze"))
+    r1a, r1b = st.columns(2)
+    with r1a:
+        phlegm = st.selectbox("가래(객담)", ["없음", "조금", "보통", "심함"], key=wkey("p_phlegm"))
+    with r1b:
+        wheeze = st.selectbox("쌕쌕거림(천명)", ["없음", "조금", "보통", "심함"], key=wkey("p_wheeze"))
+    r1a, r1b = st.columns(2)
+    with r1a:
+        phlegm = st.selectbox("가래(객담)", ["없음", "조금", "보통", "심함"], key=wkey("p_phlegm"))
+    with r1b:
+        wheeze = st.selectbox("쌕쌕거림(천명)", ["없음", "조금", "보통", "심함"], key=wkey("p_wheeze"))
 
     d1, d2, d3 = st.columns(3)
     with d1:
@@ -1253,9 +1339,15 @@ with t_peds:
     if (stool != "없음") or persistent_vomit or oliguria or red_dehydration:
         with st.expander("🥤 ORS 경구 수분 보충 가이드", expanded=False):
             st.markdown("- 5~10분마다 소량씩, 구토가 멎으면 양을 서서히 늘립니다.")
-            st.markdown("- 차가운 온도보다는 **미지근한 온도**가 흡수에 유리할 수 있습니다.")
-            st.markdown("- 2시간 내 소변이 없거나, 입이 마르고 눈물이 잘 나오지 않으면 의료진과 상의하세요.")
-            st.markdown("- 스포츠음료는 보충에 한계가 있으니, 가능하면 **ORS 용액**을 사용하세요.")
+    with st.expander("🚽 변비 관리(보호자용)", expanded=False):
+        st.markdown("""
+- **수분 섭취 늘리기**: 미지근한 물을 자주. 섬유소(과일·채소·통곡물)는 **천천히** 늘리기.
+- **활동 유도**: 가능하면 **걷기/가벼운 스트레칭**.
+- **배변 습관**: 매일 같은 시간(식후 15~30분) **화장실 앉기**.
+- **피하기**: 과도한 우유/치즈, 과자류 위주 식사.
+- **경고 신호**: **혈변/검은변**, 심한 복통·구토 동반, **1주 이상 지속** → 병원 상담.
+""".strip())
+
 
 
     score = {
@@ -1271,6 +1363,16 @@ with t_peds:
         "편두통 의심": 0,
         "수족구 의심": 0,
     }
+
+    # 가래/천명 점수 반영
+    try:
+        if wheeze in ["조금", "보통", "심함"]:
+            score["호흡기 주의"] = score.get("호흡기 주의", 0) + {"조금":15, "보통":25, "심함":40}[wheeze]
+        if phlegm in ["보통", "심함"]:
+            score["상기도/독감 계열"] = score.get("상기도/독감 계열", 0) + {"보통":10, "심함":15}[phlegm]
+    except Exception:
+        pass
+
     if stool in ["3~4회", "5~6회", "7회 이상"]:
         score["장염 의심"] += {"3~4회": 40, "5~6회": 55, "7회 이상": 70}[stool]
     if fever in ["38~38.5", "38.5~39", "39 이상"]:
@@ -1308,7 +1410,7 @@ with t_peds:
         stool=stool, fever=fever, persistent_vomit=persistent_vomit, oliguria=oliguria,
         cough=cough, nasal=nasal, eye=eye, abd_pain=abd_pain, ear_pain=ear_pain,
         rash=rash, hives=hives, migraine=migraine, hfmd=hfmd
-    )
+    , max_temp=max_temp)
     try:
         notes = build_peds_notes(
             stool=stool, fever=fever, persistent_vomit=persistent_vomit, oliguria=oliguria,
@@ -1323,6 +1425,15 @@ with t_peds:
 
 
     st.markdown("---")
+    
+    with st.expander("🚽 변비 관리(보호자용)", expanded=False):
+        st.markdown("""
+    - **수분 섭취 늘리기**: 미지근한 물을 자주. 섬유소(과일·채소·통곡물)는 **천천히** 늘리기.
+    - **활동 유도**: 가능하면 **걷기/가벼운 스트레칭**.
+    - **배변 습관**: 매일 같은 시간(식후 15~30분) **화장실 앉기**.
+    - **피하기**: 과도한 우유/치즈, 과자류 위주 식사.
+    - **경고 신호**: **혈변/검은변**, 심한 복통·구토 동반, **1주 이상 지속** → 병원 상담.
+    """.strip())
     st.subheader("해열제 계산기")
     prev_wt = st.session_state.get(wkey("wt_peds"), 0.0)
     default_wt = _safe_float(prev_wt, 0.0)
@@ -1843,6 +1954,20 @@ with t_report:
         lines.append(_build_hospital_summary())
         lines.append("")
 
+        
+        # 👶 소아 증상 요약 섹션
+        peds_notes_val = st.session_state.get("peds_notes", "").strip()
+        if peds_notes_val:
+            lines.append("## 👶 소아 증상 요약")
+            lines.append(peds_notes_val)
+            lines.append("")
+
+        # 👶 소아 증상 요약 섹션
+        peds_notes_val = st.session_state.get("peds_notes", "").strip()
+        if peds_notes_val:
+            lines.append("## 👶 소아 증상 요약")
+            lines.append(peds_notes_val)
+            lines.append("")
         md = "\n".join(lines)
         st.code(md, language="markdown")
         st.download_button("💾 보고서 .md 다운로드", data=md.encode("utf-8"), file_name="bloodmap_report.md", mime="text/markdown")
@@ -1853,3 +1978,24 @@ with t_report:
             st.download_button("📄 보고서 .pdf 다운로드", data=pdf_bytes, file_name="bloodmap_report.pdf", mime="application/pdf")
         except Exception:
             st.caption("PDF 변환 모듈을 불러오지 못했습니다. .md 또는 .txt를 사용해주세요.")
+
+def render_constipation_quickguide():
+    import streamlit as st
+    with st.expander("🚽 변비 관리(보호자용)", expanded=False):
+        st.markdown("""
+- **수분 섭취 늘리기**: 미지근한 물을 자주. 섬유소(과일·채소·통곡물)는 **천천히** 늘리기.
+- **활동 유도**: 가능한 범위에서 **걷기/가벼운 스트레칭**.
+- **배변 습관**: 매일 같은 시간(식후 15~30분) **화장실 앉기**.
+- **피해야 할 것**: 과도한 우유/치즈, 과자류 위주 식사.
+- **경고 신호**: **혈변/검은변**, 심한 복통·구토 동반, **1주 이상 지속** 시 병원 상담.
+        """.strip())
+
+def render_skin_care_quickguide():
+    import streamlit as st
+    with st.expander("🧴 피부 관리(보호자용)", expanded=False):
+        st.markdown("""
+- **미온수 샤워** 후 문지르지 말고 톡톡. **무향 보습제**를 샤워 후 3분 내 충분히.
+- **손톱 정리**로 긁힘 예방. **햇빛 차단**(모자/얇은 긴소매, 필요시 저자극 선크림).
+- **피해야 할 것**: 때타월, 알코올 스왑 남용, 강한 향/자극 제품.
+- **경고 신호**: **물집/심한 진물/발열 동반 발진**은 병원 상담.
+        """.strip())
