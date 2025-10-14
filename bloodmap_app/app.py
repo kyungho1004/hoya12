@@ -3,6 +3,92 @@
 # ===== Robust import guard (auto-injected) =====
 import importlib, types
 
+# ==== Security/Time helpers (must be defined before UI is built) ====
+def kst_now():
+    from datetime import datetime
+    try:
+        from zoneinfo import ZoneInfo
+        return datetime.now(ZoneInfo("Asia/Seoul"))
+    except Exception:
+        from datetime import datetime as _dt
+        return _dt.utcnow()
+
+def pin_auth():
+    """Numeric-only PIN auth with re-auth timeout (20 min). Returns PIN or None."""
+    import os, json, streamlit as st, hashlib
+    from datetime import timedelta
+    st.markdown("### 🔒 PIN 인증")
+    last_ok = st.session_state.get("_pin_auth_at")
+    curr_pin = st.session_state.get("_pin")
+    if last_ok and curr_pin:
+        if kst_now() - last_ok < timedelta(minutes=20):
+            return curr_pin
+        else:
+            st.session_state["_pin"] = ""
+            st.session_state["_pin_auth_at"] = None
+
+    def _pin_dir():
+        base = "/mnt/data/profile"
+        try: os.makedirs(base, exist_ok=True)
+        except Exception: pass
+        return base
+    def _pin_file(pin): 
+        return os.path.join(_pin_dir(), f"{pin}.json")
+    def _has_pin_file():
+        try: return any(f.endswith(".json") for f in os.listdir(_pin_dir()))
+        except Exception: return False
+
+    if not _has_pin_file():
+        with st.expander("처음 사용: PIN 생성", expanded=True):
+            p1 = st.text_input("새 PIN 입력(숫자만)", type="password", key=wkey("pin_new1"))
+            p2 = st.text_input("새 PIN 다시 입력(확인)", type="password", key=wkey("pin_new2"))
+            if st.button("PIN 생성", key=wkey("pin_create")):
+                if not p1 or p1 != p2 or (not p1.isdigit()) or not (4 <= len(p1) <= 8):
+                    st.error("PIN은 숫자 4~8자리이며 두 입력이 일치해야 합니다.")
+                else:
+                    pin = p1.strip()
+                    data = {"pin": hashlib.sha256(pin.encode()).hexdigest(), "created_at": kst_now().isoformat()}
+                    try:
+                        with open(_pin_file(pin), "w", encoding="utf-8") as f:
+                            json.dump(data, f, ensure_ascii=False, indent=2)
+                        st.session_state["_pin"] = pin
+                        st.session_state["_pin_auth_at"] = kst_now()
+                        st.success("PIN 생성 및 로그인 완료.")
+                    except Exception as e:
+                        st.error(f"PIN 저장 실패: {e}")
+
+    with st.expander("로그인: PIN 인증", expanded=True):
+        p = st.text_input("PIN(숫자 4~8자리)", type="password", key=wkey("pin_login"))
+        ok = st.button("인증", key=wkey("pin_login_btn"))
+        if ok:
+            if not p or (not p.isdigit()) or not (4 <= len(p) <= 8):
+                st.error("PIN은 숫자 4~8자리여야 합니다.")
+            else:
+                try:
+                    with open(_pin_file(p), "r", encoding="utf-8") as f:
+                        rec = json.load(f)
+                    if rec.get("pin") == hashlib.sha256(p.encode()).hexdigest():
+                        st.session_state["_pin"] = p
+                        st.session_state["_pin_auth_at"] = kst_now()
+                        st.success("인증 성공")
+                    else:
+                        st.error("PIN이 올바르지 않습니다.")
+                except FileNotFoundError:
+                    st.error("등록되지 않은 PIN입니다.")
+                except Exception as e:
+                    st.error(f"인증 오류: {e}")
+    return st.session_state.get("_pin", "").strip() or None
+
+def ensure_security_gate():
+    import streamlit as st
+    pin = pin_auth()
+    if not pin:
+        st.warning("PIN 인증 후 이용 가능합니다.")
+        st.stop()
+# ==== End helpers ====
+
+
+
 def _safe_import(modname):
     try:
         return importlib.import_module(modname)
@@ -357,8 +443,6 @@ def render_caregiver_notes_peds(
     hives,
     migraine,
     hfmd,
-    sputum=None,
-    wheeze=None,
 ):
     st.markdown("---")
 
@@ -366,8 +450,7 @@ def render_caregiver_notes_peds(
     render_symptom_explain_peds(
         stool=stool, fever=fever, persistent_vomit=persistent_vomit, oliguria=oliguria,
         cough=cough, nasal=nasal, eye=eye, abd_pain=abd_pain, ear_pain=ear_pain,
-        rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, max_temp=max_temp,
-        sputum=sputum, wheeze=wheeze
+        rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, max_temp=max_temp
     )
     st.subheader("보호자 설명 (증상별)")
 
@@ -480,7 +563,7 @@ def render_caregiver_notes_peds(
     st.info("❗ 즉시 병원 평가: 번개치는 두통 · 시야 이상/복시/암점 · 경련 · 의식저하 · 심한 목 통증 · 호흡곤란/입술부종")
 
 def build_peds_notes(
-    *, stool, fever, persistent_vomit, oliguria, cough, nasal, eye, abd_pain, ear_pain, rash, hives, migraine, hfmd, sputum=None, wheeze=None,
+    *, stool, fever, persistent_vomit, oliguria, cough, nasal, eye, abd_pain, ear_pain, rash, hives, migraine, hfmd,
     duration=None, score=None, max_temp=None, red_seizure=False, red_bloodstool=False, red_night=False, red_dehydration=False
 ) -> str:
     """소아 증상 선택을 요약하여 보고서용 텍스트를 생성."""
@@ -503,10 +586,6 @@ def build_peds_notes(
         sx.append(f"설사:{stool}")
     if eye != "없음":
         sx.append(f"눈:{eye}")
-    if sputum and sputum != "없음":
-        sx.append(f"가래:{sputum}")
-    if wheeze and wheeze != "없음":
-        sx.append(f"쌕쌕거림:{wheeze}")
     if persistent_vomit:
         sx.append("지속 구토")
     if oliguria:
@@ -544,13 +623,10 @@ def build_peds_notes(
     return "\\n".join(lines)
 
 # ---------- Tabs ----------
-tab_labels = ["🏠 홈", "🧪 피수치 입력", "🧬 암 선택", "💊 항암제(진단 기반)", "👶 소아 증상", "🔬 특수검사", "📄 보고서", "📊 기록/그래프"]
-pin = pin_auth()
-if not pin:
-    import streamlit as st
-    st.warning("PIN 인증 후 이용 가능합니다.")
-    st.stop()
-t_home, t_labs, t_dx, t_chemo, t_peds, t_special, t_report, t_graph = st.tabs(tab_labels)
+tab_labels = ["🏠 홈", "🧪 피수치 입력", "🧬 암 선택", "💊 항암제(진단 기반)", "👶 소아 증상", "🔬 특수검사", "📄 보고서"]
+ensure_security_gate()
+
+t_home, t_labs, t_dx, t_chemo, t_peds, t_special, t_report = st.tabs(tab_labels)
 
 # HOME
 with t_home:
@@ -638,9 +714,6 @@ with t_home:
         st.info("응급도: " + level + (" — " + " · ".join(reasons) if reasons else ""))
 
     st.markdown("---")
-    
-show_prof = st.toggle("전문가용: 응급도 가중치 편집", value=False, key=wkey("prof_weights"))
-if show_prof:
     st.subheader("응급도 가중치 (편집 + 프리셋)")
     colp = st.columns(3)
     with colp[0]:
@@ -683,13 +756,10 @@ if show_prof:
     if newW != W:
         set_weights(newW)
         st.success("가중치 변경 사항 저장됨.")
-else:
-    st.caption("전문가용 토글을 켜면 응급도 가중치를 편집할 수 있습니다.")
-
 
 # LABS
 
-def render_symptom_explain_peds(*, stool, fever, persistent_vomit, oliguria, cough, nasal, eye, abd_pain, ear_pain, rash, hives, migraine, hfmd, max_temp=None, sputum=None, wheeze=None):
+def render_symptom_explain_peds(*, stool, fever, persistent_vomit, oliguria, cough, nasal, eye, abd_pain, ear_pain, rash, hives, migraine, hfmd, max_temp=None):
     """선택된 증상에 대한 보호자 설명(가정 관리 팁 + 병원 방문 기준)을 상세 렌더."""
     import streamlit as st
 
@@ -732,11 +802,7 @@ def render_symptom_explain_peds(*, stool, fever, persistent_vomit, oliguria, cou
             "숨이 차 보이거나, 입술이 퍼렇게 보이면 즉시 병원.",
             "기침이 2주 이상 지속되거나, 쌕쌕거림/흉통이 동반되면 진료.",
         ]
-        if sputum and sputum in ["보통", "많음"]:
-            t.append("생리식염수 분무/흡인기로 **가래 제거**를 보조하세요.")
-        if wheeze and wheeze != "없음":
-            w.insert(0, "쌕쌕거림이 들리면 **하기도 협착/천식 악화 가능** — 호흡곤란 시 즉시 병원.")
-        tips["호흡기(기침/콧물/가래/천명)"] = (t, w)
+        tips["호흡기(기침/콧물)"] = (t, w)
 
     if stool != "없음" or persistent_vomit or oliguria:
         t = [
@@ -1250,12 +1316,7 @@ with t_peds:
         fever = st.selectbox("발열", ["없음", "37~37.5 (미열)", "37.5~38", "38~38.5", "38.5~39", "39 이상"], key=wkey("p_fever"))
     with c5:
         eye = st.selectbox("눈꼽/결막", ["없음", "맑음", "노랑-농성", "양쪽"], key=wkey("p_eye"))
-    # 추가: 가래/쌕쌕거림(천명)
-    g1, g2 = st.columns(2)
-    with g1:
-        sputum = st.selectbox("가래", ["없음", "조금", "보통", "많음"], key=wkey("p_sputum"))
-    with g2:
-        wheeze = st.selectbox("쌕쌕거림(천명)", ["없음", "조금", "보통", "심함"], key=wkey("p_wheeze"))
+
     d1, d2, d3 = st.columns(3)
     with d1:
         oliguria = st.checkbox("소변량 급감", key=wkey("p_oliguria"))
@@ -1340,8 +1401,6 @@ with t_peds:
         "알레르기 주의": 0,
         "편두통 의심": 0,
         "수족구 의심": 0,
-        "하기도/천명 주의": 0,
-        "가래 동반 호흡기": 0,
     }
     if stool in ["3~4회", "5~6회", "7회 이상"]:
         score["장염 의심"] += {"3~4회": 40, "5~6회": 55, "7회 이상": 70}[stool]
@@ -1349,10 +1408,6 @@ with t_peds:
         score["상기도/독감 계열"] += 25
     if cough in ["조금", "보통", "심함"]:
         score["상기도/독감 계열"] += 20
-    if sputum in ["조금", "보통", "많음"]:
-        score["가래 동반 호흡기"] += {"조금": 10, "보통": 20, "많음": 30}[sputum]
-    if wheeze in ["조금", "보통", "심함"]:
-        score["하기도/천명 주의"] += {"조금": 25, "보통": 40, "심함": 60}[wheeze]
     if eye in ["노랑-농성", "양쪽"]:
         score["결막염 의심"] += 30
     if oliguria:
@@ -1383,13 +1438,13 @@ with t_peds:
     render_caregiver_notes_peds(
         stool=stool, fever=fever, persistent_vomit=persistent_vomit, oliguria=oliguria,
         cough=cough, nasal=nasal, eye=eye, abd_pain=abd_pain, ear_pain=ear_pain,
-        rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, sputum=sputum, wheeze=wheeze
+        rash=rash, hives=hives, migraine=migraine, hfmd=hfmd
     )
     try:
         notes = build_peds_notes(
             stool=stool, fever=fever, persistent_vomit=persistent_vomit, oliguria=oliguria,
             cough=cough, nasal=nasal, eye=eye, abd_pain=abd_pain, ear_pain=ear_pain,
-            rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, sputum=sputum, wheeze=wheeze, duration=duration_val, score=score, max_temp=max_temp, red_seizure=red_seizure, red_bloodstool=red_bloodstool, red_night=red_night, red_dehydration=red_dehydration
+            rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, duration=duration_val, score=score, max_temp=max_temp, red_seizure=red_seizure, red_bloodstool=red_bloodstool, red_night=red_night, red_dehydration=red_dehydration
         )
     except Exception:
         notes = ""
@@ -1765,10 +1820,8 @@ with t_report:
         colp1, colp2 = st.columns(2)
         with colp1:
             sec_profile = st.checkbox("프로필/활력/모드", True if use_dflt else False, key=wkey("sec_profile"))
-            sec_symptom = st.checkbox("증상 체크(홈) — (보고서에서 제외됨)", False, key=wkey("sec_symptom"))
-            sec_symptom = False
-            sec_emerg = st.checkbox("응급도 평가(기여도/가중치 포함) — (보고서에서 제외됨)", False, key=wkey("sec_emerg"))
-            sec_emerg = False
+            sec_symptom = st.checkbox("증상 체크(홈)", True if use_dflt else False, key=wkey("sec_symptom"))
+            sec_emerg = st.checkbox("응급도 평가(기여도/가중치 포함)", True if use_dflt else False, key=wkey("sec_emerg"))
             sec_dx = st.checkbox("진단명(암 선택)", True if use_dflt else False, key=wkey("sec_dx"))
         with colp2:
             sec_meds = st.checkbox("항암제 요약/부작용/병용경고", True if use_dflt else False, key=wkey("sec_meds"))
@@ -1805,8 +1858,30 @@ with t_report:
             lines.append(f"- 체온(℃): {temp if temp not in (None, '') else '—'}")
             lines.append(f"- 심박수(bpm): {hr if hr not in (None, '') else '—'}")
             lines.append("")
-        # (제외됨) 증상 체크(홈) 섹션은 보고서에서 제거되었습니다.
-        # (제외됨) 응급도 평가(기여도/가중치 포함) 섹션은 보고서에서 제거되었습니다.
+
+        if sec_symptom:
+            lines.append("## 증상 체크(홈)")
+            for k, v in sym_map.items():
+                lines.append(f"- {k}: {'예' if v else '아니오'}")
+            lines.append("")
+
+        if sec_emerg:
+            lines.append("## 응급도 평가")
+            lines.append(f"- 현재 응급도: {level}")
+            if reasons:
+                for r in reasons:
+                    lines.append(f"  - {r}")
+            if contrib:
+                lines.append("### 응급도 기여도(Why)")
+                total = sum(x["score"] for x in contrib) or 1.0
+                for it in sorted(contrib, key=lambda x: -x["score"]):
+                    pct = round(100.0 * it["score"] / total, 1)
+                    lines.append(f"- {it['factor']}: 점수 {round(it['score'], 2)} (기본{it['base']}×가중치{it['weight']}, {pct}%)")
+            lines.append("")
+            lines.append("### 사용한 가중치")
+            for k, v in get_weights().items():
+                lines.append(f"- {k}: {v}")
+            lines.append("")
 
         if sec_dx:
             lines.append("## 진단명(암)")
@@ -1909,687 +1984,3 @@ with t_report:
             st.download_button("📄 보고서 .pdf 다운로드", data=pdf_bytes, file_name="bloodmap_report.pdf", mime="application/pdf")
         except Exception:
             st.caption("PDF 변환 모듈을 불러오지 못했습니다. .md 또는 .txt를 사용해주세요.")
-
-
-# ---------------- Graph/Log Panel (separate tab) ----------------
-
-def render_graph_panel():
-    import os, io, datetime as _dt, json
-    import pandas as pd
-    import streamlit as st
-    try:
-        import matplotlib.pyplot as plt
-    except Exception:
-        plt = None
-
-    st.markdown("### 📊 기록/그래프")
-    pin = pin_auth()
-    if not pin:
-        st.info("PIN 인증 후 이용 가능합니다.")
-        return
-
-    base_dir = f"/mnt/data/bloodmap_graph/{pin}"
-    try:
-        os.makedirs(base_dir, exist_ok=True)
-    except Exception:
-        pass
-
-    try:
-        csv_files = [os.path.join(base_dir, f) for f in os.listdir(base_dir) if f.lower().endswith(".csv")]
-    except Exception:
-        csv_files = []
-
-    if not csv_files:
-        st.info(f"표시할 CSV가 없습니다. 폴더에 파일을 추가하세요: {os.path.abspath(base_dir)}")
-        return
-
-    file_map = {os.path.basename(p): p for p in csv_files}
-    sel_name = st.selectbox("기록 파일 선택", sorted(file_map.keys()), key=wkey("graph_csv_select_tab"))
-    path = file_map[sel_name]
-
-    # Preset controls (save/load)
-    def _preset_dir(pin):
-        d = f"/mnt/data/bloodmap_graph/{pin}/_presets"
-        try: os.makedirs(d, exist_ok=True)
-        except Exception: pass
-        return d
-    with st.expander("📁 프리셋", expanded=False):
-        preset_dir = _preset_dir(pin)
-        preset_files = [f[:-5] for f in os.listdir(preset_dir) if f.lower().endswith(".json")] if os.path.isdir(preset_dir) else []
-        left, right = st.columns([2,1])
-        with left:
-            load_name = st.selectbox("프리셋 불러오기", ["(선택)"] + sorted(preset_files), key=wkey("graph_preset_load"))
-        with right:
-            remove_click = st.button("선택 프리셋 삭제", key=wkey("graph_preset_delete"))
-        save_name = st.text_input("프리셋 이름 저장", key=wkey("graph_preset_name"))
-        save_click = st.button("현재 설정 프리셋 저장", key=wkey("graph_preset_save"))
-
-    try:
-        df = pd.read_csv(path)
-    except Exception as e:
-        st.error(f"CSV를 읽을 수 없습니다: {e}")
-        return
-
-    candidates = ["WBC", "Hb", "PLT", "CRP", "ANC"]
-    cols = [c for c in candidates if c in df.columns]
-    if not cols:
-        st.info("표준 항목(WBC/Hb/PLT/CRP/ANC)이 없습니다.")
-        st.dataframe(df.head(20))
-        return
-
-    # Defaults
-    sel_cols = st.session_state.get(wkey("graph_cols_tab"), cols)
-    period = st.session_state.get(wkey("graph_period_tab"), "전체")
-    date_range = st.session_state.get(wkey("graph_date_range"), None)
-
-    # Load preset if chosen
-    if 'load_name' in locals() and load_name and load_name != "(선택)":
-        try:
-            with open(os.path.join(preset_dir, f"{load_name}.json"), "r", encoding="utf-8") as f:
-                pjs = json.load(f)
-            sel_cols = pjs.get("cols", cols)
-            period = pjs.get("period", "전체")
-            date_range = tuple(pjs.get("date_range")) if pjs.get("date_range") else None
-            st.success(f"프리셋 '{load_name}' 적용됨.")
-        except Exception as e:
-            st.error(f"프리셋 불러오기 실패: {e}")
-
-    # Remove preset
-    if 'remove_click' in locals() and remove_click and load_name and load_name != "(선택)":
-        try:
-            os.remove(os.path.join(preset_dir, f"{load_name}.json"))
-            st.warning(f"프리셋 '{load_name}' 삭제됨. 다시 선택해 새로고침해 주세요.")
-        except Exception as e:
-            st.error(f"프리셋 삭제 실패: {e}")
-
-    # UI controls
-    age_group = st.radio("기준", ("성인", "소아"), horizontal=True, key=wkey("graph_age_group"))
-    sel_cols = st.multiselect("표시할 항목", default=sel_cols, options=cols, key=wkey("graph_cols_tab"))
-
-    # 시간 컬럼 탐색 및 정렬
-    time_col = None
-    for cand in ["date", "Date", "timestamp", "Timestamp", "time", "Time", "sample_time"]:
-        if cand in df.columns:
-            time_col = cand
-            break
-    if time_col is not None:
-        try:
-            df["_ts"] = pd.to_datetime(df[time_col])
-            df = df.sort_values("_ts")
-        except Exception:
-            df["_ts"] = df.index
-    else:
-        df["_ts"] = df.index
-
-    # 빠른 기간 필터
-    period = st.radio("빠른 기간", ("전체", "최근 7일", "최근 14일", "최근 30일"),
-                      index=["전체", "최근 7일", "최근 14일", "최근 30일"].index(period) if period in ["전체","최근 7일","최근 14일","최근 30일"] else 0,
-                      horizontal=True, key=wkey("graph_period_tab"))
-    if period != "전체":
-        cutoff = kst_now() - _dt.timedelta(days={"최근 7일":7, "최근 14일":14, "최근 30일":30}[period])
-        try:
-            mask = pd.to_datetime(df["_ts"]) >= cutoff
-            df = df[mask]
-        except Exception:
-            pass
-
-    # 사용자 지정 기간 (달력)
-    with st.expander("📅 사용자 지정 기간", expanded=False):
-        try:
-            min_d = pd.to_datetime(df["_ts"].min()).date()
-            max_d = pd.to_datetime(df["_ts"].max()).date()
-        except Exception:
-            min_d, max_d = None, None
-        dvals = st.date_input("기간 선택", value=date_range if date_range else ((min_d, max_d) if (min_d and max_d) else None), key=wkey("graph_date_range"))
-        if isinstance(dvals, tuple) and len(dvals) == 2 and dvals[0] and dvals[1]:
-            start_d, end_d = dvals
-            try:
-                mask2 = (pd.to_datetime(df["_ts"]).dt.date >= start_d) & (pd.to_datetime(df["_ts"]).dt.date <= end_d)
-                df = df[mask2]
-            except Exception:
-                pass
-
-    # Reference ranges (simple defaults; can be customized later)
-    REF = {
-        "성인": {
-            "WBC": (4.0, 10.0),
-            "Hb": (13.0, 17.0),
-            "PLT": (150, 400),
-            "CRP": (0.0, 0.5),
-            "ANC": (1.5, 7.5),
-        },
-        "소아": {
-            "WBC": (5.0, 15.0),
-            "Hb": (11.0, 14.5),
-            "PLT": (150, 450),
-            "CRP": (0.0, 0.5),
-            "ANC": (1.5, 8.0),
-        },
-    }
-
-    # Plot/render
-    if sel_cols:
-        if plt is None:
-            st.warning("matplotlib을 사용할 수 없어 표로 대체합니다.")
-            st.dataframe(df[["_ts"] + sel_cols].tail(50))
-        else:
-            fig, ax = plt.subplots()
-            for col in sel_cols:
-                try:
-                    ax.plot(df["_ts"], pd.to_numeric(df[col], errors="coerce"), label=col)
-                except Exception:
-                    continue
-
-            # Shade normal band ONLY when exactly one metric selected (to avoid overlapping bands)
-            if len(sel_cols) == 1:
-                metric = sel_cols[0]
-                rng = REF.get(age_group, {}).get(metric)
-                if rng:
-                    lo, hi = rng
-                    try:
-                        ax.fill_between(df["_ts"], lo, hi, alpha=0.15, label=f"{metric} 정상범위({age_group})")
-                    except Exception:
-                        pass
-
-            ax.set_xlabel("시점")
-            ax.set_ylabel("값")
-            ax.legend()
-            st.pyplot(fig)
-
-            buf = io.BytesIO()
-            fig.savefig(buf, format="png", bbox_inches="tight")
-            buf.seek(0)
-            st.download_button(
-                label="PNG로 저장",
-                data=buf,
-                file_name=f"{pin}_bloodmap_graph.png",
-                mime="image/png",
-                key=wkey("graph_png_dl_tab")
-            )
-    else:
-        st.info("표시할 항목을 선택해 주세요.")
-
-    with st.expander("원자료(최근 50행)"):
-        st.dataframe(df.tail(50))
-
-with t_graph:
-    render_graph_panel()
-
-
-# ---- Time helpers ----
-def kst_now():
-    from datetime import datetime
-    try:
-        from zoneinfo import ZoneInfo
-        return datetime.now(ZoneInfo("Asia/Seoul"))
-    except Exception:
-        # Fallback without tz database
-        return datetime.utcnow()
-
-
-# ---- PIN helpers ----
-def _profile_dir():
-    import os
-    base = "/mnt/data/profile"
-    try:
-        os.makedirs(base, exist_ok=True)
-    except Exception:
-        pass
-    return base
-
-def ensure_pin():
-    """Ask user for PIN and persist under /mnt/data/profile/{pin}.json"""
-    import json, os
-    import streamlit as st
-    pin = st.session_state.get("_pin", "")
-    with st.expander("🔒 개인 PIN 설정 (그래프/기록 분리)", expanded=False):
-        pin = st.text_input("PIN(숫자/문자 조합 가능) — 동일 PIN은 동일 사용자로 간주", value=pin, type="password", key=wkey("pin_input"))
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("PIN 저장", key=wkey("pin_save")):
-                st.session_state["_pin"] = pin.strip()
-                prof = {"pin": st.session_state["_pin"], "saved_at": kst_now().isoformat()}
-                try:
-                    with open(os.path.join(_profile_dir(), f"{st.session_state['_pin'] or 'anonymous'}.json"), "w", encoding="utf-8") as f:
-                        json.dump(prof, f, ensure_ascii=False, indent=2)
-                    st.success("PIN 저장 완료.")
-                except Exception as e:
-                    st.error(f"PIN 저장 실패: {e}")
-        with col2:
-            if st.button("PIN 초기화", key=wkey("pin_reset")):
-                st.session_state["_pin"] = ""
-                st.info("PIN이 초기화되었습니다.")
-    return st.session_state.get("_pin", "").strip()
-
-
-# ---------------- Graph/Log Panel (with PIN & filters) ----------------
-def render_graph_panel():
-    import os, io, datetime as _dt
-    import pandas as pd
-    import streamlit as st
-    try:
-        import matplotlib.pyplot as plt
-    except Exception:
-        plt = None
-
-    st.markdown("### 📊 기록/그래프")
-    pin = ensure_pin()
-    if not pin:
-        st.info("개인별 분리를 위해 PIN을 먼저 저장해 주세요.")
-        return
-
-    base_dir = f"/mnt/data/bloodmap_graph/{pin}"
-    try:
-        os.makedirs(base_dir, exist_ok=True)
-    except Exception:
-        pass
-
-    try:
-        csv_files = [os.path.join(base_dir, f) for f in os.listdir(base_dir) if f.lower().endswith(".csv")]
-    except Exception:
-        csv_files = []
-
-    if not csv_files:
-        st.info(f"표시할 CSV가 없습니다. 폴더에 파일을 추가하세요: {os.path.abspath(base_dir)}")
-        return
-
-    file_map = {os.path.basename(p): p for p in csv_files}
-    sel_name = st.selectbox("기록 파일 선택", sorted(file_map.keys()), key=wkey("graph_csv_select_tab"))
-    path = file_map[sel_name]
-
-    try:
-        df = pd.read_csv(path)
-    except Exception as e:
-        st.error(f"CSV를 읽을 수 없습니다: {e}")
-        return
-
-    candidates = ["WBC", "Hb", "PLT", "CRP", "ANC"]
-    cols = [c for c in candidates if c in df.columns]
-    if not cols:
-        st.info("표준 항목(WBC/Hb/PLT/CRP/ANC)이 없습니다.")
-        st.dataframe(df.head(20))
-        return
-
-    sel_cols = st.multiselect("표시할 항목", default=cols, options=cols, key=wkey("graph_cols_tab"))
-
-    # 시간 컬럼 탐색 및 정렬
-    time_col = None
-    for cand in ["date", "Date", "timestamp", "Timestamp", "time", "Time", "sample_time"]:
-        if cand in df.columns:
-            time_col = cand
-            break
-    if time_col is not None:
-        try:
-            df["_ts"] = pd.to_datetime(df[time_col])
-            df = df.sort_values("_ts")
-        except Exception:
-            df["_ts"] = df.index
-    else:
-        df["_ts"] = df.index
-
-    # 빠른 기간 필터
-    period = st.radio("빠른 기간", ("전체", "최근 7일", "최근 14일", "최근 30일"), horizontal=True, key=wkey("graph_period_tab"))
-    if period != "전체":
-        days = {"최근 7일": 7, "최근 14일": 14, "최근 30일": 30}[period]
-        cutoff = kst_now() - _dt.timedelta(days=days)
-        try:
-            mask = pd.to_datetime(df["_ts"]) >= cutoff
-            df = df[mask]
-        except Exception:
-            pass
-
-    # 사용자 지정 기간 필터(달력)
-    with st.expander("📅 사용자 지정 기간", expanded=False):
-        try:
-            min_d = pd.to_datetime(df["_ts"].min()).date()
-            max_d = pd.to_datetime(df["_ts"].max()).date()
-        except Exception:
-            min_d, max_d = None, None
-
-        dvals = st.date_input("기간 선택", value=(min_d, max_d) if (min_d and max_d) else None, key=wkey("graph_date_range"))
-        if isinstance(dvals, tuple) and len(dvals) == 2 and dvals[0] and dvals[1]:
-            start_d, end_d = dvals
-            try:
-                mask2 = (pd.to_datetime(df["_ts"]).dt.date >= start_d) & (pd.to_datetime(df["_ts"]).dt.date <= end_d)
-                df = df[mask2]
-            except Exception:
-                pass
-
-    # 그래프
-    if sel_cols:
-        if plt is None:
-            st.warning("matplotlib을 사용할 수 없어 표로 대체합니다.")
-            st.dataframe(df[["_ts"] + sel_cols].tail(50))
-        else:
-            fig, ax = plt.subplots()
-            for col in sel_cols:
-                try:
-                    ax.plot(df["_ts"], pd.to_numeric(df[col], errors="coerce"), label=col)
-                except Exception:
-                    continue
-            ax.set_xlabel("시점")
-            ax.set_ylabel("값")
-            ax.legend()
-            st.pyplot(fig)
-
-            # PNG 저장 버튼
-            buf = io.BytesIO()
-            fig.savefig(buf, format="png", bbox_inches="tight")
-            buf.seek(0)
-            st.download_button(
-                label="PNG로 저장",
-                data=buf,
-                file_name=f"{pin}_bloodmap_graph.png",
-                mime="image/png",
-                key=wkey("graph_png_dl_tab")
-            )
-    else:
-        st.info("표시할 항목을 선택해 주세요.")
-
-    with st.expander("원자료(최근 50행)"):
-        st.dataframe(df.tail(50))
-
-
-
-
-def render_peds_antipyretic_kst():
-    """KST time-aware pediatric antipyretic helper: start at KST 'now' (editable) and show next doses."""
-    import streamlit as st
-    from datetime import timedelta, time, datetime
-    now = kst_now()
-    st.markdown("#### 🕒 소아 해열제 시간 (KST 기준)")
-    st.caption("한국시간으로 동기화됩니다. 시작시간은 현재시간으로 자동 설정되며, 필요시 수정 가능합니다.")
-    # Time input (naive) for display/edit. We'll store date+time using today's KST date.
-    t = st.time_input("시작시간", value=time(now.hour, now.minute), key=wkey("peds_antipy_start"))
-    start_dt = datetime(now.year, now.month, now.day, t.hour, t.minute)
-    # Compute schedule for demonstration (APAP q4h, IBU q6h), next two doses each
-    apap1 = start_dt
-    ibu1 = start_dt + timedelta(hours=3)  # 교차 복용 예시(간단): APAP 후 3h에 IBU (의학적 권고 아님, 참고용)
-    apap2 = apap1 + timedelta(hours=6)
-    ibu2 = ibu1 + timedelta(hours=6)
-    st.caption("※ 실제 복용 간격: APAP ≥4h, IBU ≥6h. 아래 예시는 간단 참고용입니다.")
-    st.markdown(f"- APAP @ {apap1.strftime('%H:%M')}")
-    st.markdown(f"- IBU @ {ibu1.strftime('%H:%M')}")
-    st.markdown(f"- APAP @ {apap2.strftime('%H:%M')}")
-    st.markdown(f"- IBU @ {ibu2.strftime('%H:%M')}")
-
-def _pin_dir():
-    import os
-    base = "/mnt/data/profile"
-    try:
-        os.makedirs(base, exist_ok=True)
-    except Exception:
-        pass
-    return base
-
-def _pin_file(pin):
-    import os
-    return os.path.join(_pin_dir(), f"{pin}.json")
-
-def _has_pin_file():
-    import os, glob
-    return bool(glob.glob(_pin_dir() + "/*.json"))
-
-
-def pin_auth():
-    """Numeric-only PIN auth with re-auth timeout (20 min). Returns PIN or None."""
-    import os, json, streamlit as st, hashlib
-    from datetime import timedelta
-    st.markdown("### 🔒 PIN 인증")
-    # Re-auth timeout
-    last_ok = st.session_state.get("_pin_auth_at")
-    curr_pin = st.session_state.get("_pin")
-    if last_ok and curr_pin:
-        # if within 20 minutes, keep authenticated
-        if kst_now() - last_ok < timedelta(minutes=20):
-            return curr_pin
-        else:
-            # timeout -> clear
-            st.session_state["_pin"] = ""
-            st.session_state["_pin_auth_at"] = None
-
-    def _pin_dir():
-        base = "/mnt/data/profile"
-        try:
-            os.makedirs(base, exist_ok=True)
-        except Exception:
-            pass
-        return base
-    def _pin_file(pin): return os.path.join(_pin_dir(), f"{pin}.json")
-    def _has_pin_file():
-        try:
-            return any(f.endswith(".json") for f in os.listdir(_pin_dir()))
-        except Exception:
-            return False
-
-    # First-time creation
-    if not _has_pin_file():
-        with st.expander("처음 사용: PIN 생성", expanded=True):
-            p1 = st.text_input("새 PIN 입력(숫자만)", type="password", key=wkey("pin_new1"))
-            p2 = st.text_input("새 PIN 다시 입력(확인)", type="password", key=wkey("pin_new2"))
-            if st.button("PIN 생성", key=wkey("pin_create")):
-                if not p1 or p1 != p2 or (not p1.isdigit()) or not (4 <= len(p1) <= 8):
-                    st.error("PIN은 숫자 4~8자리이며 두 입력이 일치해야 합니다.")
-                else:
-                    pin = p1.strip()
-                    data = {"pin": hashlib.sha256(pin.encode()).hexdigest(), "created_at": kst_now().isoformat()}
-                    try:
-                        with open(_pin_file(pin), "w", encoding="utf-8") as f:
-                            json.dump(data, f, ensure_ascii=False, indent=2)
-                        st.session_state["_pin"] = pin
-                        st.session_state["_pin_auth_at"] = kst_now()
-                        st.success("PIN 생성 및 로그인 완료.")
-                    except Exception as e:
-                        st.error(f"PIN 저장 실패: {e}")
-
-    # Login
-    with st.expander("로그인: PIN 인증", expanded=True):
-        p = st.text_input("PIN(숫자 4~8자리)", type="password", key=wkey("pin_login"))
-        ok = st.button("인증", key=wkey("pin_login_btn"))
-        if ok:
-            if not p or (not p.isdigit()) or not (4 <= len(p) <= 8):
-                st.error("PIN은 숫자 4~8자리여야 합니다.")
-            else:
-                try:
-                    with open(_pin_file(p), "r", encoding="utf-8") as f:
-                        rec = json.load(f)
-                    if rec.get("pin") == hashlib.sha256(p.encode()).hexdigest():
-                        st.session_state["_pin"] = p
-                        st.session_state["_pin_auth_at"] = kst_now()
-                        st.success("인증 성공")
-                    else:
-                        st.error("PIN이 올바르지 않습니다.")
-                except FileNotFoundError:
-                    st.error("등록되지 않은 PIN입니다.")
-                except Exception as e:
-                    st.error(f"인증 오류: {e}")
-    return st.session_state.get("_pin", "").strip() or None
-
-def _graph_preset_dir(pin):
-    import os
-    base = f"/mnt/data/bloodmap_graph/{pin}/_presets"
-    try:
-        os.makedirs(base, exist_ok=True)
-    except Exception:
-        pass
-    return base
-
-def render_graph_panel():
-    import os, io, datetime as _dt, json
-    import pandas as pd
-    import streamlit as st
-    try:
-        import matplotlib.pyplot as plt
-    except Exception:
-        plt = None
-
-    st.markdown("### 📊 기록/그래프")
-    pin = pin_auth()
-    if not pin:
-        st.info("PIN 인증 후 이용 가능합니다.")
-        return
-
-    base_dir = f"/mnt/data/bloodmap_graph/{pin}"
-    try:
-        os.makedirs(base_dir, exist_ok=True)
-    except Exception:
-        pass
-
-    try:
-        csv_files = [os.path.join(base_dir, f) for f in os.listdir(base_dir) if f.lower().endswith(".csv")]
-    except Exception:
-        csv_files = []
-
-    if not csv_files:
-        st.info(f"표시할 CSV가 없습니다. 폴더에 파일을 추가하세요: {os.path.abspath(base_dir)}")
-        return
-
-    file_map = {os.path.basename(p): p for p in csv_files}
-    sel_name = st.selectbox("기록 파일 선택", sorted(file_map.keys()), key=wkey("graph_csv_select_tab"))
-    path = file_map[sel_name]
-
-    # Preset controls (save/load)
-    with st.expander("📁 프리셋", expanded=False):
-        preset_dir = _graph_preset_dir(pin)
-        preset_files = [f[:-5] for f in os.listdir(preset_dir) if f.lower().endswith(".json")] if os.path.isdir(preset_dir) else []
-        left, right = st.columns([2,1])
-        with left:
-            load_name = st.selectbox("프리셋 불러오기", ["(선택)"] + sorted(preset_files), key=wkey("graph_preset_load"))
-        with right:
-            remove_click = st.button("선택 프리셋 삭제", key=wkey("graph_preset_delete"))
-        save_name = st.text_input("프리셋 이름 저장", key=wkey("graph_preset_name"))
-        save_click = st.button("현재 설정 프리셋 저장", key=wkey("graph_preset_save"))
-
-    try:
-        df = pd.read_csv(path)
-    except Exception as e:
-        st.error(f"CSV를 읽을 수 없습니다: {e}")
-        return
-
-    candidates = ["WBC", "Hb", "PLT", "CRP", "ANC"]
-    cols = [c for c in candidates if c in df.columns]
-    if not cols:
-        st.info("표준 항목(WBC/Hb/PLT/CRP/ANC)이 없습니다.")
-        st.dataframe(df.head(20))
-        return
-
-    # Defaults
-    sel_cols = st.session_state.get(wkey("graph_cols_tab"), cols)
-    period = st.session_state.get(wkey("graph_period_tab"), "전체")
-    date_range = st.session_state.get(wkey("graph_date_range"), None)
-
-    # Load preset if chosen
-    if 'load_name' in locals() and load_name and load_name != "(선택)":
-        try:
-            with open(os.path.join(preset_dir, f"{load_name}.json"), "r", encoding="utf-8") as f:
-                pjs = json.load(f)
-            sel_cols = pjs.get("cols", cols)
-            period = pjs.get("period", "전체")
-            date_range = tuple(pjs.get("date_range")) if pjs.get("date_range") else None
-            st.success(f"프리셋 '{load_name}' 적용됨.")
-        except Exception as e:
-            st.error(f"프리셋 불러오기 실패: {e}")
-
-    # Remove preset
-    if 'remove_click' in locals() and remove_click and load_name and load_name != "(선택)":
-        try:
-            os.remove(os.path.join(preset_dir, f"{load_name}.json"))
-            st.warning(f"프리셋 '{load_name}' 삭제됨. 다시 선택해 새로고침해 주세요.")
-        except Exception as e:
-            st.error(f"프리셋 삭제 실패: {e}")
-
-    # UI controls
-    sel_cols = st.multiselect("표시할 항목", default=sel_cols, options=cols, key=wkey("graph_cols_tab"))
-    # 시간 컬럼 탐색 및 정렬
-    time_col = None
-    for cand in ["date", "Date", "timestamp", "Timestamp", "time", "Time", "sample_time"]:
-        if cand in df.columns:
-            time_col = cand
-            break
-    if time_col is not None:
-        try:
-            df["_ts"] = pd.to_datetime(df[time_col])
-            df = df.sort_values("_ts")
-        except Exception:
-            df["_ts"] = df.index
-    else:
-        df["_ts"] = df.index
-
-    # 빠른 기간 필터
-    period = st.radio("빠른 기간", ("전체", "최근 7일", "최근 14일", "최근 30일"),
-                      index=["전체", "최근 7일", "최근 14일", "최근 30일"].index(period) if period in ["전체","최근 7일","최근 14일","최근 30일"] else 0,
-                      horizontal=True, key=wkey("graph_period_tab"))
-    if period != "전체":
-        cutoff = kst_now() - _dt.timedelta(days={"최근 7일":7, "최근 14일":14, "최근 30일":30}[period])
-        try:
-            mask = pd.to_datetime(df["_ts"]) >= cutoff
-            df = df[mask]
-        except Exception:
-            pass
-
-    # 사용자 지정 기간 (달력)
-    with st.expander("📅 사용자 지정 기간", expanded=False):
-        try:
-            min_d = pd.to_datetime(df["_ts"].min()).date()
-            max_d = pd.to_datetime(df["_ts"].max()).date()
-        except Exception:
-            min_d, max_d = None, None
-        dvals = st.date_input("기간 선택", value=date_range if date_range else ((min_d, max_d) if (min_d and max_d) else None), key=wkey("graph_date_range"))
-        if isinstance(dvals, tuple) and len(dvals) == 2 and dvals[0] and dvals[1]:
-            start_d, end_d = dvals
-            try:
-                mask2 = (pd.to_datetime(df["_ts"]).dt.date >= start_d) & (pd.to_datetime(df["_ts"]).dt.date <= end_d)
-                df = df[mask2]
-            except Exception:
-                pass
-
-    # Save preset
-    if 'save_click' in locals() and save_click:
-        if not save_name.strip():
-            st.error("프리셋 이름을 입력하세요.")
-        else:
-            try:
-                os.makedirs(preset_dir, exist_ok=True)
-                payload = {
-                    "cols": sel_cols,
-                    "period": period,
-                    "date_range": list(dvals) if isinstance(dvals, tuple) else None,
-                }
-                with open(os.path.join(preset_dir, f"{save_name.strip()}.json"), "w", encoding="utf-8") as f:
-                    json.dump(payload, f, ensure_ascii=False, indent=2)
-                st.success(f"프리셋 '{save_name.strip()}' 저장 완료.")
-            except Exception as e:
-                st.error(f"프리셋 저장 실패: {e}")
-
-    # Plot/render
-    if sel_cols:
-        if plt is None:
-            st.warning("matplotlib을 사용할 수 없어 표로 대체합니다.")
-            st.dataframe(df[["_ts"] + sel_cols].tail(50))
-        else:
-            fig, ax = plt.subplots()
-            for col in sel_cols:
-                try:
-                    ax.plot(df["_ts"], pd.to_numeric(df[col], errors="coerce"), label=col)
-                except Exception:
-                    continue
-            ax.set_xlabel("시점")
-            ax.set_ylabel("값")
-            ax.legend()
-            st.pyplot(fig)
-
-            buf = io.BytesIO()
-            fig.savefig(buf, format="png", bbox_inches="tight")
-            buf.seek(0)
-            st.download_button(
-                label="PNG로 저장",
-                data=buf,
-                file_name=f"{pin}_bloodmap_graph.png",
-                mime="image/png",
-                key=wkey("graph_png_dl_tab")
-            )
-    else:
-        st.info("표시할 항목을 선택해 주세요.")
-
-    with st.expander("원자료(최근 50행)"):
-        st.dataframe(df.tail(50))
