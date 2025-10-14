@@ -1,3 +1,103 @@
+
+
+def _augment_constipation(tips_dict, constip):
+    """변비 보강. 누락 시 안전 기본값."""
+    try:
+        if constip:
+            tips_dict["변비"] = (
+                [
+                    "수분·**식이섬유** 늘리기(통곡물/과일/야채).",
+                    "**시계방향 복부 마사지**, 식후 10~15분 배변시간.",
+                    "**발 받침**으로 무릎을 올려 자세 보정.",
+                ],
+                [
+                    "**5~7일 무배변** 또는 **복부팽만/구토/항문열상** 시 진료.",
+                ]
+            )
+        return tips_dict
+    except Exception:
+        return tips_dict
+
+
+
+def _augment_global_safety(tips_dict):
+    """공통 안전 수칙 보강. 누락 시 안전 기본값."""
+    try:
+        tips_dict.setdefault("공통 안전수칙", (
+            [
+                "약 복용 시 **성분 중복 금지**(해열·감기시럽). 복용 간격 준수.",
+                "손 위생·기침 예절, **개인 물품 분리**.",
+            ],
+            [
+                "의식저하/경련/호흡곤란/청색증/탈수 의심 시 **즉시 병원**.",
+            ]
+        ))
+        return tips_dict
+    except Exception:
+        return tips_dict
+
+
+
+def _augment_hfmd_foods(tips_dict, has_hfmd):
+    """수족구 음식 리스트 보강. 누락 시 안전 기본값."""
+    try:
+        if has_hfmd:
+            t, w = tips_dict.get("수족구 의심", ([], []))
+            t = list(t) if isinstance(t, (list, tuple)) else []
+            add = [
+                "권장: **요거트·푸딩·두유·부드러운 죽·아이스크림 소량**(차갑거나 미지근하게).",
+                "회피: **신맛(감귤/토마토)·매운맛·탄산·바삭한 과자**.",
+                "**빨대/스푼으로 소량씩 자주** 섭취."
+            ]
+            for s in add:
+                if s not in t: t.append(s)
+            tips_dict["수족구 의심"] = (t, w if isinstance(w, (list, tuple)) else [])
+        return tips_dict
+    except Exception:
+        return tips_dict
+
+
+
+def _augment_rsv_tips(tips_dict, score_dict):
+    """RSV/모세기관지염 보강. 누락 시 안전 기본값."""
+    try:
+        val = 0
+        if isinstance(score_dict, dict):
+            val = int(score_dict.get("모세기관지염/RSV 의심", 0) or 0)
+        if val > 0:
+            t, w = tips_dict.get("호흡기(기침/콧물/가래/천명)", ([], []))
+            t = list(t) if isinstance(t, (list, tuple)) else []
+            w = list(w) if isinstance(w, (list, tuple)) else []
+            add_t = [
+                "코막힘·쌕쌕거림 완화: **생리식염수 분무/가습**, 취침 시 머리 **약간 높이기**.",
+                "수분을 **조금씩 자주** 주어 점액을 묽게 하세요.",
+            ]
+            add_w = [
+                "**빈호흡/흉곽함몰** 보이면 즉시 병원.",
+            ]
+            for s in add_t:
+                if s not in t: t.append(s)
+            for s in add_w:
+                if s not in w: w.append(s)
+            tips_dict["호흡기(기침/콧물/가래/천명)"] = (t, w)
+        return tips_dict
+    except Exception:
+        return tips_dict
+
+
+
+def _augment_caregiver_tips_env(tips_dict):
+    """발열 등 공통 환경 가이드 보강. 누락 시 안전 기본값."""
+    try:
+        t, w = tips_dict.get("발열", ([], []))
+        t = list(t) if isinstance(t, (list, tuple)) else []
+        if not any("24~26" in str(s) for s in t):
+            t.insert(0, "실내 **온도 24~26℃**, **습도 40~60%** 유지(과열 금지). 2~3시간마다 5~10분 환기.")
+        tips_dict["발열"] = (t, w if isinstance(w, (list, tuple)) else [])
+        return tips_dict
+    except Exception:
+        return tips_dict
+
 # app.py
 
 # ===== Robust import guard (auto-injected) =====
@@ -43,12 +143,6 @@ if "wkey" not in globals():
 
 # ===== End import guard =====
 import datetime as _dt
-from zoneinfo import ZoneInfo as _ZoneInfo
-KST = _ZoneInfo("Asia/Seoul")
-
-def now_kst():
-    return _dt.datetime.now(tz=KST)
-
 import os, sys, re, io, csv
 from pathlib import Path
 import importlib.util
@@ -363,7 +457,6 @@ def render_caregiver_notes_peds(
     hives,
     migraine,
     hfmd,
-    constip=False,
     sputum=None,
     wheeze=None,
 ):
@@ -487,7 +580,7 @@ def render_caregiver_notes_peds(
     st.info("❗ 즉시 병원 평가: 번개치는 두통 · 시야 이상/복시/암점 · 경련 · 의식저하 · 심한 목 통증 · 호흡곤란/입술부종")
 
 def build_peds_notes(
-    *, stool, fever, persistent_vomit, oliguria, cough, nasal, eye, abd_pain, ear_pain, rash, hives, migraine, hfmd, constip=False, sputum=None, wheeze=None,
+    *, stool, fever, persistent_vomit, oliguria, cough, nasal, eye, abd_pain, ear_pain, rash, hives, migraine, hfmd, sputum=None, wheeze=None,
     duration=None, score=None, max_temp=None, red_seizure=False, red_bloodstool=False, red_night=False, red_dehydration=False
 ) -> str:
     """소아 증상 선택을 요약하여 보고서용 텍스트를 생성."""
@@ -722,7 +815,8 @@ def render_symptom_explain_peds(*, stool, fever, persistent_vomit, oliguria, cou
                     w.insert(0, f"현재 최고 체온 **{mt:.1f}℃** → **즉시 병원 권고**.")
                 elif mt >= fever_threshold:
                     w.insert(0, f"현재 최고 체온 **{mt:.1f}℃** → 해열/수분 보충 후 **면밀 관찰**.")
-        tips["발열"] = (t, w)
+        tips["발열"] = (
+t, w)
 
     if cough != "없음" or nasal != "없음":
         t = [
@@ -831,12 +925,14 @@ def render_symptom_explain_peds(*, stool, fever, persistent_vomit, oliguria, cou
             "38.0℃ 이상 발열 시 바로 병원 연락, 38.5℃↑ 또는 39℃↑는 상위 조치.",
         ]
         tips["저호중구 음식 안전"] = (t, w)
-    tips = _augment_caregiver_tips_env(tips)
-    tips = _augment_rsv_tips(tips, score)
-    tips = _augment_hfmd_foods(tips, hfmd)
-    tips = _augment_global_safety(tips)
-    tips = _augment_constipation(tips, constip)
 
+
+    # --- 보호자 설명 보강 파이프라인 ---
+    tips = _augment_caregiver_tips_env(tips)
+    tips = _augment_rsv_tips(tips, score if 'score' in locals() else {})
+    tips = _augment_hfmd_foods(tips, hfmd if 'hfmd' in locals() else False)
+    tips = _augment_global_safety(tips)
+    tips = _augment_constipation(tips, constip if 'constip' in locals() else False)
     compiled = {}
     if tips:
         with st.expander("👪 증상별 보호자 설명", expanded=False):
@@ -1286,7 +1382,6 @@ with t_peds:
         migraine = st.checkbox("편두통 의심(한쪽·박동성·빛/소리 민감)", key=wkey("p_migraine"))
     with f3:
         hfmd = st.checkbox("수족구 의심(손발·입 병변)", key=wkey("p_hfmd"))
-    constip = st.checkbox("변비(3일↑/딱딱/배변 통증)", key=wkey("p_constip"))
     # 추가: 증상 지속 기간(보고서/로직 활용 가능)
     duration = st.selectbox("증상 지속일수", ["선택 안 함", "1일", "2일", "3일 이상"], key=wkey("p_duration"))
     if duration == "선택 안 함":
@@ -1386,70 +1481,18 @@ with t_peds:
         score["수족구 의심"] += 40
 
     ordered = sorted(score.items(), key=lambda x: x[1], reverse=True)
-
-# --- 소아: 의심 배너(증상 조합으로 항상 평가) ---
-try:
-    fever_high = bool((max_temp and max_temp >= 38.5) or (fever in ["38.5~39","39 이상"]))
-except Exception:
-    fever_high = False
-conjunct = (eye in ["노랑-농성","양쪽"])
-resp = (cough != "없음") or (nasal in ["진득","누런"]) or (sputum in ["조금","보통","많음"]) or (wheeze and wheeze != "없음")
-gi = (stool != "없음")
-_w_ad_hi = int(st.session_state.get("_w_adenovirus_hi", 60))
-_w_ad_lo = int(st.session_state.get("_w_adenovirus_lo", 35))
-_w_rsv_hi = int(st.session_state.get("_w_rsv_hi", 50))
-_w_rsv_lo = int(st.session_state.get("_w_rsv_lo", 25))
-if conjunct and (resp or gi):
-    add = _w_ad_hi if fever_high else _w_ad_lo
-    score["아데노바이러스 의심"] = score.get("아데노바이러스 의심", 0) + add
-    st.info("👁️‍🗨️ **아데노바이러스 의심**: 결막염 + 호흡기/장 증상 조합입니다." + (" **고열 동반**." if fever_high else ""))
-if (wheeze and wheeze != "없음") and (cough != "없음" or nasal != "없음"):
-    add = _w_rsv_hi if (cough in ["보통","심함"]) else _w_rsv_lo
-    score["모세기관지염/RSV 의심"] = score.get("모세기관지염/RSV 의심", 0) + add
-    st.info("🌬️ **RSV/모세기관지염 의심**: 쌕쌕거림 + 호흡기 증상. **숨이 차면 즉시 진료**.")
-
     st.write("• " + " / ".join([f"{k}: {v}" for k, v in ordered if v > 0]) if any(v > 0 for _, v in ordered) else "• 특이 점수 없음")
-
-
-# === 보호자 설명: 항상 표시 ===
-st.markdown("### 👪 보호자 설명")
-try:
-    render_caregiver_notes_peds(
-        stool=stool, fever=fever, persistent_vomit=persistent_vomit, oliguria=oliguria,
-        cough=cough, nasal=nasal, eye=eye, abd_pain=abd_pain, ear_pain=ear_pain,
-        rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, constip=constip,
-        sputum=sputum, wheeze=wheeze
-    )
-except Exception as e:
-    st.warning(f"보호자 설명을 생성하는 중 문제가 발생했지만, 다른 기능은 계속 사용할 수 있습니다. ({str(e)[:80]})")
-
-# === 요약(보고서 저장) ===
-try:
-    notes = build_peds_notes(
-        stool=stool, fever=fever, persistent_vomit=persistent_vomit, oliguria=oliguria,
-        cough=cough, nasal=nasal, eye=eye, abd_pain=abd_pain, ear_pain=ear_pain,
-        rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, constip=constip,
-        sputum=sputum, wheeze=wheeze,
-        duration=duration_val, score=score, max_temp=max_temp,
-        red_seizure=red_seizure, red_bloodstool=red_bloodstool, red_night=red_night, red_dehydration=red_dehydration
-    )
-except Exception as e:
-    notes = ""
-st.session_state["peds_notes"] = notes
-with st.expander(f"{risk_badge} 소아 증상 요약(보고서용 저장됨)", expanded=False):
-    st.text_area("요약 내용", value=notes, height=160, key=wkey("peds_notes_preview"))
-
     # 보호자 설명 렌더 + peds_notes 저장
     render_caregiver_notes_peds(
         stool=stool, fever=fever, persistent_vomit=persistent_vomit, oliguria=oliguria,
         cough=cough, nasal=nasal, eye=eye, abd_pain=abd_pain, ear_pain=ear_pain,
-        rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, constip=constip, sputum=sputum, wheeze=wheeze
+        rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, sputum=sputum, wheeze=wheeze
     )
     try:
         notes = build_peds_notes(
             stool=stool, fever=fever, persistent_vomit=persistent_vomit, oliguria=oliguria,
             cough=cough, nasal=nasal, eye=eye, abd_pain=abd_pain, ear_pain=ear_pain,
-            rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, constip=constip, sputum=sputum, wheeze=wheeze, duration=duration_val, score=score, max_temp=max_temp, red_seizure=red_seizure, red_bloodstool=red_bloodstool, red_night=red_night, red_dehydration=red_dehydration
+            rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, sputum=sputum, wheeze=wheeze, duration=duration_val, score=score, max_temp=max_temp, red_seizure=red_seizure, red_bloodstool=red_bloodstool, red_night=red_night, red_dehydration=red_dehydration
         )
     except Exception:
         notes = ""
