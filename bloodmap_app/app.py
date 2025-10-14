@@ -1545,17 +1545,17 @@ except Exception:
             
         with _score_detail_ct:
             # 점수 미니 테이블/뱃지
-        try:
-            if isinstance(score, dict) and score:
-                top = sorted(score.items(), key=lambda x: x[1], reverse=True)
-                # 숫자만 있는 dict는 길게 보이면 지저분하니 상위 8개만 표시
-                view = [f"- **{k}**: {int(v)}" for k, v in top[:8] if int(v) != 0]
-                if view:
-                    st.markdown("**점수 상세**")
-                    for row in view:
-                        st.write(row)
-        except Exception:
-            pass
+            try:
+                if isinstance(score, dict) and score:
+                    top = sorted(score.items(), key=lambda x: x[1], reverse=True)
+                    # 숫자만 있는 dict는 길게 보이면 지저분하니 상위 8개만 표시
+                    view = [f"- **{k}**: {int(v)}" for k, v in top[:8] if int(v) != 0]
+                    if view:
+                        st.markdown("**점수 상세**")
+                        for row in view:
+                            st.write(row)
+            except Exception:
+                pass
         
             st.text_area("요약 내용", value=notes, height=160, key=wkey("peds_notes_preview"))
 
@@ -1585,9 +1585,9 @@ with st.container():
     st.caption("최근 복용 시각을 입력하면, 한국시간(KST) 기준 다음 복용 가능 시각을 계산합니다.")
     colT1, colT2 = st.columns(2)
     with colT1:
-    last_apap = st.time_input("최근 APAP(타이레놀)", value=now_kst().time(), key=wkey("last_apap"))
+        last_apap = st.time_input("최근 APAP(타이레놀)", value=now_kst().time(), key=wkey("last_apap"))
     with colT2:
-    last_ibu = st.time_input("최근 IBU(이부프로펜)", value=now_kst().time(), key=wkey("last_ibu"))
+        last_ibu = st.time_input("최근 IBU(이부프로펜)", value=now_kst().time(), key=wkey("last_ibu"))
     ap_next = _dt.datetime.combine(now_kst().date(), last_apap).replace(tzinfo=KST) + _dt.timedelta(hours=4)
     ib_next = _dt.datetime.combine(now_kst().date(), last_ibu).replace(tzinfo=KST) + _dt.timedelta(hours=6)
     st.info(f"APAP 다음 복용 가능: **{ap_next.strftime('%H:%M')} KST** (≥4h) · IBU 다음: **{ib_next.strftime('%H:%M')} KST** (≥6h)")
@@ -1928,9 +1928,8 @@ def render_graph_panel():
     base_dir = "/mnt/data/bloodmap_graph"
     try:
         os.makedirs(base_dir, exist_ok=True)
-        except Exception:
-            pass
-
+    except Exception:
+        pass
     csv_files = []
     try:
         csv_files = [os.path.join(base_dir, f) for f in os.listdir(base_dir) if f.lower().endswith(".csv")]
