@@ -103,6 +103,32 @@ def _augment_caregiver_tips_env(tips_dict):
 # ===== Robust import guard (auto-injected) =====
 import importlib, types
 
+
+# ✅ 탭 안전 생성(없을 때만 생성) — NameError: t_labs 대비
+def _ensure_tabs():
+    import streamlit as _st  # alias to avoid shadowing
+    # 이미 탭이 전역으로 있으면 그대로 사용
+    existing = all(v in globals() for v in ("t_home","t_labs","t_peds","t_onco","t_special","t_report","t_graph"))
+    if existing:
+        return
+    tabs = _st.tabs([
+        "🏠 홈",
+        "🧪 피수치/해석",
+        "👶 소아",
+        "🧬 암/항암제",
+        "🧪 특수검사",
+        "📄 보고서",
+        "📊 기록/그래프",
+    ])
+    (globals().__setitem__("t_home",   tabs[0]),
+     globals().__setitem__("t_labs",   tabs[1]),
+     globals().__setitem__("t_peds",   tabs[2]),
+     globals().__setitem__("t_onco",   tabs[3]),
+     globals().__setitem__("t_special",tabs[4]),
+     globals().__setitem__("t_report", tabs[5]),
+     globals().__setitem__("t_graph",  tabs[6]))
+
+
 def _safe_import(modname):
     try:
         return importlib.import_module(modname)
