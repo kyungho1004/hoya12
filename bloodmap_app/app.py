@@ -1233,56 +1233,6 @@ with t_chemo:
 
 # PEDS
 with t_peds:
-
-    # ---- 해열제 스케줄 (한국시간 기준) ----
-    from datetime import datetime, timedelta, time as _time
-    try:
-        from zoneinfo import ZoneInfo  # Python 3.9+
-        _KST = ZoneInfo("Asia/Seoul")
-    except Exception:
-        from datetime import timezone
-        _KST = timezone(timedelta(hours=9))
-
-    def _kst_today_dt(_t):
-        _base = datetime.now(_KST)
-        return datetime.combine(_base.date(), _t, tzinfo=_KST)
-
-    st.subheader("해열제 스케줄 (한국시간)")
-    _default_t = datetime.now(_KST).time().replace(second=0, microsecond=0)
-    _start_t = st.time_input("시작시간 (KST)", value=_default_t, key=wkey("antipy_start_kst"))
-    _start_dt = _kst_today_dt(_start_t)
-
-    _APAP_INT = timedelta(hours=4)
-    _IBU_INT  = timedelta(hours=6)
-
-    _next_apap = _start_dt + _APAP_INT
-    _next_ibu  = _start_dt + _IBU_INT
-
-    st.caption("※ 실제 복용 간격: APAP≥4h, IBU≥6h. 아래는 '다음 가능 시각'입니다.")
-    st.markdown(f"- **APAP 가능** @ {_next_apap.strftime('%H:%M (KST)')}")
-    st.markdown(f"- **IBU 가능** @ {_next_ibu.strftime('%H:%M (KST)')}")
-
-    _timeline = []
-    _apap_ptr = _next_apap
-    _ibu_ptr  = _next_ibu
-    _end_dt   = _start_dt + timedelta(hours=12)
-    while True:
-        _nxt = _apap_ptr if _apap_ptr <= _ibu_ptr else _ibu_ptr
-        if _nxt > _end_dt:
-            break
-        if _nxt == _apap_ptr:
-            _timeline.append(("APAP", _apap_ptr))
-            _apap_ptr += _APAP_INT
-        else:
-            _timeline.append(("IBU",  _ibu_ptr))
-            _ibu_ptr  += _IBU_INT
-
-    if _timeline:
-        st.write("")
-        st.write("**앞으로 12시간 '다음 가능 시각'**")
-        for _drug, _ts in _timeline:
-            st.markdown(f"- {_drug} @ {_ts.strftime('%H:%M (KST)')}")
-
     st.subheader("소아 증상 기반 점수 + 보호자 설명 + 해열제 계산")
     c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
@@ -1525,6 +1475,35 @@ def _annotate_special_notes(lines):
             out.append(ln)
     out.append(pitfalls)
     return out
+
+
+    # ---- 해열제 스케줄 (한국시간) ----
+    from datetime import datetime, timedelta
+    try:
+        from zoneinfo import ZoneInfo  # Python 3.9+
+        _KST = ZoneInfo("Asia/Seoul")
+    except Exception:
+        from datetime import timezone
+        _KST = timezone(timedelta(hours=9))
+
+    def _kst_today_dt(_t):
+        _base = datetime.now(_KST)
+        return datetime.combine(_base.date(), _t, tzinfo=_KST)
+
+    st.subheader("해열제 스케줄 (한국시간)")
+    _default_t = datetime.now(_KST).time().replace(second=0, microsecond=0)
+    _start_t = st.time_input("시작시간 (KST)", value=_default_t, key=wkey("antipy_start_kst"))
+    _start_dt = _kst_today_dt(_start_t)
+
+    _APAP_INT = timedelta(hours=4)
+    _IBU_INT  = timedelta(hours=6)
+
+    _next_apap = _start_dt + _APAP_INT
+    _next_ibu  = _start_dt + _IBU_INT
+
+    st.caption("※ 실제 복용 간격: APAP≥4h, IBU≥6h. 아래는 '다음 가능 시각'입니다.")
+    st.markdown(f"- **APAP 가능** @ {_next_apap.strftime('%H:%M (KST)')}")
+    st.markdown(f"- **IBU 가능** @ {_next_ibu.strftime('%H:%M (KST)')}")
 
 with t_special:
     st.subheader("특수검사 해석")
