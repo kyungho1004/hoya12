@@ -154,11 +154,31 @@ from pathlib import Path
 import importlib.util
 import streamlit as st
 
-from peds_guide import (
-    render_caregiver_notes_peds,
-    render_symptom_explain_peds,
-    build_peds_notes,
-)
+
+# --- Robust import for peds_guide (works both locally and on Streamlit Cloud) ---
+try:
+    from peds_guide import (
+        render_caregiver_notes_peds,
+        render_symptom_explain_peds,
+        build_peds_notes,
+    )
+except Exception:
+    try:
+        # If running from repo root and app is under a package directory
+        from bloodmap_app.peds_guide import (
+            render_caregiver_notes_peds,
+            render_symptom_explain_peds,
+            build_peds_notes,
+        )
+    except Exception:
+        import sys, os
+        sys.path.append(os.path.dirname(__file__))
+        from peds_guide import (
+            render_caregiver_notes_peds,
+            render_symptom_explain_peds,
+            build_peds_notes,
+        )
+# -------------------------------------------------------------------------------
 
 # --- Session defaults to prevent NameError on first load ---
 if 'peds_notes' not in st.session_state:
