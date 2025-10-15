@@ -1584,14 +1584,14 @@ with t_report:
     with col_report:
         # ===== 보고서 본문 구성 =====
         st.markdown("#### 보고서 설정")
-        opt_basic = st.checkbox("기본(모두 포함)", value=True, key=wkey("rep_basic"))
-        opt_profile = st.checkbox("프로필/활력/모드", value=True, key=wkey("rep_profile"))
-        opt_sym = st.checkbox("증상 체크(홈)", value=False, key=wkey("rep_sym"))
-        opt_triage = st.checkbox("응급도 평가(기여도/가중치 포함)", value=False, key=wkey("rep_triage"))
-        opt_onco = st.checkbox("항암제 요약/부작용/병용경고", value=True, key=wkey("rep_onco"))
-        opt_labs = st.checkbox("피수치 전항목", value=True, key=wkey("rep_labs"))
-        opt_diet = st.checkbox("식이가이드", value=True, key=wkey("rep_diet"))
-        opt_special = st.checkbox("특수검사 해석(각주)", value=False, key=wkey("rep_special"))
+        opt_basic = st.checkbox("기본(모두 포함)", value=True, key=wkey("report2_basic"))
+        opt_profile = st.checkbox("프로필/활력/모드", value=True, key=wkey("report2_profile"))
+        opt_sym = st.checkbox("증상 체크(홈)", value=False, key=wkey("report2_sym"))
+        opt_triage = st.checkbox("응급도 평가(기여도/가중치 포함)", value=False, key=wkey("report2_triage"))
+        opt_onco = st.checkbox("항암제 요약/부작용/병용경고", value=True, key=wkey("report2_onco"))
+        opt_labs = st.checkbox("피수치 전항목", value=True, key=wkey("report2_labs"))
+        opt_diet = st.checkbox("식이가이드", value=True, key=wkey("report2_diet"))
+        opt_special = st.checkbox("특수검사 해석(각주)", value=False, key=wkey("report2_special"))
         
         # 수집된 상태에서 간단 MD 생성
         sym_selected = [k for k, v in (sym_map or {}).items() if v]
@@ -1652,14 +1652,14 @@ with t_report:
 
         # ===== 보고서 본문 구성 =====
         st.markdown("#### 보고서 설정")
-        opt_basic = st.checkbox("기본(모두 포함)", value=True, key=wkey("rep_basic"))
-        opt_profile = st.checkbox("프로필/활력/모드", value=True, key=wkey("rep_profile"))
-        opt_sym = st.checkbox("증상 체크(홈)", value=False, key=wkey("rep_sym"))
-        opt_triage = st.checkbox("응급도 평가(기여도/가중치 포함)", value=False, key=wkey("rep_triage"))
-        opt_onco = st.checkbox("항암제 요약/부작용/병용경고", value=True, key=wkey("rep_onco"))
-        opt_labs = st.checkbox("피수치 전항목", value=True, key=wkey("rep_labs"))
-        opt_diet = st.checkbox("식이가이드", value=True, key=wkey("rep_diet"))
-        opt_special = st.checkbox("특수검사 해석(각주)", value=False, key=wkey("rep_special"))
+        opt_basic = st.checkbox("기본(모두 포함)", value=True, key=wkey("report2_basic"))
+        opt_profile = st.checkbox("프로필/활력/모드", value=True, key=wkey("report2_profile"))
+        opt_sym = st.checkbox("증상 체크(홈)", value=False, key=wkey("report2_sym"))
+        opt_triage = st.checkbox("응급도 평가(기여도/가중치 포함)", value=False, key=wkey("report2_triage"))
+        opt_onco = st.checkbox("항암제 요약/부작용/병용경고", value=True, key=wkey("report2_onco"))
+        opt_labs = st.checkbox("피수치 전항목", value=True, key=wkey("report2_labs"))
+        opt_diet = st.checkbox("식이가이드", value=True, key=wkey("report2_diet"))
+        opt_special = st.checkbox("특수검사 해석(각주)", value=False, key=wkey("report2_special"))
 
         # 수집된 상태에서 간단 MD 생성
         sym_selected = [k for k, v in (sym_map or {}).items() if v]
