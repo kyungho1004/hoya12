@@ -1412,7 +1412,23 @@ with t_peds:
     st.caption("쿨다운: APAP ≥4h, IBU ≥6h. 중복 복용 주의.")
 
     # 3) 해열제 예시 스케줄러
+    st.markdown("#### 해열제 예시 스케줄러(교차복용)")
+    start = st.time_input("시작시간", value=_dt.datetime.now().time(), key=wkey("peds_sched_start"))
+    try:
+        base = _dt.datetime.combine(_dt.date.today(), start)
+        plan = [
+            ("APAP", base),
+            ("IBU", base + _dt.timedelta(hours=3)),
+            ("APAP", base + _dt.timedelta(hours=6)),
+            ("IBU", base + _dt.timedelta(hours=9)),
+        ]
+        st.caption("※ 실제 복용 간격: APAP≥4h, IBU≥6h. 예시는 간단 참고용.")
+        for drug, t in plan:
+            st.write(f"- {drug} @ {t.strftime('%H:%M')}")
+    except Exception:
+        st.info("시간 형식을 확인하세요.")
 
+    st.markdown("---")
     st.subheader("보호자 체크리스트")
     show_ck = st.toggle("체크리스트 열기", value=False, key=wkey("peds_ck"))
     if show_ck:
@@ -1459,6 +1475,88 @@ def _annotate_special_notes(lines):
             out.append(ln)
     out.append(pitfalls)
     return out
+
+
+    # ---- 해열제 복용 도우미 (한국시간) ----
+    from datetime import datetime, timedelta
+    try:
+        from zoneinfo import ZoneInfo
+        _KST = ZoneInfo("Asia/Seoul")
+    except Exception:
+        from datetime import timezone
+        _KST = timezone(timedelta(hours=9))
+
+    def _now_kst():
+        return datetime.now(_KST)
+
+    def _fmt(ts):
+        try:
+            return ts.strftime("%Y-%m-%d %H:%M (KST)")
+        except Exception:
+            return str(ts)
+
+    def _ensure_logs():
+        st.session_state.setdefault(wkey("apap_log"), [])
+        st.session_state.setdefault(wkey("ibu_log"), [])
+
+    _ensure_logs()
+
+    st.subheader("해열제 복용 도우미 (한국시간)")
+    st.caption("※ 간격 규칙: APAP ≥ 4시간, IBU ≥ 6시간. 아래 버튼으로 실제 복용 시간을 기록해두세요.")
+
+    # 체중 기반 용량 안내(있을 때만 노출)
+    _w = st.session_state.get(wkey("weight_kg"))
+    if _w not in (None, ""):
+        try:
+            _w = float(str(_w).replace(",", "."))
+            apap_min, apap_max = round(_w*10), round(_w*15)
+            ibu_min,  ibu_max  = round(_w*5),  round(_w*10)
+            st.markdown(f"- **권장 용량(체중 {_w:.1f}kg 기준)** · APAP: **{apap_min}–{apap_max} mg**, IBU: **{ibu_min}–{ibu_max} mg**")
+            st.caption("APAP 1일 최대 60mg/kg, IBU 1일 최대 40mg/kg. (6개월 미만 IBU 금지)")
+        except Exception:
+            pass
+
+    c1, c2 = st.columns(2)
+
+    with c1:
+        st.markdown("**APAP**")
+        apap_log = st.session_state[wkey("apap_log")]
+        last_apap = max(apap_log) if apap_log else None
+        st.write(f"최근 복용: {_fmt(last_apap) if last_apap else '없음'}")
+        if st.button("지금 복용(기록)", key=wkey("apap_take_now")):
+            apap_log.append(_now_kst())
+            st.session_state[wkey("apap_log")] = apap_log
+            st.experimental_rerun()
+        nxt_apap = (last_apap + timedelta(hours=4)) if last_apap else (_now_kst() + timedelta(hours=0))
+        st.write(f"다음 가능: {_fmt(nxt_apap)}")
+        if apap_log:
+            st.caption("오늘 기록")
+            for _ts in sorted([t for t in apap_log if t.date()==_now_kst().date()]):
+                st.markdown(f"- {_fmt(_ts)}")
+            if st.button("APAP 기록 초기화", key=wkey("apap_clear")):
+                st.session_state[wkey("apap_log")] = []
+                st.experimental_rerun()
+
+    with c2:
+        st.markdown("**IBU**")
+        ibu_log = st.session_state[wkey("ibu_log")]
+        last_ibu = max(ibu_log) if ibu_log else None
+        st.write(f"최근 복용: {_fmt(last_ibu) if last_ibu else '없음'}")
+        if st.button("지금 복용(기록)", key=wkey("ibu_take_now")):
+            ibu_log.append(_now_kst())
+            st.session_state[wkey("ibu_log")] = ibu_log
+            st.experimental_rerun()
+        nxt_ibu = (last_ibu + timedelta(hours=6)) if last_ibu else (_now_kst() + timedelta(hours=0))
+        st.write(f"다음 가능: {_fmt(nxt_ibu)}")
+        if ibu_log:
+            st.caption("오늘 기록")
+            for _ts in sorted([t for t in ibu_log if t.date()==_now_kst().date()]):
+                st.markdown(f"- {_fmt(_ts)}")
+            if st.button("IBU 기록 초기화", key=wkey("ibu_clear")):
+                st.session_state[wkey("ibu_log")] = []
+                st.experimental_rerun()
+
+    st.markdown("---")
 
 with t_special:
     st.subheader("특수검사 해석")
