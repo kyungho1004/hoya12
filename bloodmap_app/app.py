@@ -1412,21 +1412,100 @@ with t_peds:
     st.caption("쿨다운: APAP ≥4h, IBU ≥6h. 중복 복용 주의.")
 
     # 3) 해열제 예시 스케줄러
-    st.markdown("#### 해열제 예시 스케줄러(교차복용)")
-    start = st.time_input("시작시간", value=_dt.datetime.now().time(), key=wkey("peds_sched_start"))
-    try:
-        base = _dt.datetime.combine(_dt.date.today(), start)
-        plan = [
-            ("APAP", base),
-            ("IBU", base + _dt.timedelta(hours=3)),
-            ("APAP", base + _dt.timedelta(hours=6)),
-            ("IBU", base + _dt.timedelta(hours=9)),
-        ]
-        st.caption("※ 실제 복용 간격: APAP≥4h, IBU≥6h. 예시는 간단 참고용.")
-        for drug, t in plan:
-            st.write(f"- {drug} @ {t.strftime('%H:%M')}")
-    except Exception:
-        st.info("시간 형식을 확인하세요.")
+      # ---- 해열제 복용 도우미 (한국시간, 카운트다운 포함) ----
+    def render_antipy_helper_kst():
+        from datetime import datetime, timedelta
+        import streamlit as st
+        try:
+            from zoneinfo import ZoneInfo
+            KST = ZoneInfo("Asia/Seoul")
+        except Exception:
+            from datetime import timezone
+            KST = timezone(timedelta(hours=9))
+
+        def now_kst(): return datetime.now(KST)
+        def fmt(ts):   return ts.strftime("%Y-%m-%d %H:%M (KST)")
+
+        st.subheader("해열제 복용 도우미 (한국시간)")
+        st.caption("※ 간격 규칙: APAP ≥ 4시간, IBU ≥ 6시간. 버튼으로 실제 복용 시간을 기록하세요.")
+
+        st.session_state.setdefault(wkey("apap_log"), [])
+        st.session_state.setdefault(wkey("ibu_log"), [])
+        apap_log = st.session_state[wkey("apap_log")]
+        ibu_log  = st.session_state[wkey("ibu_log")]
+
+        def remain(next_dt):
+            now = now_kst()
+            if not next_dt: return ("-", "", 0.0)
+            s = int((next_dt - now).total_seconds())
+            if s <= 0: return ("지금 가능", "", 1.0)
+            h, r = divmod(s, 3600); m, _ = divmod(r, 60)
+            return (f"{h}시간 {m}분 남음" if h else f"{m}분 남음",
+                    f"~ {next_dt.strftime('%H:%M (KST)')}", None)
+
+        def prog(last, h):
+            if not last: return 0.0
+            now = now_kst()
+            return max(0.0, min(1.0, (now-last).total_seconds()/(h*3600)))
+
+        wt = st.session_state.get(wkey("weight_kg"))
+        if wt not in (None, ""):
+            try:
+                w = float(str(wt).replace(",", "."))
+                st.markdown(f"- **권장 용량(체중 {w:.1f}kg)** · APAP: **{round(w*10)}–{round(w*15)} mg**, IBU: **{round(w*5)}–{round(w*10)} mg**")
+                st.caption("APAP 1일 최대 60 mg/kg, IBU 1일 최대 40 mg/kg · ⚠️ 6개월 미만 IBU 금지")
+            except Exception:
+                pass
+
+        c1, c2 = st.columns(2)
+
+        with c1:
+            st.markdown("**APAP (아세트아미노펜)**")
+            last = max(apap_log) if apap_log else None
+            next_dt = (last + timedelta(hours=4)) if last else now_kst()
+            label, until, _ = remain(next_dt)
+            st.write(f"최근 복용: {fmt(last) if last else '없음'}")
+            st.write(f"다음 가능: {until or fmt(next_dt)}")
+            st.info(label)
+            st.progress(prog(last, 4))
+            if st.button("지금 복용(기록)", key=wkey("apap_take_now")):
+                apap_log.append(now_kst()); st.session_state[wkey("apap_log")] = apap_log; st.experimental_rerun()
+            if apap_log:
+                st.caption("오늘 기록")
+                today = now_kst().date()
+                for ts in sorted([t for t in apap_log if t.date()==today]):
+                    st.markdown(f"- {ts.strftime('%H:%M (KST)')}")
+                if st.button("APAP 기록 초기화", key=wkey("apap_clear")):
+                    st.session_state[wkey("apap_log")] = []; st.experimental_rerun()
+
+        with c2:
+            st.markdown("**IBU (이부프로펜)**")
+            last = max(ibu_log) if ibu_log else None
+            next_dt = (last + timedelta(hours=6)) if last else now_kst()
+            label, until, _ = remain(next_dt)
+            st.write(f"최근 복용: {fmt(last) if last else '없음'}")
+            st.write(f"다음 가능: {until or fmt(next_dt)}")
+            st.info(label)
+            st.progress(prog(last, 6))
+            if st.button("지금 복용(기록)", key=wkey("ibu_take_now")):
+                ibu_log.append(now_kst()); st.session_state[wkey("ibu_log")] = ibu_log; st.experimental_rerun()
+            if ibu_log:
+                st.caption("오늘 기록")
+                today = now_kst().date()
+                for ts in sorted([t for t in ibu_log if t.date()==today]):
+                    st.markdown(f"- {ts.strftime('%H:%M (KST)')}")
+                if st.button("IBU 기록 초기화", key=wkey("ibu_clear")):
+                    st.session_state[wkey("ibu_log")] = []; st.experimental_rerun()
+
+        try:
+            from streamlit_autorefresh import st_autorefresh
+            st_autorefresh(interval=60_000, limit=None, key=wkey("antipy_autorefresh"))
+            st.caption("⏱ 타이머 자동 갱신: 60초 간격")
+        except Exception:
+            if st.button("남은 시간 갱신", key=wkey("antipy_refresh")):
+                st.experimental_rerun()
+
+    render_antipy_helper_kst()
 
     st.markdown("---")
     st.subheader("보호자 체크리스트")
