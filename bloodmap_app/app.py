@@ -1687,7 +1687,7 @@ def render_graph_panel():
 
     # 1) 기록 탭: 현재 값 추가 및 비우기 + 디스크 저장
     with tab_log:
-        st.session_state.setdefaultlt("lab_history", [])
+        st.session_state.setdefault("lab_history", [])
         hist = st.session_state["lab_history"]
 
         cols_btn = st.columns([1, 1, 1])
