@@ -1472,7 +1472,6 @@ with t_peds:
                 apap_log.append(now_kst())
                   st.session_state[wkey("apap_log")] = apap_log
                   _safe_rerun()
-
             if apap_log:
                 st.caption("오늘 기록")
                 today = now_kst().date()
