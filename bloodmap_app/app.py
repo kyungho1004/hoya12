@@ -1584,14 +1584,14 @@ with t_report:
     with col_report:
         # ===== 보고서 본문 구성 =====
         st.markdown("#### 보고서 설정")
-        opt_basic = st.checkbox("기본(모두 포함)", value=True, key=wkey("report2_basic"))
-        opt_profile = st.checkbox("프로필/활력/모드", value=True, key=wkey("report2_profile"))
-        opt_sym = st.checkbox("증상 체크(홈)", value=False, key=wkey("report2_sym"))
-        opt_triage = st.checkbox("응급도 평가(기여도/가중치 포함)", value=False, key=wkey("report2_triage"))
-        opt_onco = st.checkbox("항암제 요약/부작용/병용경고", value=True, key=wkey("report2_onco"))
-        opt_labs = st.checkbox("피수치 전항목", value=True, key=wkey("report2_labs"))
-        opt_diet = st.checkbox("식이가이드", value=True, key=wkey("report2_diet"))
-        opt_special = st.checkbox("특수검사 해석(각주)", value=False, key=wkey("report2_special"))
+        opt_basic = st.checkbox("기본(모두 포함)", value=True, key=wkey("report3_basic"))
+        opt_profile = st.checkbox("프로필/활력/모드", value=True, key=wkey("report3_profile"))
+        opt_sym = st.checkbox("증상 체크(홈)", value=False, key=wkey("report3_sym"))
+        opt_triage = st.checkbox("응급도 평가(기여도/가중치 포함)", value=False, key=wkey("report3_triage"))
+        opt_onco = st.checkbox("항암제 요약/부작용/병용경고", value=True, key=wkey("report3_onco"))
+        opt_labs = st.checkbox("피수치 전항목", value=True, key=wkey("report3_labs"))
+        opt_diet = st.checkbox("식이가이드", value=True, key=wkey("report3_diet"))
+        opt_special = st.checkbox("특수검사 해석(각주)", value=False, key=wkey("report3_special"))
         
         # 수집된 상태에서 간단 MD 생성
         sym_selected = [k for k, v in (sym_map or {}).items() if v]
@@ -1650,75 +1650,9 @@ with t_report:
             except Exception:
                 st.download_button("TXT로 저장", data=md_report.encode("utf-8"), file_name="bloodmap_report.txt", mime="text/plain", key=wkey("dl_txt_report"))
 
-        # ===== 보고서 본문 구성 =====
-        st.markdown("#### 보고서 설정")
-        opt_basic = st.checkbox("기본(모두 포함)", value=True, key=wkey("report2_basic"))
-        opt_profile = st.checkbox("프로필/활력/모드", value=True, key=wkey("report2_profile"))
-        opt_sym = st.checkbox("증상 체크(홈)", value=False, key=wkey("report2_sym"))
-        opt_triage = st.checkbox("응급도 평가(기여도/가중치 포함)", value=False, key=wkey("report2_triage"))
-        opt_onco = st.checkbox("항암제 요약/부작용/병용경고", value=True, key=wkey("report2_onco"))
-        opt_labs = st.checkbox("피수치 전항목", value=True, key=wkey("report2_labs"))
-        opt_diet = st.checkbox("식이가이드", value=True, key=wkey("report2_diet"))
-        opt_special = st.checkbox("특수검사 해석(각주)", value=False, key=wkey("report2_special"))
+        
+    # (중복된 보고서 UI 제거)
 
-        # 수집된 상태에서 간단 MD 생성
-        sym_selected = [k for k, v in (sym_map or {}).items() if v]
-        sym_line = ", ".join(sym_selected) if sym_selected else "해당 없음"
-        meds_line = ", ".join(meds) if meds else "—"
-        pick = ["WBC","Hb","PLT","ANC","CRP","Na","K","Ca","Cr","BUN","AST","ALT","T.B","Alb","Glu"]
-        lab_parts = []
-        for k in pick:
-            v = (labs or {}).get(k)
-            if v not in (None, ""):
-                lab_parts.append(f"{k}:{v}")
-        labs_line = ", ".join(lab_parts) if lab_parts else "—"
-
-        header = f"# BloodMap 보고서\n\n- PIN: {key_id}\n- 진단: {group}/{disease or '—'}\n- 체온/맥박: {temp or '—'}℃ / {hr or '—'} bpm\n- 증상: {sym_line}\n- 항암제: {meds_line}\n- 나이: {age_years}세 ({'소아' if is_peds else '성인'})"
-
-        diet_lines = "\n".join([f"- {ln}" for ln in (diets or [])])
-
-        # 항암 부작용 섹션
-        try:
-            label_map_rep = {k: display_label(k, DRUG_DB) for k in (DRUG_DB or {}).keys()}
-        except Exception:
-            label_map_rep = {}
-        try:
-            ae_map_rep = _aggregate_all_aes(meds, DRUG_DB)
-        except Exception:
-            ae_map_rep = {}
-        if ae_map_rep:
-            ae_lines = []
-            for k, arr in ae_map_rep.items():
-                name = label_map_rep.get(k, str(k))
-                ae_lines.append(f"### {name}")
-                for ln in arr:
-                    ae_lines.append(f"- {ln}")
-            ae_text = "\n".join(ae_lines)
-        else:
-            ae_text = "- (DB에 상세 부작용 없음)"
-
-        md_report = header
-        if opt_labs:
-            md_report += "\n\n## 최근 주요 수치\n" + labs_line
-        if opt_diet:
-            md_report += "\n\n## 식이 가이드\n" + (diet_lines or "—")
-        if opt_onco:
-            md_report += "\n\n## 항암제 부작용(선택 약물)\n" + ae_text
-
-        st.markdown("#### 미리보기")
-        st.code(md_report.strip(), language="markdown")
-
-        col_dl1, col_dl2 = st.columns(2)
-        with col_dl1:
-            st.download_button("MD로 저장", data=md_report.encode("utf-8"), file_name="bloodmap_report.md", mime="text/markdown", key=wkey("dl_md_report"))
-        with col_dl2:
-            try:
-                pdf_bytes = export_md_to_pdf(md_report) if 'export_md_to_pdf' in globals() else md_report.encode('utf-8')
-                st.download_button("PDF로 저장", data=pdf_bytes, file_name="bloodmap_report.pdf", mime="application/pdf", key=wkey("dl_pdf_report"))
-            except Exception:
-                st.download_button("TXT로 저장", data=md_report.encode("utf-8"), file_name="bloodmap_report.txt", mime="text/plain", key=wkey("dl_txt_report"))
-    
-    # ---------- 오른쪽: 기록/그래프/내보내기 ----------
     with col_side:
         st.info("📊 기록/그래프는 상단의 **📊 기록/그래프** 탭에서 확인하세요.")
 
