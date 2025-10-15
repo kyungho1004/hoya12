@@ -921,22 +921,6 @@ def lab_validate(abbr: str, val, is_peds: bool):
         return f"⬆️ 기준치 초과({lo}~{hi})"
     return "정상범위"
 
-
-# --- Tabs: 값이 없으면 지금 즉시 생성 (NameError: t_labs 예방) ---
-import streamlit as st
-try:
-    t_home, t_labs, t_peds, t_onco, t_special, t_report, t_graph
-except NameError:
-    t_home, t_labs, t_peds, t_onco, t_special, t_report, t_graph = st.tabs([
-        "🏠 홈",
-        "🧪 피수치/해석",   # ← t_labs
-        "👶 소아",
-        "🧬 암/항암제",
-        "🧪 특수검사",
-        "📄 보고서",
-        "📊 기록/그래프",
-    ])
-# --------------------------------------------------------------
 with t_labs:
     st.subheader("피수치 입력 — 붙여넣기 지원 (견고)")
     st.caption("예: 'WBC: 4.5', 'Hb 12.3', 'PLT, 200', 'Na 140 mmol/L'…")
