@@ -1721,7 +1721,7 @@ def render_graph_panel():
 
                 # 그래프 탭 자동 전환 플래그
                 st.session_state["auto_graph"] = True
-                st.experimental_rerun()
+                st.rerun()
 
         with cols_btn[1]:
             if st.button("🗑️ 기록 비우기", key=wkey("clear_history_btn")) and hist:
