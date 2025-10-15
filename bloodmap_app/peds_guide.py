@@ -294,11 +294,41 @@ def render_symptom_explain_peds(
             "탈수 의심(눈물 감소·구강건조·무기력) 시 병원.",
         ]
         tips["장 증상(설사/구토/소변감소)"] = (t, w)
+
+    # 변비는 별도 조건으로 분리하여 선택된 경우에만 안내
+    try:
+        _stool_str = str(stool) if stool is not None else ""
+    except Exception:
+        _stool_str = ""
+    if isinstance(_stool_str, str) and ("변비" in _stool_str):
+        t_c = [
+            "수분 섭취 늘리기, 섬유질(과일·야채) 보강.",
+            "배변습관 일정화(식후 10~15분 변기 앉기), 무리한 힘주기 피하기.",
+        ]
+        w_c = [
+            "복통 심함, 항문열상 의심, 체중감소·구토 동반 시 진료.",
+        ]
+        tips["변비 관리"] = (t_c, w_c)
     for _ln in ors_guidance():
         t.append(_ln)
     tips["장 증상(설사/구토/소변감소)"] = (t, w)
 
 
+
+    # 변비는 별도 조건으로 분리하여 선택된 경우에만 안내
+    try:
+        _stool_str = str(stool) if stool is not None else ""
+    except Exception:
+        _stool_str = ""
+    if isinstance(_stool_str, str) and ("변비" in _stool_str):
+        t_c = [
+            "수분 섭취 늘리기, 섬유질(과일·야채) 보강.",
+            "배변습관 일정화(식후 10~15분 변기 앉기), 무리한 힘주기 피하기.",
+        ]
+        w_c = [
+            "복통 심함, 항문열상 의심, 체중감소·구토 동반 시 진료.",
+        ]
+        tips["변비 관리"] = (t_c, w_c)
     # --- Chest pain / Dyspnea hard flags handled elsewhere ---
 
     # ---- Render tips ----
