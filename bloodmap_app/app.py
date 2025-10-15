@@ -551,8 +551,10 @@ def build_peds_notes(
     return "\\n".join(lines)
 
 # ---------- Tabs ----------
-tab_labels = ["🏠 홈", "🧪 피수치 입력", "🧬 암 선택", "💊 항암제(진단 기반)", "👶 소아 증상", "🔬 특수검사", "📄 보고서", "📊 기록/그래프"]
+tab_labels = (["📊 기록/그래프","🏠 홈","🧪 피수치 입력","🧬 암 선택","💊 항암제(진단 기반)","👶 소아 증상","🔬 특수검사","📄 보고서"] if st.session_state.get("auto_graph") else ["🏠 홈","🧪 피수치 입력","🧬 암 선택","💊 항암제(진단 기반)","👶 소아 증상","🔬 특수검사","📄 보고서","📊 기록/그래프"])
 t_home, t_labs, t_dx, t_chemo, t_peds, t_special, t_report, t_graph = st.tabs(tab_labels)
+if st.session_state.get("auto_graph"):
+    st.session_state["auto_graph"] = False
 
 # HOME
 with t_home:
@@ -1606,6 +1608,7 @@ with t_report:
     col_report, col_side = st.columns([2, 1])
 
     
+    
     with col_report:
         # 기본 보고서 MD 생성
         sym_selected = [k for k, v in sym_map.items() if v]
@@ -1620,9 +1623,30 @@ with t_report:
         meds_line = ", ".join(meds) if meds else "—"
         header = f"# BloodMap 보고서\n\n- PIN: {key_id}\n- 진단: {group}/{disease or '—'}\n- 체온/맥박: {temp or '—'}℃ / {hr or '—'} bpm\n- 증상: {sym_line}\n- 항암제: {meds_line}\n- 나이: {age_years}세 ({'소아' if is_peds else '성인'})"
         diet_lines = "\n".join([f"- {ln}" for ln in (diets or [])])
-        md_report = header + "\n\n## 최근 주요 수치\n" + labs_line + "\n\n## 식이 가이드\n" + (diet_lines or "—")
 
+        # 항암제 부작용(선택 약물)
+        try:
+            label_map_rep = {k: display_label(k, DRUG_DB) for k in (DRUG_DB or {}).keys()}
+        except Exception:
+            label_map_rep = {}
+        try:
+            ae_map_rep = _aggregate_all_aes(meds, DRUG_DB)
+        except Exception:
+            ae_map_rep = {}
+        if ae_map_rep:
+            ae_lines = []
+            for k, arr in ae_map_rep.items():
+                name = label_map_rep.get(k, str(k))
+                ae_lines.append(f"### {name}")
+                for ln in arr:
+                    ae_lines.append(f"- {ln}")
+            ae_text = "\n".join(ae_lines)
+        else:
+            ae_text = "- (DB에 상세 부작용 없음)"
+
+        md_report = header + "\n\n## 최근 주요 수치\n" + labs_line + "\n\n## 식이 가이드\n" + (diet_lines or "—") + "\n\n## 항암제 부작용(선택 약물)\n" + ae_text
         md_report = md_report.strip()
+
         st.markdown("### 보고서 미리보기")
         st.code(md_report, language="markdown")
 
@@ -1651,6 +1675,85 @@ def render_graph_panel():
     except Exception:
         plt = None
 
+        st.markdown("### 📊 기록/그래프")
+    base_dir = "/mnt/data/bloodmap_graph"
+    try:
+        os.makedirs(base_dir, exist_ok=True)
+    except Exception:
+        pass
+
+    # 탭 구성: 기록 / 그래프 / 내보내기
+    tab_log, tab_plot, tab_export = st.tabs(["📝 기록", "📈 그래프", "⬇️ 내보내기"])
+
+    # 1) 기록 탭: 현재 값 추가 및 비우기 + 디스크 저장
+    with tab_log:
+        st.session_state.setdefaultlt("lab_history", [])
+        hist = st.session_state["lab_history"]
+
+        cols_btn = st.columns([1, 1, 1])
+        with cols_btn[0]:
+            if st.button("➕ 현재 값을 기록에 추가", key=wkey("add_history_btn")):
+                snap = {
+                    "ts": _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "temp": st.session_state.get(wkey("cur_temp")),
+                    "hr": st.session_state.get(wkey("cur_hr")),
+                    "labs": st.session_state.get("labs_dict", {}) or {},
+                }
+                hist.append(snap)
+                st.session_state["lab_history"] = hist
+
+                # 디스크에도 즉시 저장(유저 키 기반)
+                uid = st.session_state.get("key", "guest")
+                import pandas as _pd, os
+                rows = []
+                for h in hist:
+                    row = {"_ts": h.get("ts")}
+                    labs = h.get("labs", {}) or {}
+                    for k in ["WBC","Hb","PLT","ANC","CRP","Na","K","Ca","Cr","BUN","AST","ALT","T.B","Alb","Glu"]:
+                        row[k] = labs.get(k)
+                    rows.append(row)
+                try:
+                    df_save = _pd.DataFrame(rows)
+                    os.makedirs(base_dir, exist_ok=True)
+                    df_save.to_csv(os.path.join(base_dir, f"{uid}.labs.csv"), index=False)
+                except Exception:
+                    pass
+
+                # 그래프 탭 자동 전환 플래그
+                st.session_state["auto_graph"] = True
+                st.experimental_rerun()
+
+        with cols_btn[1]:
+            if st.button("🗑️ 기록 비우기", key=wkey("clear_history_btn")) and hist:
+                st.session_state["lab_history"] = []
+                uid = st.session_state.get("key", "guest")
+                import os
+                try:
+                    os.remove(os.path.join(base_dir, f"{uid}.labs.csv"))
+                except Exception:
+                    pass
+                st.warning("기록을 모두 비웠습니다.")
+        with cols_btn[2]:
+            st.caption(f"총 {len(hist)}건")
+
+        # 최근 10건 미리보기
+        try:
+            import pandas as _pd
+            if hist:
+                rows = []
+                for h in hist[-10:]:
+                    row = {"시각": h.get("ts","")}
+                    L = h.get("labs", {}) or {}
+                    for k in ["WBC","Hb","PLT","ANC","CRP"]:
+                        row[k] = L.get(k,"")
+                    rows.append(row)
+                st.dataframe(_pd.DataFrame(rows), use_container_width=True, height=200)
+            else:
+                st.info("기록이 없습니다.")
+        except Exception:
+            pass
+
+    # 2) 그래프 탭: 아래 기존 로직을 그대로 사용
     st.markdown("### 📊 기록/그래프")
     base_dir = "/mnt/data/bloodmap_graph"
     try:
