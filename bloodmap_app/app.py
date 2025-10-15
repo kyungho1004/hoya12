@@ -1605,7 +1605,37 @@ with t_report:
 
     col_report, col_side = st.columns([2, 1])
 
-    # ---------- 오른쪽: 기록/그래프/내보내기 ----------
+    
+    with col_report:
+        # 기본 보고서 MD 생성
+        sym_selected = [k for k, v in sym_map.items() if v]
+        sym_line = ", ".join(sym_selected) if sym_selected else "해당 없음"
+        pick = ["WBC","Hb","PLT","ANC","CRP","Na","K","Ca","Cr","BUN","AST","ALT","T.B","Alb","Glu"]
+        lab_parts = []
+        for k in pick:
+            v = (labs or {}).get(k)
+            if v not in (None, ""):
+                lab_parts.append(f"{k}:{v}")
+        labs_line = ", ".join(lab_parts) if lab_parts else "—"
+        meds_line = ", ".join(meds) if meds else "—"
+        header = f"# BloodMap 보고서\n\n- PIN: {key_id}\n- 진단: {group}/{disease or '—'}\n- 체온/맥박: {temp or '—'}℃ / {hr or '—'} bpm\n- 증상: {sym_line}\n- 항암제: {meds_line}\n- 나이: {age_years}세 ({'소아' if is_peds else '성인'})"
+        diet_lines = "\n".join([f"- {ln}" for ln in (diets or [])])
+        md_report = header + "\n\n## 최근 주요 수치\n" + labs_line + "\n\n## 식이 가이드\n" + (diet_lines or "—")
+
+        md_report = md_report.strip()
+        st.markdown("### 보고서 미리보기")
+        st.code(md_report, language="markdown")
+
+        col_dl1, col_dl2 = st.columns(2)
+        with col_dl1:
+            st.download_button("MD로 저장", data=md_report.encode("utf-8"), file_name="bloodmap_report.md", mime="text/markdown", key=wkey("dl_md"))
+        with col_dl2:
+            try:
+                pdf_bytes = export_md_to_pdf(md_report) if 'export_md_to_pdf' in globals() else md_report.encode('utf-8')
+                st.download_button("PDF로 저장", data=pdf_bytes, file_name="bloodmap_report.pdf", mime="application/pdf", key=wkey("dl_pdf"))
+            except Exception:
+                st.download_button("TXT로 저장", data=md_report.encode("utf-8"), file_name="bloodmap_report.txt", mime="text/plain", key=wkey("dl_txt"))
+# ---------- 오른쪽: 기록/그래프/내보내기 ----------
     with col_side:
         st.info("📊 기록/그래프는 상단의 '📊 기록/그래프' 탭에서 확인하세요.")
     # (moved) 기록/그래프 패널은 우측 "📊 기록/그래프" 탭으로 이동했습니다.
