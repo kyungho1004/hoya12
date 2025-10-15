@@ -1469,7 +1469,10 @@ with t_peds:
             st.info(label)
             st.progress(prog(last, 4))
             if st.button("지금 복용(기록)", key=wkey("apap_take_now")):
-                apap_log.append(now_kst()); st.session_state[wkey("apap_log")] = apap_log; st.experimental_rerun()
+                apap_log.append(now_kst())
+                  st.session_state[wkey("apap_log")] = apap_log
+                  _safe_rerun()
+
             if apap_log:
                 st.caption("오늘 기록")
                 today = now_kst().date()
