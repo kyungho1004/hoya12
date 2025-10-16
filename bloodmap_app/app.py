@@ -593,11 +593,6 @@ t_home, t_labs, t_dx, t_chemo, t_peds, t_special, t_report, t_graph = st.tabs(ta
 
 # HOME
 with t_home:
-    # --- 의견/피드백: 응급도 체크 바로 아래 ---
-    st.markdown("### 💬 응급도 체크에 대한 의견")
-    set_current_tab_hint("응급도 체크")
-    render_feedback_box(default_category="데이터 오류 신고", page_hint="응급도 체크")
-    render_feedback_admin(key_suffix="emergency")
     st.subheader("응급도 요약")
     labs = st.session_state.get("labs_dict", {})
     level_tmp, reasons_tmp, contrib_tmp = emergency_level(
@@ -682,6 +677,11 @@ with t_home:
         st.info("응급도: " + level + (" — " + " · ".join(reasons) if reasons else ""))
 
     st.markdown("---")
+  # --- 의견/피드백: 응급도 체크 바로 아래 ---
+    st.markdown("### 💬 응급도 체크에 대한 의견")
+    set_current_tab_hint("응급도 체크")
+    render_feedback_box(default_category="데이터 오류 신고", page_hint="응급도 체크")
+    render_feedback_admin(key_suffix="emergency")
     
 show_prof = st.toggle("전문가용: 응급도 가중치 편집", value=False, key=wkey("prof_weights"))
 if show_prof:
@@ -2116,113 +2116,115 @@ def render_graph_panel():
 with t_graph:
     render_graph_panel()
 
-# ===== [INLINE FEEDBACK – drop-in, no external file] =====
-import os, tempfile
-from datetime import datetime
-import pandas as pd
-import streamlit as st
+# ===== Inline Feedback (append-only, safe) =====
+import os as _fb_os, tempfile as _fb_tmp
+from datetime import datetime as _fb_dt
+import pandas as _fb_pd
+import streamlit as _fb_st
 try:
-    from zoneinfo import ZoneInfo
-    _KST = ZoneInfo("Asia/Seoul")
+    from zoneinfo import ZoneInfo as _fb_ZoneInfo
+    _FB_KST = _fb_ZoneInfo("Asia/Seoul")
 except Exception:
-    _KST = None
+    _FB_KST = None
 
-def _kst_now():
-    return datetime.now(_KST) if _KST else datetime.utcnow()
+def _fb_now():
+    return _fb_dt.now(_FB_KST) if _FB_KST else _fb_dt.utcnow()
 
-def _feedback_dir():
+def _fb_dir():
     for p in [
-        os.environ.get("BLOODMAP_DATA_DIR"),
-        os.path.join(os.path.expanduser("~"), ".bloodmap", "metrics"),
-        os.path.join(tempfile.gettempdir(), "bloodmap_metrics"),
+        _fb_os.environ.get("BLOODMAP_DATA_DIR"),
+        _fb_os.path.join(_fb_os.path.expanduser("~"), ".bloodmap", "metrics"),
+        "/mnt/data/metrics", "/mount/data/metrics",
+        _fb_os.path.join(_fb_tmp.gettempdir(), "bloodmap_metrics"),
     ]:
-        if not p: 
-            continue
+        if not p: continue
         try:
-            os.makedirs(p, exist_ok=True)
-            probe = os.path.join(p, ".probe")
-            with open(probe, "w", encoding="utf-8") as f:
-                f.write("ok")
-            os.remove(probe)
+            _fb_os.makedirs(p, exist_ok=True)
+            probe = _fb_os.path.join(p, ".probe")
+            with open(probe, "w", encoding="utf-8") as f: f.write("ok")
+            _fb_os.remove(probe)
             return p
         except Exception:
             continue
-    p = os.path.join(tempfile.gettempdir(), "bloodmap_metrics")
-    os.makedirs(p, exist_ok=True)
+    p = _fb_os.path.join(_fb_tmp.gettempdir(), "bloodmap_metrics")
+    _fb_os.makedirs(p, exist_ok=True)
     return p
 
-_FB_DIR = _feedback_dir()
-_FEEDBACK_CSV = os.path.join(_FB_DIR, "feedback.csv")
+_FB_DIR = _fb_dir()
+_FB_CSV = _fb_os.path.join(_FB_DIR, "feedback.csv")
 
-def _atomic_save_csv(df: pd.DataFrame, path: str) -> None:
+def _fb_atomic_save(df: _fb_pd.DataFrame, path: str) -> None:
     tmp = path + ".tmp"
     df.to_csv(tmp, index=False)
-    os.replace(tmp, path)
+    _fb_os.replace(tmp, path)
 
-def _ensure_feedback_file() -> None:
-    if not os.path.exists(_FEEDBACK_CSV):
-        cols = ["ts_kst","name_or_nick","contact","category","rating","message","page"]
-        _atomic_save_csv(pd.DataFrame(columns=cols), _FEEDBACK_CSV)
-
-def set_current_tab_hint(name: str) -> None:
-    st.session_state["_bm_current_tab"] = name
+# 없으면 만들어주는 힌트 함수 (페이지 힌트 기록용)
+if "set_current_tab_hint" not in globals():
+    def set_current_tab_hint(name: str):
+        _fb_st.session_state["_bm_current_tab"] = name
 
 def render_feedback_box(default_category: str = "일반 의견", page_hint: str = "") -> None:
-    _ensure_feedback_file()
+    if not _fb_os.path.exists(_FB_CSV):
+        cols = ["ts_kst","name_or_nick","contact","category","rating","message","page"]
+        _fb_atomic_save(_fb_pd.DataFrame(columns=cols), _FB_CSV)
     categories = ["버그 제보","개선 요청","기능 아이디어","데이터 오류 신고","일반 의견"]
     try:
         default_index = categories.index(default_category)
     except ValueError:
         default_index = categories.index("일반 의견")
-    with st.form("feedback_form_sidebar", clear_on_submit=True):
-        name = st.text_input("이름/별명 (선택)", key="fb_name")
-        contact = st.text_input("연락처(이메일/카톡ID, 선택)", key="fb_contact")
-        category = st.selectbox("분류", categories, index=default_index, key="fb_cat")
-        rating = st.slider("전반적 만족도", 1, 5, 4, key="fb_rating")
-        msg = st.text_area("메시지", placeholder="자유롭게 적어주세요.", key="fb_msg")
-        if st.form_submit_button("보내기", use_container_width=True):
+    key_suffix = (page_hint or "Sidebar").replace(" ", "_")
+    with _fb_st.form(f"feedback_form_{key_suffix}", clear_on_submit=True):
+        name = _fb_st.text_input("이름/별명 (선택)", key=f"fb_name_{key_suffix}")
+        contact = _fb_st.text_input("연락처(이메일/카톡ID, 선택)", key=f"fb_contact_{key_suffix}")
+        category = _fb_st.selectbox("분류", categories, index=default_index, key=f"fb_cat_{key_suffix}")
+        rating = _fb_st.slider("전반적 만족도", 1, 5, 4, key=f"fb_rating_{key_suffix}")
+        msg = _fb_st.text_area("메시지", placeholder="자유롭게 적어주세요.", key=f"fb_msg_{key_suffix}")
+        if _fb_st.form_submit_button("보내기", use_container_width=True):
             row = {
-                "ts_kst": _kst_now().strftime("%Y-%m-%d %H:%M:%S"),
+                "ts_kst": _fb_now().strftime("%Y-%m-%d %H:%M:%S"),
                 "name_or_nick": (name or "").strip(),
                 "contact": (contact or "").strip(),
                 "category": category,
                 "rating": int(rating),
                 "message": (msg or "").strip(),
-                "page": (page_hint or st.session_state.get("_bm_current_tab","")).strip(),
+                "page": (page_hint or _fb_st.session_state.get("_bm_current_tab","")).strip(),
             }
             try:
-                df = pd.read_csv(_FEEDBACK_CSV)
+                df = _fb_pd.read_csv(_FB_CSV)
             except Exception:
-                df = pd.DataFrame(columns=list(row.keys()))
-            df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
-            _atomic_save_csv(df, _FEEDBACK_CSV)
-            st.success("고맙습니다! 피드백이 저장되었습니다. (KST 기준)")
+                df = _fb_pd.DataFrame(columns=list(row.keys()))
+            df = _fb_pd.concat([df, _fb_pd.DataFrame([row])], ignore_index=True)
+            _fb_atomic_save(df, _FB_CSV)
+            _fb_st.success("고맙습니다! 피드백이 저장되었습니다. (KST 기준)")
 
-def render_feedback_admin() -> None:
-    pwd = st.text_input("관리자 비밀번호", type="password", key="fb_admin_pwd")
-    admin_pw = st.secrets.get("ADMIN_PASS", "9047")
+def render_feedback_admin(key_suffix: str = "admin") -> None:
+    pwd = _fb_st.text_input("관리자 비밀번호", type="password", key=f"fb_admin_pwd_{key_suffix}")
+    admin_pw = _fb_st.secrets.get("ADMIN_PASS", "")
     if admin_pw and pwd == admin_pw:
-        if os.path.exists(_FEEDBACK_CSV):
+        if _fb_os.path.exists(_FB_CSV):
             try:
-                df = pd.read_csv(_FEEDBACK_CSV)
+                df = _fb_pd.read_csv(_FB_CSV)
             except Exception:
-                df = pd.DataFrame(columns=["ts_kst","name_or_nick","contact","category","rating","message","page"])
-            st.dataframe(df, use_container_width=True)
-            st.download_button("CSV 다운로드", data=df.to_csv(index=False), file_name="feedback.csv", mime="text/csv", use_container_width=True)
+                df = _fb_pd.DataFrame(columns=["ts_kst","name_or_nick","contact","category","rating","message","page"])
+            _fb_st.dataframe(df, use_container_width=True)
+            _fb_st.download_button("CSV 다운로드", data=df.to_csv(index=False), file_name="feedback.csv", mime="text/csv", use_container_width=True)
         else:
-            st.info("아직 피드백이 없습니다.")
+            _fb_st.info("아직 피드백이 없습니다.")
     else:
-        st.caption("올바른 비밀번호를 입력하면 목록이 표시됩니다." if admin_pw else "ADMIN_PASS가 설정되지 않았습니다.")
+        _fb_st.caption("올바른 비밀번호를 입력하면 목록이 표시됩니다." if admin_pw else "ADMIN_PASS가 설정되지 않았습니다.")
 
-def attach_feedback_sidebar(page_hint: str = "Sidebar") -> None:
-    with st.sidebar:
-        st.markdown("### 💬 의견 보내기")
-        set_current_tab_hint(page_hint or "Sidebar")
-        render_feedback_box(default_category="일반 의견", page_hint=page_hint or "Sidebar")
-        st.markdown("---")
-        render_feedback_admin()
+def attach_feedback_sidebar(page_hint: str = "Home") -> None:
+    with _fb_st.sidebar:
+        _fb_st.markdown("### 💬 의견 보내기")
+        set_current_tab_hint("Sidebar")
+        render_feedback_box(default_category="일반 의견", page_hint="Sidebar")
+        _fb_st.markdown("---")
+        render_feedback_admin(key_suffix="sidebar")
 
-# ← 이 줄은 파일 ‘맨 아래’에 있어야 합니다.
-attach_feedback_sidebar(page_hint="Home")
-# ===== [/INLINE FEEDBACK] =====
+# 사이드바 피드백 고정 표시 (중복 키 안전)
+try:
+    attach_feedback_sidebar(page_hint="Home")
+except Exception:
+    pass
+# ===== End Inline Feedback =====
 
