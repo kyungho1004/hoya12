@@ -30,8 +30,7 @@ def today_str() -> str:
     return kst_now().strftime("%Y-%m-%d")
 
 # =============================
-# Resolve writable metrics dir (handles PermissionError on Streamlit Cloud)
-# Preference order: ENV -> /mnt/data -> /mount/data -> ~/.bloodmap -> /tmp/bloodmap_metrics
+# Resolve writable metrics dir
 # =============================
 def _resolve_metrics_dir() -> str:
     candidates = [
@@ -46,7 +45,6 @@ def _resolve_metrics_dir() -> str:
             continue
         try:
             os.makedirs(cand, exist_ok=True)
-            # write probe
             probe = os.path.join(cand, ".probe")
             with open(probe, "w", encoding="utf-8") as f:
                 f.write("ok")
@@ -54,7 +52,6 @@ def _resolve_metrics_dir() -> str:
             return cand
         except Exception:
             continue
-    # last resort: /tmp
     fallback = os.path.join(tempfile.gettempdir(), "bloodmap_metrics")
     os.makedirs(fallback, exist_ok=True)
     return fallback
@@ -91,7 +88,7 @@ drug_db = try_import("drug_db")
 lab_diet = try_import("lab_diet")
 
 # =============================
-# Usage & Feedback (with atomic writes)
+# Usage & Feedback (atomic writes)
 # =============================
 def _atomic_save_csv(df: pd.DataFrame, path: str) -> None:
     tmp = path + ".tmp"
@@ -108,6 +105,7 @@ def _ensure_feedback_file() -> None:
         _atomic_save_csv(pd.DataFrame(columns=cols), _FEEDBACK_CSV)
 
 def increment_daily_session_once(session_key: str = "_bm_session_counted") -> None:
+    global _METRICS_DIR, _USAGE_CSV, _FEEDBACK_CSV
     if st.session_state.get(session_key):
         return
     st.session_state[session_key] = True
@@ -125,8 +123,6 @@ def increment_daily_session_once(session_key: str = "_bm_session_counted") -> No
         _atomic_save_csv(df, _USAGE_CSV)
     except PermissionError:
         st.warning("저장소 권한 문제로 방문 지표를 임시 경로로 전환합니다.")
-        # Switch to a new writable dir and retry once
-        global _METRICS_DIR, _USAGE_CSV, _FEEDBACK_CSV
         _METRICS_DIR = _resolve_metrics_dir()
         _USAGE_CSV = os.path.join(_METRICS_DIR, "usage_stats.csv")
         _FEEDBACK_CSV = os.path.join(_METRICS_DIR, "feedback.csv")
@@ -155,7 +151,6 @@ def get_usage_metrics():
         last7 = df.tail(7).copy() if not df.empty else pd.DataFrame(columns=["date", "daily_opens"])
         return daily, total, last7
     except PermissionError:
-        # read fallback
         return 0, 0, pd.DataFrame(columns=["date", "daily_opens"])
 
 def render_usage_panel() -> None:
