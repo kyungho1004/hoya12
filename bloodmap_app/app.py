@@ -1,4 +1,3 @@
-from feedback_inline_patch import attach_feedback_sidebar
 # app.py
 
 # ===== Robust import guard (auto-injected) =====
@@ -2112,4 +2111,113 @@ def render_graph_panel():
 with t_graph:
     render_graph_panel()
 
+# ===== [INLINE FEEDBACK – drop-in, no external file] =====
+import os, tempfile
+from datetime import datetime
+import pandas as pd
+import streamlit as st
+try:
+    from zoneinfo import ZoneInfo
+    _KST = ZoneInfo("Asia/Seoul")
+except Exception:
+    _KST = None
+
+def _kst_now():
+    return datetime.now(_KST) if _KST else datetime.utcnow()
+
+def _feedback_dir():
+    for p in [
+        os.environ.get("BLOODMAP_DATA_DIR"),
+        os.path.join(os.path.expanduser("~"), ".bloodmap", "metrics"),
+        os.path.join(tempfile.gettempdir(), "bloodmap_metrics"),
+    ]:
+        if not p: 
+            continue
+        try:
+            os.makedirs(p, exist_ok=True)
+            probe = os.path.join(p, ".probe")
+            with open(probe, "w", encoding="utf-8") as f:
+                f.write("ok")
+            os.remove(probe)
+            return p
+        except Exception:
+            continue
+    p = os.path.join(tempfile.gettempdir(), "bloodmap_metrics")
+    os.makedirs(p, exist_ok=True)
+    return p
+
+_FB_DIR = _feedback_dir()
+_FEEDBACK_CSV = os.path.join(_FB_DIR, "feedback.csv")
+
+def _atomic_save_csv(df: pd.DataFrame, path: str) -> None:
+    tmp = path + ".tmp"
+    df.to_csv(tmp, index=False)
+    os.replace(tmp, path)
+
+def _ensure_feedback_file() -> None:
+    if not os.path.exists(_FEEDBACK_CSV):
+        cols = ["ts_kst","name_or_nick","contact","category","rating","message","page"]
+        _atomic_save_csv(pd.DataFrame(columns=cols), _FEEDBACK_CSV)
+
+def set_current_tab_hint(name: str) -> None:
+    st.session_state["_bm_current_tab"] = name
+
+def render_feedback_box(default_category: str = "일반 의견", page_hint: str = "") -> None:
+    _ensure_feedback_file()
+    categories = ["버그 제보","개선 요청","기능 아이디어","데이터 오류 신고","일반 의견"]
+    try:
+        default_index = categories.index(default_category)
+    except ValueError:
+        default_index = categories.index("일반 의견")
+    with st.form("feedback_form_sidebar", clear_on_submit=True):
+        name = st.text_input("이름/별명 (선택)", key="fb_name")
+        contact = st.text_input("연락처(이메일/카톡ID, 선택)", key="fb_contact")
+        category = st.selectbox("분류", categories, index=default_index, key="fb_cat")
+        rating = st.slider("전반적 만족도", 1, 5, 4, key="fb_rating")
+        msg = st.text_area("메시지", placeholder="자유롭게 적어주세요.", key="fb_msg")
+        if st.form_submit_button("보내기", use_container_width=True):
+            row = {
+                "ts_kst": _kst_now().strftime("%Y-%m-%d %H:%M:%S"),
+                "name_or_nick": (name or "").strip(),
+                "contact": (contact or "").strip(),
+                "category": category,
+                "rating": int(rating),
+                "message": (msg or "").strip(),
+                "page": (page_hint or st.session_state.get("_bm_current_tab","")).strip(),
+            }
+            try:
+                df = pd.read_csv(_FEEDBACK_CSV)
+            except Exception:
+                df = pd.DataFrame(columns=list(row.keys()))
+            df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
+            _atomic_save_csv(df, _FEEDBACK_CSV)
+            st.success("고맙습니다! 피드백이 저장되었습니다. (KST 기준)")
+
+def render_feedback_admin() -> None:
+    pwd = st.text_input("관리자 비밀번호", type="password", key="fb_admin_pwd")
+    admin_pw = st.secrets.get("ADMIN_PASS", "")
+    if admin_pw and pwd == admin_pw:
+        if os.path.exists(_FEEDBACK_CSV):
+            try:
+                df = pd.read_csv(_FEEDBACK_CSV)
+            except Exception:
+                df = pd.DataFrame(columns=["ts_kst","name_or_nick","contact","category","rating","message","page"])
+            st.dataframe(df, use_container_width=True)
+            st.download_button("CSV 다운로드", data=df.to_csv(index=False), file_name="feedback.csv", mime="text/csv", use_container_width=True)
+        else:
+            st.info("아직 피드백이 없습니다.")
+    else:
+        st.caption("올바른 비밀번호를 입력하면 목록이 표시됩니다." if admin_pw else "ADMIN_PASS가 설정되지 않았습니다.")
+
+def attach_feedback_sidebar(page_hint: str = "Sidebar") -> None:
+    with st.sidebar:
+        st.markdown("### 💬 의견 보내기")
+        set_current_tab_hint(page_hint or "Sidebar")
+        render_feedback_box(default_category="일반 의견", page_hint=page_hint or "Sidebar")
+        st.markdown("---")
+        render_feedback_admin()
+
+# ← 이 줄은 파일 ‘맨 아래’에 있어야 합니다.
 attach_feedback_sidebar(page_hint="Home")
+# ===== [/INLINE FEEDBACK] =====
+
