@@ -1,3 +1,4 @@
+from feedback_inline_patch import attach_feedback_sidebar
 # app.py
 
 # ===== Robust import guard (auto-injected) =====
@@ -2110,3 +2111,5 @@ def render_graph_panel():
 
 with t_graph:
     render_graph_panel()
+
+attach_feedback_sidebar(page_hint="Home")
