@@ -621,6 +621,10 @@ with t_home:
         def _save_fb():
             st.session_state[fb_store_key] = st.session_state.get(fb_widget_key, "")
             st.success("피드백이 저장되었습니다(세션 기준).")
+            try:
+                st.toast("피드백 감사합니다! 반영됐어요 🙌", icon="👍")
+            except Exception:
+                st.success("피드백 감사합니다! 반영됐어요 🙌")
 
         def _clear_fb():
             st.session_state[fb_store_key] = ""
@@ -728,8 +732,16 @@ with t_home:
                 st.session_state[_log_key] = st.session_state[_log_key][-1000:]
             if _FB_WRITE_OK:
                 st.success("피드백 점수가 저장되었습니다. 고맙습니다!")
+                try:
+                    st.toast("피드백 감사합니다! 반영됐어요 🙌", icon="⭐")
+                except Exception:
+                    st.success("피드백 감사합니다! 반영됐어요 🙌")
             else:
                 st.info("쓰기 권한이 없어 점수는 세션에만 반영됩니다. (_BASE=/mnt/data)")
+                try:
+                    st.toast("피드백 감사합니다! 반영됐어요 🙌", icon="⭐")
+                except Exception:
+                    st.success("피드백 감사합니다! 반영됐어요 🙌")
 
         # 표시: 현재 평균/표 수
         try:
