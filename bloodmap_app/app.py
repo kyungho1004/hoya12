@@ -655,7 +655,8 @@ with t_home:
 
         
         # 저장소: /mnt/data/feedback/home_feedback_metrics.json
-        import json, datetime, os
+        import json, os
+        import datetime as _dt
         from pathlib import Path
         _BASE = Path("/mnt/data")
         _FB_DIR = _BASE / "feedback"
@@ -691,7 +692,7 @@ with t_home:
             data["counts"][str(_score)] = int(data["counts"].get(str(_score), 0)) + 1
             # log detail (anonymized)
             entry = {
-                "ts_kst": datetime.datetime.utcnow().isoformat() + "Z",
+                "ts_kst": _dt.datetime.now(_dt.timezone.utc).isoformat(),
                 "score": int(_score),
                 "tags": list(_tags),
                 "text_len": len(st.session_state.get(fb_widget_key, "")),
