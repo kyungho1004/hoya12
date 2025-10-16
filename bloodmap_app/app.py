@@ -701,12 +701,20 @@ with t_home:
             # keep last 1000 entries
             if len(data["ratings"]) > 1000:
                 data["ratings"] = data["ratings"][-1000:]
+            # 세션 캐시 키 로컬 보장
+            _counts_key = wkey("home_fb_counts_cache")
+            _log_key = wkey("home_fb_log_cache")
+            if _counts_key not in st.session_state:
+                st.session_state[_counts_key] = {"1":0,"2":0,"3":0,"4":0,"5":0}
+            if _log_key not in st.session_state:
+                st.session_state[_log_key] = []
+    
             _save_fb_store(data)
             # 세션 캐시 갱신
-            st.session_state[_FB_SS_COUNTS_KEY][str(_score)] = int(st.session_state[_FB_SS_COUNTS_KEY].get(str(_score),0)) + 1
-            st.session_state[_FB_SS_LOG_KEY].append(entry)
-            if len(st.session_state[_FB_SS_LOG_KEY])>1000:
-                st.session_state[_FB_SS_LOG_KEY] = st.session_state[_FB_SS_LOG_KEY][-1000:]
+            st.session_state[_counts_key][str(_score)] = int(st.session_state[_FB_SS_COUNTS_KEY].get(str(_score),0)) + 1
+            st.session_state[_log_key].append(entry)
+            if len(st.session_state[_log_key])>1000:
+                st.session_state[_log_key] = st.session_state[_log_key][-1000:]
             if _FB_WRITE_OK:
                 st.success("피드백 점수가 저장되었습니다. 고맙습니다!")
             else:
@@ -715,11 +723,19 @@ with t_home:
         # 표시: 현재 평균/표 수
         try:
             _data_preview = _load_fb_store()
+
+            # 세션 캐시 키 보장
+            _counts_key = wkey("home_fb_counts_cache")
+            _log_key = wkey("home_fb_log_cache")
+            if _counts_key not in st.session_state:
+                st.session_state[_counts_key] = {"1":0,"2":0,"3":0,"4":0,"5":0}
+            if _log_key not in st.session_state:
+                st.session_state[_log_key] = []
             # 쓰기 불가면 세션 캐시 사용
             if not _FB_WRITE_OK:
                 _data_preview = {
-                    "counts": st.session_state.get(_FB_SS_COUNTS_KEY, {"1":0,"2":0,"3":0,"4":0,"5":0}),
-                    "ratings": st.session_state.get(_FB_SS_LOG_KEY, []),
+                    "counts": st.session_state.get(_counts_key, {"1":0,"2":0,"3":0,"4":0,"5":0}),
+                    "ratings": st.session_state.get(_log_key, []),
                 }
             _total = int(sum(int(v) for v in _data_preview["counts"].values()))
             _avg = 0.0
