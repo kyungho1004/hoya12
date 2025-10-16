@@ -1,3 +1,12 @@
+
+# --- compatibility shim for set_current_tab_hint (no-op if missing) ---
+try:
+    set_current_tab_hint
+except NameError:
+    def set_current_tab_hint(name: str):
+        import streamlit as st
+        st.session_state["_bm_current_tab"] = name
+# ----------------------------------------------------------------------
 # app.py
 
 # ===== Robust import guard (auto-injected) =====
@@ -174,7 +183,7 @@ st.markdown(
 
 # --- 의견/피드백: 응급도 체크 바로 아래 ---
 st.markdown("### 💬 응급도 체크에 대한 의견")
-set_current_tab_hint("응급도 체크")
+set_current_tab_hint("응급도 체크")  # safe: defined above
 render_feedback_box(default_category="데이터 오류 신고", page_hint="응급도 체크")
 render_feedback_admin()
 
