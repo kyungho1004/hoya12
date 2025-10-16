@@ -2,12 +2,6 @@
 
 # ===== Robust import guard (auto-injected) =====
 import importlib, types
-from usage_feedback_patch import (
-    render_usage_panel,        # 지표(오늘/누적/7일) — 필요 없으면 안 써도 됨
-    render_feedback_box,       # 피드백 폼
-    render_feedback_admin,     # 관리자 보기
-    set_current_tab_hint,      # 탭명 힌트(선택)
-)
 
 def _safe_import(modname):
     try:
@@ -652,11 +646,7 @@ with t_home:
         thunderclap=thunderclap,
         visual_change=visual_change,
     )
-   with tabs[0]:
-    set_current_tab_hint("Home")          # 선택이지만 넣으면 CSV에 페이지명 기록됨
-    st.markdown("### 의견 보내기")
-    render_feedback_box(default_category="개선 요청", page_hint="Home")
-    render_feedback_admin()               # 관리자 보기(Secrets의 ADMIN_PASS 필요)
+
     alerts = []
     a = _try_float((labs or {}).get("ANC"))
     p = _try_float((labs or {}).get("PLT"))
