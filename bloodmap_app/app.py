@@ -2195,7 +2195,7 @@ def render_feedback_box(default_category: str = "일반 의견", page_hint: str 
 
 def render_feedback_admin() -> None:
     pwd = st.text_input("관리자 비밀번호", type="password", key="fb_admin_pwd")
-    admin_pw = st.secrets.get("ADMIN_PASS", "")
+    admin_pw = st.secrets.get("ADMIN_PASS", "9047")
     if admin_pw and pwd == admin_pw:
         if os.path.exists(_FEEDBACK_CSV):
             try:
