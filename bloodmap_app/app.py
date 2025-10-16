@@ -621,7 +621,10 @@ with t_home:
         def _save_fb():
             st.session_state[fb_store_key] = st.session_state.get(fb_widget_key, "")
             st.success("피드백이 저장되었습니다(세션 기준).")
-
+            try:
+           st.toast("피드백 감사합니다! 반영됐어요 🙌", icon="👍")  # Streamlit 1.31+ 권장
+        except Exception:
+           st.success("피드백 감사합니다! 반영됐어요 🙌")
         def _clear_fb():
             st.session_state[fb_store_key] = ""
             st.session_state[fb_widget_key] = ""
