@@ -172,7 +172,7 @@ st.markdown(
 > and resting peacefully in a world free from all hardships."""
 )
 st.markdown("---")
-render_deploy_banner("https://cafe.naver.com/bloodmap", "제작: Hoya/GPT · 자문: Hoya/GPT")
+render_deploy_banner("https://bloodmap.streamlit.app/", "제작: Hoya/GPT · 자문: Hoya/GPT")
 st.caption(f"모듈 경로 — special_tests: {SPECIAL_PATH or '(not found)'} | onco_map: {ONCO_PATH or '(not found)'} | drug_db: {DRUGDB_PATH or '(not found)'}")
 
 # ---------- Helpers ----------
@@ -656,21 +656,32 @@ with t_home:
         
         # 저장소: /mnt/data/feedback/home_feedback_metrics.json
         import json, os
-        import datetime as _dt
         from pathlib import Path
-        _BASE = Path("/mnt/data")
+        # 동적 저장소 선택: /mnt/data → /mount/data → /tmp (순서대로 시도)
+        _CANDIDATES = ["/mnt/data", "/mount/data", "/tmp"]
+        _BASE = None
+        for _p in _CANDIDATES:
+            try:
+                p = Path(_p)
+                if p.exists() and os.access(_p, os.W_OK):
+                    _BASE = p
+                    break
+            except Exception:
+                continue
+        if _BASE is None:
+            p = Path("/tmp")
+            try:
+                p.mkdir(exist_ok=True)
+            except Exception:
+                pass
+            _BASE = p
         _FB_DIR = _BASE / "feedback"
-        _FB_FILE = _FB_DIR / "home_feedback_metrics.json"
-
-        # 권한 확인 및 디렉토리 생성 (가드)
-        _FB_WRITE_OK = False
         try:
-            if _BASE.exists() and os.access(_BASE, os.W_OK):
-                _FB_DIR.mkdir(exist_ok=True)
-                _FB_WRITE_OK = True
+            _FB_DIR.mkdir(exist_ok=True)
         except Exception:
-            _FB_WRITE_OK = False  # 쓰기 불가 환경
-
+            pass
+        _FB_FILE = _FB_DIR / "home_feedback_metrics.json"
+        _FB_WRITE_OK = bool(_BASE and os.access(str(_BASE), os.W_OK))
         def _load_fb_store():
             if not _FB_WRITE_OK or not _FB_FILE.exists():
                 return {"ratings": [], "counts": {"1":0,"2":0,"3":0,"4":0,"5":0}}
@@ -1629,7 +1640,7 @@ with t_peds:
     apap_min_h = 4
     ibu_min_h = 6
     start = st.time_input("시작시간(한국시간)", value=_dt.datetime.now(tz=KST_TZ).time(), key=wkey("peds_sched_start_kst"))
-    horizon_h = st.slider("표시 시간(시간 단위)", min_value=2, max_value=24, value=12, step=1, key=wkey("peds_sched_horizon"))
+    horizon_h = st.slider("표시 시간(시간 단위)", min_value=6, max_value=24, value=12, step=1, key=wkey("peds_sched_horizon"))
     try:
         base = _dt.datetime.combine(_dt.datetime.now(tz=KST_TZ).date(), start)
         plan = []
