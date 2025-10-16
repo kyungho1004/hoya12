@@ -1629,7 +1629,7 @@ with t_peds:
     apap_min_h = 4
     ibu_min_h = 6
     start = st.time_input("시작시간(한국시간)", value=_dt.datetime.now(tz=KST_TZ).time(), key=wkey("peds_sched_start_kst"))
-    horizon_h = st.slider("표시 시간(시간 단위)", min_value=6, max_value=24, value=12, step=1, key=wkey("peds_sched_horizon"))
+    horizon_h = st.slider("표시 시간(시간 단위)", min_value=2, max_value=24, value=12, step=1, key=wkey("peds_sched_horizon"))
     try:
         base = _dt.datetime.combine(_dt.datetime.now(tz=KST_TZ).date(), start)
         plan = []
