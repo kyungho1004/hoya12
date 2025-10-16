@@ -711,7 +711,7 @@ with t_home:
     
             _save_fb_store(data)
             # 세션 캐시 갱신
-            st.session_state[_counts_key][str(_score)] = int(st.session_state[_FB_SS_COUNTS_KEY].get(str(_score),0)) + 1
+            st.session_state[_counts_key][str(_score)] = int(st.session_state[_counts_key].get(str(_score),0)) + 1
             st.session_state[_log_key].append(entry)
             if len(st.session_state[_log_key])>1000:
                 st.session_state[_log_key] = st.session_state[_log_key][-1000:]
