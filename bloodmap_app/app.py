@@ -2214,6 +2214,11 @@ def attach_feedback_sidebar(page_hint: str = "Sidebar") -> None:
         st.markdown("### 💬 의견 보내기")
         set_current_tab_hint(page_hint or "Sidebar")
         render_feedback_box(default_category="일반 의견", page_hint=page_hint or "Sidebar")
+        st.markdown("### 💬 응급도 체크에 대한 의견")
+        set_current_tab_hint("응급도 체크")
+        render_feedback_box(default_category="데이터 오류 신고", page_hint="응급도 체크")
+        render_feedback_admin()
+
         st.markdown("---")
         render_feedback_admin()
 
