@@ -606,23 +606,6 @@ with t_home:
         st.info("현재 상태: " + level_tmp)
 
     st.markdown("---")
-
-    # ======= 홈: 피드백 (응급도 체크 하단) =======
-    with st.expander("💬 피드백(앱 개선 제안/오류 신고)", expanded=False):
-        st.caption("※ 별명#PIN 기준으로 세션에 임시 저장됩니다. 보고서에는 포함되지 않습니다.")
-        fb_key = wkey("home_feedback")
-        fb_txt = st.text_area("피드백을 남겨주세요", value=st.session_state.get(fb_key, ""), height=120, key=fb_key)
-        col_fb1, col_fb2 = st.columns([1,1])
-        with col_fb1:
-            if st.button("피드백 저장(세션)", key=wkey("btn_fb_save")):
-                st.session_state[fb_key] = fb_txt
-                st.success("피드백이 저장되었습니다(세션 기준).")
-        with col_fb2:
-            if st.button("피드백 지우기", key=wkey("btn_fb_clear")):
-                st.session_state[fb_key] = ""
-                st.experimental_rerun()
-    # ======= 홈: 피드백 끝 =======
-
     st.subheader("응급도 체크(증상 기반)")
     c1, c2, c3, c4, c5, c6 = st.columns(6)
     with c1:
@@ -2237,3 +2220,4 @@ def attach_feedback_sidebar(page_hint: str = "Sidebar") -> None:
 # ← 이 줄은 파일 ‘맨 아래’에 있어야 합니다.
 attach_feedback_sidebar(page_hint="Home")
 # ===== [/INLINE FEEDBACK] =====
+
