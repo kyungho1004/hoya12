@@ -621,7 +621,7 @@ with t_home:
         def _save_fb():
             st.session_state[fb_store_key] = st.session_state.get(fb_widget_key, "")
             st.success("피드백이 저장되었습니다(세션 기준).")
-            try:
+
         def _clear_fb():
             st.session_state[fb_store_key] = ""
             st.session_state[fb_widget_key] = ""
