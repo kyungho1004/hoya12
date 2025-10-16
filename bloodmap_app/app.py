@@ -43,6 +43,12 @@ if "wkey" not in globals():
 
 # ===== End import guard =====
 import datetime as _dt
+from zoneinfo import ZoneInfo as _ZoneInfo
+KST = _ZoneInfo("Asia/Seoul")
+
+def now_kst():
+    return _dt.datetime.now(tz=KST)
+
 import os, sys, re, io, csv
 from pathlib import Path
 import importlib.util
@@ -310,14 +316,37 @@ ONCO = build_onco_map() or {}
 # ---------- Sidebar ----------
 with st.sidebar:
     st.header("프로필")
-    raw_key = st.text_input("별명#PIN", value=st.session_state.get("key", "guest#PIN"), key="user_key_raw")
-    unique_key, was_modified, msg = ensure_unique_pin(raw_key, auto_suffix=True)
-    st.session_state["key"] = unique_key
-    if was_modified:
-        st.warning(msg + f" → 현재 키: {unique_key}")
+    raw_key = st.text_input("별명#PIN (또는 별명만)", value=st.session_state.get("key", "guest#PIN"), key="user_key_raw")
+    pin_field = st.text_input("PIN 숫자 (별명만 입력한 경우)", value=st.session_state.get("_pin_raw",""), key="_pin_raw", type="password", help="숫자 4~8자리")
+    # PIN 추출
+    if "#" in raw_key:
+        nickname, pin = raw_key.split("#", 1)[0].strip(), raw_key.split("#", 1)[1].strip()
     else:
-        st.caption("PIN 확인됨")
-
+        nickname, pin = raw_key.strip(), pin_field.strip()
+    def _is_valid_pin(p):
+        return p.isdigit() and 4 <= len(p) <= 8
+    unique_key, was_modified, msg = ensure_unique_pin(f"{nickname}#{pin if pin else '0000'}", auto_suffix=True)
+    st.session_state["key"] = unique_key
+    pin_timeout_min = st.number_input("PIN 재인증 타임아웃(분)", min_value=5, max_value=240, value=int(st.session_state.get("_pin_to",30) or 30), key="_pin_to")
+    last_auth = st.session_state.get("_pin_last_auth_ts")
+    need_auth = True
+    if _is_valid_pin(pin):
+        if last_auth:
+            elapsed = (now_kst() - last_auth).total_seconds() / 60.0
+            need_auth = elapsed > float(pin_timeout_min)
+        else:
+            need_auth = True
+    else:
+        need_auth = True
+    if _is_valid_pin(pin):
+        if st.button("PIN 인증", key="btn_pin_auth") or (not need_auth and st.session_state.get("_pin_ok", False)):
+            st.session_state["_pin_last_auth_ts"] = now_kst()
+            st.session_state["_pin_ok"] = True
+            need_auth = False
+    if need_auth:
+        st.warning("PIN 재인증 필요(기능 사용은 가능). 숫자 4~8자리 입력 후 [PIN 인증]을 눌러 주세요.")
+    else:
+        st.caption(f"PIN 인증됨 · 유효 시간 남음 ≈ {int(pin_timeout_min)}분")
     st.subheader("활력징후")
     temp = st.text_input("현재 체온(℃)", value=st.session_state.get(wkey("cur_temp"), ""), key=wkey("cur_temp"), placeholder="36.8")
     hr = st.text_input("심박수(bpm)", value=st.session_state.get(wkey("cur_hr"), ""), key=wkey("cur_hr"), placeholder="0")
@@ -369,6 +398,21 @@ def render_caregiver_notes_peds(
         rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, max_temp=max_temp,
         sputum=sputum, wheeze=wheeze
     )
+    
+    # 아데노바이러스 의심 안내
+    try:
+        _mt = float(max_temp) if max_temp is not None else None
+    except Exception:
+        _mt = None
+    if (_mt is not None and _mt >= 39.0) and (eye in ["노랑-농성","양쪽"]) and (cough in ["보통","심함"] or stool != "없음"):
+        bullet(
+            "🧬 아데노바이러스 의심",
+            """
+- 특징: **높은 열**, **양측 결막충혈/농성 눈곱**, **인후통/기침** 또는 **설사**
+- 가정관리: 수분 충분히, 해열 간격 준수(APAP ≥4h, IBU ≥6h), 눈 분비물 위생 관리
+- 진료 기준: **고열 3일↑**, **호흡곤란/무기력**, **탈수(소변감소/입마름)**, **심한 결막통증/시야 이상**
+            """,
+        )
     st.subheader("보호자 설명 (증상별)")
 
     def bullet(title, body):
@@ -1337,7 +1381,19 @@ with t_peds:
         "수족구 의심": 0,
         "하기도/천명 주의": 0,
         "가래 동반 호흡기": 0,
+       "아데노바이러스 의심": 0,
     }
+
+    
+    # 아데노바이러스 의심 가중 (고열 + 결막 + 호흡기/장 증상)
+    try:
+        _mt = float(max_temp) if max_temp is not None else None
+    except Exception:
+        _mt = None
+    if (_mt is not None and _mt >= 39.0) and (eye in ["노랑-농성","양쪽"]) and (cough in ["보통","심함"] or stool in ["1~2회","3~4회","5~6회","7회 이상"]):
+        score["아데노바이러스 의심"] += 60
+    elif (eye in ["노랑-농성","양쪽"]) and (cough in ["보통","심함"] or stool in ["1~2회","3~4회","5~6회","7회 이상"]):
+        score["아데노바이러스 의심"] += 35
     if stool in ["3~4회", "5~6회", "7회 이상"]:
         score["장염 의심"] += {"3~4회": 40, "5~6회": 55, "7회 이상": 70}[stool]
     if fever in ["38~38.5", "38.5~39", "39 이상"]:
@@ -1411,23 +1467,47 @@ with t_peds:
         st.write(f"이부프로펜 1회 권장량: **{ib_ml_1:.1f} mL** (최대 {ib_ml_max:.1f} mL)")
     st.caption("쿨다운: APAP ≥4h, IBU ≥6h. 중복 복용 주의.")
 
-    # 3) 해열제 예시 스케줄러
-    st.markdown("#### 해열제 예시 스케줄러(교차복용)")
-    start = st.time_input("시작시간", value=_dt.datetime.now().time(), key=wkey("peds_sched_start"))
+
+    # 3) 해열제 스케줄러 (KST·간격검증)
+    st.markdown("#### 해열제 스케줄(KST, 간격 자동검증)")
+    KST_TZ = _dt.timezone(_dt.timedelta(hours=9))
+    apap_min_h = 4
+    ibu_min_h = 6
+    start = st.time_input("시작시간(한국시간)", value=_dt.datetime.now(tz=KST_TZ).time(), key=wkey("peds_sched_start_kst"))
+    horizon_h = st.slider("표시 시간(시간 단위)", min_value=6, max_value=24, value=12, step=1, key=wkey("peds_sched_horizon"))
     try:
-        base = _dt.datetime.combine(_dt.date.today(), start)
-        plan = [
-            ("APAP", base),
-            ("IBU", base + _dt.timedelta(hours=3)),
-            ("APAP", base + _dt.timedelta(hours=6)),
-            ("IBU", base + _dt.timedelta(hours=9)),
-        ]
-        st.caption("※ 실제 복용 간격: APAP≥4h, IBU≥6h. 예시는 간단 참고용.")
-        for drug, t in plan:
-            st.write(f"- {drug} @ {t.strftime('%H:%M')}")
+        base = _dt.datetime.combine(_dt.datetime.now(tz=KST_TZ).date(), start)
+        plan = []
+        last_apap = None
+        last_ibu = None
+        cur = base
+        cur_drug = "APAP"
+        end_dt = base + _dt.timedelta(hours=horizon_h)
+        step = _dt.timedelta(minutes=30)
+        while cur <= end_dt:
+            can_apap = last_apap is None or (cur - last_apap).total_seconds() >= apap_min_h * 3600
+            can_ibu  = last_ibu  is None or (cur - last_ibu ).total_seconds() >= ibu_min_h  * 3600
+            if cur_drug == "APAP" and can_apap:
+                plan.append(("APAP", cur))
+                last_apap = cur
+                cur_drug = "IBU"
+                cur += _dt.timedelta(hours=3)
+                continue
+            if cur_drug == "IBU" and can_ibu:
+                plan.append(("IBU", cur))
+                last_ibu = cur
+                cur_drug = "APAP"
+                cur += _dt.timedelta(hours=3)
+                continue
+            cur += step
+        st.caption("기준: APAP ≥ 4시간, IBU ≥ 6시간 (KST 기준)")
+        if plan:
+            for drug, t in plan:
+                st.write(f"- {drug} @ {t.strftime('%m/%d %H:%M')} (KST)")
+        else:
+            st.info("표시할 일정이 없습니다. 시작시간/표시시간을 조정해 보세요.")
     except Exception:
         st.info("시간 형식을 확인하세요.")
-
     st.markdown("---")
     st.subheader("보호자 체크리스트")
     show_ck = st.toggle("체크리스트 열기", value=False, key=wkey("peds_ck"))
@@ -1581,83 +1661,334 @@ with t_report:
     )
 
     col_report, col_side = st.columns([2, 1])
-    with col_report:
-        # ===== 보고서 본문 구성 =====
-        st.markdown("#### 보고서 설정")
-        opt_basic = st.checkbox("기본(모두 포함)", value=True, key=wkey("report3_basic"))
-        opt_profile = st.checkbox("프로필/활력/모드", value=True, key=wkey("report3_profile"))
-        opt_sym = st.checkbox("증상 체크(홈)", value=False, key=wkey("report3_sym"))
-        opt_triage = st.checkbox("응급도 평가(기여도/가중치 포함)", value=False, key=wkey("report3_triage"))
-        opt_onco = st.checkbox("항암제 요약/부작용/병용경고", value=True, key=wkey("report3_onco"))
-        opt_labs = st.checkbox("피수치 전항목", value=True, key=wkey("report3_labs"))
-        opt_diet = st.checkbox("식이가이드", value=True, key=wkey("report3_diet"))
-        opt_special = st.checkbox("특수검사 해석(각주)", value=False, key=wkey("report3_special"))
-        
-        # 수집된 상태에서 간단 MD 생성
-        sym_selected = [k for k, v in (sym_map or {}).items() if v]
-        sym_line = ", ".join(sym_selected) if sym_selected else "해당 없음"
-        meds_line = ", ".join(meds) if meds else "—"
-        pick = ["WBC","Hb","PLT","ANC","CRP","Na","K","Ca","Cr","BUN","AST","ALT","T.B","Alb","Glu"]
-        lab_parts = []
-        for k in pick:
-            v = (labs or {}).get(k)
-            if v not in (None, ""):
-                lab_parts.append(f"{k}:{v}")
-        labs_line = ", ".join(lab_parts) if lab_parts else "—"
-        
-        header = f"# BloodMap 보고서\n\n- PIN: {key_id}\n- 진단: {group}/{disease or '—'}\n- 체온/맥박: {temp or '—'}℃ / {hr or '—'} bpm\n- 증상: {sym_line}\n- 항암제: {meds_line}\n- 나이: {age_years}세 ({'소아' if is_peds else '성인'})"
-        
-        diet_lines = "\n".join([f"- {ln}" for ln in (diets or [])])
-        
-        # 항암 부작용 섹션
-        try:
-            label_map_rep = {k: display_label(k, DRUG_DB) for k in (DRUG_DB or {}).keys()}
-        except Exception:
-            label_map_rep = {}
-        try:
-            ae_map_rep = _aggregate_all_aes(meds, DRUG_DB)
-        except Exception:
-            ae_map_rep = {}
-        if ae_map_rep:
-            ae_lines = []
-            for k, arr in ae_map_rep.items():
-                name = label_map_rep.get(k, str(k))
-                ae_lines.append(f"### {name}")
-                for ln in arr:
-                    ae_lines.append(f"- {ln}")
-            ae_text = "\n".join(ae_lines)
-        else:
-            ae_text = "- (DB에 상세 부작용 없음)"
-        
-        md_report = header
-        if opt_labs:
-            md_report += "\n\n## 최근 주요 수치\n" + labs_line
-        if opt_diet:
-            md_report += "\n\n## 식이 가이드\n" + (diet_lines or "—")
-        if opt_onco:
-            md_report += "\n\n## 항암제 부작용(선택 약물)\n" + ae_text
-        
-        st.markdown("#### 미리보기")
-        st.code(md_report.strip(), language="markdown")
-        
-        col_dl1, col_dl2 = st.columns(2)
-        with col_dl1:
-            st.download_button("MD로 저장", data=md_report.encode("utf-8"), file_name="bloodmap_report.md", mime="text/markdown", key=wkey("dl_md_report"))
-        with col_dl2:
-            try:
-                pdf_bytes = export_md_to_pdf(md_report) if 'export_md_to_pdf' in globals() else md_report.encode('utf-8')
-                st.download_button("PDF로 저장", data=pdf_bytes, file_name="bloodmap_report.pdf", mime="application/pdf", key=wkey("dl_pdf_report"))
-            except Exception:
-                st.download_button("TXT로 저장", data=md_report.encode("utf-8"), file_name="bloodmap_report.txt", mime="text/plain", key=wkey("dl_txt_report"))
 
-        
-    # (중복된 보고서 UI 제거)
-
+    # ---------- 오른쪽: 기록/그래프/내보내기 ----------
     with col_side:
-        st.info("📊 기록/그래프는 상단의 **📊 기록/그래프** 탭에서 확인하세요.")
+        st.markdown("### 📊 기록/그래프 패널")
+
+        st.session_state.setdefault("lab_history", [])
+        hist = st.session_state["lab_history"]
+
+        tab_log, tab_plot, tab_export = st.tabs(["📝 기록", "📈 그래프", "⬇️ 내보내기"])
+
+        with tab_log:
+            cols_btn = st.columns([1, 1, 1])
+            with cols_btn[0]:
+                if st.button("➕ 현재 값을 기록에 추가", key=wkey("add_history_tab")):
+                    snap = {
+                        "ts": now_kst().strftime("%Y-%m-%d %H:%M:%S"),
+                        "temp": temp or "",
+                        "hr": hr or "",
+                        "labs": {k: ("" if labs.get(k) in (None, "") else labs.get(k)) for k in labs.keys()},
+                        "mode": "peds" if bool(st.session_state.get(wkey("is_peds"), False)) else "adult",
+                        "ref": lab_ref(bool(st.session_state.get(wkey("is_peds"), False))),
+                    }
+                    weird = []
+                    for k, v in (snap["labs"] or {}).items():
+                        try:
+                            fv = float(v)
+                            if k == "Na" and not (110 <= fv <= 170):
+                                weird.append(f"Na {fv}")
+                            if k == "K" and not (1.0 <= fv <= 8.0):
+                                weird.append(f"K {fv}")
+                            if k == "Hb" and not (3.0 <= fv <= 25.0):
+                                weird.append(f"Hb {fv}")
+                            if k == "PLT" and fv > 0 and fv < 1:
+                                weird.append(f"PLT {fv} (단위 확인)")
+                        except Exception:
+                            pass
+                    hist.append(snap)
+                    st.success("현재 값이 기록에 추가되었습니다.")
+                    if weird:
+                        st.warning("비정상적으로 보이는 값 감지: " + ", ".join(weird) + " — 단위/오타를 확인하세요.")
+            with cols_btn[1]:
+                if st.button("🗑️ 기록 비우기", key=wkey("clear_history")) and hist:
+                    st.session_state["lab_history"] = []
+                    hist = st.session_state["lab_history"]
+                    st.warning("기록을 모두 비웠습니다.")
+            with cols_btn[2]:
+                st.caption(f"총 {len(hist)}건")
+
+            if not hist:
+                st.info("기록이 없습니다.")
+            else:
+                try:
+                    import pandas as pd
+                    rows = []
+                    for h in hist[-10:]:
+                        row = {
+                            "시각": h.get("ts", ""),
+                            "T(℃)": h.get("temp", ""),
+                            "HR": h.get("hr", ""),
+                            "WBC": (h.get("labs", {}) or {}).get("WBC", ""),
+                            "Hb": (h.get("labs", {}) or {}).get("Hb", ""),
+                            "PLT": (h.get("labs", {}) or {}).get("PLT", ""),
+                            "ANC": (h.get("labs", {}) or {}).get("ANC", ""),
+                            "CRP": (h.get("labs", {}) or {}).get("CRP", ""),
+                        }
+                        rows.append(row)
+                    df = pd.DataFrame(rows)
+                    st.dataframe(df, use_container_width=True, height=280)
+                except Exception:
+                    st.write(hist[-5:])
+
+        with tab_plot:
+            default_metrics = ["WBC", "Hb", "PLT", "ANC", "CRP", "Na", "Cr", "BUN", "AST", "ALT", "Glu"]
+            all_metrics = sorted({*default_metrics, *list(labs.keys())})
+            pick = st.multiselect("그래프 항목 선택", options=all_metrics, default=default_metrics[:4], key=wkey("chart_metrics_tab"))
+
+            if not hist:
+                st.info("기록이 없습니다. 먼저 '기록' 탭에서 추가하세요.")
+            elif not pick:
+                st.info("표시할 항목을 선택하세요.")
+            else:
+                x = [h.get("ts", "") for h in hist]
+                if _HAS_MPL:
+                    for m in pick:
+                        y, band = [], None
+                        for h in hist:
+                            v = (h.get("labs", {}) or {}).get(m, "")
+                            try:
+                                v = float(str(v).replace(",", "."))
+                            except Exception:
+                                v = None
+                            y.append(v)
+                        for h in reversed(hist):
+                            ref = (h.get("ref") or {})
+                            if m in ref:
+                                band = ref[m]
+                                break
+                        if all(v is None for v in y):
+                            continue
+                        fig = plt.figure()
+                        plt.plot(x, [vv if vv is not None else float("nan") for vv in y], marker="o")
+                        plt.title(m)
+                        plt.xlabel("기록 시각")
+                        plt.ylabel(m)
+                        plt.xticks(rotation=45, ha="right")
+                        if band and isinstance(band, (tuple, list)) and len(band) == 2:
+                            lo, hi = band
+                            try:
+                                plt.axhspan(lo, hi, alpha=0.15)
+                            except Exception:
+                                pass
+                        plt.tight_layout()
+                        st.pyplot(fig)
+                else:
+                    try:
+                        import pandas as pd
+                        df_rows = []
+                        for i, h in enumerate(hist):
+                            row = {"ts": x[i]}
+                            for m in pick:
+                                v = (h.get("labs", {}) or {}).get(m, None)
+                                try:
+                                    v = float(str(v).replace(",", "."))
+                                except Exception:
+                                    v = None
+                                row[m] = v
+                            df_rows.append(row)
+                        if df_rows:
+                            df = pd.DataFrame(df_rows).set_index("ts")
+                            for m in pick:
+                                st.line_chart(df[[m]])
+                        else:
+                            st.info("표시할 데이터가 없습니다.")
+                    except Exception:
+                        st.warning("matplotlib/pandas 미설치 → 간단 표로 폴백합니다.")
+                        for m in pick:
+                            st.write(m, [(x[i], (hist[i].get("labs", {}) or {}).get(m, None)) for i in range(len(hist))])
+
+        with tab_export:
+            if not hist:
+                st.info("기록이 없습니다.")
+            else:
+                since = st.text_input("시작 시각(YYYY-MM-DD)", value="")
+                until = st.text_input("종료 시각(YYYY-MM-DD)", value="")
+
+                def _in_range(ts):
+                    if not ts:
+                        return False
+                    d = ts[:10]
+                    if since and d < since:
+                        return False
+                    if until and d > until:
+                        return False
+                    return True
+
+                sel = [h for h in hist if _in_range(h.get("ts", ""))] if (since or until) else hist
+
+                output = io.StringIO()
+                writer = csv.writer(output)
+                all_keys = set()
+                for h in sel:
+                    all_keys |= set((h.get("labs", {}) or {}).keys())
+                all_keys = sorted(all_keys)
+                headers = ["ts", "temp", "hr"] + all_keys
+                writer.writerow(headers)
+                for h in sel:
+                    row = [h.get("ts", ""), h.get("temp", ""), h.get("hr", "")]
+                    for m in all_keys:
+                        row.append((h.get("labs", {}) or {}).get(m, ""))
+                    writer.writerow(row)
+                st.download_button("CSV 다운로드", data=output.getvalue().encode("utf-8"), file_name="bloodmap_history.csv", mime="text/csv")
+                st.caption("팁: 기간 필터를 지정해 필요한 구간만 내보낼 수 있습니다.")
+
+    # ---------- 왼쪽: 보고서 본문 ----------
+    with col_report:
+        use_dflt = st.checkbox("기본(모두 포함)", True, key=wkey("rep_all"))
+        colp1, colp2 = st.columns(2)
+        with colp1:
+            sec_profile = st.checkbox("프로필/활력/모드", True if use_dflt else False, key=wkey("sec_profile"))
+            sec_symptom = st.checkbox("증상 체크(홈) — (보고서에서 제외됨)", False, key=wkey("sec_symptom"))
+            sec_symptom = False
+            sec_emerg = st.checkbox("응급도 평가(기여도/가중치 포함) — (보고서에서 제외됨)", False, key=wkey("sec_emerg"))
+            sec_emerg = False
+            sec_dx = st.checkbox("진단명(암 선택)", True if use_dflt else False, key=wkey("sec_dx"))
+        with colp2:
+            sec_meds = st.checkbox("항암제 요약/부작용/병용경고", True if use_dflt else False, key=wkey("sec_meds"))
+            sec_labs = st.checkbox("피수치 전항목", True if use_dflt else False, key=wkey("sec_labs"))
+            sec_diet = st.checkbox("식이가이드", True if use_dflt else False, key=wkey("sec_diet"))
+            sec_special = st.checkbox("특수검사 해석(각주)", True if use_dflt else False, key=wkey("sec_special"))
+
+        st.markdown("### 🏥 병원 전달용 요약 + QR")
+        qr_text = _build_hospital_summary()
+        st.code(qr_text, language="text")
+        qr_png = _qr_image_bytes(qr_text)
+        if qr_png:
+            st.image(qr_png, caption="이 QR을 스캔하면 위 요약 텍스트가 표시됩니다.", use_column_width=False)
+            st.download_button("QR 이미지(.png) 다운로드", data=qr_png, file_name="bloodmap_hospital_qr.png", mime="image/png")
+        else:
+            st.info("QR 라이브러리를 찾지 못했습니다. 위 텍스트를 그대로 공유하세요. (선택: requirements에 `qrcode` 추가)")
+
+        lines = []
+        lines.append("# Bloodmap Report (Full)")
+        lines.append(f"_생성 시각(KST): {now_kst().strftime('%Y-%m-%d %H:%M:%S')}_")
+        lines.append("")
+        lines.append("> In memory of Eunseo, a little star now shining in the sky.")
+        lines.append("> This app is made with the hope that she is no longer in pain,")
+        lines.append("> and resting peacefully in a world free from all hardships.")
+        lines.append("")
+        lines.append("---")
+        lines.append("")
+
+        if sec_profile:
+            lines.append("## 프로필/활력/모드")
+            lines.append(f"- 키(별명#PIN): {key_id}")
+            lines.append(f"- 나이(년): {age_years}")
+            lines.append(f"- 모드: {'소아' if is_peds else '성인'}")
+            lines.append(f"- 체온(℃): {temp if temp not in (None, '') else '—'}")
+            lines.append(f"- 심박수(bpm): {hr if hr not in (None, '') else '—'}")
+            lines.append("")
+        # (제외됨) 증상 체크(홈) 섹션은 보고서에서 제거되었습니다.
+        # (제외됨) 응급도 평가(기여도/가중치 포함) 섹션은 보고서에서 제거되었습니다.
+
+        if sec_dx:
+            lines.append("## 진단명(암)")
+            lines.append(f"- 그룹: {group or '(미선택)'}")
+            lines.append(f"- 질환: {disease or '(미선택)'}")
+            lines.append("")
+
+        if sec_meds:
+            lines.append("## 항암제 요약")
+            if meds:
+                for m in meds:
+                    try:
+                        lines.append(f"- {display_label(m, DRUG_DB)}")
+                    except Exception:
+                        lines.append(f"- {m}")
+            else:
+                lines.append("- (없음)")
+            lines.append("")
+
+            warns, notes = check_chemo_interactions(meds)
+            if warns:
+                lines.append("### ⚠️ 병용 주의/경고")
+                for w in warns:
+                    lines.append(f"- {w}")
+                lines.append("")
+            if notes:
+                lines.append("### ℹ️ 참고(데이터베이스 기재)")
+                for n in notes:
+                    lines.append(n)
+                lines.append("")
+
+            if meds:
+                ae_map = _aggregate_all_aes(meds, DRUG_DB)
+                if ae_map:
+                    lines.append("## 항암제 부작용(전체)")
+                    for k, arr in ae_map.items():
+                        try:
+                            nm = display_label(k, DRUG_DB)
+                        except Exception:
+                            nm = k
+                        lines.append(f"- {nm}")
+                        for ln in arr:
+                            lines.append(f"  - {ln}")
+                    lines.append("")
+
+        if sec_labs:
+            lines.append("## 피수치 (모든 항목)")
+            all_labs = [
+                ("WBC", "백혈구"),
+                ("Ca", "칼슘"),
+                ("Glu", "혈당"),
+                ("CRP", "CRP"),
+                ("Hb", "혈색소"),
+                ("P", "인(Phosphorus)"),
+                ("T.P", "총단백"),
+                ("Cr", "크레아티닌"),
+                ("PLT", "혈소판"),
+                ("Na", "나트륨"),
+                ("AST", "AST"),
+                ("T.B", "총빌리루빈"),
+                ("ANC", "절대호중구"),
+                ("Alb", "알부민"),
+                ("ALT", "ALT"),
+                ("BUN", "BUN"),
+            ]
+            for abbr, kor in all_labs:
+                v = labs.get(abbr) if isinstance(labs, dict) else None
+                lines.append(f"- {abbr} ({kor}): {v if v not in (None, '') else '—'}")
+            lines.append(f"- ANC 분류: {anc_band(labs.get('ANC') if isinstance(labs, dict) else None)}")
+            lines.append("")
+
+        if sec_diet:
+            dlist = diets or []
+            if dlist:
+                lines.append("## 식이가이드(자동)")
+                for d in dlist:
+                    lines.append(f"- {d}")
+                lines.append("")
+
+        if sec_special:
+            spec_lines = st.session_state.get("special_interpretations", [])
+            if spec_lines:
+                lines.append("## 특수검사 해석(각주 포함)")
+                for ln in spec_lines:
+                    lines.append(f"- {ln}")
+                lines.append("")
+
+        lines.append("---")
+        lines.append("### 🏥 병원 전달용 텍스트 (QR 동일 내용)")
+        lines.append(_build_hospital_summary())
+        lines.append("")
+
+        md = "\n".join(lines)
+        st.code(md, language="markdown")
+        st.download_button("💾 보고서 .md 다운로드", data=md.encode("utf-8"), file_name="bloodmap_report.md", mime="text/markdown")
+        txt_data = md.replace("**", "")
+        st.download_button("📝 보고서 .txt 다운로드", data=txt_data.encode("utf-8"), file_name="bloodmap_report.txt", mime="text/plain")
+        try:
+            pdf_bytes = export_md_to_pdf(md)
+            st.download_button("📄 보고서 .pdf 다운로드", data=pdf_bytes, file_name="bloodmap_report.pdf", mime="application/pdf")
+        except Exception:
+            st.caption("PDF 변환 모듈을 불러오지 못했습니다. .md 또는 .txt를 사용해주세요.")
+
 
 # ---------------- Graph/Log Panel (separate tab) ----------------
 def render_graph_panel():
+
     import os, io, datetime as _dt
     import pandas as pd
     import streamlit as st
@@ -1666,102 +1997,116 @@ def render_graph_panel():
     except Exception:
         plt = None
 
-    st.markdown("### 📊 기록/그래프")
+    st.markdown("### 📊 기록/그래프(파일 + 세션기록)")
+
     base_dir = "/mnt/data/bloodmap_graph"
     try:
         os.makedirs(base_dir, exist_ok=True)
     except Exception:
         pass
 
+    # 파일 로딩
     csv_files = []
     try:
         csv_files = [os.path.join(base_dir, f) for f in os.listdir(base_dir) if f.lower().endswith(".csv")]
     except Exception:
         csv_files = []
 
-    if not csv_files:
-        st.info("표시할 CSV가 없습니다. 폴더에 WBC/Hb/PLT/ANC/CRP 컬럼이 포함된 CSV를 넣어주세요.")
-        return
-
     file_map = {os.path.basename(p): p for p in csv_files}
-    sel_name = st.selectbox("기록 파일 선택", sorted(file_map.keys()), key=wkey("graph_csv_select_tab"))
-    path = file_map[sel_name]
+    mode = st.radio("데이터 소스", ["세션 기록", "CSV 파일"], horizontal=True, key=wkey("g2_mode"))
+    df = None
 
-    try:
-        df = pd.read_csv(path)
-    except Exception as e:
-        st.error(f"CSV를 읽을 수 없습니다: {e}")
+    hist = st.session_state.get("lab_history", [])
+
+    if mode == "CSV 파일" and file_map:
+        sel_name = st.selectbox("기록 파일 선택", sorted(file_map.keys()), key=wkey("g2_csv_select"))
+        path = file_map[sel_name]
+        try:
+            df = pd.read_csv(path)
+        except Exception as e:
+            st.error(f"CSV를 읽을 수 없습니다: {e}")
+            df = None
+    elif mode == "CSV 파일" and not file_map:
+        st.info("CSV 파일이 없습니다. 세션 기록을 사용하거나 /mnt/data/bloodmap_graph 폴더에 CSV를 넣어주세요.")
+
+    # 세션 기록 → DataFrame
+    if mode == "세션 기록":
+        if not hist:
+            st.info("세션 기록이 없습니다. 보고서 옆 패널의 '기록' 탭에서 '현재 값을 기록에 추가'를 눌러보세요.")
+        else:
+            rows = []
+            for h in hist:
+                row = {"ts": h.get("ts", "")}
+                labs = (h.get("labs") or {})
+                for k, v in labs.items():
+                    row[k] = v
+                rows.append(row)
+            if rows:
+                df = pd.DataFrame(rows)
+                try:
+                    df["ts"] = pd.to_datetime(df["ts"])
+                except Exception:
+                    pass
+
+    if df is None:
         return
 
-    candidates = ["WBC", "Hb", "PLT", "CRP", "ANC"]
-    cols = [c for c in candidates if c in df.columns]
-    if not cols:
-        st.info("표준 항목(WBC/Hb/PLT/CRP/ANC)이 없습니다.")
-        st.dataframe(df.head(20))
-        return
-
-    sel_cols = st.multiselect("표시할 항목", default=cols, options=cols, key=wkey("graph_cols_tab"))
-
-    # 시간 컬럼 탐색 및 정렬
+    # 시간축 정렬/정규화
     time_col = None
-    for cand in ["date", "Date", "timestamp", "Timestamp", "time", "Time", "sample_time"]:
+    for cand in ["ts", "date", "Date", "timestamp", "Timestamp", "time", "Time", "sample_time"]:
         if cand in df.columns:
             time_col = cand
             break
-    if time_col is not None:
+    if time_col is None:
+        df["_ts"] = range(len(df))
+        time_col = "_ts"
+    else:
         try:
             df["_ts"] = pd.to_datetime(df[time_col])
-            df = df.sort_values("_ts")
+            time_col = "_ts"
         except Exception:
-            df["_ts"] = df.index
-    else:
-        df["_ts"] = df.index
+            pass
+
+    # 항목 선택
+    candidates = ["WBC", "Hb", "PLT", "CRP", "ANC", "Na", "Cr", "BUN", "AST", "ALT", "Glu"]
+    cols_avail = [c for c in candidates if c in df.columns]
+    if not cols_avail:
+        cols_avail = [c for c in df.columns if c not in ["_ts", "ts", "date", "Date", "timestamp", "Timestamp", "time", "Time", "sample_time"]]
+
+    picks = st.multiselect("그래프 항목 선택", options=cols_avail, default=cols_avail[:4], key=wkey("g2_cols"))
 
     # 기간 필터
-    period = st.radio("기간", ("전체", "최근 7일", "최근 14일", "최근 30일"), horizontal=True, key=wkey("graph_period_tab"))
-    if period != "전체":
+    period = st.radio("기간", ("전체", "최근 7일", "최근 14일", "최근 30일"), horizontal=True, key=wkey("g2_period"))
+    if period != "전체" and "datetime64" in str(df[time_col].dtype):
         days = {"최근 7일": 7, "최근 14일": 14, "최근 30일": 30}[period]
         cutoff = _dt.datetime.now() - _dt.timedelta(days=days)
         try:
-            mask = pd.to_datetime(df["_ts"]) >= cutoff
+            mask = df[time_col] >= cutoff
             df = df[mask]
         except Exception:
             pass
 
-    # 그래프
-    if sel_cols:
-        if plt is None:
-            st.warning("matplotlib이 없어 간단 표로 대체합니다.")
-            st.dataframe(df[["_ts"] + sel_cols].tail(50))
-        else:
-            fig, ax = plt.subplots()
-            for col in sel_cols:
-                try:
-                    ax.plot(df["_ts"], pd.to_numeric(df[col], errors="coerce"), label=col)
-                except Exception:
-                    continue
-            ax.set_xlabel("시점")
-            ax.set_ylabel("값")
-            ax.legend()
-            st.pyplot(fig)
+    if not picks:
+        st.info("표시할 항목을 선택하세요.")
+        return
 
-            # PNG 저장 버튼
-            buf = io.BytesIO()
-            fig.savefig(buf, format="png", bbox_inches="tight")
-            buf.seek(0)
-            st.download_button(
-                label="PNG로 저장",
-                data=buf,
-                file_name="bloodmap_graph.png",
-                mime="image/png",
-                key=wkey("graph_png_dl_tab")
-            )
+    # 플롯
+    if plt is None:
+        st.warning("matplotlib이 없어 간단 표로 대체합니다.")
+        st.dataframe(df[[time_col] + picks].tail(50))
     else:
-        st.info("표시할 항목을 선택해 주세요.")
-
-    # 원자료
-    with st.expander("원자료(최근 50행)"):
-        st.dataframe(df.tail(50))
+        for m_ in picks:
+            try:
+                y = pd.to_numeric(df[m_], errors="coerce")
+            except Exception:
+                y = df[m_]
+            fig, ax = plt.subplots()
+            ax.plot(df[time_col], y, marker="o")
+            ax.set_title(m_)
+            ax.set_xlabel("시점")
+            ax.set_ylabel(m_)
+            fig.autofmt_xdate(rotation=45)
+            st.pyplot(fig)
 
 with t_graph:
     render_graph_panel()
