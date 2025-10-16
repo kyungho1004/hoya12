@@ -593,6 +593,11 @@ t_home, t_labs, t_dx, t_chemo, t_peds, t_special, t_report, t_graph = st.tabs(ta
 
 # HOME
 with t_home:
+    # --- 의견/피드백: 응급도 체크 바로 아래 ---
+    st.markdown("### 💬 응급도 체크에 대한 의견")
+    set_current_tab_hint("응급도 체크")
+    render_feedback_box(default_category="데이터 오류 신고", page_hint="응급도 체크")
+    render_feedback_admin(key_suffix="emergency")
     st.subheader("응급도 요약")
     labs = st.session_state.get("labs_dict", {})
     level_tmp, reasons_tmp, contrib_tmp = emergency_level(
