@@ -702,6 +702,11 @@ with t_home:
             if len(data["ratings"]) > 1000:
                 data["ratings"] = data["ratings"][-1000:]
             _save_fb_store(data)
+            # 세션 캐시 갱신
+            st.session_state[_FB_SS_COUNTS_KEY][str(_score)] = int(st.session_state[_FB_SS_COUNTS_KEY].get(str(_score),0)) + 1
+            st.session_state[_FB_SS_LOG_KEY].append(entry)
+            if len(st.session_state[_FB_SS_LOG_KEY])>1000:
+                st.session_state[_FB_SS_LOG_KEY] = st.session_state[_FB_SS_LOG_KEY][-1000:]
             if _FB_WRITE_OK:
                 st.success("피드백 점수가 저장되었습니다. 고맙습니다!")
             else:
@@ -710,15 +715,21 @@ with t_home:
         # 표시: 현재 평균/표 수
         try:
             _data_preview = _load_fb_store()
-            _total = sum(_data_preview["counts"].values())
+            # 쓰기 불가면 세션 캐시 사용
+            if not _FB_WRITE_OK:
+                _data_preview = {
+                    "counts": st.session_state.get(_FB_SS_COUNTS_KEY, {"1":0,"2":0,"3":0,"4":0,"5":0}),
+                    "ratings": st.session_state.get(_FB_SS_LOG_KEY, []),
+                }
+            _total = int(sum(int(v) for v in _data_preview["counts"].values()))
             _avg = 0.0
             if _total > 0:
                 _avg = (
-                    5*_data_preview["counts"].get("5",0) +
-                    4*_data_preview["counts"].get("4",0) +
-                    3*_data_preview["counts"].get("3",0) +
-                    2*_data_preview["counts"].get("2",0) +
-                    1*_data_preview["counts"].get("1",0)
+                    5*int(_data_preview["counts"].get("5",0)) +
+                    4*int(_data_preview["counts"].get("4",0)) +
+                    3*int(_data_preview["counts"].get("3",0)) +
+                    2*int(_data_preview["counts"].get("2",0)) +
+                    1*int(_data_preview["counts"].get("1",0))
                 ) / _total
             col_avg, col_cnt = st.columns(2)
             with col_avg:
