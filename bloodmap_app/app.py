@@ -665,7 +665,10 @@ with t_home:
         st.info("현재 상태: " + level_tmp)
 
     st.markdown("---")
-    st.subheader("응급도 체크(증상 기반)")
+ st.markdown("### 💬 응급도 체크에 대한 의견")
+   set_current_tab_hint("응급도 체크")
+   render_feedback_box(default_category="데이터 오류 신고", page_hint="응급도 체크")
+   render_feedback_admin()
     c1, c2, c3, c4, c5, c6 = st.columns(6)
     with c1:
         hematuria = st.checkbox("혈뇨", key=wkey("sym_hematuria"))
