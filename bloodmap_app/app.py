@@ -171,6 +171,13 @@ st.markdown(
 > This app is made with the hope that she is no longer in pain,
 > and resting peacefully in a world free from all hardships."""
 )
+
+# --- 의견/피드백: 응급도 체크 바로 아래 ---
+st.markdown("### 💬 응급도 체크에 대한 의견")
+set_current_tab_hint("응급도 체크")
+render_feedback_box(default_category="데이터 오류 신고", page_hint="응급도 체크")
+render_feedback_admin()
+
 st.markdown("---")
 render_deploy_banner("https://bloodmap.streamlit.app/", "제작: Hoya/GPT · 자문: Hoya/GPT")
 st.caption(f"모듈 경로 — special_tests: {SPECIAL_PATH or '(not found)'} | onco_map: {ONCO_PATH or '(not found)'} | drug_db: {DRUGDB_PATH or '(not found)'}")
@@ -2169,7 +2176,7 @@ def render_feedback_box(default_category: str = "일반 의견", page_hint: str 
         default_index = categories.index(default_category)
     except ValueError:
         default_index = categories.index("일반 의견")
-    with st.form("feedback_form_sidebar", clear_on_submit=True):
+    with st.form(f"feedback_form_{(page_hint or 'Sidebar').replace(' ', '_')}", clear_on_submit=True):
         name = st.text_input("이름/별명 (선택)", key="fb_name")
         contact = st.text_input("연락처(이메일/카톡ID, 선택)", key="fb_contact")
         category = st.selectbox("분류", categories, index=default_index, key="fb_cat")
@@ -2195,7 +2202,7 @@ def render_feedback_box(default_category: str = "일반 의견", page_hint: str 
 
 def render_feedback_admin() -> None:
     pwd = st.text_input("관리자 비밀번호", type="password", key="fb_admin_pwd")
-    admin_pw = st.secrets.get("ADMIN_PASS", "9047")
+    admin_pw = st.secrets.get("ADMIN_PASS", "")
     if admin_pw and pwd == admin_pw:
         if os.path.exists(_FEEDBACK_CSV):
             try:
