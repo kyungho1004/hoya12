@@ -530,3 +530,67 @@ def render_section_vomit():
                 st.caption("※ 금기/주의 질환이 있을 수 있으니 반드시 의료진 지시에 따르세요.")
             except Exception:
                 st.info("용량 계산 모듈이 준비되지 않았습니다.")
+
+
+# === 소아 상기도/눈귀/피부 통합 섹션 ===
+def render_section_uri_general():
+    expanded_default = bool(st.session_state.get("peds_stable_mode", False))
+    st.markdown("#### 상기도·눈/귀·피부 일반 증상")
+    with st.expander("🧒 상기도/눈귀/피부 체크", expanded=expanded_default):
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            cough = st.selectbox("기침", ["없음","가끔","자주","밤에 심함"], key=wkey("p_uri_cough"))
+            nasal = st.selectbox("콧물/코막힘", ["없음","맑은 콧물","누런 콧물","심한 코막힘"], key=wkey("p_uri_nasal"))
+        with c2:
+            sore_throat = st.checkbox("인후통/침 삼킬 때 아파함", key=wkey("p_uri_sore"))
+            ear_pain = st.checkbox("귀 통증/만지면 울음", key=wkey("p_uri_ear"))
+        with c3:
+            eye = st.selectbox("눈꼽/결막", ["없음","맑음","노랑-농성","양쪽"], key=wkey("p_uri_eye"))
+            rash = st.checkbox("발진/두드러기", key=wkey("p_uri_rash"))
+
+        st.markdown("**경고 신호(있으면 즉시 진료)**")
+        r1, r2, r3 = st.columns(3)
+        with r1:
+            high_fever = st.checkbox("고열(≥38.5℃)", key=wkey("p_uri_red_fever"))
+            difficulty = st.checkbox("호흡곤란/그르렁거림", key=wkey("p_uri_red_breath"))
+        with r2:
+            lethargy = st.checkbox("심한 무기력/의식저하", key=wkey("p_uri_red_lethargy"))
+            dehydration = st.checkbox("탈수 의심(눈물↓/입마름)", key=wkey("p_uri_red_dehyd"))
+        with r3:
+            ear_drain = st.checkbox("귀에서 고름/심한 통증 지속", key=wkey("p_uri_red_ear"))
+            eye_pus = st.checkbox("심한 눈곱·빛부심/시야 불편", key=wkey("p_uri_red_eye"))
+
+        if any([high_fever, difficulty, lethargy, dehydration, ear_drain, eye_pus]):
+            st.error("🚨 경고 신호가 있어요. **즉시 의료진과 상담/진료**를 권장합니다.")
+        else:
+            st.success("✅ 가정 내 관리")
+            st.write("- **코 세척/가습**으로 콧물·코막힘 완화.")
+            st.write("- **수분 섭취** 유지, 따뜻한 음료 도움이 될 수 있어요.")
+            st.write("- 기침이 심하면 **머리 높이기/수면 환경 정리**.")
+            st.write("- 눈곱이 많으면 **미온수 거즈로 닦기**, 손 위생 철저.")
+            st.write("- 귀 통증은 **진통제** 참고만, 지속되면 진료.")
+        with st.expander("해열/통증 완화 (참고: 의료진 상담 후)", expanded=False):
+            try:
+                import peds_dose as PD
+                # 나이/체중 추정
+                age_keys = ["peds_age_const", "peds_age_diarrhea", "peds_age_vomit"]
+                age_guess = 24
+                for k in age_keys:
+                    try:
+                        age_guess = int(st.session_state.get(wkey(k), age_guess))
+                        break
+                    except Exception:
+                        continue
+                weight_key = wkey("p_uri_weight")
+                weight_val = st.session_state.get(weight_key, 0.0)
+                if not isinstance(weight_val, (int,float)) or weight_val <= 0:
+                    weight_val = st.number_input("체중(kg, 선택)", min_value=0.0, max_value=80.0, value=0.0, step=0.5, key=weight_key)
+                apap_ml, estw1 = PD.acetaminophen_ml(age_guess, weight_val if weight_val>0 else None)
+                ibu_ml,  estw2 = PD.ibuprofen_ml(age_guess, weight_val if weight_val>0 else None)
+                disp_w = weight_val if weight_val>0 else estw1
+                st.caption(f"추정체중: {disp_w:.1f} kg (입력 없으면 월령 기반 추정)")
+                st.write(f"- 아세트아미노펜 시럽(160mg/5mL): **{apap_ml} mL** (6~8시간 간격)")
+                st.write(f"- 이부프로펜 시럽(100mg/5mL): **{ibu_ml} mL** (8시간 간격)")
+                st.caption("※ 금기/주의 질환에 따라 달라질 수 있으니, 반드시 의료진 지시에 따르세요.")
+            except Exception:
+                st.info("용량 계산 모듈이 준비되지 않았습니다.")
