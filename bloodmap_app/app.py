@@ -1897,6 +1897,36 @@ def _annotate_special_notes(lines):
                 st.info("용량 계산 모듈이 준비되지 않았습니다.")
 
 
+    # === 소아 보호자 설명(통합, peds_guide 연계) ===
+    with st.expander("👪 소아 보호자 설명(통합)", expanded=True):
+        try:
+            from peds_guide import render_caregiver_notes_peds
+            render_caregiver_notes_peds(
+                stool=stool,
+                fever=fever,
+                persistent_vomit=persistent_vomit,
+                oliguria=oliguria,
+                cough=cough,
+                nasal=nasal,
+                eye=eye,
+                abd_pain=abd_pain,
+                ear_pain=ear_pain,
+                rash=rash,
+                hives=hives,
+                migraine=migraine,
+                hfmd=hfmd,
+                sputum=sputum if "sputum" in locals() else None,
+                wheeze=wheeze if "wheeze" in locals() else None,
+                max_temp=max_temp if "max_temp" in locals() else None,
+                sore_throat=False,
+                chest_ret=False,
+                rr=None,
+                score=score if "score" in locals() else None,
+            )
+        except Exception as _e:
+            st.info("보호자 설명 모듈을 불러오지 못했습니다. 다음에 다시 시도해 주세요.")
+    # === 소아 보호자 설명(통합) 끝 ===
+
 with t_special:
     st.subheader("특수검사 해석")
     if SPECIAL_PATH:
