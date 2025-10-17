@@ -613,7 +613,7 @@ with t_home:
     with col_q1:
         if st.button("💬 피드백 남기기", key=wkey("btn_open_feedback")):
             st.session_state["open_feedback_expander"] = True
-            st.experimental_rerun()
+            _safe_rerun()
     # ======= 홈: 피드백 퀵 링크 버튼 끝 =======
 # ======= 홈: 피드백 (응급도 체크 하단) =======
     # ======= 홈: 피드백 (응급도 체크 하단) =======
@@ -633,7 +633,7 @@ with t_home:
         def _clear_fb():
             st.session_state[fb_store_key] = ""
             st.session_state[fb_widget_key] = ""
-            st.experimental_rerun()
+            _safe_rerun()
 
         with col_fb1:
             st.button("피드백 저장(세션)", key=wkey("btn_fb_save"), on_click=_save_fb)
@@ -2416,3 +2416,12 @@ def _run_safety_checklist_silent():
 
 _run_safety_checklist_silent()
 # ======= 안전 체크리스트 끝 =======
+def _safe_rerun():
+    try:
+        st.rerun()
+    except Exception:
+        try:
+            _safe_rerun()
+        except Exception:
+            pass
+
