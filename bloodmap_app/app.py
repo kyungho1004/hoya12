@@ -1458,6 +1458,45 @@ with t_peds:
     # 추가: 변비 선택 (모바일 호환을 위해 독립 컨테이너)
     with st.container():
         constipation = st.selectbox("변비", ["없음","의심","3일 이상","배변 시 통증"], key=wkey("p_constipation"))
+
+        # 변비 보호자 설명 + 해열제 참고 (peds_dose 연계)
+        if constipation != "없음":
+            with st.expander("변비 보호자 설명 + 해열제 참고", expanded=False):
+                st.markdown("**가정 내 관리 요약**")
+                st.write("- 물/수유를 연령에 맞게 **자주 제공**하세요.")
+                st.write("- 과일·채소·전곡류 등 **식이섬유** 섭취를 늘려보세요.")
+                st.write("- 식후 5~10분 **배변 루틴** 만들기(억지로 오래 앉히지 않기).")
+                st.write("- 걷기·놀이 등 **활동량**을 늘립니다.")
+                if constipation in ["3일 이상","배변 시 통증"]:
+                    st.write("- **자두/배** 등 변 완화 식품을 소량 제공하고, **지속 시 진료**를 권합니다.")
+                st.caption("※ 다음 경고 신호(혈변/검은변, 심한 복부팽만·복통, 고열, 담즙성 구토, 생후 1개월 미만, 체중감소/탈수)가 있으면 즉시 진료하세요.")
+
+                with st.expander("해열/통증 완화 (참고: 의료진 상담 후)", expanded=False):
+                    try:
+                        import peds_dose as PD
+                        # 연령(개월) 추정: 앞서 입력한 값 재사용, 없으면 24개월 가정
+                        # 가능하면 소아 변비 체크 섹션의 개월 입력 키를 먼저 참고
+                        age_guess = 24
+                        for age_key in ["peds_age_const", "peds_age_diarrhea", "peds_age_vomit"]:
+                            try:
+                                age_guess = int(st.session_state.get(wkey(age_key), age_guess))
+                                break
+                            except Exception:
+                                continue
+                        # 선택적 체중 입력
+                        weight_key = wkey("peds_w_const")
+                        weight_val = st.session_state.get(weight_key, 0.0)
+                        if not isinstance(weight_val, (int,float)) or weight_val <= 0:
+                            weight_val = st.number_input("체중(kg, 선택)", min_value=0.0, max_value=80.0, value=0.0, step=0.5, key=weight_key)
+                        apap_ml, estw1 = PD.acetaminophen_ml(age_guess, weight_val if weight_val>0 else None)
+                        ibu_ml,  estw2 = PD.ibuprofen_ml(age_guess, weight_val if weight_val>0 else None)
+                        disp_w = weight_val if weight_val>0 else estw1
+                        st.caption(f"추정체중: {disp_w:.1f} kg (입력 없으면 월령 기반 추정)")
+                        st.write(f"- 아세트아미노펜 시럽(160mg/5mL): **{apap_ml} mL** (6~8시간 간격)")
+                        st.write(f"- 이부프로펜 시럽(100mg/5mL): **{ibu_ml} mL** (8시간 간격)")
+                        st.caption("※ 금기/주의 질환에 따라 달라질 수 있으니, 반드시 의료진 지시에 따르세요.")
+                    except Exception:
+                        st.info("용량 계산 모듈이 준비되지 않았습니다.")
     # 추가: 가래/쌕쌕거림(천명)
     g1, g2 = st.columns(2)
     with g1:
