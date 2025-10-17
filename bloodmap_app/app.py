@@ -62,7 +62,7 @@ if 'peds_actions' not in st.session_state:
     st.session_state['peds_actions'] = []
 
 
-APP_VERSION = "v7.24 (Graphs Bands • Peds Checklist+Schedule • Onco-DB Guard • Special Notes+)"
+APP_VERSION = "보호자님들의울타리가 되기위해 노력하는 개발자가 될게요 여러분 모두 화이팅입니다 다같이 우리 힘내봐요"
 
 # ---------- Safe Import Helper ----------
 def _load_local_module(mod_name: str, rel_paths):
@@ -173,7 +173,7 @@ st.markdown(
 > and resting peacefully in a world free from all hardships."""
 )
 st.markdown("---")
-render_deploy_banner("https://bloodmap.streamlit.app/", "제작: Hoya/GPT · 자문: Hoya/GPT")
+render_deploy_banner("https://cafe.naver.com/bloodmap", "제작: Hoya/GPT · 자문: Hoya/GPT")
 st.caption(f"모듈 경로 — special_tests: {SPECIAL_PATH or '(not found)'} | onco_map: {ONCO_PATH or '(not found)'} | drug_db: {DRUGDB_PATH or '(not found)'}")
 
 # ---------- Helpers ----------
