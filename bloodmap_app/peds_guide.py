@@ -379,7 +379,9 @@ def render_caregiver_notes_peds(
 
 # === Section renderers (UI moved out of app.py) ===
 def render_section_constipation():
-    with st.expander("🧒 소아 변비 체크", expanded=False):
+    expanded_default = bool(st.session_state.get("peds_stable_mode", False))
+    st.markdown("#### 소아 변비")
+    with st.expander("🧒 소아 변비 체크", expanded=expanded_default):
         st.caption("가정 내 자가 관리 도움용 정보입니다. ※ 응급 신호가 있으면 즉시 진료를 권합니다.")
         c_a, c_b = st.columns(2)
         with c_a:
@@ -444,7 +446,9 @@ def render_section_constipation():
                         st.info("용량 계산 모듈이 준비되지 않았습니다.")
 
 def render_section_diarrhea():
-    with st.expander("🧒 소아 설사 체크", expanded=False):
+    expanded_default = bool(st.session_state.get("peds_stable_mode", False))
+    st.markdown("#### 소아 설사")
+    with st.expander("🧒 소아 설사 체크", expanded=expanded_default):
         st.caption("탈수 확인이 가장 중요합니다. 아래 항목을 확인해 주세요.")
         d1, d2 = st.columns(2)
         with d1:
@@ -485,7 +489,9 @@ def render_section_diarrhea():
                 st.info("용량 계산 모듈이 준비되지 않았습니다.")
 
 def render_section_vomit():
-    with st.expander("🧒 소아 구토 체크", expanded=False):
+    expanded_default = bool(st.session_state.get("peds_stable_mode", False))
+    st.markdown("#### 소아 구토")
+    with st.expander("🧒 소아 구토 체크", expanded=expanded_default):
         st.caption("구토는 탈수 위험이 있어요. 아래 항목을 확인해 주세요.")
         v1, v2 = st.columns(2)
         with v1:
