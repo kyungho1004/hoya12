@@ -609,17 +609,11 @@ with t_home:
 
     
     # ======= 홈: 피드백 퀵 링크 버튼 =======
-    # 모바일 최적화: 전체 폭 버튼 + 즉시 펼침
+    # 모바일 최적화: 전체 폭 버튼 + 즉시 펼침 (별도 rerun 호출 없음)
     if st.button("💬 피드백 남기기", key=wkey("btn_open_feedback"), use_container_width=True):
         st.session_state["open_feedback_expander"] = True
-        try:
-            st.rerun()
-        except Exception:
-            try:
-                st.experimental_rerun()
-            except Exception:
-                pass
-    # ======= 홈: 피드백 퀵 링크 버튼 끝 =======
+# ======= 홈: 피드백 퀵 링크 버튼 끝 =======
+# ======= 홈: 피드백 퀵 링크 버튼 끝 =======
 # ======= 홈: 피드백 (응급도 체크 하단) =======
     # ======= 홈: 피드백 (응급도 체크 하단) =======
     with st.expander("💬 피드백(앱 개선 제안/오류 신고)", expanded=st.session_state.get("open_feedback_expander", False)):
