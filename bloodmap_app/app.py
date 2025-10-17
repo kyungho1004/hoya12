@@ -63,7 +63,6 @@ if 'peds_actions' not in st.session_state:
 
 
 APP_VERSION = "보호자님들에게 도움이 되는 피수치+소아탭업데이트하였습니다.많은 피드백과 관심 부탁드립니다"
-              "모든 보호자님들 다같이 힘내봐요화이팅 "
 
 # ---------- Safe Import Helper ----------
 def _load_local_module(mod_name: str, rel_paths):
