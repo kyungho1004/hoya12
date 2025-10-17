@@ -625,7 +625,7 @@ with t_home:
         def _clear_fb():
             st.session_state[fb_store_key] = ""
             st.session_state[fb_widget_key] = ""
-            st.experimental_rerun()
+            None  # rerun removed
 
         with col_fb1:
             st.button("피드백 저장(세션)", key=wkey("btn_fb_save"), on_click=_save_fb)
@@ -2560,5 +2560,19 @@ def attach_feedback_sidebar(page_hint: str = "Sidebar") -> None:
 
 # ← 이 줄은 파일 ‘맨 아래’에 있어야 합니다.
 attach_feedback_sidebar(page_hint="Home")
+
+def _ss_setdefault(k, v):
+    try:
+        st.session_state.setdefault(k, v)
+    except Exception:
+        if k not in st.session_state:
+            st.session_state[k] = v
+# === mobile stability init ===
+_ss_setdefault('open_feedback_expander', False)
+_ss_setdefault('visited_today_counted', False)
+_ss_setdefault(wkey('home_fb_counts_cache'), {'1':0,'2':0,'3':0,'4':0,'5':0})
+_ss_setdefault(wkey('home_fb_log_cache'), [])
+# === end mobile stability init ===
+
 
 # ===== [/INLINE FEEDBACK] =====
