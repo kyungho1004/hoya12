@@ -2481,4 +2481,67 @@ _ss_setdefault(wkey('home_fb_log_cache'), [])
 # === end mobile stability init ===
 
 
+# ==== 소아(안정 모드) 초기가드: 최상단에서 바로 렌더 후 종료 ====
+try:
+    # 세션 키 기본값
+    try:
+        st.session_state.setdefault("peds_stable_mode", False)
+    except Exception:
+        if "peds_stable_mode" not in st.session_state:
+            st.session_state["peds_stable_mode"] = False
+
+    # URL 파라미터 우선 (view=peds 이면 항상 소아 고정)
+    _qp = st.query_params if hasattr(st, "query_params") else {}
+    _view_lock = False
+    try:
+        _view_lock = (_qp.get("view", "") == "peds") if isinstance(_qp, dict) else False
+    except Exception:
+        _view_lock = False
+
+    if st.session_state.get("peds_stable_mode", False) or _view_lock:
+        # 소아 섹션만 렌더
+        try:
+            from peds_guide import render_section_constipation, render_section_diarrhea, render_section_vomit, render_caregiver_notes_peds
+        except Exception:
+            from peds_guide import render_section_constipation, render_section_diarrhea, render_section_vomit
+            render_caregiver_notes_peds = None
+
+        st.info("🧒 소아(안정 모드): 탭 없이 소아 섹션만 표시 중입니다. 상단 토글 해제 또는 URL 파라미터(view=peds) 제거 시 일반 모드로 돌아갑니다.")
+        render_section_constipation()
+        render_section_diarrhea()
+        render_section_vomit()
+
+        # 통합 보호자 설명(가능 시)
+        try:
+            if render_caregiver_notes_peds is not None:
+                # 일부 변수는 없을 수 있어 안전하게 locals 체크
+                render_caregiver_notes_peds(
+                    stool=locals().get("stool"),
+                    fever=locals().get("fever"),
+                    persistent_vomit=locals().get("persistent_vomit"),
+                    oliguria=locals().get("oliguria"),
+                    cough=locals().get("cough"),
+                    nasal=locals().get("nasal"),
+                    eye=locals().get("eye"),
+                    abd_pain=locals().get("abd_pain"),
+                    ear_pain=locals().get("ear_pain"),
+                    rash=locals().get("rash"),
+                    hives=locals().get("hives"),
+                    migraine=locals().get("migraine"),
+                    hfmd=locals().get("hfmd"),
+                    sputum=locals().get("sputum"),
+                    wheeze=locals().get("wheeze"),
+                    max_temp=locals().get("max_temp"),
+                    sore_throat=False,
+                    chest_ret=False,
+                    rr=None,
+                    score=locals().get("score"),
+                )
+        except Exception:
+            pass
+
+        st.stop()
+except Exception:
+    pass
+# ==== 소아(안정 모드) 초기가드 끝 ====
 # ===== [/INLINE FEEDBACK] =====
