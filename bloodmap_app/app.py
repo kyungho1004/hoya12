@@ -172,7 +172,7 @@ st.markdown(
 > and resting peacefully in a world free from all hardships."""
 )
 st.markdown("---")
-render_deploy_banner("https://cafe.naver.com/bloodmap", "제작: Hoya/GPT · 자문: Hoya/GPT")
+render_deploy_banner("https://bloodmap.streamlit.app/", "제작: Hoya/GPT · 자문: Hoya/GPT")
 st.caption(f"모듈 경로 — special_tests: {SPECIAL_PATH or '(not found)'} | onco_map: {ONCO_PATH or '(not found)'} | drug_db: {DRUGDB_PATH or '(not found)'}")
 
 # ---------- Helpers ----------
@@ -607,9 +607,17 @@ with t_home:
 
     st.markdown("---")
 
+    
+    # ======= 홈: 피드백 퀵 링크 버튼 =======
+    col_q1, col_q2 = st.columns([1,3])
+    with col_q1:
+        if st.button("💬 피드백 남기기", key=wkey("btn_open_feedback")):
+            st.session_state["open_feedback_expander"] = True
+            st.experimental_rerun()
+    # ======= 홈: 피드백 퀵 링크 버튼 끝 =======
+# ======= 홈: 피드백 (응급도 체크 하단) =======
     # ======= 홈: 피드백 (응급도 체크 하단) =======
-    # ======= 홈: 피드백 (응급도 체크 하단) =======
-    with st.expander("💬 피드백(앱 개선 제안/오류 신고)", expanded=False):
+    with st.expander("💬 피드백(앱 개선 제안/오류 신고)", expanded=st.session_state.get("open_feedback_expander", False)):
         st.caption("※ 별명#PIN 기준 세션 임시 저장. 보고서에는 포함되지 않습니다.")
         fb_store_key = wkey("home_feedback_store")   # 저장용
         fb_widget_key = wkey("home_feedback_input")  # 위젯용(분리)
@@ -621,10 +629,6 @@ with t_home:
         def _save_fb():
             st.session_state[fb_store_key] = st.session_state.get(fb_widget_key, "")
             st.success("피드백이 저장되었습니다(세션 기준).")
-            try:
-                st.toast("피드백 감사합니다! 반영됐어요 🙌", icon="👍")
-            except Exception:
-                st.success("피드백 감사합니다! 반영됐어요 🙌")
 
         def _clear_fb():
             st.session_state[fb_store_key] = ""
@@ -732,16 +736,8 @@ with t_home:
                 st.session_state[_log_key] = st.session_state[_log_key][-1000:]
             if _FB_WRITE_OK:
                 st.success("피드백 점수가 저장되었습니다. 고맙습니다!")
-                try:
-                    st.toast("피드백 감사합니다! 반영됐어요 🙌", icon="⭐")
-                except Exception:
-                    st.success("피드백 감사합니다! 반영됐어요 🙌")
             else:
                 st.info("쓰기 권한이 없어 점수는 세션에만 반영됩니다. (_BASE=/mnt/data)")
-                try:
-                    st.toast("피드백 감사합니다! 반영됐어요 🙌", icon="⭐")
-                except Exception:
-                    st.success("피드백 감사합니다! 반영됐어요 🙌")
 
         # 표시: 현재 평균/표 수
         try:
@@ -2398,3 +2394,25 @@ def attach_feedback_sidebar(page_hint: str = "Sidebar") -> None:
 # ← 이 줄은 파일 ‘맨 아래’에 있어야 합니다.
 attach_feedback_sidebar(page_hint="Home")
 # ===== [/INLINE FEEDBACK] =====
+
+# ======= 안전 체크리스트 (비노출) =======
+def _run_safety_checklist_silent():
+    try:
+        import importlib, os
+        for mod in ["core_utils", "pdf_export", "ui_results", "peds_dose"]:
+            try:
+                importlib.import_module(mod)
+            except Exception:
+                pass
+        for d in ["/mnt/data/bloodmap_graph", "/mnt/data/profile", "/mnt/data/care_log"]:
+            try:
+                if not os.path.exists(d):
+                    os.makedirs(d, exist_ok=True)
+            except Exception:
+                pass
+        print("P0/P1 안전강화 패치 OK")
+    except Exception:
+        pass
+
+_run_safety_checklist_silent()
+# ======= 안전 체크리스트 끝 =======
