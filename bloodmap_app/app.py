@@ -609,18 +609,16 @@ with t_home:
 
     
     # ======= 홈: 피드백 퀵 링크 버튼 =======
-    col_q1, col_q2 = st.columns([1,3])
-    with col_q1:
-        if st.button("💬 피드백 남기기", key=wkey("btn_open_feedback")):
-            st.session_state["open_feedback_expander"] = True
+    # 모바일 최적화: 전체 폭 버튼 + 즉시 펼침
+    if st.button("💬 피드백 남기기", key=wkey("btn_open_feedback"), use_container_width=True):
+        st.session_state["open_feedback_expander"] = True
+        try:
+            st.rerun()
+        except Exception:
             try:
-                st.rerun()
+                st.experimental_rerun()
             except Exception:
-                try:
-                    st.experimental_rerun()
-                except Exception:
-                    pass
-
+                pass
     # ======= 홈: 피드백 퀵 링크 버튼 끝 =======
 # ======= 홈: 피드백 (응급도 체크 하단) =======
     # ======= 홈: 피드백 (응급도 체크 하단) =======
@@ -2214,7 +2212,7 @@ def render_graph_panel():
             st.error(f"CSV를 읽을 수 없습니다: {e}")
             df = None
     elif mode == "CSV 파일" and not file_map:
-        st.info("CSV 파일이 없습니다. 세션 기록을 사용하거나 /mnt/data/bloodmap_graph 폴더에 CSV를 넣어주세요.")
+        st.info("CSV가 아직 없어요 🙂 지금 입력하신 세션 데이터를 그대로 사용하거나, 나중에 /mnt/data/bloodmap_graph 폴더에 CSV를 추가해 주세요.")
 
     # 세션 기록 → DataFrame
     if mode == "세션 기록":
