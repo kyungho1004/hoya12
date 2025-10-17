@@ -651,14 +651,6 @@ with t_home:
             key=_score_key,
             index=0,
         )
-        def _safe_rerun():
-    try:
-        st.rerun()
-    except Exception:
-        try:
-            st.experimental_rerun()
-        except Exception:
-            pass
 
         st.markdown("##### 빠른 태그(선택)")
         _tag_key = wkey("home_fb_tags")
