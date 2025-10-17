@@ -607,16 +607,9 @@ with t_home:
 
     st.markdown("---")
 
-    
-    # ======= 홈: 피드백 퀵 링크 버튼 =======
-    # 모바일 최적화: 전체 폭 버튼 + 즉시 펼침 (별도 rerun 호출 없음)
-    if st.button("💬 피드백 남기기", key=wkey("btn_open_feedback"), use_container_width=True):
-        st.session_state["open_feedback_expander"] = True
-# ======= 홈: 피드백 퀵 링크 버튼 끝 =======
-# ======= 홈: 피드백 퀵 링크 버튼 끝 =======
-# ======= 홈: 피드백 (응급도 체크 하단) =======
     # ======= 홈: 피드백 (응급도 체크 하단) =======
-    with st.expander("💬 피드백(앱 개선 제안/오류 신고)", expanded=st.session_state.get("open_feedback_expander", False)):
+    # ======= 홈: 피드백 (응급도 체크 하단) =======
+    with st.expander("💬 피드백(앱 개선 제안/오류 신고)", expanded=False):
         st.caption("※ 별명#PIN 기준 세션 임시 저장. 보고서에는 포함되지 않습니다.")
         fb_store_key = wkey("home_feedback_store")   # 저장용
         fb_widget_key = wkey("home_feedback_input")  # 위젯용(분리)
@@ -632,13 +625,7 @@ with t_home:
         def _clear_fb():
             st.session_state[fb_store_key] = ""
             st.session_state[fb_widget_key] = ""
-            try:
-                st.rerun()
-            except Exception:
-                try:
-                    st.experimental_rerun()
-                except Exception:
-                    pass
+            st.experimental_rerun()
 
         with col_fb1:
             st.button("피드백 저장(세션)", key=wkey("btn_fb_save"), on_click=_save_fb)
@@ -2206,7 +2193,7 @@ def render_graph_panel():
             st.error(f"CSV를 읽을 수 없습니다: {e}")
             df = None
     elif mode == "CSV 파일" and not file_map:
-        st.info("CSV가 아직 없어요 🙂 지금 입력하신 세션 데이터를 그대로 사용하거나, 나중에 /mnt/data/bloodmap_graph 폴더에 CSV를 추가해 주세요.")
+        st.info("CSV 파일이 없습니다. 세션 기록을 사용하거나 /mnt/data/bloodmap_graph 폴더에 CSV를 넣어주세요.")
 
     # 세션 기록 → DataFrame
     if mode == "세션 기록":
@@ -2398,42 +2385,44 @@ def attach_feedback_sidebar(page_hint: str = "Sidebar") -> None:
 
 # ← 이 줄은 파일 ‘맨 아래’에 있어야 합니다.
 attach_feedback_sidebar(page_hint="Home")
+# ======= 소아: 변비 체크 =======
+with st.expander("🧒 소아 변비 체크", expanded=False):
+    st.caption("가정 내 자가 관리 도움용 정보입니다. ※ 응급 신호가 있으면 즉시 진료를 권합니다.")
+    col_a, col_b = st.columns(2)
+    with col_a:
+        ped_age = st.number_input("나이(개월)", min_value=0, max_value=216, value=24, step=1, key=wkey("peds_const_age"))
+        days = st.number_input("배변이 없던 기간(일)", min_value=0, max_value=30, value=2, step=1, key=wkey("peds_const_days"))
+    with col_b:
+        hard = st.checkbox("딱딱한/토끼똥 형태", key=wkey("peds_const_hard"))
+        pain = st.checkbox("배변 시 통증/항문 찢어짐 의심", key=wkey("peds_const_pain"))
+    st.markdown("**경고 신호(있으면 즉시 진료)**")
+    c1,c2,c3 = st.columns(3)
+    with c1:
+        red_vomit = st.checkbox("녹/노란 담즙 구토", key=wkey("peds_const_red_vomit"))
+        red_blood = st.checkbox("혈변/검은변", key=wkey("peds_const_red_blood"))
+    with c2:
+        red_fever = st.checkbox("고열(≥38.5℃)", key=wkey("peds_const_red_fever"))
+        red_distend = st.checkbox("심한 복부팽만/심한 복통", key=wkey("peds_const_red_distend"))
+    with c3:
+        red_weight = st.checkbox("체중감소/탈수 의심", key=wkey("peds_const_red_weight"))
+        red_newborn = st.checkbox("생후 1개월 미만", key=wkey("peds_const_red_newborn"))
+
+    red_flags = any([red_vomit, red_blood, red_fever, red_distend, red_weight, red_newborn])
+    if red_flags:
+        st.error("🚨 경고 신호가 있어요. **즉시 의료진과 상담/진료**를 권장합니다.")
+    else:
+        tips = []
+        tips.append("물/수유 **충분히**: 연령에 맞게 수분을 자주 제공해 주세요.")
+        tips.append("식이섬유: 과일·채소·전곡류 등 **섬유질** 섭취를 늘려보세요.")
+        tips.append("배변 루틴: 식후 5~10분 **변기/변좌에 앉히기** (무리 강요 금지).")
+        tips.append("운동/활동: 걷기·놀이 등 **활동량** 늘리기.")
+        if days >= 3 or hard or pain:
+            tips.append("배변 완화 식품(자두/배 등)을 소량 제공해 보세요. **증상 지속 시 진료**를 권합니다.")
+        st.success("✅ 가정 내 관리 팁")
+        for t in tips:
+            st.write("- " + t)
+        st.caption("※ 약물 사용은 연령·체중에 따라 다릅니다. **의료진 지시 없이 임의 복용은 피하세요.**")
+
+# ======= 소아: 변비 체크 끝 =======
+
 # ===== [/INLINE FEEDBACK] =====
-
-# ======= 안전 체크리스트 (비노출) =======
-def _run_safety_checklist_silent():
-    try:
-        import importlib, os
-        for mod in ["core_utils", "pdf_export", "ui_results", "peds_dose"]:
-            try:
-                importlib.import_module(mod)
-            except Exception:
-                pass
-        for d in ["/mnt/data/bloodmap_graph", "/mnt/data/profile", "/mnt/data/care_log"]:
-            try:
-                if not os.path.exists(d):
-                    os.makedirs(d, exist_ok=True)
-            except Exception:
-                pass
-        print("P0/P1 안전강화 패치 OK")
-    except Exception:
-        pass
-
-_run_safety_checklist_silent()
-# ======= 안전 체크리스트 끝 =======
-def _safe_rerun():
-    try:
-        st.rerun()
-    except Exception:
-        try:
-            try:
-                st.rerun()
-            except Exception:
-                try:
-                    st.experimental_rerun()
-                except Exception:
-                    pass
-
-        except Exception:
-            pass
-
