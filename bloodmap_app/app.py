@@ -2,6 +2,7 @@
 
 # ===== Robust import guard (auto-injected) =====
 import importlib, types
+from peds_guide import render_section_constipation, render_section_diarrhea, render_section_vomit
 
 def _safe_import(modname):
     try:
@@ -1777,155 +1778,12 @@ def _annotate_special_notes(lines):
     return out
 
     # ======= 소아: 변비 체크 =======
-    with st.expander("🧒 소아 변비 체크", expanded=False):
-        st.caption("가정 내 자가 관리 도움용 정보입니다. ※ 응급 신호가 있으면 즉시 진료를 권합니다.")
-        c_a, c_b = st.columns(2)
-        with c_a:
-            p_age = st.number_input("나이(개월)", min_value=0, max_value=216, value=24, step=1, key=wkey("peds_age_const"))
-            days = st.number_input("배변이 없던 기간(일)", min_value=0, max_value=30, value=2, step=1, key=wkey("peds_days_const"))
-        with c_b:
-            hard = st.checkbox("딱딱한/토끼똥 형태", key=wkey("peds_hard_const"))
-            pain = st.checkbox("배변 시 통증/항문 찢어짐 의심", key=wkey("peds_pain_const"))
-        st.markdown("**경고 신호(있으면 즉시 진료)**")
-        g1,g2,g3 = st.columns(3)
-        with g1:
-            red_vomit = st.checkbox("녹/노란 담즙 구토", key=wkey("peds_const_red_vomit"))
-            red_blood = st.checkbox("혈변/검은변", key=wkey("peds_const_red_blood"))
-        with g2:
-            red_fever = st.checkbox("고열(≥38.5℃)", key=wkey("peds_const_red_fever"))
-            red_distend = st.checkbox("심한 복부팽만/심한 복통", key=wkey("peds_const_red_distend"))
-        with g3:
-            red_weight = st.checkbox("체중감소/탈수 의심", key=wkey("peds_const_red_weight"))
-            red_newborn = st.checkbox("생후 1개월 미만", key=wkey("peds_const_red_newborn"))
-        if any([red_vomit, red_blood, red_fever, red_distend, red_weight, red_newborn]):
-            st.error("🚨 경고 신호가 있어요. **즉시 의료진과 상담/진료**를 권장합니다.")
-        else:
-            tips = [
-                "물/수유 **충분히**: 연령에 맞게 수분을 자주 제공해 주세요.",
-                "식이섬유: 과일·채소·전곡류 등 **섬유질** 섭취 늘리기.",
-                "배변 루틴: 식후 5~10분 **변기/변좌에 앉히기** (무리 강요 금지).",
-                "운동/활동: 걷기·놀이 등 **활동량** 늘리기.",
-            ]
-            if days >= 3 or hard or pain:
-                tips.append("배변 완화 식품(자두/배 등)을 소량 제공. **지속 시 진료** 권장.")
-            st.success("✅ 가정 내 관리 팁")
-            for t in tips:
-                st.write("- " + t)
-            st.caption("※ 약물은 연령·체중에 따라 다릅니다. **의료진 지시 없이 임의 복용은 피하세요.**")
-
-    # ======= 소아: 설사 체크 =======
-    with st.expander("🧒 소아 설사 체크", expanded=False):
-        st.caption("탈수 확인이 가장 중요합니다. 아래 항목을 확인해 주세요.")
-        d1, d2 = st.columns(2)
-        with d1:
-            d_age = st.number_input("나이(개월)", min_value=0, max_value=216, value=18, step=1, key=wkey("peds_age_diarrhea"))
-            stool_cnt = st.selectbox("설사 횟수(금일)", ["1~2회","3~4회","5~6회","7회 이상"], key=wkey("peds_stool_cnt"))
-        with d2:
-            vomit = st.checkbox("동반 구토", key=wkey("peds_vomit_with_diarrhea"))
-            less_urine = st.checkbox("소변 감소/진한 소변", key=wkey("peds_less_urine"))
-        st.markdown("**경고 신호**")
-        h1,h2,h3 = st.columns(3)
-        with h1:
-            red_blood_stool = st.checkbox("혈변/검은변", key=wkey("peds_dia_red_blood"))
-            red_age = st.checkbox("3개월 미만", key=wkey("peds_dia_red_age"))
-        with h2:
-            red_high_fever = st.checkbox("고열(≥38.5℃)", key=wkey("peds_dia_red_fever"))
-            red_persist = st.checkbox("3일 이상 지속", key=wkey("peds_dia_red_persist"))
-        with h3:
-            red_lethargy = st.checkbox("심한 무기력/정신 혼미", key=wkey("peds_dia_red_lethargy"))
-            red_signs_dehyd = st.checkbox("심한 탈수 의심(눈물 감소/입마름/함몰된 눈)", key=wkey("peds_dia_red_dehyd"))
-        if any([red_blood_stool, red_age, red_high_fever, red_persist, red_lethargy, red_signs_dehyd]):
-            st.error("🚨 경고 신호가 있어요. **즉시 의료진과 상담/진료**를 권장합니다.")
-        else:
-            st.success("✅ 가정 내 관리")
-            st.write("- **수분 보충**: 경구수분보충액(ORS) 소량·자주. 모유수유는 계속.")
-            st.write("- **식사**: 기름진 음식/생과일 주스 피하고, 죽/바나나/감자 등 속 편한 음식.")
-            st.write("- **지속 시 진료**: 48~72시간 지속되면 진료 권장.")
-        # 해열·통증이 동반될 경우 참고용(의료진 상담 후 사용)
-        with st.expander("해열/통증 완화 (참고: 의료진 상담 후)", expanded=False):
-            try:
-                import peds_dose as PD
-                weight_kg = st.number_input("체중(kg, 선택)", min_value=0.0, max_value=80.0, value=0.0, step=0.5, key=wkey("peds_w_diarrhea"))
-                apap_ml, estw1 = PD.acetaminophen_ml(d_age, weight_kg if weight_kg>0 else None)
-                ibu_ml,  estw2 = PD.ibuprofen_ml(d_age, weight_kg if weight_kg>0 else None)
-                st.caption(f"추정체중: {estw1 if weight_kg<=0 else weight_kg:.1f} kg")
-                st.write(f"- 아세트아미노펜 시럽(160mg/5mL): **{apap_ml} mL** (6~8시간 간격)")
-                st.write(f"- 이부프로펜 시럽(100mg/5mL): **{ibu_ml} mL** (8시간 간격)")
-                st.caption("※ 금기/주의 질환이 있을 수 있으니 반드시 의료진 지시에 따르세요.")
-            except Exception as e:
-                st.info("용량 계산 모듈이 준비되지 않았습니다.")
-
-    # ======= 소아: 구토 체크 =======
-    with st.expander("🧒 소아 구토 체크", expanded=False):
-        st.caption("구토는 탈수 위험이 있어요. 아래 항목을 확인해 주세요.")
-        v1, v2 = st.columns(2)
-        with v1:
-            v_age = st.number_input("나이(개월)", min_value=0, max_value=216, value=18, step=1, key=wkey("peds_age_vomit"))
-            vom_freq = st.selectbox("구토 횟수(금일)", ["1~2회","3~4회","5~6회","7회 이상"], key=wkey("peds_vomit_cnt"))
-        with v2:
-            bile = st.checkbox("녹/노란 담즙 구토", key=wkey("peds_vomit_bile"))
-            projectile = st.checkbox("분수토/심한 구토", key=wkey("peds_vomit_proj"))
-        st.markdown("**경고 신호**")
-        v1c, v2c, v3c = st.columns(3)
-        with v1c:
-            v_red_blood = st.checkbox("혈성 구토", key=wkey("peds_vomit_blood"))
-            v_age_flag = st.checkbox("3개월 미만", key=wkey("peds_vomit_age"))
-        with v2c:
-            v_high_fever = st.checkbox("고열(≥38.5℃)", key=wkey("peds_vomit_fever"))
-            v_stiff_neck = st.checkbox("목 경직/의식 변화", key=wkey("peds_vomit_stiff"))
-        with v3c:
-            v_dehyd = st.checkbox("심한 탈수(소변 감소/입마름/눈함몰)", key=wkey("peds_vomit_dehyd"))
-            v_pain = st.checkbox("심한 복통/복부팽만", key=wkey("peds_vomit_pain"))
-        if any([bile, projectile, v_red_blood, v_age_flag, v_high_fever, v_stiff_neck, v_dehyd, v_pain]):
-            st.error("🚨 경고 신호가 있어요. **즉시 의료진과 상담/진료**를 권장합니다.")
-        else:
-            st.success("✅ 가정 내 관리")
-            st.write("- **수분 소량·자주**: 미지근한 물/ORS를 한 번에 많이가 아니라 조금씩 자주.")
-            st.write("- **식사**: 구토 멈출 때까지는 무리한 식사 금지, 이후 죽/바나나 등 순한 음식.")
-            st.write("- **지속 시 진료**: 24~48시간 지속되면 진료 권장.")
-        with st.expander("해열/통증 완화 (참고: 의료진 상담 후)", expanded=False):
-            try:
-                import peds_dose as PD
-                weight_kg = st.number_input("체중(kg, 선택)", min_value=0.0, max_value=80.0, value=0.0, step=0.5, key=wkey("peds_w_vomit"))
-                apap_ml, estw1 = PD.acetaminophen_ml(v_age, weight_kg if weight_kg>0 else None)
-                ibu_ml,  estw2 = PD.ibuprofen_ml(v_age, weight_kg if weight_kg>0 else None)
-                st.caption(f"추정체중: {estw1 if weight_kg<=0 else weight_kg:.1f} kg")
-                st.write(f"- 아세트아미노펜 시럽(160mg/5mL): **{apap_ml} mL** (6~8시간 간격)")
-                st.write(f"- 이부프로펜 시럽(100mg/5mL): **{ibu_ml} mL** (8시간 간격)")
-                st.caption("※ 금기/주의 질환이 있을 수 있으니 반드시 의료진 지시에 따르세요.")
-            except Exception:
-                st.info("용량 계산 모듈이 준비되지 않았습니다.")
-
-
-    # === 소아 보호자 설명(통합, peds_guide 연계) ===
-    with st.expander("👪 소아 보호자 설명(통합)", expanded=True):
-        try:
-            from peds_guide import render_caregiver_notes_peds
-            render_caregiver_notes_peds(
-                stool=stool,
-                fever=fever,
-                persistent_vomit=persistent_vomit,
-                oliguria=oliguria,
-                cough=cough,
-                nasal=nasal,
-                eye=eye,
-                abd_pain=abd_pain,
-                ear_pain=ear_pain,
-                rash=rash,
-                hives=hives,
-                migraine=migraine,
-                hfmd=hfmd,
-                sputum=sputum if "sputum" in locals() else None,
-                wheeze=wheeze if "wheeze" in locals() else None,
-                max_temp=max_temp if "max_temp" in locals() else None,
-                sore_throat=False,
-                chest_ret=False,
-                rr=None,
-                score=score if "score" in locals() else None,
-            )
-        except Exception as _e:
-            st.info("보호자 설명 모듈을 불러오지 못했습니다. 다음에 다시 시도해 주세요.")
-    # === 소아 보호자 설명(통합) 끝 ===
+    render_section_constipation()
+# ======= 소아: 설사 체크 =======
+    render_section_diarrhea()
+# ======= 소아: 구토 체크 =======
+    render_section_vomit()
+# === 소아 보호자 설명(통합) 끝 ===
 
 with t_special:
     st.subheader("특수검사 해석")
