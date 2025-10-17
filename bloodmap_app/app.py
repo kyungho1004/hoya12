@@ -791,6 +791,81 @@ with t_home:
     # ======= 홈: 피드백 끝 =======
 # ======= 홈: 피드백 끝 =======
 
+# ===== 안정 모드: 홈 응급도 체크 렌더 함수 =====
+def _render_home_emergency_stable():
+    st.subheader("응급도 체크(증상 기반)")
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
+    with c1:
+        hematuria = st.checkbox("혈뇨", key=wkey("sym_hematuria"))
+    with c2:
+        melena = st.checkbox("흑색변", key=wkey("sym_melena"))
+    with c3:
+        hematochezia = st.checkbox("혈변", key=wkey("sym_hematochezia"))
+    with c4:
+        chest_pain = st.checkbox("흉통", key=wkey("sym_chest"))
+    with c5:
+        dyspnea = st.checkbox("호흡곤란", key=wkey("sym_dyspnea"))
+    with c6:
+        confusion = st.checkbox("의식저하", key=wkey("sym_confusion"))
+    d1, d2, d3 = st.columns(3)
+    with d1:
+        oliguria = st.checkbox("소변량 급감", key=wkey("sym_oliguria"))
+    with d2:
+        persistent_vomit = st.checkbox("지속 구토(>6시간)", key=wkey("sym_pvomit"))
+    with d3:
+        petechiae = st.checkbox("점상출혈", key=wkey("sym_petechiae"))
+    e1, e2 = st.columns(2)
+    with e1:
+        thunderclap = st.checkbox("번개치는 듯한 두통(Thunderclap)", key=wkey("sym_thunderclap"))
+    with e2:
+        visual_change = st.checkbox("시야 이상/복시/암점", key=wkey("sym_visual_change"))
+
+    sym = dict(
+        hematuria=hematuria,
+        melena=melena,
+        hematochezia=hematochezia,
+        chest_pain=chest_pain,
+        dyspnea=dyspnea,
+        confusion=confusion,
+        oliguria=oliguria,
+        persistent_vomit=persistent_vomit,
+        petechiae=petechiae,
+        thunderclap=thunderclap,
+        visual_change=visual_change,
+    )
+
+    alerts = []
+    a = _try_float((labs or {}).get("ANC"))
+    p = _try_float((labs or {}).get("PLT"))
+    if thunderclap or (visual_change and (confusion or chest_pain or dyspnea)):
+        alerts.append("🧠 **신경계 위중 의심** — 번개치듯 두통/시야 이상/의식장애 → 즉시 응급평가")
+    if (a is not None and a < 500) and (_try_float(st.session_state.get(wkey("cur_temp"))) and _try_float(st.session_state.get(wkey("cur_temp"))) >= 38.0):
+        alerts.append("🔥 **발열성 호중구감소증 의심** — ANC<500 + 발열 → 즉시 항생제 평가")
+    if (p is not None and p < 20000) and (melena or hematochezia or petechiae):
+        alerts.append("🩸 **출혈 고위험** — 혈소판<20k + 출혈징후 → 즉시 병원")
+    if oliguria and persistent_vomit:
+        alerts.append("💧 **중등~중증 탈수 가능** — 소변 급감 + 지속 구토 → 수액 고려")
+    if chest_pain and dyspnea:
+        alerts.append("❤️ **흉통+호흡곤란** — 응급평가 권장")
+    if alerts:
+        for msg in alerts:
+            st.error(msg)
+    else:
+        st.info("위험 조합 경고 없음")
+
+    level, reasons, contrib = emergency_level(
+        labs, st.session_state.get(wkey("cur_temp")), st.session_state.get(wkey("cur_hr")), sym
+    )
+    if level.startswith("🚨"):
+        st.error("응급도: " + level + " — " + " · ".join(reasons))
+    elif level.startswith("🟧"):
+        st.warning("응급도: " + level + " — " + " · ".join(reasons))
+    else:
+        st.info("응급도: " + level + (" — " + " · ".join(reasons) if reasons else ""))
+
+    st.markdown("---")
+# ===== 안정 모드: 홈 응급도 체크 렌더 함수 끝 =====
+
     st.subheader("응급도 체크(증상 기반)")
     c1, c2, c3, c4, c5, c6 = st.columns(6)
     with c1:
@@ -2544,4 +2619,26 @@ try:
 except Exception:
     pass
 # ==== 소아(안정 모드) 초기가드 끝 ====
+# ==== 홈 응급도(안정 모드) 초기가드 ====
+try:
+    try:
+        st.session_state.setdefault("home_emerg_stable", False)
+    except Exception:
+        if "home_emerg_stable" not in st.session_state:
+            st.session_state["home_emerg_stable"] = False
+
+    _qp = st.query_params if hasattr(st, "query_params") else {}
+    _lock_home = False
+    try:
+        _lock_home = (_qp.get("view", "") == "home") if isinstance(_qp, dict) else False
+    except Exception:
+        _lock_home = False
+
+    if st.session_state.get("home_emerg_stable", False) or _lock_home:
+        st.info("🏠 홈 응급도(안정 모드): 탭 없이 응급도 섹션만 표시 중입니다. 토글 해제 또는 URL 파라미터(view=home) 제거 시 일반 모드로 돌아갑니다.")
+        _render_home_emergency_stable()
+        st.stop()
+except Exception:
+    pass
+# ==== 홈 응급도(안정 모드) 초기가드 끝 ====
 # ===== [/INLINE FEEDBACK] =====
