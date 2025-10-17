@@ -62,7 +62,7 @@ if 'peds_actions' not in st.session_state:
     st.session_state['peds_actions'] = []
 
 
-APP_VERSION = "보호자님들의울타리가 되기위해 노력하는 개발자가 될게요 여러분 모두 화이팅입니다 다같이 우리 힘내봐요"
+APP_VERSION = "v7.24 (Graphs Bands • Peds Checklist+Schedule • Onco-DB Guard • Special Notes+)"
 
 # ---------- Safe Import Helper ----------
 def _load_local_module(mod_name: str, rel_paths):
@@ -173,7 +173,7 @@ st.markdown(
 > and resting peacefully in a world free from all hardships."""
 )
 st.markdown("---")
-render_deploy_banner("https://cafe.naver.com/bloodmap", "제작: Hoya/GPT · 자문: Hoya/GPT")
+render_deploy_banner("https://bloodmap.streamlit.app/", "제작: Hoya/GPT · 자문: Hoya/GPT")
 st.caption(f"모듈 경로 — special_tests: {SPECIAL_PATH or '(not found)'} | onco_map: {ONCO_PATH or '(not found)'} | drug_db: {DRUGDB_PATH or '(not found)'}")
 
 # ---------- Helpers ----------
@@ -593,6 +593,20 @@ tab_labels = ["🏠 홈", "🧪 피수치 입력", "🧬 암 선택", "💊 항�
 t_home, t_labs, t_dx, t_chemo, t_peds, t_special, t_report, t_graph = st.tabs(tab_labels)
 
 # HOME
+# ==== 소아(안정 모드): 탭을 우회하여 소아만 렌더 ====
+with st.container():
+    _ss_setdefault("peds_stable_mode", False)
+    st.caption("모바일에서 소아 탭이 홈으로 돌아가면 아래 안정 모드를 사용하세요.")
+    peds_stable = st.toggle("🧒 소아(안정 모드)", key="peds_stable_mode")
+if pds := st.session_state.get("peds_stable_mode", False):
+    try:
+        render_section_constipation()
+        render_section_diarrhea()
+        render_section_vomit()
+    except Exception:
+        st.info("소아 섹션을 불러오지 못했습니다.")
+    st.stop()
+# ==== 소아(안정 모드) 끝 ====
 with t_home:
     st.subheader("응급도 요약")
     labs = st.session_state.get("labs_dict", {})
