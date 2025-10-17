@@ -1538,6 +1538,31 @@ with t_chemo:
 # PEDS
 with t_peds:
     st.subheader("소아 증상 기반 점수 + 보호자 설명 + 해열제 계산")
+    # ---- 소아 GI(변비·설사·구토) 빠른체크 ----
+    try:
+        st.session_state.setdefault("open_peds_gi_sections", False)
+    except Exception:
+        if "open_peds_gi_sections" not in st.session_state:
+            st.session_state["open_peds_gi_sections"] = False
+
+    cols = st.columns([1,1,3])
+    with cols[0]:
+        st.toggle("GI 섹션 열기", key="open_peds_gi_sections", help="변비·설사·구토 체크 섹션을 아래에 펼칩니다.")
+    with cols[1]:
+        if st.session_state.get("open_peds_gi_sections", False):
+            st.caption("변비·설사·구토 섹션을 아래에 표시합니다.")
+        else:
+            st.caption("필요 시 켜서 확인하세요.")
+
+    if st.session_state.get("open_peds_gi_sections", False):
+        try:
+            from peds_guide import render_section_constipation, render_section_diarrhea, render_section_vomit
+            render_section_constipation()
+            render_section_diarrhea()
+            render_section_vomit()
+        except Exception:
+            st.info("소아 GI 섹션을 불러오지 못했습니다.")
+    # ---- 소아 GI 빠른체크 끝 ----
     c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
         nasal = st.selectbox("콧물", ["없음", "투명", "진득", "누런"], key=wkey("p_nasal"))
@@ -2585,6 +2610,8 @@ try:
         render_section_constipation()
         render_section_diarrhea()
         render_section_vomit()
+
+        render_section_uri_general()
 
         # 통합 보호자 설명(가능 시)
         try:
