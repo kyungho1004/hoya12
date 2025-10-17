@@ -1455,6 +1455,9 @@ with t_peds:
         fever = st.selectbox("발열", ["없음", "37~37.5 (미열)", "37.5~38", "38~38.5", "38.5~39", "39 이상"], key=wkey("p_fever"))
     with c5:
         eye = st.selectbox("눈꼽/결막", ["없음", "맑음", "노랑-농성", "양쪽"], key=wkey("p_eye"))
+    # 추가: 변비 선택 (모바일 호환을 위해 독립 컨테이너)
+    with st.container():
+        constipation = st.selectbox("변비", ["없음","의심","3일 이상","배변 시 통증"], key=wkey("p_constipation"))
     # 추가: 가래/쌕쌕거림(천명)
     g1, g2 = st.columns(2)
     with g1:
@@ -1610,6 +1613,18 @@ with t_peds:
         )
     except Exception:
         notes = ""
+    # 변비 선택이 있으면 요약에 추가
+
+    try:
+
+        if 'constipation' in locals() and constipation != '없음':
+
+            notes = (notes + "\n" if notes else "") + "[증상] 변비:" + str(constipation)
+
+    except Exception:
+
+        pass
+
     st.session_state["peds_notes"] = notes
     with st.expander(f"{risk_badge} 소아 증상 요약(보고서용 저장됨)", expanded=False):
         st.text_area("요약 내용", value=notes, height=160, key=wkey("peds_notes_preview"))
