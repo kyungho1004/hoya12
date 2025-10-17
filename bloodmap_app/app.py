@@ -614,6 +614,14 @@ with t_home:
         if st.button("💬 피드백 남기기", key=wkey("btn_open_feedback")):
             st.session_state["open_feedback_expander"] = True
             _safe_rerun()
+            try:
+      st.rerun()
+        except Exception:
+      try:
+        st.experimental_rerun()
+      except Exception:
+        pass
+
     # ======= 홈: 피드백 퀵 링크 버튼 끝 =======
 # ======= 홈: 피드백 (응급도 체크 하단) =======
     # ======= 홈: 피드백 (응급도 체크 하단) =======
@@ -633,7 +641,14 @@ with t_home:
         def _clear_fb():
             st.session_state[fb_store_key] = ""
             st.session_state[fb_widget_key] = ""
-            _safe_rerun()
+          try:
+    st.rerun()
+except Exception:
+    try:
+        st.experimental_rerun()
+    except Exception:
+        pass
+
 
         with col_fb1:
             st.button("피드백 저장(세션)", key=wkey("btn_fb_save"), on_click=_save_fb)
