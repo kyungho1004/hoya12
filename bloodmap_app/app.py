@@ -751,6 +751,11 @@ with t_home:
                 st.success("피드백 점수가 저장되었습니다. 고맙습니다!")
             else:
                 st.info("쓰기 권한이 없어 점수는 세션에만 반영됩니다. (_BASE=/mnt/data)")
+           try:
+        apm.save_feedback_atomic("home", int(st.session_state.get("home_fb_score", 0)),
+                                 st.session_state.get("home_fb_text",""), {})
+    except Exception:
+        pass
 
         # 표시: 현재 평균/표 수
         try:
