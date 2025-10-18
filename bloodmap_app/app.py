@@ -2,7 +2,39 @@
 
 # ===== Robust import guard (auto-injected) =====
 import importlib, types
-from peds_guide import render_section_constipation, render_section_diarrhea, render_section_vomit, render_peds_jumpbar
+# ===== P0 safety patch: robust import guard for peds_guide =====
+import sys as _sys, os as _os
+_CURDIR = _os.path.dirname(_os.path.abspath(__file__))
+for _p in (_CURDIR, "/mnt/data"):
+    if _p and _p not in _sys.path:
+        _sys.path.insert(0, _p)
+try:
+    from peds_guide import (
+        render_section_constipation,
+        render_section_diarrhea,
+        render_section_vomit,
+        render_peds_jumpbar,
+    )
+except Exception as _peds_err:
+    # Fallback stubs to prevent ImportError crash (NameError-safe)
+    try:
+        import streamlit as st  # local import to avoid top-level failure
+        st.warning("소아 모듈 로드 실패로 임시 안전모드로 동작합니다. (peds_guide ImportError)")
+    except Exception:
+        pass
+    def render_section_constipation(*args, **kwargs): 
+        pass
+    def render_section_diarrhea(*args, **kwargs): 
+        pass
+    def render_section_vomit(*args, **kwargs): 
+        pass
+    def render_peds_jumpbar(*args, **kwargs):
+        try:
+            import streamlit as st
+            st.info("임시 점프바: 소아 섹션 모듈이 로드되지 않았습니다.")
+        except Exception:
+            pass
+# ===== End of P0 safety patch =====
 
 def _safe_import(modname):
     try:
