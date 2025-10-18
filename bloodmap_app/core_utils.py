@@ -60,3 +60,27 @@ def schedule_block():
     df = st.session_state.get("schedules", {}).get(st.session_state.get("key","guest"))
     if isinstance(df, pd.DataFrame) and not df.empty:
         st.dataframe(df, use_container_width=True, height=180)
+
+
+# --- Smooth in-page jump helpers (Streamlit) ---
+def set_jump(anchor: str):
+    import streamlit as st
+    st.session_state["__jump_to__"] = anchor
+
+def render_jump():
+    import streamlit as st
+    from streamlit.components.v1 import html as _html
+    anchor = st.session_state.pop("__jump_to__", None)
+    qp = st.query_params.get("jump", None) if hasattr(st, "query_params") else None
+    target = anchor or qp
+    if target:
+        _html("""
+        <script>
+        (function() {{
+            const anchorId = "{anchor}" || "{qp}";
+            const el = document.getElementById(anchorId);
+            if (el) {{ el.scrollIntoView({{behavior: 'smooth', block: 'start'}}); }}
+        }})();
+        </script>
+        """.format(anchor=target if target else "", qp=""), height=0)
+# --- /Smooth in-page jump helpers ---
