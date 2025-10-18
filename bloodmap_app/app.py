@@ -63,7 +63,7 @@ if 'peds_actions' not in st.session_state:
     st.session_state['peds_actions'] = []
 
 
-APP_VERSION = "항상 여러분들의 힘이 되도록 노력하겠습니다 여러분들의 피드백이 업데이트에 많은 도움이 됩니다"
+APP_VERSION = "v7.24 (Graphs Bands • Peds Checklist+Schedule • Onco-DB Guard • Special Notes+)"
 
 # ---------- Safe Import Helper ----------
 def _load_local_module(mod_name: str, rel_paths):
@@ -86,6 +86,7 @@ def _load_local_module(mod_name: str, rel_paths):
 _branding, BRANDING_PATH = _load_local_module("branding", ["branding.py", "modules/branding.py"])
 if _branding and hasattr(_branding, "render_deploy_banner"):
     render_deploy_banner = _branding.render_deploy_banner
+    render_pledge = getattr(_branding, "render_pledge", lambda text: None)
 else:
     def render_deploy_banner(*a, **k):
         return None
@@ -175,6 +176,11 @@ st.markdown(
 )
 st.markdown("---")
 render_deploy_banner("https://bloodmap.streamlit.app/", "제작: Hoya/GPT · 자문: Hoya/GPT")
+try:
+    render_pledge("Bloodmap 항상 여러분들의 힘이 되도록 노력하겠습니다. 여러분들의 피드백이 업데이트에 많은 도움이 됩니다")
+except Exception:
+    pass
+
 st.caption(f"모듈 경로 — special_tests: {SPECIAL_PATH or '(not found)'} | onco_map: {ONCO_PATH or '(not found)'} | drug_db: {DRUGDB_PATH or '(not found)'}")
 
 # ---------- Helpers ----------
