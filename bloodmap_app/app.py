@@ -4,6 +4,25 @@
 import importlib, types
 from peds_guide import render_section_constipation, render_section_diarrhea, render_section_vomit
 
+
+# --- lightweight usage logger (privacy-safe) ---
+def track(event, **props):
+    try:
+        import csv, time, os
+        row = {"ts": time.time(), "event": str(event)}
+        row.update({k: (str(v) if not isinstance(v, (int, float)) else v) for k, v in props.items()})
+        path = "/mnt/data/usage_logs.csv"
+        write_header = not os.path.exists(path)
+        with open(path, "a", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=row.keys())
+            if write_header:
+                w.writeheader()
+            w.writerow(row)
+    except Exception:
+        pass
+# --- /usage logger ---
+
+
 def _safe_import(modname):
     try:
         return importlib.import_module(modname)
@@ -54,6 +73,13 @@ import os, sys, re, io, csv
 from pathlib import Path
 import importlib.util
 import streamlit as st
+
+st.markdown("""
+<style>
+/* peds-accessibility */
+.peds-jumpbar button{ min-height: 44px; font-size: 0.95rem; }
+</style>
+""", unsafe_allow_html=True)
 
 # --- Session defaults to prevent NameError on first load ---
 if 'peds_notes' not in st.session_state:
@@ -1451,6 +1477,20 @@ with t_chemo:
 # PEDS
 with t_peds:
     st.subheader("소아 증상 기반 점수 + 보호자 설명 + 해열제 계산")
+    if 'peds_tip_seen' not in st.session_state:
+        st.info('버튼을 누르면 해당 섹션이 자동으로 펼쳐져요. 다시 보지 않기를 누르면 이 안내는 사라집니다.')
+        st.checkbox('다시 보지 않기', key=wkey('peds_tip_dontshow'))
+        if st.session_state.get(wkey('peds_tip_dontshow')):
+            st.session_state['peds_tip_seen'] = True
+    if 'peds_tab_logged' not in st.session_state:
+        st.session_state['peds_tab_logged'] = True
+        try:
+            track('tab_enter', tab='peds')
+        except Exception:
+            pass
+    for _aid in ['peds_constipation','peds_diarrhea','peds_vomit','peds_antipyretic','peds_ors','peds_respiratory']:
+        st.markdown(f'<div id="{_aid}"></div>', unsafe_allow_html=True)
+    render_peds_jumpbar()
     c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
         nasal = st.selectbox("콧물", ["없음", "투명", "진득", "누런"], key=wkey("p_nasal"))
