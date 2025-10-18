@@ -21,7 +21,6 @@ def _call_first(mod, names):
                 fn()
             except Exception:
                 pass
-  
 
 # Optional modules (no-op if absent)
 branding = _safe_import("branding")
@@ -39,13 +38,6 @@ if "wkey" not in globals():
     def wkey(x): 
         try:
             import streamlit as st
-            st.markdown("""
-<style>
-/* bloodmap-global-smooth-scroll */
-html { scroll-behavior: smooth; }
-[id^="peds_"]{ scroll-margin-top: 84px; }
-</style>
-""", unsafe_allow_html=True)
             return f"{x}_{st.session_state.get('_uid','')}".strip('_')
         except Exception:
             return str(x)
@@ -65,11 +57,67 @@ import streamlit as st
 
 st.markdown("""
 <style>
-/* bloodmap-global-smooth-scroll */
+/* smooth-scroll */
 html { scroll-behavior: smooth; }
-[id^="peds_"]{ scroll-margin-top: 84px; }
+.peds-nav-md{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin:.25rem 0 .5rem;}
+.peds-nav-md a{display:block;text-align:center;padding:.6rem .8rem;border-radius:12px;border:1px solid #ddd;text-decoration:none;color:inherit;background:#fff}
+.peds-nav-md a:active{transform:scale(.98)}
 </style>
 """, unsafe_allow_html=True)
+
+# --- in-place smooth scroll (no rerun) ---
+
+
+# --- HTML-only pediatric navigator (no rerun) ---
+def render_peds_nav_md():
+    from streamlit.components.v1 import html as _html
+    _html("""
+    <style>
+    .peds-nav{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin:.25rem 0 0.5rem}
+    .peds-nav button{padding:.6rem .8rem;border-radius:12px;border:1px solid #ddd;cursor:pointer;background:#fff}
+    .peds-nav button:active{transform:scale(.98)}
+    </style>
+    <div class="peds-nav">
+        <button onclick="document.getElementById('peds_constipation')?.scrollIntoView({behavior:'smooth',block:'start'})">🧻 변비</button>
+        <button onclick="document.getElementById('peds_diarrhea')?.scrollIntoView({behavior:'smooth',block:'start'})">💦 설사</button>
+        <button onclick="document.getElementById('peds_vomit')?.scrollIntoView({behavior:'smooth',block:'start'})">🤢 구토</button>
+        <button onclick="document.getElementById('peds_antipyretic')?.scrollIntoView({behavior:'smooth',block:'start'})">🌡️ 해열제</button>
+        <button onclick="document.getElementById('peds_ors')?.scrollIntoView({behavior:'smooth',block:'start'})">🥤 ORS·탈수</button>
+        <button onclick="document.getElementById('peds_respiratory')?.scrollIntoView({behavior:'smooth',block:'start'})">🫁 가래·쌕쌕</button>
+    </div>
+    """, height=70)
+# --- /HTML-only pediatric navigator ---
+
+
+
+# --- Markdown-based pediatric navigator (no rerun, no iframe) ---
+def render_peds_nav_md():
+    import streamlit as st
+    st.markdown("""
+    <div class="peds-nav-md">
+      <a href="#peds_constipation">🧻 변비</a>
+      <a href="#peds_diarrhea">💦 설사</a>
+      <a href="#peds_vomit">🤢 구토</a>
+      <a href="#peds_antipyretic">🌡️ 해열제</a>
+      <a href="#peds_ors">🥤 ORS·탈수</a>
+      <a href="#peds_respiratory">🫁 가래·쌕쌕</a>
+    </div>
+    """, unsafe_allow_html=True)
+# --- /Markdown-based pediatric navigator ---
+
+def _scroll_now(target: str):
+    from streamlit.components.v1 import html as _html
+    if not target:
+        return
+    _html(f"""
+    <script>
+    (function(){{
+        const el = document.getElementById("{target}");
+        if (el) el.scrollIntoView({{behavior:'smooth', block:'start'}});
+    }})();
+    </script>
+    """, height=0)
+# --- /in-place smooth scroll ---
 
 # --- Session defaults to prevent NameError on first load ---
 if 'peds_notes' not in st.session_state:
@@ -607,37 +655,6 @@ def build_peds_notes(
 # ---------- Tabs ----------
 tab_labels = ["🏠 홈", "🧪 피수치 입력", "🧬 암 선택", "💊 항암제(진단 기반)", "👶 소아 증상", "🔬 특수검사", "📄 보고서", "📊 기록/그래프"]
 t_home, t_labs, t_dx, t_chemo, t_peds, t_special, t_report, t_graph = st.tabs(tab_labels)
-# --- sticky tabs (localStorage, global) ---
-st.markdown("""
-<script>
-(function(){
-  const KEY='__active_tab_label__';
-  function buttons(){ return Array.from(document.querySelectorAll('button[role="tab"]')); }
-  // 저장된 탭 복원
-  const saved = localStorage.getItem(KEY);
-  if(saved){
-    const btn = buttons().find(b => (b.innerText||'').trim().startsWith(saved));
-    if(btn) btn.click();
-  }else{
-    // 첫 로드 시 현재 선택된 탭 저장
-    const cur = buttons().find(b => b.getAttribute('aria-selected')==='true');
-    if(cur){
-      const label=(cur.innerText||'').trim().split('\\n')[0];
-      if(label) localStorage.setItem(KEY, label);
-    }
-  }
-  // 클릭 시 최신 탭 저장
-  buttons().forEach(b=>{
-    b.addEventListener('click', ()=>{
-      const label=(b.innerText||'').trim().split('\\n')[0];
-      if(label) localStorage.setItem(KEY, label);
-    }, {once:false});
-  });
-})();
-</script>
-""", unsafe_allow_html=True)
-# --- /sticky tabs ---
-
 
 # HOME
 with t_home:
@@ -1490,111 +1507,9 @@ with t_chemo:
             st.write("- (DB에 상세 부작용 없음)")
 
 # PEDS
-
-# --- Pediatric quick paddles (JS open+scroll, no rerun) ---
-# --- PEDS: anchors + jumpbar (render-once) + auto-open ---
-# (A) 앵커 – 섹션 바로 위
-for _aid in ["peds_constipation","peds_diarrhea","peds_vomit","peds_antipyretic","peds_ors","peds_respiratory"]:
-    st.markdown(f'<div id="{_aid}"></div>', unsafe_allow_html=True)
-
-# (B) 점프바 – 세션에서 한 번만 렌더(중복 방지)
-if 'peds_jumpbar_done' not in st.session_state:
-    st.session_state['peds_jumpbar_done'] = True
-    st.markdown("""
-    <style>
-    .peds-jumpbar{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin:.2rem 0 .6rem}
-    .peds-jumpbar button{display:block;width:100%;padding:.65rem .8rem;border-radius:12px;border:1px solid #ddd;background:#fff;cursor:pointer}
-    .peds-jumpbar button:active{transform:scale(.98)}
-    </style>
-    <div class="peds-jumpbar" id="peds-jumpbar">
-      <button data-target="peds_constipation">🧻 변비</button>
-      <button data-target="peds_diarrhea">💦 설사</button>
-      <button data-target="peds_vomit">🤢 구토</button>
-      <button data-target="peds_antipyretic">🌡️ 해열제</button>
-      <button data-target="peds_ors">🥤 ORS·탈수</button>
-      <button data-target="peds_respiratory">🫁 가래·쌕쌕</button>
-    </div>
-    <script>
-    (function(){
-      // 이벤트 위임 — #peds-jumpbar 하나만 동작(중복 방지)
-      const bar = document.getElementById('peds-jumpbar');
-      if(!bar || bar.__wired__) return;
-      bar.__wired__ = true;
-
-      function openAfterAnchor(id){
-        const anchor = document.getElementById(id);
-        if(!anchor) return;
-        // anchor 아래에서 가장 가까운 expander(<details>) 강제 오픈
-        const details = Array.from(document.querySelectorAll('details'));
-        const aTop = anchor.getBoundingClientRect().top + window.scrollY;
-        let best=null, bestDy=1e9;
-        for(const d of details){
-          const dy = (d.getBoundingClientRect().top + window.scrollY) - aTop;
-          if(dy >= -16 && dy < bestDy){ best = d; bestDy = dy; }
-        }
-        if(best) best.open = true;
-        setTimeout(()=>{ anchor.scrollIntoView({behavior:'smooth', block:'start'}); }, 30);
-      }
-
-      bar.addEventListener('click', (e)=>{
-        const btn = e.target.closest('button[data-target]');
-        if(!btn) return;
-        const id = btn.getAttribute('data-target');
-        if(!id) return;
-        openAfterAnchor(id);
-      }, {passive:true});
-    })();
-    </script>
-    """, unsafe_allow_html=True)
-
-# (C) 전역 스크롤/착지 보정 CSS(한 번만 있으면 됨)
-if 'peds_scroll_css' not in st.session_state:
-    st.session_state['peds_scroll_css'] = True
-    st.markdown("""
-    <style>
-    html { scroll-behavior: smooth; }
-    [id^="peds_"]{ scroll-margin-top: 84px; }  /* 탭/헤더 높이만큼 여유 */
-    </style>
-    """, unsafe_allow_html=True)
-# --- /PEDS: anchors + jumpbar + auto-open ---
-
-
-    # auto-open details just after target anchor
-    st.markdown("""
-    <script>
-    (function(){
-      try{
-        const KEY='__peds_target__';
-        const id = localStorage.getItem(KEY);
-        if(!id) return;
-        const anchor = document.getElementById(id);
-        if(anchor){
-          let next = anchor.nextElementSibling;
-          for(let i=0;i<8 && next;i++){
-            if(next.tagName && next.tagName.toLowerCase()==='details'){ break; }
-            next = next.nextElementSibling;
-          }
-          if(next && next.tagName && next.tagName.toLowerCase()==='details'){
-            next.open = true;
-          }
-          setTimeout(()=>{
-            const el = document.getElementById(id);
-            if(el) el.scrollIntoView({behavior:'smooth', block:'start'});
-          }, 60);
-        }
-        localStorage.removeItem(KEY);
-      }catch(e){ /* no-op */ }
-    })();
-    </script>
-    """, unsafe_allow_html=True)
-    # --- /PEDS: anchors + jumpbar + auto-open ---
-  render_peds_jumpbar()
-    st.markdown('<div id="peds_respiratory"></div>', unsafe_allow_html=True)
-    st.markdown('<div id="peds_ors"></div>', unsafe_allow_html=True)
-    st.markdown('<div id="peds_antipyretic"></div>', unsafe_allow_html=True)
-    st.markdown('<div id="peds_vomit"></div>', unsafe_allow_html=True)
-    st.markdown('<div id="peds_diarrhea"></div>', unsafe_allow_html=True)
-    st.markdown('<div id="peds_constipation"></div>', unsafe_allow_html=True)
+with t_peds:
+    st.subheader("소아 증상 기반 점수 + 보호자 설명 + 해열제 계산")
+    render_peds_nav_md()
     c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
         nasal = st.selectbox("콧물", ["없음", "투명", "진득", "누런"], key=wkey("p_nasal"))
@@ -1881,6 +1796,67 @@ if 'peds_scroll_css' not in st.session_state:
         st.info("시간 형식을 확인하세요.")
     st.markdown("---")
     st.subheader("보호자 체크리스트")
+
+
+st.markdown("---")
+st.markdown("## 👶 소아 퀵 섹션 (GI/호흡기)")
+st.caption("필요한 것만 펼쳐서 확인하세요. 아래 각 섹션은 보고서/해열제 계산과 연동됩니다.")
+
+# --- Anchors ---
+st.markdown('<div id="peds_constipation"></div>', unsafe_allow_html=True)
+st.markdown('<div id="peds_diarrhea"></div>', unsafe_allow_html=True)
+st.markdown('<div id="peds_vomit"></div>', unsafe_allow_html=True)
+st.markdown('<div id="peds_antipyretic"></div>', unsafe_allow_html=True)
+st.markdown('<div id="peds_ors"></div>', unsafe_allow_html=True)
+st.markdown('<div id="peds_respiratory"></div>', unsafe_allow_html=True)
+
+# --- 변비 ---
+with st.expander("🧻 변비 체크", expanded=False):
+    try:
+        render_section_constipation()
+    except Exception:
+        st.info("상세 변비 체크 모듈을 불러오지 못했습니다. 아래 요약 가이드를 참고하세요.")
+        st.write("- 수분/수유 자주, 식이섬유(과일·채소·전곡), 식후 5~10분 배변 루틴")
+        st.write("- 3일 이상/배변 시 통증/혈변/복부팽만/구토 동반 시 진료")
+
+# --- 설사 ---
+with st.expander("💦 설사 체크", expanded=False):
+    try:
+        render_section_diarrhea()
+    except Exception:
+        st.info("상세 설사 체크 모듈을 불러오지 못했습니다. 아래 요약 가이드를 참고하세요.")
+        st.write("- ORS를 5~10분마다 소량씩, 기름진 음식·우유 일시 제한")
+        st.write("- 혈변/검은변, 고열, 소변 감소·축 늘어짐 → 진료")
+
+# --- 구토 ---
+with st.expander("🤢 구토 체크", expanded=False):
+    try:
+        render_section_vomit()
+    except Exception:
+        st.info("상세 구토 체크 모듈을 불러오지 못했습니다. 아래 요약 가이드를 참고하세요.")
+        st.write("- 10~15분마다 소량 수분, 초록/커피색/혈토 → 즉시 진료")
+
+# --- 해열제 ---
+with st.expander("🌡️ 해열제 가이드/계산", expanded=False):
+    try:
+        ap_ml_1, ap_ml_max = acetaminophen_ml(st.session_state.get(wkey("wt_peds"), 0.0))
+        ib_ml_1, ib_ml_max = ibuprofen_ml(st.session_state.get(wkey("wt_peds"), 0.0))
+    except Exception:
+        ap_ml_1 = ap_ml_max = ib_ml_1 = ib_ml_max = 0.0
+    st.write(f"- 아세트아미노펜(160mg/5mL): **{ap_ml_1:.1f} mL** (최대 {ap_ml_max:.1f} mL) — 최소 간격 **4h**")
+    st.write(f"- 이부프로펜(100mg/5mL): **{ib_ml_1:.1f} mL** (최대 {ib_ml_max:.1f} mL) — 최소 간격 **6h**")
+    st.caption("※ 금기/주의 질환은 반드시 의료진 지시를 따르세요. 중복 복용 주의.")
+
+# --- ORS/탈수 ---
+with st.expander("🥤 ORS/탈수 가이드", expanded=False):
+    st.write("- 5~10분마다 소량씩 자주, 토하면 10~15분 휴식 후 재개")
+    st.write("- 2시간 이상 소변 없음/입마름/눈물 감소/축 늘어짐 → 진료")
+    st.write("- 가능하면 스포츠음료 대신 **ORS** 용액 사용")
+
+# --- 가래/쌕쌕 ---
+with st.expander("🫁 가래/쌕쌕(천명) 가이드", expanded=False):
+    st.write("- 생리식염수 분무/흡인, 수면 시 머리 살짝 높이기")
+    st.write("- 쌕쌕/호흡곤란/청색증 → 즉시 응급평가")
     show_ck = st.toggle("체크리스트 열기", value=False, key=wkey("peds_ck"))
     if show_ck:
         colL, colR = st.columns(2)
@@ -1926,15 +1902,7 @@ def _annotate_special_notes(lines):
             out.append(ln)
     out.append(pitfalls)
     return out
-
-    # ======= 소아: 변비 체크 =======
-    render_section_constipation()
-# ======= 소아: 설사 체크 =======
-    render_section_diarrhea()
-# ======= 소아: 구토 체크 =======
-    render_section_vomit()
-# === 소아 보호자 설명(통합) 끝 ===
-
+# (migrated) 기존 소아 GI 섹션 호출은 t_peds 퀵 섹션으로 이동되었습니다.
 with t_special:
     st.subheader("특수검사 해석")
     if SPECIAL_PATH:
@@ -2050,60 +2018,6 @@ with t_report:
 
         tab_log, tab_plot, tab_export = st.tabs(["📝 기록", "📈 그래프", "⬇️ 내보내기"])
 
-
-
-
-        st.markdown("""
-
-        <script>
-
-        (function(){
-
-          const KEY='__active_tab_label__';
-
-          function buttons(){ return Array.from(document.querySelectorAll('button[role="tab"]')); }
-
-          const saved = localStorage.getItem(KEY);
-
-          if(saved){
-
-            const btn = buttons().find(b => (b.innerText||'').trim().startsWith(saved));
-
-            if(btn) btn.click();
-
-          }else{
-
-            const cur = buttons().find(b => b.getAttribute('aria-selected')==='true');
-
-            if(cur){
-
-              const label=(cur.innerText||'').trim().split('\n')[0];
-
-              if(label) localStorage.setItem(KEY, label);
-
-            }
-
-          }
-
-          buttons().forEach(b=>{
-
-            b.addEventListener('click', ()=>{
-
-              const label=(b.innerText||'').trim().split('\n')[0];
-
-              if(label) localStorage.setItem(KEY, label);
-
-            }, {once:false});
-
-          });
-
-        })();
-
-        </script>
-
-        <!-- sticky-tabs-local -->
-
-        """, unsafe_allow_html=True)
         with tab_log:
             cols_btn = st.columns([1, 1, 1])
             with cols_btn[0]:
@@ -2668,40 +2582,3 @@ _ss_setdefault(wkey('home_fb_log_cache'), [])
 
 
 # ===== [/INLINE FEEDBACK] =====
-
-
-st.markdown("""
-<script>
-(function(){
-  try{
-    const key='__peds_open__';
-    const key2='__peds_open_alt__';
-    const token = localStorage.getItem(key);
-    const token2 = localStorage.getItem(key2);
-    if(token){
-      const details = Array.from(parent.document.querySelectorAll('details'));
-      const hit = details.find(d => {
-        const txt = (d.querySelector('summary')?.innerText||'').trim();
-        return txt.includes(token) || (token2 && txt.includes(token2));
-      });
-      if(hit){
-        hit.open = true;
-        setTimeout(()=>{
-          const aid = (token==='변비')?'peds_constipation':
-                      (token==='설사')?'peds_diarrhea':
-                      (token==='구토')?'peds_vomit':
-                      (token==='해열제')?'peds_antipyretic':
-                      (token && token.includes('ORS'))?'peds_ors':'peds_respiratory';
-          const el = parent.document.getElementById(aid);
-          if(el){ el.scrollIntoView({behavior:'smooth',block:'start'}); }
-        }, 50);
-      }
-      localStorage.removeItem(key);
-      localStorage.removeItem(key2);
-    }
-  }catch(e){ /* noop */ }
-})();
-</script>
-<!-- peds-auto-open -->
-""", unsafe_allow_html=True)
-
