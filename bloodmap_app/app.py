@@ -55,6 +55,14 @@ from pathlib import Path
 import importlib.util
 import streamlit as st
 
+st.markdown("""
+<style>
+/* bloodmap-global-smooth-scroll */
+html { scroll-behavior: smooth; }
+[id^="peds_"]{ scroll-margin-top: 84px; }
+</style>
+""", unsafe_allow_html=True)
+
 # --- Session defaults to prevent NameError on first load ---
 if 'peds_notes' not in st.session_state:
     st.session_state['peds_notes'] = ''
@@ -1465,6 +1473,58 @@ def render_peds_paddles():
 # --- /Pediatric quick paddles ---
 with t_peds:
     st.subheader("소아 증상 기반 점수 + 보호자 설명 + 해열제 계산")
+
+    # --- PEDS: anchors + jumpbar + auto-open ---
+    # anchors
+    for _aid in ["peds_constipation","peds_diarrhea","peds_vomit","peds_antipyretic","peds_ors","peds_respiratory"]:
+        st.markdown('<div id="' + _aid + '"></div>', unsafe_allow_html=True)
+
+    # jumpbar (HTML buttons, no rerun)
+    st.markdown("""
+    <style>
+    .peds-jumpbar{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin:.2rem 0 .6rem}
+    .peds-jumpbar button{display:block;width:100%;padding:.65rem .8rem;border-radius:12px;border:1px solid #ddd;background:#fff;cursor:pointer}
+    .peds-jumpbar button:active{transform:scale(.98)}
+    </style>
+    <div class="peds-jumpbar">
+      <button onclick="localStorage.setItem('__peds_target__','peds_constipation');document.getElementById('peds_constipation')?.scrollIntoView({behavior:'smooth',block:'start'});">🧻 변비</button>
+      <button onclick="localStorage.setItem('__peds_target__','peds_diarrhea');document.getElementById('peds_diarrhea')?.scrollIntoView({behavior:'smooth',block:'start'});">💦 설사</button>
+      <button onclick="localStorage.setItem('__peds_target__','peds_vomit');document.getElementById('peds_vomit')?.scrollIntoView({behavior:'smooth',block:'start'});">🤢 구토</button>
+      <button onclick="localStorage.setItem('__peds_target__','peds_antipyretic');document.getElementById('peds_antipyretic')?.scrollIntoView({behavior:'smooth',block:'start'});">🌡️ 해열제</button>
+      <button onclick="localStorage.setItem('__peds_target__','peds_ors');document.getElementById('peds_ors')?.scrollIntoView({behavior:'smooth',block:'start'});">🥤 ORS·탈수</button>
+      <button onclick="localStorage.setItem('__peds_target__','peds_respiratory');document.getElementById('peds_respiratory')?.scrollIntoView({behavior:'smooth',block:'start'});">🫁 가래·쌕쌕</button>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # auto-open details just after target anchor
+    st.markdown("""
+    <script>
+    (function(){
+      try{
+        const KEY='__peds_target__';
+        const id = localStorage.getItem(KEY);
+        if(!id) return;
+        const anchor = document.getElementById(id);
+        if(anchor){
+          let next = anchor.nextElementSibling;
+          for(let i=0;i<8 && next;i++){
+            if(next.tagName && next.tagName.toLowerCase()==='details'){ break; }
+            next = next.nextElementSibling;
+          }
+          if(next && next.tagName && next.tagName.toLowerCase()==='details'){
+            next.open = true;
+          }
+          setTimeout(()=>{
+            const el = document.getElementById(id);
+            if(el) el.scrollIntoView({behavior:'smooth', block:'start'});
+          }, 60);
+        }
+        localStorage.removeItem(KEY);
+      }catch(e){ /* no-op */ }
+    })();
+    </script>
+    """, unsafe_allow_html=True)
+    # --- /PEDS: anchors + jumpbar + auto-open ---
     render_peds_paddles()
     st.markdown('<div id="peds_respiratory"></div>', unsafe_allow_html=True)
     st.markdown('<div id="peds_ors"></div>', unsafe_allow_html=True)
@@ -1927,6 +1987,60 @@ with t_report:
 
         tab_log, tab_plot, tab_export = st.tabs(["📝 기록", "📈 그래프", "⬇️ 내보내기"])
 
+
+
+
+        st.markdown("""
+
+        <script>
+
+        (function(){
+
+          const KEY='__active_tab_label__';
+
+          function buttons(){ return Array.from(document.querySelectorAll('button[role="tab"]')); }
+
+          const saved = localStorage.getItem(KEY);
+
+          if(saved){
+
+            const btn = buttons().find(b => (b.innerText||'').trim().startsWith(saved));
+
+            if(btn) btn.click();
+
+          }else{
+
+            const cur = buttons().find(b => b.getAttribute('aria-selected')==='true');
+
+            if(cur){
+
+              const label=(cur.innerText||'').trim().split('\n')[0];
+
+              if(label) localStorage.setItem(KEY, label);
+
+            }
+
+          }
+
+          buttons().forEach(b=>{
+
+            b.addEventListener('click', ()=>{
+
+              const label=(b.innerText||'').trim().split('\n')[0];
+
+              if(label) localStorage.setItem(KEY, label);
+
+            }, {once:false});
+
+          });
+
+        })();
+
+        </script>
+
+        <!-- sticky-tabs-local -->
+
+        """, unsafe_allow_html=True)
         with tab_log:
             cols_btn = st.columns([1, 1, 1])
             with cols_btn[0]:
