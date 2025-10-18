@@ -55,11 +55,21 @@ from pathlib import Path
 import importlib.util
 import streamlit as st
 
+st.markdown("""
+<style>
+/* smooth-scroll */
+html { scroll-behavior: smooth; }
+.peds-nav-md{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin:.25rem 0 .5rem;}
+.peds-nav-md a{display:block;text-align:center;padding:.6rem .8rem;border-radius:12px;border:1px solid #ddd;text-decoration:none;color:inherit;background:#fff}
+.peds-nav-md a:active{transform:scale(.98)}
+</style>
+""", unsafe_allow_html=True)
+
 # --- in-place smooth scroll (no rerun) ---
 
 
 # --- HTML-only pediatric navigator (no rerun) ---
-def render_peds_nav_html():
+def render_peds_nav_md():
     from streamlit.components.v1 import html as _html
     _html("""
     <style>
@@ -77,6 +87,23 @@ def render_peds_nav_html():
     </div>
     """, height=70)
 # --- /HTML-only pediatric navigator ---
+
+
+
+# --- Markdown-based pediatric navigator (no rerun, no iframe) ---
+def render_peds_nav_md():
+    import streamlit as st
+    st.markdown("""
+    <div class="peds-nav-md">
+      <a href="#peds_constipation">🧻 변비</a>
+      <a href="#peds_diarrhea">💦 설사</a>
+      <a href="#peds_vomit">🤢 구토</a>
+      <a href="#peds_antipyretic">🌡️ 해열제</a>
+      <a href="#peds_ors">🥤 ORS·탈수</a>
+      <a href="#peds_respiratory">🫁 가래·쌕쌕</a>
+    </div>
+    """, unsafe_allow_html=True)
+# --- /Markdown-based pediatric navigator ---
 
 def _scroll_now(target: str):
     from streamlit.components.v1 import html as _html
@@ -1482,7 +1509,7 @@ with t_chemo:
 # PEDS
 with t_peds:
     st.subheader("소아 증상 기반 점수 + 보호자 설명 + 해열제 계산")
-    render_peds_nav_html()
+    render_peds_nav_md()
     c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
         nasal = st.selectbox("콧물", ["없음", "투명", "진득", "누런"], key=wkey("p_nasal"))
