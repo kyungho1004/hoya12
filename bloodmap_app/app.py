@@ -589,11 +589,60 @@ def build_peds_notes(
     return "\\n".join(lines)
 
 # ---------- Tabs ----------
+
+# Persist selected tab via query params (prevents jumping to 홈 on rerun)
 tab_labels = ["🏠 홈", "🧪 피수치 입력", "🧬 암 선택", "💊 항암제(진단 기반)", "👶 소아 증상", "🔬 특수검사", "📄 보고서", "📊 기록/그래프"]
-t_home, t_labs, t_dx, t_chemo, t_peds, t_special, t_report, t_graph = st.tabs(tab_labels)
+def _get_qp():
+    try:
+        return dict(st.query_params)
+    except Exception:
+        try:
+            return st.experimental_get_query_params()
+        except Exception:
+            return {}
+def _set_qp(**kwargs):
+    try:
+        for k,v in kwargs.items():
+            st.query_params[k] = v
+    except Exception:
+        try:
+            st.experimental_set_query_params(**kwargs)
+        except Exception:
+            pass
+_qp = _get_qp()
+_selected = (_qp.get("tab") if isinstance(_qp.get("tab"), str) else None) or (_qp.get("tab", ["home"])[0] if _qp.get("tab") else "home")
+# Reorder so selected tab appears first (Streamlit selects first tab on rerun)
+order = list(tab_labels)
+def _reorder(labels, first_label):
+    return [first_label] + [x for x in labels if x != first_label]
+label_map = {
+    "home": "🏠 홈",
+    "labs": "🧪 피수치 입력",
+    "dx": "🧬 암 선택",
+    "chemo": "💊 항암제(진단 기반)",
+    "peds": "👶 소아 증상",
+    "special": "🔬 특수검사",
+    "report": "📄 보고서",
+    "graph": "📊 기록/그래프",
+}
+if _selected in label_map:
+    order = _reorder(tab_labels, label_map[_selected])
+_tabs = st.tabs(order)
+_tab_by_label = {label: _tabs[i] for i, label in enumerate(order)}
+# Canonical handles
+t_home    = _tab_by_label["🏠 홈"]
+t_labs    = _tab_by_label["🧪 피수치 입력"]
+t_dx      = _tab_by_label["🧬 암 선택"]
+t_chemo   = _tab_by_label["💊 항암제(진단 기반)"]
+t_peds    = _tab_by_label["👶 소아 증상"]
+t_special = _tab_by_label["🔬 특수검사"]
+t_report  = _tab_by_label["📄 보고서"]
+t_graph   = _tab_by_label["📊 기록/그래프"]
+
 
 # HOME
 with t_home:
+    _set_qp(tab='home')
     st.subheader("응급도 요약")
     labs = st.session_state.get("labs_dict", {})
     level_tmp, reasons_tmp, contrib_tmp = emergency_level(
@@ -1444,6 +1493,7 @@ with t_chemo:
 
 # PEDS
 with t_peds:
+    _set_qp(tab='peds')
     st.subheader("소아 증상 기반 점수 + 보호자 설명 + 해열제 계산")
     c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
@@ -1456,20 +1506,7 @@ with t_peds:
         fever = st.selectbox("발열", ["없음", "37~37.5 (미열)", "37.5~38", "38~38.5", "38.5~39", "39 이상"], key=wkey("p_fever"))
     with c5:
         eye = st.selectbox("눈꼽/결막", ["없음", "맑음", "노랑-농성", "양쪽"], key=wkey("p_eye"))
-    
-    # --- PEDS Quick Selector (stateful, non-destructive) ---
-    try:
-        _choice = st.radio("증상 바로 보기", ["(선택 없음)","변비","설사","구토"], horizontal=True, key=wkey("peds_choice"))
-        if _choice == "변비":
-            render_section_constipation()
-        elif _choice == "설사":
-            render_section_diarrhea()
-        elif _choice == "구토":
-            render_section_vomit()
-    except Exception:
-        st.caption("peds_guide 연결이 불안정합니다. (임포트/함수 확인)")
-    # --- End PEDS Quick Selector ---
-# 추가: 변비 선택 (모바일 호환을 위해 독립 컨테이너)
+    # 추가: 변비 선택 (모바일 호환을 위해 독립 컨테이너)
     with st.container():
         constipation = st.selectbox("변비", ["없음","의심","3일 이상","배변 시 통증"], key=wkey("p_constipation"))
 
