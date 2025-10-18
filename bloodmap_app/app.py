@@ -55,42 +55,6 @@ from pathlib import Path
 import importlib.util
 import streamlit as st
 
-# --- jump adapters (robust to missing core_utils helpers) ---
-def _jump(anchor: str):
-    import streamlit as st
-    try:
-        import core_utils as _cu
-        if hasattr(_cu, "set_jump"):
-            _cu.set_jump(anchor)
-            return
-    except Exception:
-        pass
-    # fallback: store in session for client-side scroll
-    st.session_state["__jump_to__"] = anchor
-
-def _render_jump():
-    import streamlit as st
-    from streamlit.components.v1 import html as _html
-    # try core_utils.render_jump if present
-    try:
-        import core_utils as _cu
-        if hasattr(_cu, "render_jump"):
-            return _cu.render_jump()
-    except Exception:
-        pass
-    # lightweight fallback
-    target = st.session_state.pop("__jump_to__", None)
-    if target:
-        _html(f"""
-        <script>
-        (function() {{
-            const el = document.getElementById("{target}");
-            if (el) {{ el.scrollIntoView({{behavior:'smooth', block:'start'}}); }}
-        }})();
-        </script>
-        """, height=0)
-# --- /jump adapters ---
-
 # --- Session defaults to prevent NameError on first load ---
 if 'peds_notes' not in st.session_state:
     st.session_state['peds_notes'] = ''
@@ -1479,66 +1443,8 @@ with t_chemo:
             st.write("- (DB에 상세 부작용 없음)")
 
 # PEDS
-
-# --- Pediatric quick paddles (chips/cards) ---
-def render_peds_paddles():
-    import streamlit as st
-    try:
-        wkey = globals().get("wkey", lambda x: x)  # keep unique keys if available
-    except Exception:
-        wkey = lambda x: x
-    cols = st.columns(4)
-    paddles = [
-        ("🧻 변비", "peds_gi"),
-        ("💦 설사", "peds_gi"),
-        ("🤢 구토", "peds_gi"),
-        ("🌡️ 해열제", "peds_antipyretic"),
-        ("🥤 ORS/탈수", "peds_ors"),
-        ("🚨 응급도", "peds_risk"),
-    ]
-    for i, (label, target) in enumerate(paddles):
-        with cols[i % 4]:
-            if st.button(label, key=wkey(f"paddle_{i}")):
-                _jump(target); st.rerun()
-# --- /Pediatric quick paddles ---
 with t_peds:
     st.subheader("소아 증상 기반 점수 + 보호자 설명 + 해열제 계산")
-
-
-    render_peds_paddles()
-    # 소아 빠른 이동 버튼 & 앵커
-    col_a, col_b, col_c, col_d = st.columns([1,1,1,1])
-    with col_a:
-        if st.button("🧻 GI 바로가기", key=wkey("jump_gi")):
-            _jump("peds_gi"); st.rerun()
-    with col_b:
-        if st.button("🌡️ 해열제", key=wkey("jump_antipy")):
-            _jump("peds_antipyretic"); st.rerun()
-    with col_c:
-        if st.button("🥤 ORS/탈수", key=wkey("jump_ors")):
-            _jump("peds_ors"); st.rerun()
-    with col_d:
-        if st.button("🚨 응급도", key=wkey("jump_risk")):
-            _jump("peds_risk"); st.rerun()
-
-    # 앵커 플레이스홀더 (섹션 위/아래 어디든 스크롤 도착점)
-    st.markdown('<div id="peds_top"></div>', unsafe_allow_html=True)
-    st.markdown('<div id="peds_gi"></div>', unsafe_allow_html=True)
-    st.markdown('<div id="peds_antipyretic"></div>', unsafe_allow_html=True)
-    st.markdown('<div id="peds_ors"></div>', unsafe_allow_html=True)
-    st.markdown('<div id="peds_risk"></div>', unsafe_allow_html=True)
-st.markdown('<div id="peds_gi"></div>', unsafe_allow_html=True)
-    # --- GI quick toggle (변비/설사/구토) ---
-gi_open = st.toggle("🧻 GI(소화기) 빠른 가이드 열기", value=False, key=wkey("peds_gi_toggle"))
-if gi_open:
-    st.info("변비/설사/구토 — 보호자용 빠른 체크입니다. ⏱ 필요 항목만 간단 입력.")
-    try:
-        render_section_constipation()
-        render_section_diarrhea()
-        render_section_vomit()
-    except Exception as _e:
-        st.warning(f"GI 가이드 모듈 로드에 문제가 있어요: {_e}")
-# --- /GI quick toggle ---
     c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
         nasal = st.selectbox("콧물", ["없음", "투명", "진득", "누런"], key=wkey("p_nasal"))
