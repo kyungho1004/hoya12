@@ -21,6 +21,7 @@ def _call_first(mod, names):
                 fn()
             except Exception:
                 pass
+  
 
 # Optional modules (no-op if absent)
 branding = _safe_import("branding")
@@ -38,6 +39,13 @@ if "wkey" not in globals():
     def wkey(x): 
         try:
             import streamlit as st
+            st.markdown("""
+<style>
+/* bloodmap-global-smooth-scroll */
+html { scroll-behavior: smooth; }
+[id^="peds_"]{ scroll-margin-top: 84px; }
+</style>
+""", unsafe_allow_html=True)
             return f"{x}_{st.session_state.get('_uid','')}".strip('_')
         except Exception:
             return str(x)
@@ -599,6 +607,37 @@ def build_peds_notes(
 # ---------- Tabs ----------
 tab_labels = ["🏠 홈", "🧪 피수치 입력", "🧬 암 선택", "💊 항암제(진단 기반)", "👶 소아 증상", "🔬 특수검사", "📄 보고서", "📊 기록/그래프"]
 t_home, t_labs, t_dx, t_chemo, t_peds, t_special, t_report, t_graph = st.tabs(tab_labels)
+# --- sticky tabs (localStorage, global) ---
+st.markdown("""
+<script>
+(function(){
+  const KEY='__active_tab_label__';
+  function buttons(){ return Array.from(document.querySelectorAll('button[role="tab"]')); }
+  // 저장된 탭 복원
+  const saved = localStorage.getItem(KEY);
+  if(saved){
+    const btn = buttons().find(b => (b.innerText||'').trim().startsWith(saved));
+    if(btn) btn.click();
+  }else{
+    // 첫 로드 시 현재 선택된 탭 저장
+    const cur = buttons().find(b => b.getAttribute('aria-selected')==='true');
+    if(cur){
+      const label=(cur.innerText||'').trim().split('\\n')[0];
+      if(label) localStorage.setItem(KEY, label);
+    }
+  }
+  // 클릭 시 최신 탭 저장
+  buttons().forEach(b=>{
+    b.addEventListener('click', ()=>{
+      const label=(b.innerText||'').trim().split('\\n')[0];
+      if(label) localStorage.setItem(KEY, label);
+    }, {once:false});
+  });
+})();
+</script>
+""", unsafe_allow_html=True)
+# --- /sticky tabs ---
+
 
 # HOME
 with t_home:
@@ -1453,48 +1492,72 @@ with t_chemo:
 # PEDS
 
 # --- Pediatric quick paddles (JS open+scroll, no rerun) ---
-def render_peds_paddles():
-    import streamlit as st
-    st.markdown("""
-    <style>
-    .peds-paddles{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin:.25rem 0 .75rem}
-    .peds-paddles button{display:block;width:100%;padding:.65rem .8rem;border-radius:12px;border:1px solid #ddd;background:#fff;cursor:pointer}
-    .peds-paddles button:active{transform:scale(.98)}
-    </style>
-    <div class="peds-paddles">
-      <button onclick="localStorage.setItem('__peds_open__','변비');document.getElementById('peds_constipation')?.scrollIntoView({behavior:'smooth',block:'start'});">🧻 변비</button>
-      <button onclick="localStorage.setItem('__peds_open__','설사');document.getElementById('peds_diarrhea')?.scrollIntoView({behavior:'smooth',block:'start'});">💦 설사</button>
-      <button onclick="localStorage.setItem('__peds_open__','구토');document.getElementById('peds_vomit')?.scrollIntoView({behavior:'smooth',block:'start'});">🤢 구토</button>
-      <button onclick="localStorage.setItem('__peds_open__','해열제');document.getElementById('peds_antipyretic')?.scrollIntoView({behavior:'smooth',block:'start'});">🌡️ 해열제</button>
-      <button onclick="localStorage.setItem('__peds_open__','ORS·탈수');document.getElementById('peds_ors')?.scrollIntoView({behavior:'smooth',block:'start'});">🥤 ORS·탈수</button>
-      <button onclick="localStorage.setItem('__peds_open__','가래');localStorage.setItem('__peds_open_alt__','쌕쌕');document.getElementById('peds_respiratory')?.scrollIntoView({behavior:'smooth',block:'start'});">🫁 가래·쌕쌕</button>
-    </div>
-    """, unsafe_allow_html=True)
-# --- /Pediatric quick paddles ---
-with t_peds:
-    st.subheader("소아 증상 기반 점수 + 보호자 설명 + 해열제 계산")
+# --- PEDS: anchors + jumpbar (render-once) + auto-open ---
+# (A) 앵커 – 섹션 바로 위
+for _aid in ["peds_constipation","peds_diarrhea","peds_vomit","peds_antipyretic","peds_ors","peds_respiratory"]:
+    st.markdown(f'<div id="{_aid}"></div>', unsafe_allow_html=True)
 
-    # --- PEDS: anchors + jumpbar + auto-open ---
-    # anchors
-    for _aid in ["peds_constipation","peds_diarrhea","peds_vomit","peds_antipyretic","peds_ors","peds_respiratory"]:
-        st.markdown('<div id="' + _aid + '"></div>', unsafe_allow_html=True)
-
-    # jumpbar (HTML buttons, no rerun)
+# (B) 점프바 – 세션에서 한 번만 렌더(중복 방지)
+if 'peds_jumpbar_done' not in st.session_state:
+    st.session_state['peds_jumpbar_done'] = True
     st.markdown("""
     <style>
     .peds-jumpbar{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin:.2rem 0 .6rem}
     .peds-jumpbar button{display:block;width:100%;padding:.65rem .8rem;border-radius:12px;border:1px solid #ddd;background:#fff;cursor:pointer}
     .peds-jumpbar button:active{transform:scale(.98)}
     </style>
-    <div class="peds-jumpbar">
-      <button onclick="localStorage.setItem('__peds_target__','peds_constipation');document.getElementById('peds_constipation')?.scrollIntoView({behavior:'smooth',block:'start'});">🧻 변비</button>
-      <button onclick="localStorage.setItem('__peds_target__','peds_diarrhea');document.getElementById('peds_diarrhea')?.scrollIntoView({behavior:'smooth',block:'start'});">💦 설사</button>
-      <button onclick="localStorage.setItem('__peds_target__','peds_vomit');document.getElementById('peds_vomit')?.scrollIntoView({behavior:'smooth',block:'start'});">🤢 구토</button>
-      <button onclick="localStorage.setItem('__peds_target__','peds_antipyretic');document.getElementById('peds_antipyretic')?.scrollIntoView({behavior:'smooth',block:'start'});">🌡️ 해열제</button>
-      <button onclick="localStorage.setItem('__peds_target__','peds_ors');document.getElementById('peds_ors')?.scrollIntoView({behavior:'smooth',block:'start'});">🥤 ORS·탈수</button>
-      <button onclick="localStorage.setItem('__peds_target__','peds_respiratory');document.getElementById('peds_respiratory')?.scrollIntoView({behavior:'smooth',block:'start'});">🫁 가래·쌕쌕</button>
+    <div class="peds-jumpbar" id="peds-jumpbar">
+      <button data-target="peds_constipation">🧻 변비</button>
+      <button data-target="peds_diarrhea">💦 설사</button>
+      <button data-target="peds_vomit">🤢 구토</button>
+      <button data-target="peds_antipyretic">🌡️ 해열제</button>
+      <button data-target="peds_ors">🥤 ORS·탈수</button>
+      <button data-target="peds_respiratory">🫁 가래·쌕쌕</button>
     </div>
+    <script>
+    (function(){
+      // 이벤트 위임 — #peds-jumpbar 하나만 동작(중복 방지)
+      const bar = document.getElementById('peds-jumpbar');
+      if(!bar || bar.__wired__) return;
+      bar.__wired__ = true;
+
+      function openAfterAnchor(id){
+        const anchor = document.getElementById(id);
+        if(!anchor) return;
+        // anchor 아래에서 가장 가까운 expander(<details>) 강제 오픈
+        const details = Array.from(document.querySelectorAll('details'));
+        const aTop = anchor.getBoundingClientRect().top + window.scrollY;
+        let best=null, bestDy=1e9;
+        for(const d of details){
+          const dy = (d.getBoundingClientRect().top + window.scrollY) - aTop;
+          if(dy >= -16 && dy < bestDy){ best = d; bestDy = dy; }
+        }
+        if(best) best.open = true;
+        setTimeout(()=>{ anchor.scrollIntoView({behavior:'smooth', block:'start'}); }, 30);
+      }
+
+      bar.addEventListener('click', (e)=>{
+        const btn = e.target.closest('button[data-target]');
+        if(!btn) return;
+        const id = btn.getAttribute('data-target');
+        if(!id) return;
+        openAfterAnchor(id);
+      }, {passive:true});
+    })();
+    </script>
     """, unsafe_allow_html=True)
+
+# (C) 전역 스크롤/착지 보정 CSS(한 번만 있으면 됨)
+if 'peds_scroll_css' not in st.session_state:
+    st.session_state['peds_scroll_css'] = True
+    st.markdown("""
+    <style>
+    html { scroll-behavior: smooth; }
+    [id^="peds_"]{ scroll-margin-top: 84px; }  /* 탭/헤더 높이만큼 여유 */
+    </style>
+    """, unsafe_allow_html=True)
+# --- /PEDS: anchors + jumpbar + auto-open ---
+
 
     # auto-open details just after target anchor
     st.markdown("""
