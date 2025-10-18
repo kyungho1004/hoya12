@@ -3,8 +3,6 @@
 # ===== Robust import guard (auto-injected) =====
 import importlib, types
 from peds_guide import render_section_constipation, render_section_diarrhea, render_section_vomit
-import app_patch_mobile as apm
-apm.init_top()
 
 def _safe_import(modname):
     try:
@@ -64,7 +62,7 @@ if 'peds_actions' not in st.session_state:
     st.session_state['peds_actions'] = []
 
 
-APP_VERSION = "보호자님들에게 도움이 되는 피수치+소아탭업데이트하였습니다.많은 피드백과 관심 부탁드립니다"
+APP_VERSION = "v7.24 (Graphs Bands • Peds Checklist+Schedule • Onco-DB Guard • Special Notes+)"
 
 # ---------- Safe Import Helper ----------
 def _load_local_module(mod_name: str, rel_paths):
@@ -175,7 +173,7 @@ st.markdown(
 > and resting peacefully in a world free from all hardships."""
 )
 st.markdown("---")
-render_deploy_banner("https://cafe.naver.com/bloodmap/", "제작: Hoya/GPT · 자문: Hoya/GPT")
+render_deploy_banner("https://bloodmap.streamlit.app/", "제작: Hoya/GPT · 자문: Hoya/GPT")
 st.caption(f"모듈 경로 — special_tests: {SPECIAL_PATH or '(not found)'} | onco_map: {ONCO_PATH or '(not found)'} | drug_db: {DRUGDB_PATH or '(not found)'}")
 
 # ---------- Helpers ----------
@@ -595,24 +593,6 @@ tab_labels = ["🏠 홈", "🧪 피수치 입력", "🧬 암 선택", "💊 항�
 t_home, t_labs, t_dx, t_chemo, t_peds, t_special, t_report, t_graph = st.tabs(tab_labels)
 
 # HOME
-# ==== 소아(안정 모드): 탭을 우회하여 소아만 렌더 ====
-with st.container():
-    try:
-        st.session_state.setdefault("peds_stable_mode", False)
-    except Exception:
-        if "peds_stable_mode" not in st.session_state:
-            st.session_state["peds_stable_mode"] = False
-    st.caption("모바일에서 소아 탭이 홈으로 돌아가면 아래 안정 모드를 사용하세요.")
-    peds_stable = st.toggle("🧒 소아(안정 모드)", key="peds_stable_mode")
-if st.session_state.get("peds_stable_mode", False):
-    try:
-        render_section_constipation()
-        render_section_diarrhea()
-        render_section_vomit()
-    except Exception:
-        st.info("소아 섹션을 불러오지 못했습니다.")
-    st.stop()
-# ==== 소아(안정 모드) 끝 ====
 with t_home:
     st.subheader("응급도 요약")
     labs = st.session_state.get("labs_dict", {})
@@ -719,18 +699,16 @@ with t_home:
             os.replace(tmp, _FB_FILE)
 
         def _submit_rating():
-       # Atomic per-entry storage + de-dup
-       try:
-        apm.save_feedback_atomic(
-            "home",
-            int(st.session_state.get("home_fb_score", 0)),
-            st.session_state.get("home_fb_text", ""),
-            {},
-        )
-        except Exception:
-        pass
-
-         # (여기부터 기존 _submit_rating 본문 계속...)
+            # Atomic per-entry storage + de-dup
+            try:
+                apm.save_feedback_atomic(
+                    "home",
+                    int(st.session_state.get("home_fb_score", 0)),
+                    st.session_state.get(fb_widget_key, ""),
+                    {},
+                )
+            except Exception:
+                pass
 
             data = _load_fb_store()
             # aggregate
@@ -764,6 +742,7 @@ with t_home:
                 st.success("피드백 점수가 저장되었습니다. 고맙습니다!")
             else:
                 st.info("쓰기 권한이 없어 점수는 세션에만 반영됩니다. (_BASE=/mnt/data)")
+
         # 표시: 현재 평균/표 수
         try:
             _data_preview = _load_fb_store()
@@ -804,81 +783,6 @@ with t_home:
 
     # ======= 홈: 피드백 끝 =======
 # ======= 홈: 피드백 끝 =======
-
-# ===== 안정 모드: 홈 응급도 체크 렌더 함수 =====
-def _render_home_emergency_stable():
-    st.subheader("응급도 체크(증상 기반)")
-    c1, c2, c3, c4, c5, c6 = st.columns(6)
-    with c1:
-        hematuria = st.checkbox("혈뇨", key=wkey("sym_hematuria"))
-    with c2:
-        melena = st.checkbox("흑색변", key=wkey("sym_melena"))
-    with c3:
-        hematochezia = st.checkbox("혈변", key=wkey("sym_hematochezia"))
-    with c4:
-        chest_pain = st.checkbox("흉통", key=wkey("sym_chest"))
-    with c5:
-        dyspnea = st.checkbox("호흡곤란", key=wkey("sym_dyspnea"))
-    with c6:
-        confusion = st.checkbox("의식저하", key=wkey("sym_confusion"))
-    d1, d2, d3 = st.columns(3)
-    with d1:
-        oliguria = st.checkbox("소변량 급감", key=wkey("sym_oliguria"))
-    with d2:
-        persistent_vomit = st.checkbox("지속 구토(>6시간)", key=wkey("sym_pvomit"))
-    with d3:
-        petechiae = st.checkbox("점상출혈", key=wkey("sym_petechiae"))
-    e1, e2 = st.columns(2)
-    with e1:
-        thunderclap = st.checkbox("번개치는 듯한 두통(Thunderclap)", key=wkey("sym_thunderclap"))
-    with e2:
-        visual_change = st.checkbox("시야 이상/복시/암점", key=wkey("sym_visual_change"))
-
-    sym = dict(
-        hematuria=hematuria,
-        melena=melena,
-        hematochezia=hematochezia,
-        chest_pain=chest_pain,
-        dyspnea=dyspnea,
-        confusion=confusion,
-        oliguria=oliguria,
-        persistent_vomit=persistent_vomit,
-        petechiae=petechiae,
-        thunderclap=thunderclap,
-        visual_change=visual_change,
-    )
-
-    alerts = []
-    a = _try_float((labs or {}).get("ANC"))
-    p = _try_float((labs or {}).get("PLT"))
-    if thunderclap or (visual_change and (confusion or chest_pain or dyspnea)):
-        alerts.append("🧠 **신경계 위중 의심** — 번개치듯 두통/시야 이상/의식장애 → 즉시 응급평가")
-    if (a is not None and a < 500) and (_try_float(st.session_state.get(wkey("cur_temp"))) and _try_float(st.session_state.get(wkey("cur_temp"))) >= 38.0):
-        alerts.append("🔥 **발열성 호중구감소증 의심** — ANC<500 + 발열 → 즉시 항생제 평가")
-    if (p is not None and p < 20000) and (melena or hematochezia or petechiae):
-        alerts.append("🩸 **출혈 고위험** — 혈소판<20k + 출혈징후 → 즉시 병원")
-    if oliguria and persistent_vomit:
-        alerts.append("💧 **중등~중증 탈수 가능** — 소변 급감 + 지속 구토 → 수액 고려")
-    if chest_pain and dyspnea:
-        alerts.append("❤️ **흉통+호흡곤란** — 응급평가 권장")
-    if alerts:
-        for msg in alerts:
-            st.error(msg)
-    else:
-        st.info("위험 조합 경고 없음")
-
-    level, reasons, contrib = emergency_level(
-        labs, st.session_state.get(wkey("cur_temp")), st.session_state.get(wkey("cur_hr")), sym
-    )
-    if level.startswith("🚨"):
-        st.error("응급도: " + level + " — " + " · ".join(reasons))
-    elif level.startswith("🟧"):
-        st.warning("응급도: " + level + " — " + " · ".join(reasons))
-    else:
-        st.info("응급도: " + level + (" — " + " · ".join(reasons) if reasons else ""))
-
-    st.markdown("---")
-# ===== 안정 모드: 홈 응급도 체크 렌더 함수 끝 =====
 
     st.subheader("응급도 체크(증상 기반)")
     c1, c2, c3, c4, c5, c6 = st.columns(6)
@@ -1552,31 +1456,6 @@ with t_chemo:
 # PEDS
 with t_peds:
     st.subheader("소아 증상 기반 점수 + 보호자 설명 + 해열제 계산")
-    # ---- 소아 GI(변비·설사·구토) 빠른체크 ----
-    try:
-        st.session_state.setdefault("open_peds_gi_sections", False)
-    except Exception:
-        if "open_peds_gi_sections" not in st.session_state:
-            st.session_state["open_peds_gi_sections"] = False
-
-    cols = st.columns([1,1,3])
-    with cols[0]:
-        st.toggle("GI 섹션 열기", key="open_peds_gi_sections", help="변비·설사·구토 체크 섹션을 아래에 펼칩니다.")
-    with cols[1]:
-        if st.session_state.get("open_peds_gi_sections", False):
-            st.caption("변비·설사·구토 섹션을 아래에 표시합니다.")
-        else:
-            st.caption("필요 시 켜서 확인하세요.")
-
-    if st.session_state.get("open_peds_gi_sections", False):
-        try:
-            from peds_guide import render_section_constipation, render_section_diarrhea, render_section_vomit
-            render_section_constipation()
-            render_section_diarrhea()
-            render_section_vomit()
-        except Exception:
-            st.info("소아 GI 섹션을 불러오지 못했습니다.")
-    # ---- 소아 GI 빠른체크 끝 ----
     c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
         nasal = st.selectbox("콧물", ["없음", "투명", "진득", "누런"], key=wkey("p_nasal"))
@@ -2595,91 +2474,4 @@ _ss_setdefault(wkey('home_fb_log_cache'), [])
 # === end mobile stability init ===
 
 
-# ==== 소아(안정 모드) 초기가드: 최상단에서 바로 렌더 후 종료 ====
-try:
-    # 세션 키 기본값
-    try:
-        st.session_state.setdefault("peds_stable_mode", False)
-    except Exception:
-        if "peds_stable_mode" not in st.session_state:
-            st.session_state["peds_stable_mode"] = False
-
-    # URL 파라미터 우선 (view=peds 이면 항상 소아 고정)
-    _qp = st.query_params if hasattr(st, "query_params") else {}
-    _view_lock = False
-    try:
-        _view_lock = (_qp.get("view", "") == "peds") if isinstance(_qp, dict) else False
-    except Exception:
-        _view_lock = False
-
-    if st.session_state.get("peds_stable_mode", False) or _view_lock:
-        # 소아 섹션만 렌더
-        try:
-            from peds_guide import render_section_constipation, render_section_diarrhea, render_section_vomit, render_caregiver_notes_peds
-        except Exception:
-            from peds_guide import render_section_constipation, render_section_diarrhea, render_section_vomit
-            render_caregiver_notes_peds = None
-
-        st.info("🧒 소아(안정 모드): 탭 없이 소아 섹션만 표시 중입니다. 상단 토글 해제 또는 URL 파라미터(view=peds) 제거 시 일반 모드로 돌아갑니다.")
-        render_section_constipation()
-        render_section_diarrhea()
-        render_section_vomit()
-
-        render_section_uri_general()
-
-        # 통합 보호자 설명(가능 시)
-        try:
-            if render_caregiver_notes_peds is not None:
-                # 일부 변수는 없을 수 있어 안전하게 locals 체크
-                render_caregiver_notes_peds(
-                    stool=locals().get("stool"),
-                    fever=locals().get("fever"),
-                    persistent_vomit=locals().get("persistent_vomit"),
-                    oliguria=locals().get("oliguria"),
-                    cough=locals().get("cough"),
-                    nasal=locals().get("nasal"),
-                    eye=locals().get("eye"),
-                    abd_pain=locals().get("abd_pain"),
-                    ear_pain=locals().get("ear_pain"),
-                    rash=locals().get("rash"),
-                    hives=locals().get("hives"),
-                    migraine=locals().get("migraine"),
-                    hfmd=locals().get("hfmd"),
-                    sputum=locals().get("sputum"),
-                    wheeze=locals().get("wheeze"),
-                    max_temp=locals().get("max_temp"),
-                    sore_throat=False,
-                    chest_ret=False,
-                    rr=None,
-                    score=locals().get("score"),
-                )
-        except Exception:
-            pass
-
-        st.stop()
-except Exception:
-    pass
-# ==== 소아(안정 모드) 초기가드 끝 ====
-# ==== 홈 응급도(안정 모드) 초기가드 ====
-try:
-    try:
-        st.session_state.setdefault("home_emerg_stable", False)
-    except Exception:
-        if "home_emerg_stable" not in st.session_state:
-            st.session_state["home_emerg_stable"] = False
-
-    _qp = st.query_params if hasattr(st, "query_params") else {}
-    _lock_home = False
-    try:
-        _lock_home = (_qp.get("view", "") == "home") if isinstance(_qp, dict) else False
-    except Exception:
-        _lock_home = False
-
-    if st.session_state.get("home_emerg_stable", False) or _lock_home:
-        st.info("🏠 홈 응급도(안정 모드): 탭 없이 응급도 섹션만 표시 중입니다. 토글 해제 또는 URL 파라미터(view=home) 제거 시 일반 모드로 돌아갑니다.")
-        _render_home_emergency_stable()
-        st.stop()
-except Exception:
-    pass
-# ==== 홈 응급도(안정 모드) 초기가드 끝 ====
 # ===== [/INLINE FEEDBACK] =====
