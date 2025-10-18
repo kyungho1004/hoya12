@@ -61,26 +61,149 @@ def schedule_block():
     if isinstance(df, pd.DataFrame) and not df.empty:
         st.dataframe(df, use_container_width=True, height=180)
 
+# ---------- eGFR (CKD-EPI 2009) ----------
+def egfr_ckd_epi_2009(scr_mg_dl, age_years, sex: str):
+    """Return eGFR (mL/min/1.73m2) using CKD-EPI 2009 for adults (>=18y).
+    sex: 'M' or 'F' (case-insensitive). Returns None if inputs invalid.
+    """
+    try:
+        scr = float(scr_mg_dl); age = int(age_years)
+        if age < 18: return None
+        sex = (sex or '').strip().upper()
+        k = 0.7 if sex=='F' else 0.9
+        a = -0.329 if sex=='F' else -0.411
+        min_scr = min(scr/k, 1.0)
+        max_scr = max(scr/k, 1.0)
+        egfr = 141 * (min_scr ** a) * (max_scr ** -1.209) * (0.993 ** age)
+        if sex == 'F':
+            egfr *= 1.018
+        # Ethnicity factor omitted intentionally
+        return round(egfr)
+    except Exception:
+        return None
 
-# --- Smooth in-page jump helpers (Streamlit) ---
-def set_jump(anchor: str):
-    import streamlit as st
-    st.session_state["__jump_to__"] = anchor
+# ---------- Care log I/O ----------
+def _care_log_path():
+    import os
+    d = "/mnt/data/care_log"
+    os.makedirs(d, exist_ok=True)
+    return os.path.join(d, "log.csv")
 
-def render_jump():
-    import streamlit as st
-    from streamlit.components.v1 import html as _html
-    anchor = st.session_state.pop("__jump_to__", None)
-    qp = st.query_params.get("jump", None) if hasattr(st, "query_params") else None
-    target = anchor or qp
-    if target:
-        _html("""
-        <script>
-        (function() {{
-            const anchorId = "{anchor}" || "{qp}";
-            const el = document.getElementById(anchorId);
-            if (el) {{ el.scrollIntoView({{behavior: 'smooth', block: 'start'}}); }}
-        }})();
-        </script>
-        """.format(anchor=target if target else "", qp=""), height=0)
-# --- /Smooth in-page jump helpers ---
+def read_care_log():
+    p = _care_log_path()
+    try:
+        import pandas as pd
+        if os.path.exists(p):
+            return pd.read_csv(p)
+    except Exception:
+        pass
+    import pandas as pd
+    return pd.DataFrame(columns=["ts_kst","uid","med","dose_mg","weight_kg","note"])
+
+def append_care_log(uid, med, dose_mg, weight_kg=None, note=""):
+    import pandas as pd, datetime as _dt
+    df = read_care_log()
+    ts = _dt.datetime.now(tz=_dt.timezone(_dt.timedelta(hours=9))).strftime("%Y-%m-%d %H:%M:%S")
+    row = {"ts_kst": ts, "uid": uid or "guest", "med": med, "dose_mg": dose_mg, "weight_kg": weight_kg, "note": note}
+    df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
+    df.to_csv(_care_log_path(), index=False)
+    return row
+
+# ---------- Dose guardrails ----------
+def _last_intake_time(df, uid, med):
+    try:
+        sdf = df[df["uid"]==uid]
+        sdf = sdf[sdf["med"]==med]
+        if sdf.empty: return None
+        last = sdf.iloc[-1]["ts_kst"]
+        from datetime import datetime
+        try:
+            return datetime.strptime(last, "%Y-%m-%d %H:%M:%S")
+        except Exception:
+            return None
+    except Exception:
+        return None
+
+def _total_intake_24h(df, uid, med):
+    from datetime import datetime, timedelta
+    now = datetime.now() + timedelta(hours=9)  # naive KST-ish
+    try:
+        sdf = df[(df["uid"]==uid) & (df["med"]==med)]
+        if sdf.empty: return 0.0
+        tot = 0.0
+        for _, r in sdf.iterrows():
+            try:
+                t = datetime.strptime(str(r["ts_kst"]), "%Y-%m-%d %H:%M:%S")
+                if (now - t).total_seconds() <= 86400:
+                    tot += float(r["dose_mg"] or 0)
+            except Exception:
+                pass
+        return tot
+    except Exception:
+        return 0.0
+
+def check_guard_apap(uid, dose_mg, weight_kg=None):
+    """Cooldown: ≥4h, 24h total ≤ 75 mg/kg (max 4000 mg).
+    Returns (ok: bool, message: str, next_allow_ts: str|None, remaining_mg: float|None)
+    """
+    df = read_care_log()
+    # cooldown
+    from datetime import datetime, timedelta
+    last = _last_intake_time(df, uid, "APAP")
+    if last:
+        delta = datetime.now() - last
+        if delta.total_seconds() < 4*3600:
+            next_ts = (last + timedelta(hours=4)).strftime("%Y-%m-%d %H:%M:%S")
+            return (False, "APAP는 최소 4시간 간격이 필요합니다.", next_ts, None)
+    # total 24h
+    total = _total_intake_24h(df, uid, "APAP")
+    max_total = None
+    if weight_kg:
+        try:
+            max_total = min(75.0*float(weight_kg), 4000.0)
+        except Exception:
+            max_total = 4000.0
+    else:
+        max_total = 4000.0
+    if total + float(dose_mg) > max_total:
+        return (False, "24시간 총량을 초과합니다.", None, max_total - total)
+    return (True, "투약 가능합니다.", None, max_total - (total + float(dose_mg)))
+
+def check_guard_ibu(uid, dose_mg, weight_kg=None):
+    """Cooldown: ≥6h, 24h total ≤ 30 mg/kg (max 1200 mg OTC).
+    Conservative pediatric cap used.
+    """
+    df = read_care_log()
+    from datetime import datetime, timedelta
+    last = _last_intake_time(df, uid, "IBU")
+    if last:
+        delta = datetime.now() - last
+        if delta.total_seconds() < 6*3600:
+            next_ts = (last + timedelta(hours=6)).strftime("%Y-%m-%d %H:%M:%S")
+            return (False, "IBU는 최소 6시간 간격이 필요합니다.", next_ts, None)
+    total = _total_intake_24h(df, uid, "IBU")
+    if weight_kg:
+        try:
+            max_total = min(30.0*float(weight_kg), 1200.0)
+        except Exception:
+            max_total = 1200.0
+    else:
+        max_total = 1200.0
+    if total + float(dose_mg) > max_total:
+        return (False, "24시간 총량을 초과합니다.", None, max_total - total)
+    return (True, "투약 가능합니다.", None, max_total - (total + float(dose_mg)))
+
+# ---------- ICS helper ----------
+def make_ics(title, start_ts):
+    """Create a simple .ics VEVENT starting at start_ts (YYYY-MM-DD HH:MM:SS KST assumed)."""
+    import os
+    path = "/mnt/data/care_log/next_med.ics"
+    try:
+        os.makedirs("/mnt/data/care_log", exist_ok=True)
+        dtstart = re.sub(r'[-: ]','', start_ts)[:14]  # YYYYMMDDHHMMSS
+        content = "BEGIN:VCALENDAR\\nVERSION:2.0\\nPRODID:-//BloodMap//KR//EN\\nBEGIN:VEVENT\\nUID:next-med@bloodmap\\nDTSTART;TZID=Asia/Seoul:%s\\nSUMMARY:%s\\nEND:VEVENT\\nEND:VCALENDAR" % (dtstart, title)
+        with open(path,"w",encoding="utf-8") as f:
+            f.write(content)
+        return path
+    except Exception:
+        return None
