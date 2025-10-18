@@ -3,6 +3,8 @@
 # ===== Robust import guard (auto-injected) =====
 import importlib, types
 from peds_guide import render_section_constipation, render_section_diarrhea, render_section_vomit
+import app_patch_mobile as apm
+apm.init_top()
 
 def _safe_import(modname):
     try:
