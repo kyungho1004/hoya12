@@ -1445,6 +1445,31 @@ with t_chemo:
 # PEDS
 with t_peds:
     st.subheader("소아 증상 기반 점수 + 보호자 설명 + 해열제 계산")
+    
+
+# --- Quick Actions: 변비/설사 바로가기 (peds_guide) ---
+try:
+    from peds_guide import render_section_constipation as _pg_constip, render_section_diarrhea as _pg_diarr
+    _has_peds_pair = True
+except Exception:
+    _has_peds_pair = False
+
+col_quick = st.columns([1,1,3])
+with col_quick[0]:
+    if st.button("🚽 변비", key=wkey("btn_peds_constip")) and _has_peds_pair:
+        try:
+            _pg_constip()
+        except Exception:
+            st.warning("변비 섹션 렌더 중 예외가 발생했습니다.")
+with col_quick[1]:
+    if st.button("💧 설사", key=wkey("btn_peds_diarr")) and _has_peds_pair:
+        try:
+            _pg_diarr()
+        except Exception:
+            st.warning("설사 섹션 렌더 중 예외가 발생했습니다.")
+if not _has_peds_pair:
+    st.caption("peds_guide의 변비/설사 섹션을 찾을 수 없습니다. peds_guide.py 위치/함수명을 확인하세요.")
+# --- End Quick Actions ---
     c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
         nasal = st.selectbox("콧물", ["없음", "투명", "진득", "누런"], key=wkey("p_nasal"))
