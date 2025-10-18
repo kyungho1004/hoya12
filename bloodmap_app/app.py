@@ -1588,7 +1588,7 @@ if 'peds_scroll_css' not in st.session_state:
     </script>
     """, unsafe_allow_html=True)
     # --- /PEDS: anchors + jumpbar + auto-open ---
-    render_peds_paddles()
+  render_peds_jumpbar()
     st.markdown('<div id="peds_respiratory"></div>', unsafe_allow_html=True)
     st.markdown('<div id="peds_ors"></div>', unsafe_allow_html=True)
     st.markdown('<div id="peds_antipyretic"></div>', unsafe_allow_html=True)
