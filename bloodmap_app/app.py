@@ -699,17 +699,6 @@ with t_home:
             os.replace(tmp, _FB_FILE)
 
         def _submit_rating():
-            # Atomic per-entry storage + de-dup
-            try:
-                apm.save_feedback_atomic(
-                    "home",
-                    int(st.session_state.get("home_fb_score", 0)),
-                    st.session_state.get(fb_widget_key, ""),
-                    {},
-                )
-            except Exception:
-                pass
-
             data = _load_fb_store()
             # aggregate
             data["counts"][str(_score)] = int(data["counts"].get(str(_score), 0)) + 1
@@ -1456,6 +1445,41 @@ with t_chemo:
 # PEDS
 with t_peds:
     st.subheader("소아 증상 기반 점수 + 보호자 설명 + 해열제 계산")
+
+
+    # 소아 빠른 이동 버튼 & 앵커
+    col_a, col_b, col_c, col_d = st.columns([1,1,1,1])
+    with col_a:
+        if st.button("🧻 GI 바로가기", key=wkey("jump_gi")):
+            core_utils.set_jump("peds_gi"); st.rerun()
+    with col_b:
+        if st.button("🌡️ 해열제", key=wkey("jump_antipy")):
+            core_utils.set_jump("peds_antipyretic"); st.rerun()
+    with col_c:
+        if st.button("🥤 ORS/탈수", key=wkey("jump_ors")):
+            core_utils.set_jump("peds_ors"); st.rerun()
+    with col_d:
+        if st.button("🚨 응급도", key=wkey("jump_risk")):
+            core_utils.set_jump("peds_risk"); st.rerun()
+
+    # 앵커 플레이스홀더 (섹션 위/아래 어디든 스크롤 도착점)
+    st.markdown('<div id="peds_top"></div>', unsafe_allow_html=True)
+    st.markdown('<div id="peds_gi"></div>', unsafe_allow_html=True)
+    st.markdown('<div id="peds_antipyretic"></div>', unsafe_allow_html=True)
+    st.markdown('<div id="peds_ors"></div>', unsafe_allow_html=True)
+    st.markdown('<div id="peds_risk"></div>', unsafe_allow_html=True)
+st.markdown('<div id="peds_gi"></div>', unsafe_allow_html=True)
+    # --- GI quick toggle (변비/설사/구토) ---
+gi_open = st.toggle("🧻 GI(소화기) 빠른 가이드 열기", value=False, key=wkey("peds_gi_toggle"))
+if gi_open:
+    st.info("변비/설사/구토 — 보호자용 빠른 체크입니다. ⏱ 필요 항목만 간단 입력.")
+    try:
+        render_section_constipation()
+        render_section_diarrhea()
+        render_section_vomit()
+    except Exception as _e:
+        st.warning(f"GI 가이드 모듈 로드에 문제가 있어요: {_e}")
+# --- /GI quick toggle ---
     c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
         nasal = st.selectbox("콧물", ["없음", "투명", "진득", "누런"], key=wkey("p_nasal"))
