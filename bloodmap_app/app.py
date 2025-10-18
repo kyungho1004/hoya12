@@ -55,6 +55,13 @@ from pathlib import Path
 import importlib.util
 import streamlit as st
 
+st.markdown("""
+<style>
+/* smooth-scroll-global */
+html { scroll-behavior: smooth; }
+</style>
+""", unsafe_allow_html=True)
+
 # --- Session defaults to prevent NameError on first load ---
 if 'peds_notes' not in st.session_state:
     st.session_state['peds_notes'] = ''
@@ -1443,8 +1450,35 @@ with t_chemo:
             st.write("- (DB에 상세 부작용 없음)")
 
 # PEDS
+
+# --- Pediatric quick paddles (HTML links, no rerun) ---
+def render_peds_paddles():
+    import streamlit as st
+    st.markdown("""
+    <style>
+    .peds-paddles{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin:.25rem 0 .75rem}
+    .peds-paddles a{display:block;text-align:center;padding:.65rem .8rem;border-radius:12px;border:1px solid #ddd;text-decoration:none;color:inherit;background:#fff}
+    .peds-paddles a:active{transform:scale(.98)}
+    </style>
+    <div class="peds-paddles">
+      <a href="#peds_constipation">🧻 변비</a>
+      <a href="#peds_diarrhea">💦 설사</a>
+      <a href="#peds_vomit">🤢 구토</a>
+      <a href="#peds_antipyretic">🌡️ 해열제</a>
+      <a href="#peds_ors">🥤 ORS·탈수</a>
+      <a href="#peds_respiratory">🫁 가래·쌕쌕</a>
+    </div>
+    """, unsafe_allow_html=True)
+# --- /Pediatric quick paddles ---
 with t_peds:
     st.subheader("소아 증상 기반 점수 + 보호자 설명 + 해열제 계산")
+    render_peds_paddles()
+    st.markdown('<div id="peds_respiratory"></div>', unsafe_allow_html=True)
+    st.markdown('<div id="peds_ors"></div>', unsafe_allow_html=True)
+    st.markdown('<div id="peds_antipyretic"></div>', unsafe_allow_html=True)
+    st.markdown('<div id="peds_vomit"></div>', unsafe_allow_html=True)
+    st.markdown('<div id="peds_diarrhea"></div>', unsafe_allow_html=True)
+    st.markdown('<div id="peds_constipation"></div>', unsafe_allow_html=True)
     c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
         nasal = st.selectbox("콧물", ["없음", "투명", "진득", "누런"], key=wkey("p_nasal"))
@@ -2464,3 +2498,26 @@ _ss_setdefault(wkey('home_fb_log_cache'), [])
 
 
 # ===== [/INLINE FEEDBACK] =====
+
+
+st.markdown("""
+<script>
+(function(){
+  const KEY='__active_tab_label__';
+  function buttons(){ return Array.from(parent.document.querySelectorAll('button[role="tab"]')); }
+  const saved = localStorage.getItem(KEY);
+  if(saved){
+    const btn = buttons().find(b => (b.innerText||'').trim().startsWith(saved));
+    if(btn) btn.click();
+  }
+  buttons().forEach(b=>{
+    b.addEventListener('click', ()=>{
+      const label=(b.innerText||'').trim().split('\n')[0];
+      if(label) localStorage.setItem(KEY,label);
+    }, {once:false});
+  });
+})();
+</script>
+<!-- sticky-tabs-localStorage -->
+""", unsafe_allow_html=True)
+
