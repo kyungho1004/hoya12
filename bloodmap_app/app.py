@@ -2,39 +2,7 @@
 
 # ===== Robust import guard (auto-injected) =====
 import importlib, types
-# ===== P0 safety patch: robust import guard for peds_guide =====
-import sys as _sys, os as _os
-_CURDIR = _os.path.dirname(_os.path.abspath(__file__))
-for _p in (_CURDIR, "/mnt/data"):
-    if _p and _p not in _sys.path:
-        _sys.path.insert(0, _p)
-try:
-    from peds_guide import (
-        render_section_constipation,
-        render_section_diarrhea,
-        render_section_vomit,
-        render_peds_jumpbar,
-    )
-except Exception as _peds_err:
-    # Fallback stubs to prevent ImportError crash (NameError-safe)
-    try:
-        import streamlit as st  # local import to avoid top-level failure
-        st.warning("소아 모듈 로드 실패로 임시 안전모드로 동작합니다. (peds_guide ImportError)")
-    except Exception:
-        pass
-    def render_section_constipation(*args, **kwargs): 
-        pass
-    def render_section_diarrhea(*args, **kwargs): 
-        pass
-    def render_section_vomit(*args, **kwargs): 
-        pass
-    def render_peds_jumpbar(*args, **kwargs):
-        try:
-            import streamlit as st
-            st.info("임시 점프바: 소아 섹션 모듈이 로드되지 않았습니다.")
-        except Exception:
-            pass
-# ===== End of P0 safety patch =====
+from peds_guide import render_section_constipation, render_section_diarrhea, render_section_vomit
 
 def _safe_import(modname):
     try:
@@ -86,97 +54,6 @@ import os, sys, re, io, csv
 from pathlib import Path
 import importlib.util
 import streamlit as st
-
-# ===== P1: Antipyretic guardrails (APAP/IBU) — functionized =====
-def render_antipyretic_guardrails_panel(_container=None):
-    try:
-        import core_utils as CU
-        tgt = _container if _container is not None else st
-        tgt.markdown("### 🛡️ 해열제 가드레일 (APAP/IBU)")
-        c1,c2,c3 = tgt.columns([1,1,2])
-        with c1:
-            weight_kg = tgt.number_input("체중(kg)", min_value=0.0, step=0.5, value=0.0, key=wkey("wt_guard"))
-        with c2:
-            med = tgt.selectbox("약 선택", ["APAP","IBU"], key=wkey("med_guard"))
-        with c3:
-            dose_mg = tgt.number_input("이번 복용량 (mg)", min_value=0.0, step=50.0, value=0.0, key=wkey("dose_guard"))
-        note = tgt.text_input("메모(선택)", key=wkey("note_guard"))
-        uid = st.session_state.get("key") or st.session_state.get("_uid") or "guest"
-
-        def _guard_and_log(_med):
-            if _med=="APAP":
-                ok,msg,next_ts,remaining = CU.check_guard_apap(uid, dose_mg, weight_kg or None)
-            else:
-                ok,msg,next_ts,remaining = CU.check_guard_ibu(uid, dose_mg, weight_kg or None)
-            if not ok:
-                tgt.error(msg)
-                if next_ts:
-                    tgt.info(f"다음 복용 가능 시각(KST): **{next_ts}**")
-                    ics = CU.make_ics(f"{_med} 다음 복용", next_ts)
-                    try:
-                        if ics and os.path.exists(ics):
-                            with open(ics, "rb") as f:
-                                tgt.download_button("📅 다음 복용 .ics 저장", f, file_name="next_med.ics", key=wkey(f"ics_{_med}"))
-                    except Exception:
-                        pass
-                if remaining is not None:
-                    tgt.caption(f"남은 24시간 한도 추정치: {remaining:.0f} mg")
-                return False
-            # ok: append care log
-            row = CU.append_care_log(uid, _med, dose_mg, weight_kg or None, note or "")
-            tgt.success("기록되었습니다.")
-            tgt.caption(f"{row['ts_kst']} - {uid} - { _med } {dose_mg:.0f}mg")
-            return True
-
-        cL, cR = tgt.columns(2)
-        with cL:
-            if tgt.button("APAP 복용 기록", key=wkey("btn_apap")):
-                _guard_and_log("APAP")
-        with cR:
-            if tgt.button("IBU 복용 기록", key=wkey("btn_ibu")):
-                _guard_and_log("IBU")
-    except Exception as _e_guard:
-        try:
-            ( _container if _container is not None else st ).warning("해열제 가드레일 모듈 로딩에 실패했지만 앱은 계속 동작합니다.")
-        except Exception:
-            pass
-# ===== End functionized guardrails =====
-
-
-# ---------- History external save (P0 safety patch) ----------
-def _sanitize_uid_for_path(uid: str) -> str:
-    import re
-    uid = uid or "guest"
-    return re.sub(r'[^A-Za-z0-9._-]+', '_', uid)
-
-def _save_history_to_csv(hist: list):
-    """/mnt/data/bloodmap_graph/{uid}.labs.csv 에 최신 기록을 내보냅니다.
-    기존 기능/경로를 보존하고, 세션 리런에도 데이터가 남도록 보장합니다.
-    """
-    try:
-        import pandas as pd, os
-        uid = st.session_state.get("key") or st.session_state.get("_uid") or "guest"
-        uid = _sanitize_uid_for_path(str(uid))
-        out_dir = "/mnt/data/bloodmap_graph"
-        os.makedirs(out_dir, exist_ok=True)
-        rows = []
-        for h in hist:
-            row = {
-                "ts": h.get("ts",""),
-                "temp": h.get("temp",""),
-                "hr": h.get("hr",""),
-            }
-            labs = (h.get("labs") or {})
-            for k,v in labs.items():
-                row[k] = v
-            rows.append(row)
-        df = pd.DataFrame(rows)
-        df.to_csv(os.path.join(out_dir, f"{uid}.labs.csv"), index=False)
-    except Exception:
-        # 저장 실패는 앱 동작을 막지 않음
-        pass
-
-
 
 # --- Session defaults to prevent NameError on first load ---
 if 'peds_notes' not in st.session_state:
@@ -2050,7 +1927,6 @@ with t_report:
                         except Exception:
                             pass
                     hist.append(snap)
-                    _save_history_to_csv(hist)
                     st.success("현재 값이 기록에 추가되었습니다.")
                     if weird:
                         st.warning("비정상적으로 보이는 값 감지: " + ", ".join(weird) + " — 단위/오타를 확인하세요.")
