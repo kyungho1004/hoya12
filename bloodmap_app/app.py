@@ -2,7 +2,7 @@
 
 # ===== Robust import guard (auto-injected) =====
 import importlib, types
-from peds_guide import render_section_constipation, render_section_diarrhea, render_section_vomit
+from peds_guide import render_section_constipation, render_section_diarrhea, render_section_vomit, render_peds_jumpbar
 
 def _safe_import(modname):
     try:
@@ -55,69 +55,40 @@ from pathlib import Path
 import importlib.util
 import streamlit as st
 
-st.markdown("""
-<style>
-/* smooth-scroll */
-html { scroll-behavior: smooth; }
-.peds-nav-md{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin:.25rem 0 .5rem;}
-.peds-nav-md a{display:block;text-align:center;padding:.6rem .8rem;border-radius:12px;border:1px solid #ddd;text-decoration:none;color:inherit;background:#fff}
-.peds-nav-md a:active{transform:scale(.98)}
-</style>
-""", unsafe_allow_html=True)
+# ---------- History external save (P0 safety patch) ----------
+def _sanitize_uid_for_path(uid: str) -> str:
+    import re
+    uid = uid or "guest"
+    return re.sub(r'[^A-Za-z0-9._-]+', '_', uid)
 
-# --- in-place smooth scroll (no rerun) ---
+def _save_history_to_csv(hist: list):
+    """/mnt/data/bloodmap_graph/{uid}.labs.csv 에 최신 기록을 내보냅니다.
+    기존 기능/경로를 보존하고, 세션 리런에도 데이터가 남도록 보장합니다.
+    """
+    try:
+        import pandas as pd, os
+        uid = st.session_state.get("key") or st.session_state.get("_uid") or "guest"
+        uid = _sanitize_uid_for_path(str(uid))
+        out_dir = "/mnt/data/bloodmap_graph"
+        os.makedirs(out_dir, exist_ok=True)
+        rows = []
+        for h in hist:
+            row = {
+                "ts": h.get("ts",""),
+                "temp": h.get("temp",""),
+                "hr": h.get("hr",""),
+            }
+            labs = (h.get("labs") or {})
+            for k,v in labs.items():
+                row[k] = v
+            rows.append(row)
+        df = pd.DataFrame(rows)
+        df.to_csv(os.path.join(out_dir, f"{uid}.labs.csv"), index=False)
+    except Exception:
+        # 저장 실패는 앱 동작을 막지 않음
+        pass
 
 
-# --- HTML-only pediatric navigator (no rerun) ---
-def render_peds_nav_md():
-    from streamlit.components.v1 import html as _html
-    _html("""
-    <style>
-    .peds-nav{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin:.25rem 0 0.5rem}
-    .peds-nav button{padding:.6rem .8rem;border-radius:12px;border:1px solid #ddd;cursor:pointer;background:#fff}
-    .peds-nav button:active{transform:scale(.98)}
-    </style>
-    <div class="peds-nav">
-        <button onclick="document.getElementById('peds_constipation')?.scrollIntoView({behavior:'smooth',block:'start'})">🧻 변비</button>
-        <button onclick="document.getElementById('peds_diarrhea')?.scrollIntoView({behavior:'smooth',block:'start'})">💦 설사</button>
-        <button onclick="document.getElementById('peds_vomit')?.scrollIntoView({behavior:'smooth',block:'start'})">🤢 구토</button>
-        <button onclick="document.getElementById('peds_antipyretic')?.scrollIntoView({behavior:'smooth',block:'start'})">🌡️ 해열제</button>
-        <button onclick="document.getElementById('peds_ors')?.scrollIntoView({behavior:'smooth',block:'start'})">🥤 ORS·탈수</button>
-        <button onclick="document.getElementById('peds_respiratory')?.scrollIntoView({behavior:'smooth',block:'start'})">🫁 가래·쌕쌕</button>
-    </div>
-    """, height=70)
-# --- /HTML-only pediatric navigator ---
-
-
-
-# --- Markdown-based pediatric navigator (no rerun, no iframe) ---
-def render_peds_nav_md():
-    import streamlit as st
-    st.markdown("""
-    <div class="peds-nav-md">
-      <a href="#peds_constipation">🧻 변비</a>
-      <a href="#peds_diarrhea">💦 설사</a>
-      <a href="#peds_vomit">🤢 구토</a>
-      <a href="#peds_antipyretic">🌡️ 해열제</a>
-      <a href="#peds_ors">🥤 ORS·탈수</a>
-      <a href="#peds_respiratory">🫁 가래·쌕쌕</a>
-    </div>
-    """, unsafe_allow_html=True)
-# --- /Markdown-based pediatric navigator ---
-
-def _scroll_now(target: str):
-    from streamlit.components.v1 import html as _html
-    if not target:
-        return
-    _html(f"""
-    <script>
-    (function(){{
-        const el = document.getElementById("{target}");
-        if (el) el.scrollIntoView({{behavior:'smooth', block:'start'}});
-    }})();
-    </script>
-    """, height=0)
-# --- /in-place smooth scroll ---
 
 # --- Session defaults to prevent NameError on first load ---
 if 'peds_notes' not in st.session_state:
@@ -1509,7 +1480,6 @@ with t_chemo:
 # PEDS
 with t_peds:
     st.subheader("소아 증상 기반 점수 + 보호자 설명 + 해열제 계산")
-    render_peds_nav_md()
     c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
         nasal = st.selectbox("콧물", ["없음", "투명", "진득", "누런"], key=wkey("p_nasal"))
@@ -1796,67 +1766,6 @@ with t_peds:
         st.info("시간 형식을 확인하세요.")
     st.markdown("---")
     st.subheader("보호자 체크리스트")
-
-
-st.markdown("---")
-st.markdown("## 👶 소아 퀵 섹션 (GI/호흡기)")
-st.caption("필요한 것만 펼쳐서 확인하세요. 아래 각 섹션은 보고서/해열제 계산과 연동됩니다.")
-
-# --- Anchors ---
-st.markdown('<div id="peds_constipation"></div>', unsafe_allow_html=True)
-st.markdown('<div id="peds_diarrhea"></div>', unsafe_allow_html=True)
-st.markdown('<div id="peds_vomit"></div>', unsafe_allow_html=True)
-st.markdown('<div id="peds_antipyretic"></div>', unsafe_allow_html=True)
-st.markdown('<div id="peds_ors"></div>', unsafe_allow_html=True)
-st.markdown('<div id="peds_respiratory"></div>', unsafe_allow_html=True)
-
-# --- 변비 ---
-with st.expander("🧻 변비 체크", expanded=False):
-    try:
-        render_section_constipation()
-    except Exception:
-        st.info("상세 변비 체크 모듈을 불러오지 못했습니다. 아래 요약 가이드를 참고하세요.")
-        st.write("- 수분/수유 자주, 식이섬유(과일·채소·전곡), 식후 5~10분 배변 루틴")
-        st.write("- 3일 이상/배변 시 통증/혈변/복부팽만/구토 동반 시 진료")
-
-# --- 설사 ---
-with st.expander("💦 설사 체크", expanded=False):
-    try:
-        render_section_diarrhea()
-    except Exception:
-        st.info("상세 설사 체크 모듈을 불러오지 못했습니다. 아래 요약 가이드를 참고하세요.")
-        st.write("- ORS를 5~10분마다 소량씩, 기름진 음식·우유 일시 제한")
-        st.write("- 혈변/검은변, 고열, 소변 감소·축 늘어짐 → 진료")
-
-# --- 구토 ---
-with st.expander("🤢 구토 체크", expanded=False):
-    try:
-        render_section_vomit()
-    except Exception:
-        st.info("상세 구토 체크 모듈을 불러오지 못했습니다. 아래 요약 가이드를 참고하세요.")
-        st.write("- 10~15분마다 소량 수분, 초록/커피색/혈토 → 즉시 진료")
-
-# --- 해열제 ---
-with st.expander("🌡️ 해열제 가이드/계산", expanded=False):
-    try:
-        ap_ml_1, ap_ml_max = acetaminophen_ml(st.session_state.get(wkey("wt_peds"), 0.0))
-        ib_ml_1, ib_ml_max = ibuprofen_ml(st.session_state.get(wkey("wt_peds"), 0.0))
-    except Exception:
-        ap_ml_1 = ap_ml_max = ib_ml_1 = ib_ml_max = 0.0
-    st.write(f"- 아세트아미노펜(160mg/5mL): **{ap_ml_1:.1f} mL** (최대 {ap_ml_max:.1f} mL) — 최소 간격 **4h**")
-    st.write(f"- 이부프로펜(100mg/5mL): **{ib_ml_1:.1f} mL** (최대 {ib_ml_max:.1f} mL) — 최소 간격 **6h**")
-    st.caption("※ 금기/주의 질환은 반드시 의료진 지시를 따르세요. 중복 복용 주의.")
-
-# --- ORS/탈수 ---
-with st.expander("🥤 ORS/탈수 가이드", expanded=False):
-    st.write("- 5~10분마다 소량씩 자주, 토하면 10~15분 휴식 후 재개")
-    st.write("- 2시간 이상 소변 없음/입마름/눈물 감소/축 늘어짐 → 진료")
-    st.write("- 가능하면 스포츠음료 대신 **ORS** 용액 사용")
-
-# --- 가래/쌕쌕 ---
-with st.expander("🫁 가래/쌕쌕(천명) 가이드", expanded=False):
-    st.write("- 생리식염수 분무/흡인, 수면 시 머리 살짝 높이기")
-    st.write("- 쌕쌕/호흡곤란/청색증 → 즉시 응급평가")
     show_ck = st.toggle("체크리스트 열기", value=False, key=wkey("peds_ck"))
     if show_ck:
         colL, colR = st.columns(2)
@@ -1902,7 +1811,15 @@ def _annotate_special_notes(lines):
             out.append(ln)
     out.append(pitfalls)
     return out
-# (migrated) 기존 소아 GI 섹션 호출은 t_peds 퀵 섹션으로 이동되었습니다.
+
+    # ======= 소아: 변비 체크 =======
+    render_section_constipation()
+# ======= 소아: 설사 체크 =======
+    render_section_diarrhea()
+# ======= 소아: 구토 체크 =======
+    render_section_vomit()
+# === 소아 보호자 설명(통합) 끝 ===
+
 with t_special:
     st.subheader("특수검사 해석")
     if SPECIAL_PATH:
@@ -2045,6 +1962,7 @@ with t_report:
                         except Exception:
                             pass
                     hist.append(snap)
+                    _save_history_to_csv(hist)
                     st.success("현재 값이 기록에 추가되었습니다.")
                     if weird:
                         st.warning("비정상적으로 보이는 값 감지: " + ", ".join(weird) + " — 단위/오타를 확인하세요.")
