@@ -56,6 +56,28 @@ import importlib.util
 import streamlit as st
 
 # --- in-place smooth scroll (no rerun) ---
+
+
+# --- HTML-only pediatric navigator (no rerun) ---
+def render_peds_nav_html():
+    from streamlit.components.v1 import html as _html
+    _html("""
+    <style>
+    .peds-nav{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin:.25rem 0 0.5rem}
+    .peds-nav button{padding:.6rem .8rem;border-radius:12px;border:1px solid #ddd;cursor:pointer;background:#fff}
+    .peds-nav button:active{transform:scale(.98)}
+    </style>
+    <div class="peds-nav">
+        <button onclick="document.getElementById('peds_constipation')?.scrollIntoView({behavior:'smooth',block:'start'})">🧻 변비</button>
+        <button onclick="document.getElementById('peds_diarrhea')?.scrollIntoView({behavior:'smooth',block:'start'})">💦 설사</button>
+        <button onclick="document.getElementById('peds_vomit')?.scrollIntoView({behavior:'smooth',block:'start'})">🤢 구토</button>
+        <button onclick="document.getElementById('peds_antipyretic')?.scrollIntoView({behavior:'smooth',block:'start'})">🌡️ 해열제</button>
+        <button onclick="document.getElementById('peds_ors')?.scrollIntoView({behavior:'smooth',block:'start'})">🥤 ORS·탈수</button>
+        <button onclick="document.getElementById('peds_respiratory')?.scrollIntoView({behavior:'smooth',block:'start'})">🫁 가래·쌕쌕</button>
+    </div>
+    """, height=70)
+# --- /HTML-only pediatric navigator ---
+
 def _scroll_now(target: str):
     from streamlit.components.v1 import html as _html
     if not target:
@@ -1460,6 +1482,7 @@ with t_chemo:
 # PEDS
 with t_peds:
     st.subheader("소아 증상 기반 점수 + 보호자 설명 + 해열제 계산")
+    render_peds_nav_html()
     c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
         nasal = st.selectbox("콧물", ["없음", "투명", "진득", "누런"], key=wkey("p_nasal"))
