@@ -1489,447 +1489,456 @@ with t_chemo:
         else:
             st.write("- (DB에 상세 부작용 없음)")
 
-with t_peds:
+# PEDS
 
-    # PEDS
+# --- Pediatric quick paddles (JS open+scroll, no rerun) ---
+# --- PEDS: anchors + jumpbar (render-once) + auto-open ---
+# (A) 앵커 – 섹션 바로 위
+for _aid in ["peds_constipation","peds_diarrhea","peds_vomit","peds_antipyretic","peds_ors","peds_respiratory"]:
+    st.markdown(f'<div id="{_aid}"></div>', unsafe_allow_html=True)
 
-    # --- Pediatric quick paddles (JS open+scroll, no rerun) ---
-    # --- PEDS: anchors + jumpbar (render-once) + auto-open ---
-    # (A) 앵커 – 섹션 바로 위
-    for _aid in ["peds_constipation","peds_diarrhea","peds_vomit","peds_antipyretic","peds_ors","peds_respiratory"]:
-        st.markdown(f'<div id="{_aid}"></div>', unsafe_allow_html=True)
+# (B) 점프바 – 세션에서 한 번만 렌더(중복 방지)
+if 'peds_jumpbar_done' not in st.session_state:
+    st.session_state['peds_jumpbar_done'] = True
+    st.markdown("""
+    <style>
+    .peds-jumpbar{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin:.2rem 0 .6rem}
+    .peds-jumpbar button{display:block;width:100%;padding:.65rem .8rem;border-radius:12px;border:1px solid #ddd;background:#fff;cursor:pointer}
+    .peds-jumpbar button:active{transform:scale(.98)}
+    </style>
+    <div class="peds-jumpbar" id="peds-jumpbar">
+      <button data-target="peds_constipation">🧻 변비</button>
+      <button data-target="peds_diarrhea">💦 설사</button>
+      <button data-target="peds_vomit">🤢 구토</button>
+      <button data-target="peds_antipyretic">🌡️ 해열제</button>
+      <button data-target="peds_ors">🥤 ORS·탈수</button>
+      <button data-target="peds_respiratory">🫁 가래·쌕쌕</button>
+    </div>
+    <script>
+    (function(){
+      // 이벤트 위임 — #peds-jumpbar 하나만 동작(중복 방지)
+      const bar = document.getElementById('peds-jumpbar');
+      if(!bar || bar.__wired__) return;
+      bar.__wired__ = true;
 
-    # (B) 점프바 – 세션에서 한 번만 렌더(중복 방지)
-    if 'peds_jumpbar_done' not in st.session_state:
-        st.session_state['peds_jumpbar_done'] = True
-        st.markdown("""
-        <style>
-        .peds-jumpbar{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin:.2rem 0 .6rem}
-        .peds-jumpbar button{display:block;width:100%;padding:.65rem .8rem;border-radius:12px;border:1px solid #ddd;background:#fff;cursor:pointer}
-        .peds-jumpbar button:active{transform:scale(.98)}
-        </style>
-        <div class="peds-jumpbar" id="peds-jumpbar">
-          <button data-target="peds_constipation">🧻 변비</button>
-          <button data-target="peds_diarrhea">💦 설사</button>
-          <button data-target="peds_vomit">🤢 구토</button>
-          <button data-target="peds_antipyretic">🌡️ 해열제</button>
-          <button data-target="peds_ors">🥤 ORS·탈수</button>
-          <button data-target="peds_respiratory">🫁 가래·쌕쌕</button>
-        </div>
-        <script>
-        (function(){
-          // 이벤트 위임 — #peds-jumpbar 하나만 동작(중복 방지)
-          const bar = document.getElementById('peds-jumpbar');
-          if(!bar || bar.__wired__) return;
-          bar.__wired__ = true;
-
-          function openAfterAnchor(id){
-            const anchor = document.getElementById(id);
-            if(!anchor) return;
-            // anchor 아래에서 가장 가까운 expander(<details>) 강제 오픈
-            const details = Array.from(document.querySelectorAll('details'));
-            const aTop = anchor.getBoundingClientRect().top + window.scrollY;
-            let best=null, bestDy=1e9;
-            for(const d of details){
-              const dy = (d.getBoundingClientRect().top + window.scrollY) - aTop;
-              if(dy >= -16 && dy < bestDy){ best = d; bestDy = dy; }
-            }
-            if(best) best.open = true;
-            setTimeout(()=>{ anchor.scrollIntoView({behavior:'smooth', block:'start'}); }, 30);
-          }
-
-          bar.addEventListener('click', (e)=>{
-            const btn = e.target.closest('button[data-target]');
-            if(!btn) return;
-            const id = btn.getAttribute('data-target');
-            if(!id) return;
-            openAfterAnchor(id);
-          }, {passive:true});
-        })();
-        </script>
-        """, unsafe_allow_html=True)
-
-    # (C) 전역 스크롤/착지 보정 CSS(한 번만 있으면 됨)
-    if 'peds_scroll_css' not in st.session_state:
-        st.session_state['peds_scroll_css'] = True
-        st.markdown("""
-        <style>
-        html { scroll-behavior: smooth; }
-        [id^="peds_"]{ scroll-margin-top: 84px; }  /* 탭/헤더 높이만큼 여유 */
-        </style>
-        """, unsafe_allow_html=True)
-    # --- /PEDS: anchors + jumpbar + auto-open ---
-
-
-        # auto-open details just after target anchor
-        st.markdown("""
-        <script>
-        (function(){
-          try{
-            const KEY='__peds_target__';
-            const id = localStorage.getItem(KEY);
-            if(!id) return;
-            const anchor = document.getElementById(id);
-            if(anchor){
-              let next = anchor.nextElementSibling;
-              for(let i=0;i<8 && next;i++){
-                if(next.tagName && next.tagName.toLowerCase()==='details'){ break; }
-                next = next.nextElementSibling;
-              }
-              if(next && next.tagName && next.tagName.toLowerCase()==='details'){
-                next.open = true;
-              }
-              setTimeout(()=>{
-                const el = document.getElementById(id);
-                if(el) el.scrollIntoView({behavior:'smooth', block:'start'});
-              }, 60);
-            }
-            localStorage.removeItem(KEY);
-          }catch(e){ /* no-op */ }
-        })();
-        </script>
-        """, unsafe_allow_html=True)
-        # --- /PEDS: anchors + jumpbar + auto-open ---
-        # render_peds_paddles()  # disabled to avoid duplication
-        c1, c2, c3, c4, c5 = st.columns(5)
-        with c1:
-            nasal = st.selectbox("콧물", ["없음", "투명", "진득", "누런"], key=wkey("p_nasal"))
-        with c2:
-            cough = st.selectbox("기침", ["없음", "조금", "보통", "심함"], key=wkey("p_cough"))
-        with c3:
-            stool = st.selectbox("설사", ["없음", "1~2회", "3~4회", "5~6회", "7회 이상"], key=wkey("p_stool"))
-        with c4:
-            fever = st.selectbox("발열", ["없음", "37~37.5 (미열)", "37.5~38", "38~38.5", "38.5~39", "39 이상"], key=wkey("p_fever"))
-        with c5:
-            eye = st.selectbox("눈꼽/결막", ["없음", "맑음", "노랑-농성", "양쪽"], key=wkey("p_eye"))
-        # 추가: 변비 선택 (모바일 호환을 위해 독립 컨테이너)
-        with st.container():
-            constipation = st.selectbox("변비", ["없음","의심","3일 이상","배변 시 통증"], key=wkey("p_constipation"))
-
-            # 변비 보호자 설명 + 해열제 참고 (peds_dose 연계)
-            if constipation != "없음":
-                with st.expander("변비 보호자 설명 + 해열제 참고", expanded=False):
-                    st.markdown("**가정 내 관리 요약**")
-                    st.write("- 물/수유를 연령에 맞게 **자주 제공**하세요.")
-                    st.write("- 과일·채소·전곡류 등 **식이섬유** 섭취를 늘려보세요.")
-                    st.write("- 식후 5~10분 **배변 루틴** 만들기(억지로 오래 앉히지 않기).")
-                    st.write("- 걷기·놀이 등 **활동량**을 늘립니다.")
-                    if constipation in ["3일 이상","배변 시 통증"]:
-                        st.write("- **자두/배** 등 변 완화 식품을 소량 제공하고, **지속 시 진료**를 권합니다.")
-                    st.caption("※ 다음 경고 신호(혈변/검은변, 심한 복부팽만·복통, 고열, 담즙성 구토, 생후 1개월 미만, 체중감소/탈수)가 있으면 즉시 진료하세요.")
-
-                    with st.expander("해열/통증 완화 (참고: 의료진 상담 후)", expanded=False):
-                        try:
-                            import peds_dose as PD
-                            # 연령(개월) 추정: 앞서 입력한 값 재사용, 없으면 24개월 가정
-                            # 가능하면 소아 변비 체크 섹션의 개월 입력 키를 먼저 참고
-                            age_guess = 24
-                            for age_key in ["peds_age_const", "peds_age_diarrhea", "peds_age_vomit"]:
-                                try:
-                                    age_guess = int(st.session_state.get(wkey(age_key), age_guess))
-                                    break
-                                except Exception:
-                                    continue
-                            # 선택적 체중 입력
-                            weight_key = wkey("peds_w_const")
-                            weight_val = st.session_state.get(weight_key, 0.0)
-                            if not isinstance(weight_val, (int,float)) or weight_val <= 0:
-                                weight_val = st.number_input("체중(kg, 선택)", min_value=0.0, max_value=80.0, value=0.0, step=0.5, key=weight_key)
-                            apap_ml, estw1 = PD.acetaminophen_ml(age_guess, weight_val if weight_val>0 else None)
-                            ibu_ml,  estw2 = PD.ibuprofen_ml(age_guess, weight_val if weight_val>0 else None)
-                            disp_w = weight_val if weight_val>0 else estw1
-                            st.caption(f"추정체중: {disp_w:.1f} kg (입력 없으면 월령 기반 추정)")
-                            st.write(f"- 아세트아미노펜 시럽(160mg/5mL): **{apap_ml} mL** (6~8시간 간격)")
-                            st.write(f"- 이부프로펜 시럽(100mg/5mL): **{ibu_ml} mL** (8시간 간격)")
-                            st.caption("※ 금기/주의 질환에 따라 달라질 수 있으니, 반드시 의료진 지시에 따르세요.")
-                        except Exception:
-                            st.info("용량 계산 모듈이 준비되지 않았습니다.")
-        # 추가: 가래/쌕쌕거림(천명)
-        g1, g2 = st.columns(2)
-        with g1:
-            sputum = st.selectbox("가래", ["없음", "조금", "보통", "많음"], key=wkey("p_sputum"))
-        with g2:
-            wheeze = st.selectbox("쌕쌕거림(천명)", ["없음", "조금", "보통", "심함"], key=wkey("p_wheeze"))
-        d1, d2, d3 = st.columns(3)
-        with d1:
-            oliguria = st.checkbox("소변량 급감", key=wkey("p_oliguria"))
-        with d2:
-            persistent_vomit = st.checkbox("지속 구토(>6시간)", key=wkey("p_pvomit"))
-        with d3:
-            petechiae = st.checkbox("점상출혈", key=wkey("p_petechiae"))
-
-        e1, e2, e3 = st.columns(3)
-        with e1:
-            abd_pain = st.checkbox("복통/배마사지 거부", key=wkey("p_abd_pain"))
-        with e2:
-            ear_pain = st.checkbox("귀 통증/만지면 울음", key=wkey("p_ear_pain"))
-        with e3:
-            rash = st.checkbox("가벼운 발진/두드러기", key=wkey("p_rash"))
-
-        f1, f2, f3 = st.columns(3)
-        with f1:
-            hives = st.checkbox("두드러기·알레르기 의심(전신/입술부종 등)", key=wkey("p_hives"))
-        with f2:
-            migraine = st.checkbox("편두통 의심(한쪽·박동성·빛/소리 민감)", key=wkey("p_migraine"))
-        with f3:
-            hfmd = st.checkbox("수족구 의심(손발·입 병변)", key=wkey("p_hfmd"))
-        # 추가: 증상 지속 기간(보고서/로직 활용 가능)
-        duration = st.selectbox("증상 지속일수", ["선택 안 함", "1일", "2일", "3일 이상"], key=wkey("p_duration"))
-        if duration == "선택 안 함":
-            duration_val = None
-        else:
-            duration_val = duration
-
-        # ANC 기반 음식 안전 가이드(저호중구 시)
-        try:
-            anc_val = float(str(st.session_state.get("labs_dict", {}).get("ANC", "")).replace(",", "."))
-        except Exception:
-            anc_val = None
-        if anc_val is not None and anc_val < 1000:
-            st.warning("🍽️ 저호중구 시 음식 안전: **생야채/생과일 껍질**은 피하고, **완전 가열** 후 섭취하세요. 남은 음식은 **2시간 이후 섭취 비권장**. 멸균·살균 식품 권장.")
-
-        # 추가: 최고 체온(°C)와 레드 플래그 체크
-        max_temp = st.number_input("최고 체온(°C)", min_value=34.0, max_value=43.5, step=0.1, format="%.1f", key=wkey("p_max_temp"))
-        col_rf1, col_rf2, col_rf3, col_rf4 = st.columns(4)
-        with col_rf1:
-            red_seizure = st.checkbox("경련/의식저하", key=wkey("p_red_seizure"))
-        with col_rf2:
-            red_bloodstool = st.checkbox("혈변/검은변", key=wkey("p_red_blood"))
-        with col_rf3:
-            red_night = st.checkbox("야간/새벽 악화", key=wkey("p_red_night"))
-        with col_rf4:
-            red_dehydration = st.checkbox("탈수 의심(눈물↓·입마름)", key=wkey("p_red_dehyd"))
-
-        # 간단 위험 배지 산정
-        fever_flag = (max_temp is not None and max_temp >= 38.5)
-        danger_count = sum([1 if x else 0 for x in [red_seizure, red_bloodstool, red_night, red_dehydration, fever_flag]])
-        if red_seizure or red_bloodstool or (max_temp is not None and max_temp >= 39.0):
-            risk_badge = "🚨"
-            st.error("🚨 고위험 신호가 있습니다. 즉시 병원(응급실) 평가를 권합니다.")
-        elif danger_count >= 2:
-            risk_badge = "🟡"
-            st.warning("🟡 주의가 필요합니다. 수분 보충/해열제 가이드 준수하며 경과를 면밀히 관찰하세요.")
-        else:
-            risk_badge = "🟢"
-            st.info("🟢 현재는 비교적 안정 신호입니다. 악화 시 바로 상위 단계 조치를 따르세요.")
-
-        # ORS(경구수분보충) 가이드 — 설사/지속구토/소변감소 시 노출
-        if (stool != "없음") or persistent_vomit or oliguria or red_dehydration:
-            with st.expander("🥤 ORS 경구 수분 보충 가이드", expanded=False):
-                st.markdown("- 5~10분마다 소량씩, 구토가 멎으면 양을 서서히 늘립니다.")
-                st.markdown("- 차가운 온도보다는 **미지근한 온도**가 흡수에 유리할 수 있습니다.")
-                st.markdown("- 2시간 내 소변이 없거나, 입이 마르고 눈물이 잘 나오지 않으면 의료진과 상의하세요.")
-                st.markdown("- 스포츠음료는 보충에 한계가 있으니, 가능하면 **ORS 용액**을 사용하세요.")
-
-
-        score = {
-            "장염 의심": 0,
-            "상기도/독감 계열": 0,
-            "결막염 의심": 0,
-            "탈수/신장 문제": 0,
-            "출혈성 경향": 0,
-            "중이염/귀질환": 0,
-            "피부발진/경미한 알레르기": 0,
-            "복통 평가": 0,
-            "알레르기 주의": 0,
-            "편두통 의심": 0,
-            "수족구 의심": 0,
-            "하기도/천명 주의": 0,
-            "가래 동반 호흡기": 0,
-           "아데노바이러스 의심": 0,
+      function openAfterAnchor(id){
+        const anchor = document.getElementById(id);
+        if(!anchor) return;
+        // anchor 아래에서 가장 가까운 expander(<details>) 강제 오픈
+        const details = Array.from(document.querySelectorAll('details'));
+        const aTop = anchor.getBoundingClientRect().top + window.scrollY;
+        let best=null, bestDy=1e9;
+        for(const d of details){
+          const dy = (d.getBoundingClientRect().top + window.scrollY) - aTop;
+          if(dy >= -16 && dy < bestDy){ best = d; bestDy = dy; }
         }
+        if(best) best.open = true;
+        setTimeout(()=>{ anchor.scrollIntoView({behavior:'smooth', block:'start'}); }, 30);
+      }
+
+      bar.addEventListener('click', function (e) {
+        // closest 대체(호환성): 부모 방향으로 버튼 탐색
+        let el = e.target;
+        while (el && el !== bar && !(el.matches && el.matches('button[data-target]'))) {
+          el = el.parentNode;
+        }
+        if (!el || el === bar) return;
+        const id = el.getAttribute('data-target');
+        if (!id) return;
+        openAfterAnchor(id);
+      }, false);
+})();
+    </script>
+    """, unsafe_allow_html=True)
+
+# (C) 전역 스크롤/착지 보정 CSS(한 번만 있으면 됨)
+if 'peds_scroll_css' not in st.session_state:
+    st.session_state['peds_scroll_css'] = True
+    st.markdown("""
+    <style>
+    html { scroll-behavior: smooth; }
+    [id^="peds_"]{ scroll-margin-top: 84px; }  /* 탭/헤더 높이만큼 여유 */
+    </style>
+    """, unsafe_allow_html=True)
+# --- /PEDS: anchors + jumpbar + auto-open ---
+
+
+    # auto-open details just after target anchor
+    st.markdown("""
+    <script>
+    (function(){
+      try{
+        const KEY='__peds_target__';
+        const id = localStorage.getItem(KEY);
+        if(!id) return;
+        const anchor = document.getElementById(id);
+        if(anchor){
+          let next = anchor.nextElementSibling;
+          for(let i=0;i<8 && next;i++){
+            if(next.tagName && next.tagName.toLowerCase()==='details'){ break; }
+            next = next.nextElementSibling;
+          }
+          if(next && next.tagName && next.tagName.toLowerCase()==='details'){
+            next.open = true;
+          }
+          setTimeout(()=>{
+            const el = document.getElementById(id);
+            if(el) el.scrollIntoView({behavior:'smooth', block:'start'});
+          }, 60);
+        }
+        localStorage.removeItem(KEY);
+      }catch(e){ /* no-op */ }
+    })();
+    </script>
+    """, unsafe_allow_html=True)
+    # --- /PEDS: anchors + jumpbar + auto-open ---
+    render_peds_paddles()
+    st.markdown('<div id="peds_respiratory"></div>', unsafe_allow_html=True)
+    st.markdown('<div id="peds_ors"></div>', unsafe_allow_html=True)
+    st.markdown('<div id="peds_antipyretic"></div>', unsafe_allow_html=True)
+    st.markdown('<div id="peds_vomit"></div>', unsafe_allow_html=True)
+    st.markdown('<div id="peds_diarrhea"></div>', unsafe_allow_html=True)
+    st.markdown('<div id="peds_constipation"></div>', unsafe_allow_html=True)
+    c1, c2, c3, c4, c5 = st.columns(5)
+    with c1:
+        nasal = st.selectbox("콧물", ["없음", "투명", "진득", "누런"], key=wkey("p_nasal"))
+    with c2:
+        cough = st.selectbox("기침", ["없음", "조금", "보통", "심함"], key=wkey("p_cough"))
+    with c3:
+        stool = st.selectbox("설사", ["없음", "1~2회", "3~4회", "5~6회", "7회 이상"], key=wkey("p_stool"))
+    with c4:
+        fever = st.selectbox("발열", ["없음", "37~37.5 (미열)", "37.5~38", "38~38.5", "38.5~39", "39 이상"], key=wkey("p_fever"))
+    with c5:
+        eye = st.selectbox("눈꼽/결막", ["없음", "맑음", "노랑-농성", "양쪽"], key=wkey("p_eye"))
+    # 추가: 변비 선택 (모바일 호환을 위해 독립 컨테이너)
+    with st.container():
+        constipation = st.selectbox("변비", ["없음","의심","3일 이상","배변 시 통증"], key=wkey("p_constipation"))
+
+        # 변비 보호자 설명 + 해열제 참고 (peds_dose 연계)
+        if constipation != "없음":
+            with st.expander("변비 보호자 설명 + 해열제 참고", expanded=False):
+                st.markdown("**가정 내 관리 요약**")
+                st.write("- 물/수유를 연령에 맞게 **자주 제공**하세요.")
+                st.write("- 과일·채소·전곡류 등 **식이섬유** 섭취를 늘려보세요.")
+                st.write("- 식후 5~10분 **배변 루틴** 만들기(억지로 오래 앉히지 않기).")
+                st.write("- 걷기·놀이 등 **활동량**을 늘립니다.")
+                if constipation in ["3일 이상","배변 시 통증"]:
+                    st.write("- **자두/배** 등 변 완화 식품을 소량 제공하고, **지속 시 진료**를 권합니다.")
+                st.caption("※ 다음 경고 신호(혈변/검은변, 심한 복부팽만·복통, 고열, 담즙성 구토, 생후 1개월 미만, 체중감소/탈수)가 있으면 즉시 진료하세요.")
+
+                with st.expander("해열/통증 완화 (참고: 의료진 상담 후)", expanded=False):
+                    try:
+                        import peds_dose as PD
+                        # 연령(개월) 추정: 앞서 입력한 값 재사용, 없으면 24개월 가정
+                        # 가능하면 소아 변비 체크 섹션의 개월 입력 키를 먼저 참고
+                        age_guess = 24
+                        for age_key in ["peds_age_const", "peds_age_diarrhea", "peds_age_vomit"]:
+                            try:
+                                age_guess = int(st.session_state.get(wkey(age_key), age_guess))
+                                break
+                            except Exception:
+                                continue
+                        # 선택적 체중 입력
+                        weight_key = wkey("peds_w_const")
+                        weight_val = st.session_state.get(weight_key, 0.0)
+                        if not isinstance(weight_val, (int,float)) or weight_val <= 0:
+                            weight_val = st.number_input("체중(kg, 선택)", min_value=0.0, max_value=80.0, value=0.0, step=0.5, key=weight_key)
+                        apap_ml, estw1 = PD.acetaminophen_ml(age_guess, weight_val if weight_val>0 else None)
+                        ibu_ml,  estw2 = PD.ibuprofen_ml(age_guess, weight_val if weight_val>0 else None)
+                        disp_w = weight_val if weight_val>0 else estw1
+                        st.caption(f"추정체중: {disp_w:.1f} kg (입력 없으면 월령 기반 추정)")
+                        st.write(f"- 아세트아미노펜 시럽(160mg/5mL): **{apap_ml} mL** (6~8시간 간격)")
+                        st.write(f"- 이부프로펜 시럽(100mg/5mL): **{ibu_ml} mL** (8시간 간격)")
+                        st.caption("※ 금기/주의 질환에 따라 달라질 수 있으니, 반드시 의료진 지시에 따르세요.")
+                    except Exception:
+                        st.info("용량 계산 모듈이 준비되지 않았습니다.")
+    # 추가: 가래/쌕쌕거림(천명)
+    g1, g2 = st.columns(2)
+    with g1:
+        sputum = st.selectbox("가래", ["없음", "조금", "보통", "많음"], key=wkey("p_sputum"))
+    with g2:
+        wheeze = st.selectbox("쌕쌕거림(천명)", ["없음", "조금", "보통", "심함"], key=wkey("p_wheeze"))
+    d1, d2, d3 = st.columns(3)
+    with d1:
+        oliguria = st.checkbox("소변량 급감", key=wkey("p_oliguria"))
+    with d2:
+        persistent_vomit = st.checkbox("지속 구토(>6시간)", key=wkey("p_pvomit"))
+    with d3:
+        petechiae = st.checkbox("점상출혈", key=wkey("p_petechiae"))
+
+    e1, e2, e3 = st.columns(3)
+    with e1:
+        abd_pain = st.checkbox("복통/배마사지 거부", key=wkey("p_abd_pain"))
+    with e2:
+        ear_pain = st.checkbox("귀 통증/만지면 울음", key=wkey("p_ear_pain"))
+    with e3:
+        rash = st.checkbox("가벼운 발진/두드러기", key=wkey("p_rash"))
+
+    f1, f2, f3 = st.columns(3)
+    with f1:
+        hives = st.checkbox("두드러기·알레르기 의심(전신/입술부종 등)", key=wkey("p_hives"))
+    with f2:
+        migraine = st.checkbox("편두통 의심(한쪽·박동성·빛/소리 민감)", key=wkey("p_migraine"))
+    with f3:
+        hfmd = st.checkbox("수족구 의심(손발·입 병변)", key=wkey("p_hfmd"))
+    # 추가: 증상 지속 기간(보고서/로직 활용 가능)
+    duration = st.selectbox("증상 지속일수", ["선택 안 함", "1일", "2일", "3일 이상"], key=wkey("p_duration"))
+    if duration == "선택 안 함":
+        duration_val = None
+    else:
+        duration_val = duration
+
+    # ANC 기반 음식 안전 가이드(저호중구 시)
+    try:
+        anc_val = float(str(st.session_state.get("labs_dict", {}).get("ANC", "")).replace(",", "."))
+    except Exception:
+        anc_val = None
+    if anc_val is not None and anc_val < 1000:
+        st.warning("🍽️ 저호중구 시 음식 안전: **생야채/생과일 껍질**은 피하고, **완전 가열** 후 섭취하세요. 남은 음식은 **2시간 이후 섭취 비권장**. 멸균·살균 식품 권장.")
+
+    # 추가: 최고 체온(°C)와 레드 플래그 체크
+    max_temp = st.number_input("최고 체온(°C)", min_value=34.0, max_value=43.5, step=0.1, format="%.1f", key=wkey("p_max_temp"))
+    col_rf1, col_rf2, col_rf3, col_rf4 = st.columns(4)
+    with col_rf1:
+        red_seizure = st.checkbox("경련/의식저하", key=wkey("p_red_seizure"))
+    with col_rf2:
+        red_bloodstool = st.checkbox("혈변/검은변", key=wkey("p_red_blood"))
+    with col_rf3:
+        red_night = st.checkbox("야간/새벽 악화", key=wkey("p_red_night"))
+    with col_rf4:
+        red_dehydration = st.checkbox("탈수 의심(눈물↓·입마름)", key=wkey("p_red_dehyd"))
+
+    # 간단 위험 배지 산정
+    fever_flag = (max_temp is not None and max_temp >= 38.5)
+    danger_count = sum([1 if x else 0 for x in [red_seizure, red_bloodstool, red_night, red_dehydration, fever_flag]])
+    if red_seizure or red_bloodstool or (max_temp is not None and max_temp >= 39.0):
+        risk_badge = "🚨"
+        st.error("🚨 고위험 신호가 있습니다. 즉시 병원(응급실) 평가를 권합니다.")
+    elif danger_count >= 2:
+        risk_badge = "🟡"
+        st.warning("🟡 주의가 필요합니다. 수분 보충/해열제 가이드 준수하며 경과를 면밀히 관찰하세요.")
+    else:
+        risk_badge = "🟢"
+        st.info("🟢 현재는 비교적 안정 신호입니다. 악화 시 바로 상위 단계 조치를 따르세요.")
+
+    # ORS(경구수분보충) 가이드 — 설사/지속구토/소변감소 시 노출
+    if (stool != "없음") or persistent_vomit or oliguria or red_dehydration:
+        with st.expander("🥤 ORS 경구 수분 보충 가이드", expanded=False):
+            st.markdown("- 5~10분마다 소량씩, 구토가 멎으면 양을 서서히 늘립니다.")
+            st.markdown("- 차가운 온도보다는 **미지근한 온도**가 흡수에 유리할 수 있습니다.")
+            st.markdown("- 2시간 내 소변이 없거나, 입이 마르고 눈물이 잘 나오지 않으면 의료진과 상의하세요.")
+            st.markdown("- 스포츠음료는 보충에 한계가 있으니, 가능하면 **ORS 용액**을 사용하세요.")
+
+
+    score = {
+        "장염 의심": 0,
+        "상기도/독감 계열": 0,
+        "결막염 의심": 0,
+        "탈수/신장 문제": 0,
+        "출혈성 경향": 0,
+        "중이염/귀질환": 0,
+        "피부발진/경미한 알레르기": 0,
+        "복통 평가": 0,
+        "알레르기 주의": 0,
+        "편두통 의심": 0,
+        "수족구 의심": 0,
+        "하기도/천명 주의": 0,
+        "가래 동반 호흡기": 0,
+       "아데노바이러스 의심": 0,
+    }
 
     
-        # 아데노바이러스 의심 가중 (고열 + 결막 + 호흡기/장 증상)
-        try:
-            _mt = float(max_temp) if max_temp is not None else None
-        except Exception:
-            _mt = None
-        if (_mt is not None and _mt >= 39.0) and (eye in ["노랑-농성","양쪽"]) and (cough in ["보통","심함"] or stool in ["1~2회","3~4회","5~6회","7회 이상"]):
-            score["아데노바이러스 의심"] += 60
-        elif (eye in ["노랑-농성","양쪽"]) and (cough in ["보통","심함"] or stool in ["1~2회","3~4회","5~6회","7회 이상"]):
-            score["아데노바이러스 의심"] += 35
-        if stool in ["3~4회", "5~6회", "7회 이상"]:
-            score["장염 의심"] += {"3~4회": 40, "5~6회": 55, "7회 이상": 70}[stool]
-        if fever in ["38~38.5", "38.5~39", "39 이상"]:
-            score["상기도/독감 계열"] += 25
-        if cough in ["조금", "보통", "심함"]:
-            score["상기도/독감 계열"] += 20
-        if sputum in ["조금", "보통", "많음"]:
-            score["가래 동반 호흡기"] += {"조금": 10, "보통": 20, "많음": 30}[sputum]
-        if wheeze in ["조금", "보통", "심함"]:
-            score["하기도/천명 주의"] += {"조금": 25, "보통": 40, "심함": 60}[wheeze]
-        if eye in ["노랑-농성", "양쪽"]:
-            score["결막염 의심"] += 30
-        if oliguria:
-            score["탈수/신장 문제"] += 40
-            score["장염 의심"] += 10
-        if persistent_vomit:
-            score["장염 의심"] += 25
-            score["탈수/신장 문제"] += 15
-            score["복통 평가"] += 10
-        if petechiae:
-            score["출혈성 경향"] += 60
-        if ear_pain:
-            score["중이염/귀질환"] += 35
-        if rash:
-            score["피부발진/경미한 알레르기"] += 25
-        if abd_pain:
-            score["복통 평가"] += 25
-        if hives:
-            score["알레르기 주의"] += 60
-        if migraine:
-            score["편두통 의심"] += 35
-        if hfmd:
-            score["수족구 의심"] += 40
+    # 아데노바이러스 의심 가중 (고열 + 결막 + 호흡기/장 증상)
+    try:
+        _mt = float(max_temp) if max_temp is not None else None
+    except Exception:
+        _mt = None
+    if (_mt is not None and _mt >= 39.0) and (eye in ["노랑-농성","양쪽"]) and (cough in ["보통","심함"] or stool in ["1~2회","3~4회","5~6회","7회 이상"]):
+        score["아데노바이러스 의심"] += 60
+    elif (eye in ["노랑-농성","양쪽"]) and (cough in ["보통","심함"] or stool in ["1~2회","3~4회","5~6회","7회 이상"]):
+        score["아데노바이러스 의심"] += 35
+    if stool in ["3~4회", "5~6회", "7회 이상"]:
+        score["장염 의심"] += {"3~4회": 40, "5~6회": 55, "7회 이상": 70}[stool]
+    if fever in ["38~38.5", "38.5~39", "39 이상"]:
+        score["상기도/독감 계열"] += 25
+    if cough in ["조금", "보통", "심함"]:
+        score["상기도/독감 계열"] += 20
+    if sputum in ["조금", "보통", "많음"]:
+        score["가래 동반 호흡기"] += {"조금": 10, "보통": 20, "많음": 30}[sputum]
+    if wheeze in ["조금", "보통", "심함"]:
+        score["하기도/천명 주의"] += {"조금": 25, "보통": 40, "심함": 60}[wheeze]
+    if eye in ["노랑-농성", "양쪽"]:
+        score["결막염 의심"] += 30
+    if oliguria:
+        score["탈수/신장 문제"] += 40
+        score["장염 의심"] += 10
+    if persistent_vomit:
+        score["장염 의심"] += 25
+        score["탈수/신장 문제"] += 15
+        score["복통 평가"] += 10
+    if petechiae:
+        score["출혈성 경향"] += 60
+    if ear_pain:
+        score["중이염/귀질환"] += 35
+    if rash:
+        score["피부발진/경미한 알레르기"] += 25
+    if abd_pain:
+        score["복통 평가"] += 25
+    if hives:
+        score["알레르기 주의"] += 60
+    if migraine:
+        score["편두통 의심"] += 35
+    if hfmd:
+        score["수족구 의심"] += 40
 
-        ordered = sorted(score.items(), key=lambda x: x[1], reverse=True)
-        st.write("• " + " / ".join([f"{k}: {v}" for k, v in ordered if v > 0]) if any(v > 0 for _, v in ordered) else "• 특이 점수 없음")
-        # 보호자 설명 렌더 + peds_notes 저장
-        render_caregiver_notes_peds(
+    ordered = sorted(score.items(), key=lambda x: x[1], reverse=True)
+    st.write("• " + " / ".join([f"{k}: {v}" for k, v in ordered if v > 0]) if any(v > 0 for _, v in ordered) else "• 특이 점수 없음")
+    # 보호자 설명 렌더 + peds_notes 저장
+    render_caregiver_notes_peds(
+        stool=stool, fever=fever, persistent_vomit=persistent_vomit, oliguria=oliguria,
+        cough=cough, nasal=nasal, eye=eye, abd_pain=abd_pain, ear_pain=ear_pain,
+        rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, sputum=sputum, wheeze=wheeze
+    )
+    try:
+        notes = build_peds_notes(
             stool=stool, fever=fever, persistent_vomit=persistent_vomit, oliguria=oliguria,
             cough=cough, nasal=nasal, eye=eye, abd_pain=abd_pain, ear_pain=ear_pain,
-            rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, sputum=sputum, wheeze=wheeze
+            rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, sputum=sputum, wheeze=wheeze, duration=duration_val, score=score, max_temp=max_temp, red_seizure=red_seizure, red_bloodstool=red_bloodstool, red_night=red_night, red_dehydration=red_dehydration
         )
-        try:
-            notes = build_peds_notes(
-                stool=stool, fever=fever, persistent_vomit=persistent_vomit, oliguria=oliguria,
-                cough=cough, nasal=nasal, eye=eye, abd_pain=abd_pain, ear_pain=ear_pain,
-                rash=rash, hives=hives, migraine=migraine, hfmd=hfmd, sputum=sputum, wheeze=wheeze, duration=duration_val, score=score, max_temp=max_temp, red_seizure=red_seizure, red_bloodstool=red_bloodstool, red_night=red_night, red_dehydration=red_dehydration
-            )
-        except Exception:
-            notes = ""
-        # 변비 선택이 있으면 요약에 추가
+    except Exception:
+        notes = ""
+    # 변비 선택이 있으면 요약에 추가
 
-        try:
+    try:
 
-            if 'constipation' in locals() and constipation != '없음':
+        if 'constipation' in locals() and constipation != '없음':
 
-                notes = (notes + "\n" if notes else "") + "[증상] 변비:" + str(constipation)
+            notes = (notes + "\n" if notes else "") + "[증상] 변비:" + str(constipation)
 
-        except Exception:
+    except Exception:
 
-            pass
+        pass
 
-        st.session_state["peds_notes"] = notes
-        with st.expander(f"{risk_badge} 소아 증상 요약(보고서용 저장됨)", expanded=False):
-            st.text_area("요약 내용", value=notes, height=160, key=wkey("peds_notes_preview"))
+    st.session_state["peds_notes"] = notes
+    with st.expander(f"{risk_badge} 소아 증상 요약(보고서용 저장됨)", expanded=False):
+        st.text_area("요약 내용", value=notes, height=160, key=wkey("peds_notes_preview"))
 
 
-        st.markdown("---")
-        st.subheader("해열제 계산기")
-        prev_wt = st.session_state.get(wkey("wt_peds"), 0.0)
-        default_wt = _safe_float(prev_wt, 0.0)
-        wt = st.number_input("체중(kg)", min_value=0.0, max_value=200.0, value=default_wt, step=0.1, key=wkey("wt_peds_num"))
-        st.session_state[wkey("wt_peds")] = wt
-        try:
-            ap_ml_1, ap_ml_max = acetaminophen_ml(wt)
-            ib_ml_1, ib_ml_max = ibuprofen_ml(wt)
-        except Exception:
-            ap_ml_1, ap_ml_max, ib_ml_1, ib_ml_max = (0.0, 0.0, 0.0, 0.0)
-        colA, colB = st.columns(2)
-        with colA:
-            st.write(f"아세트아미노펜 1회 권장량: **{ap_ml_1:.1f} mL** (최대 {ap_ml_max:.1f} mL)")
-        with colB:
-            st.write(f"이부프로펜 1회 권장량: **{ib_ml_1:.1f} mL** (최대 {ib_ml_max:.1f} mL)")
-        st.caption("쿨다운: APAP ≥4h, IBU ≥6h. 중복 복용 주의.")
+    st.markdown("---")
+    st.subheader("해열제 계산기")
+    prev_wt = st.session_state.get(wkey("wt_peds"), 0.0)
+    default_wt = _safe_float(prev_wt, 0.0)
+    wt = st.number_input("체중(kg)", min_value=0.0, max_value=200.0, value=default_wt, step=0.1, key=wkey("wt_peds_num"))
+    st.session_state[wkey("wt_peds")] = wt
+    try:
+        ap_ml_1, ap_ml_max = acetaminophen_ml(wt)
+        ib_ml_1, ib_ml_max = ibuprofen_ml(wt)
+    except Exception:
+        ap_ml_1, ap_ml_max, ib_ml_1, ib_ml_max = (0.0, 0.0, 0.0, 0.0)
+    colA, colB = st.columns(2)
+    with colA:
+        st.write(f"아세트아미노펜 1회 권장량: **{ap_ml_1:.1f} mL** (최대 {ap_ml_max:.1f} mL)")
+    with colB:
+        st.write(f"이부프로펜 1회 권장량: **{ib_ml_1:.1f} mL** (최대 {ib_ml_max:.1f} mL)")
+    st.caption("쿨다운: APAP ≥4h, IBU ≥6h. 중복 복용 주의.")
 
 
-        # 3) 해열제 스케줄러 (KST·간격검증)
-        st.markdown("#### 해열제 스케줄(KST, 간격 자동검증)")
-        KST_TZ = _dt.timezone(_dt.timedelta(hours=9))
-        apap_min_h = 4
-        ibu_min_h = 6
-        start = st.time_input("시작시간(한국시간)", value=_dt.datetime.now(tz=KST_TZ).time(), key=wkey("peds_sched_start_kst"))
-        horizon_h = st.slider("표시 시간(시간 단위)", min_value=6, max_value=24, value=12, step=1, key=wkey("peds_sched_horizon"))
-        try:
-            base = _dt.datetime.combine(_dt.datetime.now(tz=KST_TZ).date(), start)
-            plan = []
-            last_apap = None
-            last_ibu = None
-            cur = base
-            cur_drug = "APAP"
-            end_dt = base + _dt.timedelta(hours=horizon_h)
-            step = _dt.timedelta(minutes=30)
-            while cur <= end_dt:
-                can_apap = last_apap is None or (cur - last_apap).total_seconds() >= apap_min_h * 3600
-                can_ibu  = last_ibu  is None or (cur - last_ibu ).total_seconds() >= ibu_min_h  * 3600
-                if cur_drug == "APAP" and can_apap:
-                    plan.append(("APAP", cur))
-                    last_apap = cur
-                    cur_drug = "IBU"
-                    cur += _dt.timedelta(hours=3)
-                    continue
-                if cur_drug == "IBU" and can_ibu:
-                    plan.append(("IBU", cur))
-                    last_ibu = cur
-                    cur_drug = "APAP"
-                    cur += _dt.timedelta(hours=3)
-                    continue
-                cur += step
-            st.caption("기준: APAP ≥ 4시간, IBU ≥ 6시간 (KST 기준)")
-            if plan:
-                for drug, t in plan:
-                    st.write(f"- {drug} @ {t.strftime('%m/%d %H:%M')} (KST)")
-            else:
-                st.info("표시할 일정이 없습니다. 시작시간/표시시간을 조정해 보세요.")
-        except Exception:
-            st.info("시간 형식을 확인하세요.")
-        st.markdown("---")
-        st.subheader("보호자 체크리스트")
-        show_ck = st.toggle("체크리스트 열기", value=False, key=wkey("peds_ck"))
-        if show_ck:
-            colL, colR = st.columns(2)
-            with colL:
-                st.markdown("**🟢 집에서 해볼 수 있는 것**")
-                st.write("- 충분한 수분 섭취(ORS/미온수)")
-                st.write("- 해열제 올바른 간격 준수")
-                st.write("- 생리식염수 비강 세척/흡인(콧물)")
-                st.write("- 가벼운 옷/시원한 환경")
-            with colR:
-                st.markdown("**🔴 즉시 진료가 필요한 신호**")
-                st.write("- 번개치는 두통, 시야 이상, 경련, 의식저하")
-                st.write("- 호흡곤란/청색증/입술부종")
-                st.write("- 소변량 급감·축 늘어짐(탈수)")
-                st.write("- 피 섞인 변/검은 변, 점상출혈 지속")
+    # 3) 해열제 스케줄러 (KST·간격검증)
+    st.markdown("#### 해열제 스케줄(KST, 간격 자동검증)")
+    KST_TZ = _dt.timezone(_dt.timedelta(hours=9))
+    apap_min_h = 4
+    ibu_min_h = 6
+    start = st.time_input("시작시간(한국시간)", value=_dt.datetime.now(tz=KST_TZ).time(), key=wkey("peds_sched_start_kst"))
+    horizon_h = st.slider("표시 시간(시간 단위)", min_value=6, max_value=24, value=12, step=1, key=wkey("peds_sched_horizon"))
+    try:
+        base = _dt.datetime.combine(_dt.datetime.now(tz=KST_TZ).date(), start)
+        plan = []
+        last_apap = None
+        last_ibu = None
+        cur = base
+        cur_drug = "APAP"
+        end_dt = base + _dt.timedelta(hours=horizon_h)
+        step = _dt.timedelta(minutes=30)
+        while cur <= end_dt:
+            can_apap = last_apap is None or (cur - last_apap).total_seconds() >= apap_min_h * 3600
+            can_ibu  = last_ibu  is None or (cur - last_ibu ).total_seconds() >= ibu_min_h  * 3600
+            if cur_drug == "APAP" and can_apap:
+                plan.append(("APAP", cur))
+                last_apap = cur
+                cur_drug = "IBU"
+                cur += _dt.timedelta(hours=3)
+                continue
+            if cur_drug == "IBU" and can_ibu:
+                plan.append(("IBU", cur))
+                last_ibu = cur
+                cur_drug = "APAP"
+                cur += _dt.timedelta(hours=3)
+                continue
+            cur += step
+        st.caption("기준: APAP ≥ 4시간, IBU ≥ 6시간 (KST 기준)")
+        if plan:
+            for drug, t in plan:
+                st.write(f"- {drug} @ {t.strftime('%m/%d %H:%M')} (KST)")
+        else:
+            st.info("표시할 일정이 없습니다. 시작시간/표시시간을 조정해 보세요.")
+    except Exception:
+        st.info("시간 형식을 확인하세요.")
+    st.markdown("---")
+    st.subheader("보호자 체크리스트")
+    show_ck = st.toggle("체크리스트 열기", value=False, key=wkey("peds_ck"))
+    if show_ck:
+        colL, colR = st.columns(2)
+        with colL:
+            st.markdown("**🟢 집에서 해볼 수 있는 것**")
+            st.write("- 충분한 수분 섭취(ORS/미온수)")
+            st.write("- 해열제 올바른 간격 준수")
+            st.write("- 생리식염수 비강 세척/흡인(콧물)")
+            st.write("- 가벼운 옷/시원한 환경")
+        with colR:
+            st.markdown("**🔴 즉시 진료가 필요한 신호**")
+            st.write("- 번개치는 두통, 시야 이상, 경련, 의식저하")
+            st.write("- 호흡곤란/청색증/입술부종")
+            st.write("- 소변량 급감·축 늘어짐(탈수)")
+            st.write("- 피 섞인 변/검은 변, 점상출혈 지속")
 
-    # SPECIAL (notes + pitfalls)
-    def _annotate_special_notes(lines):
-        if not lines:
-            return []
-        notes_map = {
-            r"procalcitonin|pct": "세균성 감염 지표 — 초기 6–24h, 신장기능/패혈증 단계 고려",
-            r"d[- ]?dimer": "혈전/색전 의심 시 상승 — 고령·수술 후·임신 등에서 비특이적 상승",
-            r"ferritin": "염증/HLH/철대사 이상 — 간질환·감염에서도 상승 가능",
-            r"troponin": "심근 손상 — 신장기능 저하/빈맥/수술·패혈증에서도 경도 상승 가능",
-            r"bnp|nt[- ]?pro[- ]?bnp": "심부전 가능성 — 연령·비만·신장기능·폐고혈압 영향",
-            r"crp": "염증 비특이 — 절대치보다 **추세**가 중요",
-            r"esr": "만성 염증성 지표 — 빈혈/임신/고령에서 상승",
-            r"ldh": "용혈/종양부하/조직손상 — 비특이 지표",
-            r"haptoglobin": "용혈 시 감소 — 간질환/급성기반응으로 변화",
-            r"fibrinogen": "급성기 반응성으로 상승 — DIC 말기에 감소",
-        }
-        pitfalls = "※ 해석은 임상 맥락·시간축(발현 경과)·신장/간기능 영향을 반드시 함께 보세요."
-        out = []
-        for ln in lines:
-            tagged = False
-            for pat, note in notes_map.items():
-                if re.search(pat, ln, flags=re.I):
-                    out.append(f"{ln} — [참고] {note}")
-                    tagged = True
-                    break
-            if not tagged:
-                out.append(ln)
-        out.append(pitfalls)
-        return out
+# SPECIAL (notes + pitfalls)
+def _annotate_special_notes(lines):
+    if not lines:
+        return []
+    notes_map = {
+        r"procalcitonin|pct": "세균성 감염 지표 — 초기 6–24h, 신장기능/패혈증 단계 고려",
+        r"d[- ]?dimer": "혈전/색전 의심 시 상승 — 고령·수술 후·임신 등에서 비특이적 상승",
+        r"ferritin": "염증/HLH/철대사 이상 — 간질환·감염에서도 상승 가능",
+        r"troponin": "심근 손상 — 신장기능 저하/빈맥/수술·패혈증에서도 경도 상승 가능",
+        r"bnp|nt[- ]?pro[- ]?bnp": "심부전 가능성 — 연령·비만·신장기능·폐고혈압 영향",
+        r"crp": "염증 비특이 — 절대치보다 **추세**가 중요",
+        r"esr": "만성 염증성 지표 — 빈혈/임신/고령에서 상승",
+        r"ldh": "용혈/종양부하/조직손상 — 비특이 지표",
+        r"haptoglobin": "용혈 시 감소 — 간질환/급성기반응으로 변화",
+        r"fibrinogen": "급성기 반응성으로 상승 — DIC 말기에 감소",
+    }
+    pitfalls = "※ 해석은 임상 맥락·시간축(발현 경과)·신장/간기능 영향을 반드시 함께 보세요."
+    out = []
+    for ln in lines:
+        tagged = False
+        for pat, note in notes_map.items():
+            if re.search(pat, ln, flags=re.I):
+                out.append(f"{ln} — [참고] {note}")
+                tagged = True
+                break
+        if not tagged:
+            out.append(ln)
+    out.append(pitfalls)
+    return out
 
-        # ======= 소아: 변비 체크 =======
-        render_section_constipation()
-    # ======= 소아: 설사 체크 =======
-        render_section_diarrhea()
-    # ======= 소아: 구토 체크 =======
-        render_section_vomit()
-    # === 소아 보호자 설명(통합) 끝 ===
+    # ======= 소아: 변비 체크 =======
+    render_section_constipation()
+# ======= 소아: 설사 체크 =======
+    render_section_diarrhea()
+# ======= 소아: 구토 체크 =======
+    render_section_vomit()
+# === 소아 보호자 설명(통합) 끝 ===
+
 with t_special:
     st.subheader("특수검사 해석")
     if SPECIAL_PATH:
