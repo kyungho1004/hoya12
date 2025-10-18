@@ -87,52 +87,61 @@ from pathlib import Path
 import importlib.util
 import streamlit as st
 
-# ===== P1: Antipyretic guardrails panel (APAP/IBU) =====
-try:
-    import core_utils as CU
-    st.markdown("### 🛡️ 해열제 가드레일 (APAP/IBU)")
-    c1,c2,c3 = st.columns([1,1,2])
-    with c1:
-        weight_kg = st.number_input("체중(kg)", min_value=0.0, step=0.5, value=0.0, key=wkey("wt_guard"))
-    with c2:
-        med = st.selectbox("약 선택", ["APAP","IBU"], key=wkey("med_guard"))
-    with c3:
-        dose_mg = st.number_input("이번 복용량 (mg)", min_value=0.0, step=50.0, value=0.0, key=wkey("dose_guard"))
-    note = st.text_input("메모(선택)", key=wkey("note_guard"))
-    uid = st.session_state.get("key") or st.session_state.get("_uid") or "guest"
+# ===== P1: Antipyretic guardrails (APAP/IBU) — functionized =====
+def render_antipyretic_guardrails_panel(_container=None):
+    try:
+        import core_utils as CU
+        tgt = _container if _container is not None else st
+        tgt.markdown("### 🛡️ 해열제 가드레일 (APAP/IBU)")
+        c1,c2,c3 = tgt.columns([1,1,2])
+        with c1:
+            weight_kg = tgt.number_input("체중(kg)", min_value=0.0, step=0.5, value=0.0, key=wkey("wt_guard"))
+        with c2:
+            med = tgt.selectbox("약 선택", ["APAP","IBU"], key=wkey("med_guard"))
+        with c3:
+            dose_mg = tgt.number_input("이번 복용량 (mg)", min_value=0.0, step=50.0, value=0.0, key=wkey("dose_guard"))
+        note = tgt.text_input("메모(선택)", key=wkey("note_guard"))
+        uid = st.session_state.get("key") or st.session_state.get("_uid") or "guest"
 
-    def _guard_and_log(_med):
-        if _med=="APAP":
-            ok,msg,next_ts,remaining = CU.check_guard_apap(uid, dose_mg, weight_kg or None)
-        else:
-            ok,msg,next_ts,remaining = CU.check_guard_ibu(uid, dose_mg, weight_kg or None)
-        if not ok:
-            st.error(msg)
-            if next_ts:
-                st.info(f"다음 복용 가능 시각(KST): **{next_ts}**")
-                ics = CU.make_ics(f"{_med} 다음 복용", next_ts)
-                if ics and os.path.exists(ics):
-                    with open(ics, "rb") as f:
-                        st.download_button("📅 다음 복용 .ics 저장", f, file_name="next_med.ics", key=wkey(f"ics_{_med}"))
-            if remaining is not None:
-                st.caption(f"남은 24시간 한도 추정치: {remaining:.0f} mg")
-            return False
-        # ok: append care log
-        row = CU.append_care_log(uid, _med, dose_mg, weight_kg or None, note or "")
-        st.success("기록되었습니다.")
-        st.caption(f"{row['ts_kst']} - {uid} - { _med } {dose_mg:.0f}mg")
-        return True
+        def _guard_and_log(_med):
+            if _med=="APAP":
+                ok,msg,next_ts,remaining = CU.check_guard_apap(uid, dose_mg, weight_kg or None)
+            else:
+                ok,msg,next_ts,remaining = CU.check_guard_ibu(uid, dose_mg, weight_kg or None)
+            if not ok:
+                tgt.error(msg)
+                if next_ts:
+                    tgt.info(f"다음 복용 가능 시각(KST): **{next_ts}**")
+                    ics = CU.make_ics(f"{_med} 다음 복용", next_ts)
+                    try:
+                        if ics and os.path.exists(ics):
+                            with open(ics, "rb") as f:
+                                tgt.download_button("📅 다음 복용 .ics 저장", f, file_name="next_med.ics", key=wkey(f"ics_{_med}"))
+                    except Exception:
+                        pass
+                if remaining is not None:
+                    tgt.caption(f"남은 24시간 한도 추정치: {remaining:.0f} mg")
+                return False
+            # ok: append care log
+            row = CU.append_care_log(uid, _med, dose_mg, weight_kg or None, note or "")
+            tgt.success("기록되었습니다.")
+            tgt.caption(f"{row['ts_kst']} - {uid} - { _med } {dose_mg:.0f}mg")
+            return True
 
-    cL, cR = st.columns(2)
-    with cL:
-        if st.button("APAP 복용 기록", key=wkey("btn_apap")):
-            _guard_and_log("APAP")
-    with cR:
-        if st.button("IBU 복용 기록", key=wkey("btn_ibu")):
-            _guard_and_log("IBU")
-except Exception as _e_guard:
-    st.warning("해열제 가드레일 모듈 로딩에 실패했지만 앱은 계속 동작합니다.")
-# ===== End P1 panel =====
+        cL, cR = tgt.columns(2)
+        with cL:
+            if tgt.button("APAP 복용 기록", key=wkey("btn_apap")):
+                _guard_and_log("APAP")
+        with cR:
+            if tgt.button("IBU 복용 기록", key=wkey("btn_ibu")):
+                _guard_and_log("IBU")
+    except Exception as _e_guard:
+        try:
+            ( _container if _container is not None else st ).warning("해열제 가드레일 모듈 로딩에 실패했지만 앱은 계속 동작합니다.")
+        except Exception:
+            pass
+# ===== End functionized guardrails =====
+
 
 # ---------- History external save (P0 safety patch) ----------
 def _sanitize_uid_for_path(uid: str) -> str:
