@@ -2464,3 +2464,21 @@ _ss_setdefault(wkey('home_fb_log_cache'), [])
 
 
 # ===== [/INLINE FEEDBACK] =====
+
+# ===== Pediatric Quick Selector (compact) =====
+try:
+    import streamlit as st
+    from peds_guide import render_section_constipation, render_section_diarrhea, render_section_vomit, render_peds_jumpbar
+    with st.expander("👶 소아 안전모드 — 증상 Quick Guide", expanded=False):
+        render_peds_jumpbar()
+        choice = st.radio("증상 선택", ["변비","설사","구토"], horizontal=True, key=wkey("peds_choice"))
+        if choice == "변비":
+            render_section_constipation()
+        elif choice == "설사":
+            render_section_diarrhea()
+        else:
+            render_section_vomit()
+except Exception:
+    pass
+# ===== End Pediatric Quick Selector =====
+

@@ -16,7 +16,7 @@ def wkey(x):
     except Exception:
         return str(x)
 
-__all__ = ["render_caregiver_notes_peds","render_symptom_explain_peds","build_peds_notes","render_peds_jumpbar"]
+__all__ = ["render_caregiver_notes_peds","render_symptom_explain_peds","build_peds_notes"]
 
 # -------- Pediatric helpers (weight-based dosing, ORS) --------
 def _get_age_years():
@@ -524,18 +524,3 @@ def render_section_vomit():
                 st.caption("※ 금기/주의 질환이 있을 수 있으니 반드시 의료진 지시에 따르세요.")
             except Exception:
                 st.info("용량 계산 모듈이 준비되지 않았습니다.")
-
-def render_peds_jumpbar():
-    """소아 증상 퀵 점프바(안전 패치): 존재만으로 NameError 방지.
-    - 기존 섹션 구조(render_section_constipation/diarrhea/vomit)를 침범하지 않음.
-    - 현재 버전에서는 안내 링크만 제공(섹션 호출은 상위에서 수행).
-    """
-    try:
-        import streamlit as st
-        c1, c2, c3 = st.columns(3)
-        with c1: st.markdown("#### ⏩ 변비 섹션")
-        with c2: st.markdown("#### ⏩ 설사 섹션")
-        with c3: st.markdown("#### ⏩ 구토 섹션")
-        st.caption("※ 상단 메뉴에서 원하는 섹션을 선택하세요. (임시 점프바 — 기능 충돌 방지용)")
-    except Exception:
-        pass
