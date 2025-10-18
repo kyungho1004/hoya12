@@ -55,13 +55,6 @@ from pathlib import Path
 import importlib.util
 import streamlit as st
 
-st.markdown("""
-<style>
-/* smooth-scroll-global */
-html { scroll-behavior: smooth; }
-</style>
-""", unsafe_allow_html=True)
-
 # --- Session defaults to prevent NameError on first load ---
 if 'peds_notes' not in st.session_state:
     st.session_state['peds_notes'] = ''
@@ -1451,22 +1444,22 @@ with t_chemo:
 
 # PEDS
 
-# --- Pediatric quick paddles (HTML links, no rerun) ---
+# --- Pediatric quick paddles (JS open+scroll, no rerun) ---
 def render_peds_paddles():
     import streamlit as st
     st.markdown("""
     <style>
     .peds-paddles{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin:.25rem 0 .75rem}
-    .peds-paddles a{display:block;text-align:center;padding:.65rem .8rem;border-radius:12px;border:1px solid #ddd;text-decoration:none;color:inherit;background:#fff}
-    .peds-paddles a:active{transform:scale(.98)}
+    .peds-paddles button{display:block;width:100%;padding:.65rem .8rem;border-radius:12px;border:1px solid #ddd;background:#fff;cursor:pointer}
+    .peds-paddles button:active{transform:scale(.98)}
     </style>
     <div class="peds-paddles">
-      <a href="#peds_constipation">🧻 변비</a>
-      <a href="#peds_diarrhea">💦 설사</a>
-      <a href="#peds_vomit">🤢 구토</a>
-      <a href="#peds_antipyretic">🌡️ 해열제</a>
-      <a href="#peds_ors">🥤 ORS·탈수</a>
-      <a href="#peds_respiratory">🫁 가래·쌕쌕</a>
+      <button onclick="localStorage.setItem('__peds_open__','변비');document.getElementById('peds_constipation')?.scrollIntoView({behavior:'smooth',block:'start'});">🧻 변비</button>
+      <button onclick="localStorage.setItem('__peds_open__','설사');document.getElementById('peds_diarrhea')?.scrollIntoView({behavior:'smooth',block:'start'});">💦 설사</button>
+      <button onclick="localStorage.setItem('__peds_open__','구토');document.getElementById('peds_vomit')?.scrollIntoView({behavior:'smooth',block:'start'});">🤢 구토</button>
+      <button onclick="localStorage.setItem('__peds_open__','해열제');document.getElementById('peds_antipyretic')?.scrollIntoView({behavior:'smooth',block:'start'});">🌡️ 해열제</button>
+      <button onclick="localStorage.setItem('__peds_open__','ORS·탈수');document.getElementById('peds_ors')?.scrollIntoView({behavior:'smooth',block:'start'});">🥤 ORS·탈수</button>
+      <button onclick="localStorage.setItem('__peds_open__','가래');localStorage.setItem('__peds_open_alt__','쌕쌕');document.getElementById('peds_respiratory')?.scrollIntoView({behavior:'smooth',block:'start'});">🫁 가래·쌕쌕</button>
     </div>
     """, unsafe_allow_html=True)
 # --- /Pediatric quick paddles ---
@@ -2503,21 +2496,35 @@ _ss_setdefault(wkey('home_fb_log_cache'), [])
 st.markdown("""
 <script>
 (function(){
-  const KEY='__active_tab_label__';
-  function buttons(){ return Array.from(parent.document.querySelectorAll('button[role="tab"]')); }
-  const saved = localStorage.getItem(KEY);
-  if(saved){
-    const btn = buttons().find(b => (b.innerText||'').trim().startsWith(saved));
-    if(btn) btn.click();
-  }
-  buttons().forEach(b=>{
-    b.addEventListener('click', ()=>{
-      const label=(b.innerText||'').trim().split('\n')[0];
-      if(label) localStorage.setItem(KEY,label);
-    }, {once:false});
-  });
+  try{
+    const key='__peds_open__';
+    const key2='__peds_open_alt__';
+    const token = localStorage.getItem(key);
+    const token2 = localStorage.getItem(key2);
+    if(token){
+      const details = Array.from(parent.document.querySelectorAll('details'));
+      const hit = details.find(d => {
+        const txt = (d.querySelector('summary')?.innerText||'').trim();
+        return txt.includes(token) || (token2 && txt.includes(token2));
+      });
+      if(hit){
+        hit.open = true;
+        setTimeout(()=>{
+          const aid = (token==='변비')?'peds_constipation':
+                      (token==='설사')?'peds_diarrhea':
+                      (token==='구토')?'peds_vomit':
+                      (token==='해열제')?'peds_antipyretic':
+                      (token && token.includes('ORS'))?'peds_ors':'peds_respiratory';
+          const el = parent.document.getElementById(aid);
+          if(el){ el.scrollIntoView({behavior:'smooth',block:'start'}); }
+        }, 50);
+      }
+      localStorage.removeItem(key);
+      localStorage.removeItem(key2);
+    }
+  }catch(e){ /* noop */ }
 })();
 </script>
-<!-- sticky-tabs-localStorage -->
+<!-- peds-auto-open -->
 """, unsafe_allow_html=True)
 
