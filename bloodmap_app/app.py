@@ -1486,55 +1486,6 @@ with t_chemo:
         for k in picked_keys:
             st.write("- " + label_map.get(k, str(k)))
 
-
-        # --- 누락 약물 확인(자동 추천 vs 선택) ---
-        try:
-            _missing_blocks = []
-            if isinstance(recs, dict) and picked_keys:
-                for cat, arr in (recs or {}).items():
-                    if not arr: 
-                        continue
-                    # recs[cat]는 key 리스트라고 가정
-                    _miss = [k for k in arr if k not in picked_keys]
-                    if _miss:
-                        _missing_blocks.append((cat, _miss))
-            if _missing_blocks:
-                st.markdown("### ❗ 항암제 누락 확인")
-                for cat, miss in _missing_blocks:
-                    st.warning(cat + ": " + ", ".join([label_map.get(k, str(k)) for k in miss]))
-        except Exception as _e:
-            st.caption(f"누락 확인 중 오류: {_e}")
-
-        # --- 중요 부작용 이모티콘 헤더 생성 ---
-        def _join_if_list(x):
-            if isinstance(x, (list, tuple)):
-                return " / ".join([str(v) for v in x if v])
-            return str(x or "")
-
-        def _ae_header_emojis(ae_text: str) -> str:
-            text = _join_if_list(ae_text)
-            if not text:
-                return ""
-            # 간단한 키워드 매핑(확장 가능)
-            crit = ["분화증후군","RA증후군","아나필락시스","무과립구증","패혈증","중증 피부","스티븐스","TEN","횡문근융해","QT","간부전","신부전","췌장염","뇌전증","혈전","폐독성","심근염"]
-            caut = ["구내염","호중구감소","혈소판감소","빈혈","간수치","신장기능","전해질","저나트륨","저칼륨","고칼륨","탈수","폐렴","장염","발열","피부발진"]
-            comm = ["오심","구토","두통","피로","발진","소양감","어지럼","복통","식욕저하","변비","설사","인후통"]
-            def hit(arr): 
-                out=[]
-                for k in arr:
-                    try:
-                        if re.search(k, text, flags=re.I):
-                            out.append(k)
-                    except re.error:
-                        if k in text: out.append(k)
-                return out
-            chips = []
-            h3 = hit(crit); h2 = hit(caut); h1 = hit(comm)
-            if h3: chips.append("🚨 " + " · ".join(sorted(set(h3))))
-            if h2: chips.append("🟧 " + " · ".join(sorted(set(h2))))
-            if h1: chips.append("🟡 " + " · ".join(sorted(set(h1))))
-            return " / ".join(chips)
-
         warns, notes = check_chemo_interactions(picked_keys)
         if warns:
             st.markdown("### ⚠️ 병용 주의/경고")
@@ -1550,16 +1501,6 @@ with t_chemo:
         if ae_map:
             for k, arr in ae_map.items():
                 st.write(f"- **{label_map.get(k, str(k))}**")
-
-            # 헤더 이모지(중요도 요약)
-            try:
-                base = DRUG_DB.get(k, {})
-                header = _ae_header_emojis(base.get("ae") or base.get("ae_ko") or base.get("adverse_effects"))
-                if header:
-                    st.caption(header)
-            except Exception:
-                pass
-
                 for ln in arr:
                     st.write(f"  - {ln}")
         else:
