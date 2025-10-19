@@ -1310,9 +1310,26 @@ with t_dx:
     groups = sorted(ONCO.keys()) if ONCO else ["혈액암", "고형암"]
     group = st.selectbox("암 그룹", options=groups, index=0, key=wkey("onco_group_sel"))
     diseases = sorted(ONCO.get(group, {}).keys()) if ONCO else ["ALL", "AML", "Lymphoma", "Breast", "Colon", "Lung"]
-    _diseases_pairs = [(_fmt_dx_kor(x), x) for x in diseases]
-_disease_idx = st.selectbox("의심/진단명", options=list(range(len(_diseases_pairs))), index=0, key=wkey("onco_disease_sel"), format_func=lambda i: _diseases_pairs[i][0])
-disease = _diseases_pairs[_disease_idx][1]
+    def _local_fmt_dx_kor(x):
+        try:
+            return _fmt_dx_kor(x)
+        except Exception:
+            try:
+                import onco_map as _om
+                if hasattr(_om, 'dx_display_kor'):
+                    return _om.dx_display_kor(x)
+            except Exception:
+                pass
+            return str(x).lower()
+    _diseases_pairs = [(_local_fmt_dx_kor(x), x) for x in diseases]
+    _disease_idx = st.selectbox(
+        '의심/진단명',
+        options=list(range(len(_diseases_pairs))),
+        index=0,
+        key=wkey('onco_disease_sel'),
+        format_func=lambda i: _diseases_pairs[i][0]
+    )
+    disease = _diseases_pairs[_disease_idx][1]
 disp = dx_display(group, disease)
 
 
