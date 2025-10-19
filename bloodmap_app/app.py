@@ -652,9 +652,38 @@ def build_peds_notes(
         lines.append("(특이 소견 없음)")
     return "\\n".join(lines)
 
+# --- P2-1 tabs helpers (diabetes/dialysis) ---
+def _render_diabetes_tab():
+    st.markdown('<div id="cat_diabetes"></div>', unsafe_allow_html=True)
+    st.subheader("🍬 당뇨")
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.number_input("HbA1c(%)", min_value=0.0, max_value=25.0, step=0.1, key=wkey("dm_hba1c"))
+    with c2:
+        st.number_input("공복혈당(mg/dL)", min_value=0.0, max_value=1000.0, step=1.0, key=wkey("dm_fpg"))
+    with c3:
+        st.number_input("식후2시간혈당(mg/dL)", min_value=0.0, max_value=1000.0, step=1.0, key=wkey("dm_ppg"))
+    st.caption("※ 해석 로직은 다음 패치에서 연결됩니다.")
+def _render_dialysis_tab():
+    st.markdown('<div id="cat_dialysis"></div>', unsafe_allow_html=True)
+    st.subheader("💧 투석")
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.number_input("Na(mmol/L)", min_value=0.0, max_value=200.0, step=1.0, key=wkey("dx_na"))
+        st.number_input("K(mmol/L)", min_value=0.0, max_value=10.0, step=0.1, key=wkey("dx_k"))
+    with c2:
+        st.number_input("Albumin(g/dL)", min_value=0.0, max_value=10.0, step=0.1, key=wkey("dx_alb"))
+        st.number_input("CRP(mg/L)", min_value=0.0, max_value=1000.0, step=0.1, key=wkey("dx_crp"))
+    with c3:
+        st.number_input("Calcium(mg/dL)", min_value=0.0, max_value=20.0, step=0.1, key=wkey("dx_ca"))
+        st.number_input("Phosphorus(mg/dL)", min_value=0.0, max_value=20.0, step=0.1, key=wkey("dx_phos"))
+    st.number_input("염도(나트륨 농도, g/L 또는 ％)", min_value=0.0, max_value=200.0, step=0.1, key=wkey("dx_salt"))
+    st.caption("※ 투석 카테고리 해석 로직 및 염도 해석은 다음 패치에서 연결됩니다.")
+# --- /P2-1 tabs helpers ---
+
 # ---------- Tabs ----------
-tab_labels = ["🏠 홈", "👶 소아 증상", "🧬 암 선택", "💊 항암제(진단 기반)", "🧪 피수치 입력", "🔬 특수검사", "📄 보고서", "📊 기록/그래프"]
-t_home, t_peds, t_dx, t_chemo, t_labs, t_special, t_report, t_graph = st.tabs(tab_labels)
+tab_labels = ["🏠 홈", "👶 소아 증상", "🧬 암 선택", "💊 항암제(진단 기반)", "🧪 피수치 입력", "🔬 특수검사", "📄 보고서", "📊 기록/그래프", "🍬 당뇨", "💧 투석"]
+t_home, t_peds, t_dx, t_chemo, t_labs, t_special, t_report, t_graph, t_dm, t_dialysis = st.tabs(tab_labels)
 
 # HOME
 with t_home:
@@ -1281,8 +1310,19 @@ with t_dx:
     groups = sorted(ONCO.keys()) if ONCO else ["혈액암", "고형암"]
     group = st.selectbox("암 그룹", options=groups, index=0, key=wkey("onco_group_sel"))
     diseases = sorted(ONCO.get(group, {}).keys()) if ONCO else ["ALL", "AML", "Lymphoma", "Breast", "Colon", "Lung"]
-    disease = st.selectbox("의심/진단명", options=diseases, index=0, key=wkey("onco_disease_sel"))
+    disease = st.selectbox("의심/진단명", options=diseases, index=0, key=wkey("onco_disease_sel"), format_func=_fmt_dx_kor)
     disp = dx_display(group, disease)
+
+# Korean display override: code - ko (암 제거, 붙여쓰기)
+_dx_disp_kor = None
+try:
+    import onco_map as _om
+    if hasattr(_om, "dx_display_kor"):
+        _dx_disp_kor = _om.dx_display_kor(disease)
+except Exception:
+    _dx_disp_kor = None
+if _dx_disp_kor:
+    disp = _dx_disp_kor
     st.session_state["onco_group"] = group
     st.session_state["onco_disease"] = disease
     st.session_state["dx_disp"] = disp
@@ -2688,3 +2728,8 @@ _ss_setdefault(wkey('home_fb_log_cache'), [])
 
 
 # ===== [/INLINE FEEDBACK] =====
+
+with t_dm:
+    _render_diabetes_tab()
+with t_dialysis:
+    _render_dialysis_tab()
