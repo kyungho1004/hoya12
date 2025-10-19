@@ -7,3 +7,6 @@ h1, h2, h3 { letter-spacing: 0.2px; }
 
 /* Inline selection banner (non-sticky, compact) */
 .select-banner { background:#e8f0fe; color:#1a73e8; padding:6px 10px; border-radius:8px; display:inline-block; margin:6px 0 8px; position:static; font-weight:600; }
+
+/* Reserve height so content below doesn't jump when banner re-renders */
+.select-banner-slot{min-height:28px;margin:0;padding:0;}

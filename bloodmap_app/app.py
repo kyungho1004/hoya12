@@ -1304,8 +1304,9 @@ with t_labs:
 
 # DX
 with t_dx:
+    # DX 전용 배너 슬롯 (다른 탭 영향 없음)
+    dx_banner = st.empty()
     # Fixed-height slot for selection banner (prevents layout shift)
-    st.markdown('<div class="select-banner-slot"></div>', unsafe_allow_html=True)
     st.subheader("암 선택")
     if not ONCO:
         st.warning("onco_map 이 로드되지 않아 기본 목록이 비어있습니다. onco_map.py를 같은 폴더나 modules/ 에 두세요.")
@@ -1348,7 +1349,7 @@ if _dx_disp_kor:
     st.session_state["onco_group"] = group
     st.session_state["onco_disease"] = disease
     st.session_state["dx_disp"] = disp
-    st.markdown(f'<div class="select-banner">선택: {disp}</div>', unsafe_allow_html=True)
+    dx_banner.markdown(f'<div class="select-banner">선택: {disp}</div>', unsafe_allow_html=True)
 
     recs = auto_recs_by_dx(group, disease, DRUG_DB) or {}
     if any(recs.values()):
