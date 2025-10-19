@@ -1355,11 +1355,11 @@ if _dx_disp_kor:
 
     recs = auto_recs_by_dx(group, disease, DRUG_DB) or {}
     if any(recs.values()):
-        st.markdown("**자동 추천 요약**")
+        dx_wrap.markdown("**자동 추천 요약**")
         for cat, arr in recs.items():
             if not arr:
                 continue
-            st.write(f"- {cat}: " + ", ".join(arr))
+            dx_wrap.write(f"- {cat}: " + ", ".join(arr))
     st.session_state["recs_by_dx"] = recs
 
 # ---------- Chemo helpers ----------
