@@ -54,6 +54,20 @@ import os, sys, re, io, csv
 from pathlib import Path
 import importlib.util
 import streamlit as st
+# --- Helper: KO label for drug display (uses drug_db.drug_kor) ---
+def _label_kor(raw_name, label_map=None):
+    try:
+        base = (label_map or {}).get(raw_name, str(raw_name)) if isinstance(label_map, dict) else str(raw_name)
+        try:
+            import drug_db as _dd
+            if hasattr(_dd, "drug_kor"):
+                return _dd.drug_kor(base)
+        except Exception:
+            pass
+        return base
+    except Exception:
+        return str(raw_name)
+# --- /Helper ---
 
 st.markdown("""
 <style>
