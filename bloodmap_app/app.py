@@ -652,6 +652,18 @@ def build_peds_notes(
         lines.append("(특이 소견 없음)")
     return "\\n".join(lines)
 
+
+# --- Drug side-effects formatter ---
+def _fmt_side_effects(drugs):
+    try:
+        import drug_db as _dd
+        if hasattr(_dd, "format_side_effects_bullets"):
+            return _dd.format_side_effects_bullets(drugs, "ko")
+    except Exception:
+        pass
+    return ""
+# --- /Drug side-effects formatter ---
+
 # ---------- Tabs ----------
 tab_labels = ["🏠 홈", "👶 소아 증상", "🧬 암 선택", "💊 항암제(진단 기반)", "🧪 피수치 입력", "🔬 특수검사", "📄 보고서", "📊 기록/그래프"]
 t_home, t_peds, t_dx, t_chemo, t_labs, t_special, t_report, t_graph = st.tabs(tab_labels)
@@ -1297,6 +1309,35 @@ with t_dx:
             st.write(f"- {cat}: " + ", ".join(arr))
     st.session_state["recs_by_dx"] = recs
 
+
+# --- Side-effects UI (DX) ---
+try:
+    # best-effort find lists in scope
+    se_lists = []
+    for cand in ['targets', 'chemos', 'drugs', 'arr']:
+        if cand in locals() and isinstance(locals()[cand], (list, tuple)):
+            se_lists.extend(list(locals()[cand]))
+    se_lists = list(dict.fromkeys(se_lists))  # dedup preserve order
+    if se_lists:
+        with st.expander("⚠️ 부작용 요약", expanded=False):
+            rec = st.session_state.get(wkey("recos_dict"), {})
+            flat = []
+            for _v in (rec or {}).values():
+                if isinstance(_v, (list, tuple)):
+                    flat.extend(list(_v))
+            try:
+                from drug_db import expand_items
+                flat = expand_items(flat)
+            except Exception:
+                pass
+            md = _fmt_side_effects(flat)
+            if md:
+                dx_wrap.markdown(md)
+            else:
+                dx_wrap.caption("등록된 요약이 없는 약물이거나 빈 목록입니다.")
+except Exception as _e:
+    dx_wrap.caption("부작용 요약을 불러오지 못했습니다.")
+# --- /Side-effects UI ---
 # ---------- Chemo helpers ----------
 def _to_set_or_empty(x):
     s = set()
@@ -1497,10 +1538,23 @@ with t_chemo:
                 st.info(n)
 
         ae_map = _aggregate_all_aes(picked_keys, DRUG_DB)
+
+# --- FALLBACK_DRUG_DB_SE: fill from drug_db if local DB empty ---
+if not ae_map:
+    try:
+        import drug_db as _dd
+        for _k in picked_keys or []:
+            _se = _dd.drug_side_effects(_k, "ko") if hasattr(_dd, "drug_side_effects") else []
+            if _se:
+                ae_map[_k] = _se
+    except Exception:
+        pass
+# --- /FALLBACK_DRUG_DB_SE ---
+
         st.markdown("### 항암제 부작용(전체)")
         if ae_map:
             for k, arr in ae_map.items():
-                st.write(f"- **{label_map.get(k, str(k))}**")
+                st.write(f"- **{_label_kor(k, label_map)}**")
                 for ln in arr:
                     st.write(f"  - {ln}")
         else:
@@ -1845,99 +1899,7 @@ with st.expander("🌡️ 해열제 가이드/계산", expanded=False):
         ap_ml_1 = ap_ml_max = ib_ml_1 = ib_ml_max = 0.0
     st.write(f"- 아세트아미노펜(160mg/5mL): **{ap_ml_1:.1f} mL** (최대 {ap_ml_max:.1f} mL) — 최소 간격 **4h**")
     st.write(f"- 이부프로펜(100mg/5mL): **{ib_ml_1:.1f} mL** (최대 {ib_ml_max:.1f} mL) — 최소 간격 **6h**")
-    
-# --- P1-2: Antipyretic schedule chain (.ics + care hint) ---
-import datetime as _dt
-from zoneinfo import ZoneInfo as _ZoneInfo
-import tempfile as _tmp
-
-def _preferred_writable_base():
-    # Try known writable locations in order
-    for p in ["/mnt/data/care_log", "/mount/data/care_log", "/tmp/care_log"]:
-        try:
-            os.makedirs(p, exist_ok=True)
-            test_fp = os.path.join(p, ".touch")
-            with open(test_fp, "w", encoding="utf-8") as _f:
-                _f.write("ok")
-            try:
-                os.remove(test_fp)
-            except Exception:
-                pass
-            return p
-        except Exception:
-            continue
-    # Extreme fallback
-    return _tmp.gettempdir()
-
-def _make_ics(title:str, start: _dt.datetime, minutes:int=0, description:str="") -> str:
-    tzid = "Asia/Seoul"
-    dtstart = start.strftime("%Y%m%dT%H%M%S")
-    dtend = (start + _dt.timedelta(minutes=minutes)).strftime("%Y%m%dT%H%M%S") if minutes>0 else None
-    uid = f"{dtstart}-{title.replace(' ','_')}@bloodmap"
-    lines = [
-        "BEGIN:VCALENDAR",
-        "VERSION:2.0",
-        "PRODID:-//BloodMap//Peds Antipyretic//KR",
-        "CALSCALE:GREGORIAN",
-        "METHOD:PUBLISH",
-        "BEGIN:VEVENT",
-        f"UID:{uid}",
-        f"DTSTAMP:{_dt.datetime.now(_ZoneInfo(tzid)).strftime('%Y%m%dT%H%M%S')}",
-        f"DTSTART;TZID={tzid}:{dtstart}",
-    ]
-    if dtend:
-        lines.append(f"DTEND;TZID={tzid}:{dtend}")
-    lines += [
-        f"SUMMARY:{title}",
-        f"DESCRIPTION:{description}".replace("\n","\\n"),
-        "END:VEVENT",
-        "END:VCALENDAR",
-        ""
-    ]
-    return "\n".join(lines)
-
-kst = _dt.datetime.now(_ZoneInfo("Asia/Seoul"))
-col1, col2 = st.columns(2)
-with col1:
-    ap_given = st.number_input("APAP 실제 투여량(mL)", min_value=0.0, step=0.5, value=float(f"{ap_ml_1:.1f}"), key=wkey("apap_given"))
-    if st.button("APAP 기록 + 다음 복용 .ics", key=wkey("apap_log_ics")):
-        next_time = kst + _dt.timedelta(hours=4)
-        ics_text = _make_ics("다음 해열제(APAP) 복용 가능", next_time, 0, "APAP 최소 간격 4시간 (KST).")
-        base = _preferred_writable_base()
-        fname = f"next_APAP_{kst.strftime('%Y%m%d_%H%M%S')}.ics"
-        ics_path = os.path.join(base, fname)
-        try:
-            with open(ics_path, "w", encoding="utf-8") as f:
-                f.write(ics_text)
-        except Exception as _e:
-            st.warning(f"쓰기 권한 문제로 임시 다운로드만 제공합니다. ({type(_e).__name__})")
-        st.success(f"다음 APAP 가능 시각: {next_time.strftime('%Y-%m-%d %H:%M')} (KST)")
-        st.download_button("📅 .ics 내보내기 (APAP)", data=ics_text, file_name=fname, mime="text/calendar", key=wkey("apap_ics_dl"))
-        st.session_state[wkey("apap_ml_24h")] = st.session_state.get(wkey("apap_ml_24h"), 0.0) + float(ap_given)
-with col2:
-    ib_given = st.number_input("IBU 실제 투여량(mL)", min_value=0.0, step=0.5, value=float(f"{ib_ml_1:.1f}"), key=wkey("ibu_given"))
-    if st.button("IBU 기록 + 다음 복용 .ics", key=wkey("ibu_log_ics")):
-        next_time = kst + _dt.timedelta(hours=6)
-        ics_text = _make_ics("다음 해열제(IBU) 복용 가능", next_time, 0, "IBU 최소 간격 6시간 (KST).")
-        base = _preferred_writable_base()
-        fname = f"next_IBU_{kst.strftime('%Y%m%d_%H%M%S')}.ics"
-        ics_path = os.path.join(base, fname)
-        try:
-            with open(ics_path, "w", encoding="utf-8") as f:
-                f.write(ics_text)
-        except Exception as _e:
-            st.warning(f"쓰기 권한 문제로 임시 다운로드만 제공합니다. ({type(_e).__name__})")
-        st.success(f"다음 IBU 가능 시각: {next_time.strftime('%Y-%m-%d %H:%M')} (KST)")
-        st.download_button("📅 .ics 내보내기 (IBU)", data=ics_text, file_name=fname, mime="text/calendar", key=wkey("ibu_ics_dl"))
-        st.session_state[wkey("ibu_ml_24h")] = st.session_state.get(wkey("ibu_ml_24h"), 0.0) + float(ib_given)
-
-# 24h 총량 소프트 배너(실제 하드 가드레일과 충돌 없이 알림만)
-ap24 = st.session_state.get(wkey("apap_ml_24h"), 0.0)
-ib24 = st.session_state.get(wkey("ibu_ml_24h"), 0.0)
-if ap24 > 0 or ib24 > 0:
-    st.caption(f"24시간 누적(세션 기준): APAP {ap24:.1f} mL / IBU {ib24:.1f} mL")
-# --- /P1-2 ---
-st.caption("※ 금기/주의 질환은 반드시 의료진 지시를 따르세요. 중복 복용 주의.")
+    st.caption("※ 금기/주의 질환은 반드시 의료진 지시를 따르세요. 중복 복용 주의.")
 
 # --- ORS/탈수 ---
 with st.expander("🥤 ORS/탈수 가이드", expanded=False):
@@ -2067,7 +2029,49 @@ def _qr_image_bytes(text: str) -> bytes:
         return b""
 
 # REPORT with side panel (tabs)
+
+# --- Report builder (md) ---
+def _build_report_md():
+    import datetime as _dt
+    md = []
+    md.append(f"# 진료 요약  \n생성: {_dt.datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    try:
+        sel = st.session_state.get(wkey('dx_disp')) or st.session_state.get('dx_disp')
+        if sel:
+            md.append(f"\n**선택 진단**: {sel}")
+    except Exception:
+        pass
+    flat = st.session_state.get(wkey('last_drugs_flat'), [])
+    if flat:
+        md.append("\n## 자동 추천 요약")
+        md.append("- 전체: " + _fmt_drug_or_regimen_list(flat))
+        se_md = _side_effects_from_items(flat)
+        if se_md:
+            md.append("\n### ⚠️ 부작용 요약\n" + se_md)
+    return "\n".join(md)
+# --- /Report builder ---
+
 with t_report:
+    # Report export (md/pdf)
+    try:
+        md = _build_report_md()
+        import os, time
+        os.makedirs("/mnt/data/report", exist_ok=True)
+        md_path = f"/mnt/data/report/report_{int(time.time())}.md"
+        with open(md_path, "w", encoding="utf-8") as _f:
+            _f.write(md)
+        st.download_button("📄 보고서(.md) 다운로드", data=md, file_name=os.path.basename(md_path), mime="text/markdown", key=wkey("dl_md"))
+        try:
+            import pdf_export as _pe
+            if hasattr(_pe, "md_to_pdf"):
+                pdf_path = md_path.replace(".md",".pdf")
+                _pe.md_to_pdf(md, pdf_path)
+                with open(pdf_path, "rb") as _pf:
+                    st.download_button("🧾 보고서(.pdf) 다운로드", data=_pf.read(), file_name=os.path.basename(pdf_path), mime="application/pdf", key=wkey("dl_pdf"))
+        except Exception:
+            pass
+    except Exception:
+        st.caption("보고서 생성 중 오류가 발생했습니다.")
     st.subheader("보고서 (.md/.txt/.pdf) — 모든 항목 포함")
 
     key_id = st.session_state.get("key", "(미설정)")
