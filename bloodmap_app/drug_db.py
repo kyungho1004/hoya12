@@ -426,3 +426,38 @@ def display_label(key: str, db: dict = None) -> str:
     if isinstance(entry, dict):
         return entry.get("alias") or norm
     return norm
+
+
+# --- KOR names for oncology drugs (non-destructive patch) ---
+DRUG_KO = {
+    # TKIs & targeted
+    "Imatinib":"이미티닙","Sunitinib":"수니티닙","Regorafenib":"레고라페닙","Ripretinib":"리프레티닙",
+    "Osimertinib":"오시머티닙","Erlotinib":"얼로티닙","Gefitinib":"게피티닙",
+    "Alectinib":"알렉티닙","Lorlatinib":"롤라티닙","Bevacizumab":"베바시주맙",
+    "Trastuzumab":"트라스투주맙","Rituximab":"리툭시맙",
+    "Pembrolizumab":"펨브롤리주맙","Nivolumab":"니볼루맙","Atezolizumab":"아테졸리주맙",
+    # Chemo classics
+    "Cyclophosphamide":"사이클로포스파마이드","Doxorubicin":"독소루비신","Vincristine":"빈크리스틴","Prednisone":"프레드니손",
+    "Paclitaxel":"파클리탁셀","Docetaxel":"도세탁셀","Capecitabine":"카페시타빈",
+    "Oxaliplatin":"옥살리플라틴","Cisplatin":"시스플라틴","Carboplatin":"카보플라틴","Irinotecan":"이리노테칸",
+    "Fluorouracil":"플루오로우라실","5-Fluorouracil":"플루오로우라실","5FU":"플루오로우라실","5-FU":"플루오로우라실",
+}
+
+def drug_kor(name: str) -> str:
+    try:
+        base = str(name).strip()
+        kor = DRUG_KO.get(base) or DRUG_KO.get(base.title())
+        return f"{base}({kor})" if kor else base
+    except Exception:
+        return str(name)
+
+def format_drug_list_kor(drugs) -> str:
+    seen = set()
+    out = []
+    for d in drugs or []:
+        label = drug_kor(d)
+        if label not in seen:
+            seen.add(label)
+            out.append(label)
+    return ", ".join(out)
+# --- /KOR names patch ---

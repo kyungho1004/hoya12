@@ -681,6 +681,21 @@ def _render_dialysis_tab():
     st.caption("※ 투석 카테고리 해석 로직 및 염도 해석은 다음 패치에서 연결됩니다.")
 # --- /P2-1 tabs helpers ---
 
+
+# --- Drug list formatter (English + Korean) ---
+def _fmt_drug_list(arr):
+    try:
+        import drug_db as _dd
+        if hasattr(_dd, "format_drug_list_kor"):
+            return _dd.format_drug_list_kor(arr)
+    except Exception:
+        pass
+    try:
+        return ", ".join([str(x) for x in (arr or [])])
+    except Exception:
+        return ""
+# --- /Drug list formatter ---
+
 # ---------- Tabs ----------
 tab_labels = ["🏠 홈", "👶 소아 증상", "🧬 암 선택", "💊 항암제(진단 기반)", "🧪 피수치 입력", "🔬 특수검사", "📄 보고서", "📊 기록/그래프", "🍬 당뇨", "💧 투석"]
 t_home, t_peds, t_dx, t_chemo, t_labs, t_special, t_report, t_graph, t_dm, t_dialysis = st.tabs(tab_labels)
@@ -1359,7 +1374,7 @@ if _dx_disp_kor:
         for cat, arr in recs.items():
             if not arr:
                 continue
-            dx_wrap.write(f"- {cat}: " + ", ".join(arr))
+            dx_wrap.write(f"- {cat}: " + _fmt_drug_list(arr))
     st.session_state["recs_by_dx"] = recs
 
 # ---------- Chemo helpers ----------
