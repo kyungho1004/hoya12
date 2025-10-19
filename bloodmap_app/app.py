@@ -1310,8 +1310,11 @@ with t_dx:
     groups = sorted(ONCO.keys()) if ONCO else ["혈액암", "고형암"]
     group = st.selectbox("암 그룹", options=groups, index=0, key=wkey("onco_group_sel"))
     diseases = sorted(ONCO.get(group, {}).keys()) if ONCO else ["ALL", "AML", "Lymphoma", "Breast", "Colon", "Lung"]
-    disease = st.selectbox("의심/진단명", options=diseases, index=0, key=wkey("onco_disease_sel"), format_func=(_fmt_dx_kor if "_fmt_dx_kor" in globals() else (lambda x: str(x).lower())))
-    disp = dx_display(group, disease)
+    _diseases_pairs = [(_fmt_dx_kor(x), x) for x in diseases]
+_disease_idx = st.selectbox("의심/진단명", options=list(range(len(_diseases_pairs))), index=0, key=wkey("onco_disease_sel"), format_func=lambda i: _diseases_pairs[i][0])
+disease = _diseases_pairs[_disease_idx][1]
+disp = dx_display(group, disease)
+
 
 # Korean display override: code - ko (암 제거, 붙여쓰기)
 _dx_disp_kor = None
