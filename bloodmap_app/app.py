@@ -2688,3 +2688,22 @@ _ss_setdefault(wkey('home_fb_log_cache'), [])
 
 
 # ===== [/INLINE FEEDBACK] =====
+
+# === Patch End: Disable browser auto-translation on medical labels ===
+def __bloodmap_disable_autotranslate():
+    html = (
+        '<meta name="google" content="notranslate">'
+        '<style>.notranslate, .stApp { translate: no; }</style>'
+        '<script>document.documentElement.classList.add("notranslate");'
+        'document.documentElement.setAttribute("translate","no");</script>'
+    )
+    try:
+        st.markdown(html, unsafe_allow_html=True)
+    except Exception:
+        pass
+
+# Call once at end (safe if re-run)
+try:
+    __bloodmap_disable_autotranslate()
+except Exception:
+    pass
