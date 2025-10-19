@@ -2,28 +2,13 @@
 
 # ===== Robust import guard (auto-injected) =====
 import importlib, types
-# [patched:P0-1] removed hard import from peds_guide
+from peds_guide import render_section_constipation, render_section_diarrhea, render_section_vomit
 
 def _safe_import(modname):
     try:
         return importlib.import_module(modname)
     except Exception:
         return None
-
-# [patched:P0-1] safe-bind peds_guide functions
-_pg = _safe_import("peds_guide")
-if _pg is not None:
-    render_section_constipation = getattr(_pg, "render_section_constipation", lambda *a, **k: None)
-    render_section_diarrhea    = getattr(_pg, "render_section_diarrhea", lambda *a, **k: None)
-    render_section_vomit       = getattr(_pg, "render_section_vomit", lambda *a, **k: None)
-else:
-    import streamlit as st
-    def render_section_constipation(*a, **k):
-        st.info("🔧 안전모드: peds_guide 모듈이 없어 변비 섹션을 대체 안내로 표시합니다.")
-    def render_section_diarrhea(*a, **k):
-        st.info("🔧 안전모드: peds_guide 모듈이 없어 설사 섹션을 대체 안내로 표시합니다.")
-    def render_section_vomit(*a, **k):
-        st.info("🔧 안전모드: peds_guide 모듈이 없어 구토 섹션을 대체 안내로 표시합니다.")
 
 def _call_first(mod, names):
     """Call functions by name on module if they exist."""
@@ -84,7 +69,7 @@ html { scroll-behavior: smooth; }
 
 
 # --- HTML-only pediatric navigator (no rerun) ---
-def render_peds_nav_iframe():
+def render_peds_nav_md():
     from streamlit.components.v1 import html as _html
     _html("""
     <style>
@@ -385,7 +370,7 @@ def emergency_level(labs: dict, temp_c, hr, symptoms: dict):
     if symptoms.get("visual_change"):
         add("시야 이상/복시/암점", 2, "w_visual_change")
 
-    risk = sum(item["score"] for item in contrib) + st.session_state.get(wkey('peds_days_weight'), 0)
+    risk = sum(item["score"] for item in contrib)
     level = "🚨 응급" if risk >= 5 else ("🟧 주의" if risk >= 2 else "🟢 안심")
     return level, reasons, contrib
 
@@ -607,51 +592,7 @@ def build_peds_notes(
     *, stool, fever, persistent_vomit, oliguria, cough, nasal, eye, abd_pain, ear_pain, rash, hives, migraine, hfmd, sputum=None, wheeze=None,
     duration=None, score=None, max_temp=None, red_seizure=False, red_bloodstool=False, red_night=False, red_dehydration=False
 ) -> str:
-    """소아 증상 선택을 요약하여 
-# --- P1-3: 결과 저장 append 보장 + 중복 제거 ---
-import csv, datetime as _dt
-from zoneinfo import ZoneInfo as _ZoneInfo
-def _graph_dir_candidates():
-    return ['/mnt/data/bloodmap_graph','/mount/data/bloodmap_graph','/tmp/bloodmap_graph']
-def _ensure_graph_dir():
-    import os
-    for d in _graph_dir_candidates():
-        try:
-            os.makedirs(d, exist_ok=True)
-            test = os.path.join(d, '.touch')
-            with open(test, 'w', encoding='utf-8') as f:
-                f.write('ok')
-            try:
-                os.remove(test)
-            except Exception:
-                pass
-            return d
-        except Exception:
-            continue
-    import tempfile as _tmp
-    return _tmp.gettempdir()
-
-def _append_labs_row(uid: str, row: dict):
-    import os
-    base = _ensure_graph_dir()
-    path = os.path.join(base, f"{uid}.labs.csv")
-    write_header = not os.path.exists(path)
-    with open(path, 'a', encoding='utf-8', newline='') as f:
-        w = csv.DictWriter(f, fieldnames=list(row.keys()))
-        if write_header:
-            w.writeheader()
-        w.writerow(row)
-    try:
-        import pandas as _pd
-        df = _pd.read_csv(path)
-        key_cols = [c for c in ['timestamp','WBC','Hb','PLT','CRP','ANC','Na','K','Alb','Ca','AST','ALT','Glucose'] if c in df.columns]
-        if key_cols:
-            df = df.drop_duplicates(subset=key_cols, keep='last')
-            df.to_csv(path, index=False)
-    except Exception:
-        pass
-
-보고서용 텍스트를 생성."""
+    """소아 증상 선택을 요약하여 보고서용 텍스트를 생성."""
     lines = []
     if duration:
         lines.append(f"[지속일수] {duration}")
@@ -711,39 +652,9 @@ def _append_labs_row(uid: str, row: dict):
         lines.append("(특이 소견 없음)")
     return "\\n".join(lines)
 
-# --- P2-1 tabs helpers (diabetes/dialysis) ---
-def _render_diabetes_tab():
-    st.markdown('<div id="cat_diabetes"></div>', unsafe_allow_html=True)
-    st.subheader("🍬 당뇨")
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        st.number_input("HbA1c(%)", min_value=0.0, max_value=25.0, step=0.1, key=wkey("dm_hba1c"))
-    with c2:
-        st.number_input("공복혈당(mg/dL)", min_value=0.0, max_value=1000.0, step=1.0, key=wkey("dm_fpg"))
-    with c3:
-        st.number_input("식후2시간혈당(mg/dL)", min_value=0.0, max_value=1000.0, step=1.0, key=wkey("dm_ppg"))
-    st.caption("※ 해석 로직은 다음 패치에서 연결됩니다.")
-
-def _render_dialysis_tab():
-    st.markdown('<div id="cat_dialysis"></div>', unsafe_allow_html=True)
-    st.subheader("💧 투석")
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        st.number_input("Na(mmol/L)", min_value=0.0, max_value=200.0, step=1.0, key=wkey("dx_na"))
-        st.number_input("K(mmol/L)", min_value=0.0, max_value=10.0, step=0.1, key=wkey("dx_k"))
-    with c2:
-        st.number_input("Albumin(g/dL)", min_value=0.0, max_value=10.0, step=0.1, key=wkey("dx_alb"))
-        st.number_input("CRP(mg/L)", min_value=0.0, max_value=1000.0, step=0.1, key=wkey("dx_crp"))
-    with c3:
-        st.number_input("Calcium(mg/dL)", min_value=0.0, max_value=20.0, step=0.1, key=wkey("dx_ca"))
-        st.number_input("Phosphorus(mg/dL)", min_value=0.0, max_value=20.0, step=0.1, key=wkey("dx_phos"))
-    st.number_input("염도(나트륨 농도, g/L 또는 ％)", min_value=0.0, max_value=200.0, step=0.1, key=wkey("dx_salt"))
-    st.caption("※ 투석 카테고리 해석 로직 및 염도 해석은 다음 패치에서 연결됩니다.")
-# --- /P2-1 tabs helpers ---
-
 # ---------- Tabs ----------
-tab_labels = ["🏠 홈", "👶 소아 증상", "🧬 암 선택", "💊 항암제(진단 기반)", "🧪 피수치 입력", "🔬 특수검사", "📄 보고서", "📊 기록/그래프", "🍬 당뇨", "💧 투석"]
-t_home, t_peds, t_dx, t_chemo, t_labs, t_special, t_report, t_graph, t_dm, t_dialysis = st.tabs(tab_labels)
+tab_labels = ["🏠 홈", "👶 소아 증상", "🧬 암 선택", "💊 항암제(진단 기반)", "🧪 피수치 입력", "🔬 특수검사", "📄 보고서", "📊 기록/그래프"]
+t_home, t_peds, t_dx, t_chemo, t_labs, t_special, t_report, t_graph = st.tabs(tab_labels)
 
 # HOME
 with t_home:
@@ -1897,24 +1808,6 @@ st.markdown('<div id="peds_diarrhea"></div>', unsafe_allow_html=True)
 st.markdown('<div id="peds_vomit"></div>', unsafe_allow_html=True)
 st.markdown('<div id="peds_antipyretic"></div>', unsafe_allow_html=True)
 st.markdown('<div id="peds_ors"></div>', unsafe_allow_html=True)
-
-# --- P1-1: 지속일수 가중치 (소아 증상 점수 연동) ---
-def _peds_duration_weight(days_text: str) -> int:
-    # '지속일수' 값을 받아 가중치 점수를 반환: 1일=0, 2일=+1, 3일 이상=+2
-    if not days_text:
-        return 0
-    t = str(days_text)
-    if '3' in t:
-        return 2
-    if '2' in t:
-        return 1
-    return 0
-
-_peds_days = st.selectbox('증상 지속일수', ['1일','2일','3일 이상'], index=0, key=wkey('peds_days'))
-_peds_days_w = _peds_duration_weight(_peds_days)
-st.session_state[wkey('peds_days_weight')] = _peds_days_w
-
-
 st.markdown('<div id="peds_respiratory"></div>', unsafe_allow_html=True)
 
 # --- 변비 ---
@@ -1952,106 +1845,7 @@ with st.expander("🌡️ 해열제 가이드/계산", expanded=False):
         ap_ml_1 = ap_ml_max = ib_ml_1 = ib_ml_max = 0.0
     st.write(f"- 아세트아미노펜(160mg/5mL): **{ap_ml_1:.1f} mL** (최대 {ap_ml_max:.1f} mL) — 최소 간격 **4h**")
     st.write(f"- 이부프로펜(100mg/5mL): **{ib_ml_1:.1f} mL** (최대 {ib_ml_max:.1f} mL) — 최소 간격 **6h**")
-    
-# --- P1-2: Antipyretic schedule chain (.ics + care hint) ---
-import datetime as _dt
-from zoneinfo import ZoneInfo as _ZoneInfo
-import tempfile as _tmp
-
-def _preferred_writable_base():
-    # Try known writable locations in order
-    for p in ["/mnt/data/care_log", "/mount/data/care_log", "/tmp/care_log"]:
-        try:
-            os.makedirs(p, exist_ok=True)
-            test_fp = os.path.join(p, ".touch")
-            with open(test_fp, "w", encoding="utf-8") as _f:
-                _f.write("ok")
-            try:
-                os.remove(test_fp)
-            except Exception:
-                pass
-            return p
-        except Exception:
-            continue
-    # Extreme fallback
-    return _tmp.gettempdir()
-
-def _make_ics(title:str, start: _dt.datetime, minutes:int=0, description:str="") -> str:
-    tzid = "Asia/Seoul"
-    dtstart = start.strftime("%Y%m%dT%H%M%S")
-    dtend = (start + _dt.timedelta(minutes=minutes)).strftime("%Y%m%dT%H%M%S") if minutes>0 else None
-    uid = f"{dtstart}-{title.replace(' ','_')}@bloodmap"
-    lines = [
-        "BEGIN:VCALENDAR",
-        "VERSION:2.0",
-        "PRODID:-//BloodMap//Peds Antipyretic//KR",
-        "CALSCALE:GREGORIAN",
-        "METHOD:PUBLISH",
-        "BEGIN:VEVENT",
-        f"UID:{uid}",
-        f"DTSTAMP:{_dt.datetime.now(_ZoneInfo(tzid)).strftime('%Y%m%dT%H%M%S')}",
-        f"DTSTART;TZID={tzid}:{dtstart}",
-    ]
-    if dtend:
-        lines.append(f"DTEND;TZID={tzid}:{dtend}")
-    lines += [
-        f"SUMMARY:{title}",
-        f"DESCRIPTION:{description}".replace("\n","\\n"),
-        "END:VEVENT",
-        "END:VCALENDAR",
-        ""
-    ]
-    return "\n".join(lines)
-
-kst = _dt.datetime.now(_ZoneInfo("Asia/Seoul"))
-col1, col2 = st.columns(2)
-with col1:
-    ap_given = st.number_input("APAP 실제 투여량(mL)", min_value=0.0, step=0.5, value=float(f"{ap_ml_1:.1f}"), key=wkey("apap_given"))
-    if st.button("APAP 기록 + 다음 복용 .ics", key=wkey("apap_log_ics")):
-        next_time = kst + _dt.timedelta(hours=4)
-        ics_text = _make_ics("다음 해열제(APAP) 복용 가능", next_time, 0, "APAP 최소 간격 4시간 (KST).")
-        base = _preferred_writable_base()
-        fname = f"next_APAP_{kst.strftime('%Y%m%d_%H%M%S')}.ics"
-        ics_path = os.path.join(base, fname)
-        write_ok = True
-        try:
-            with open(ics_path, "w", encoding="utf-8") as f:
-                f.write(ics_text)
-        except Exception as _e:
-            write_ok = False
-            st.warning(f"쓰기 권한 문제로 임시 다운로드만 제공합니다. ({type(_e).__name__})")
-        st.success(f"다음 APAP 가능 시각: {next_time.strftime('%Y-%m-%d %H:%M')} (KST)")
-        st.download_button("📅 .ics 내보내기 (APAP)", data=ics_text, file_name=fname, mime="text/calendar", key=wkey("apap_ics_dl"))
-        st.session_state[wkey("apap_ml_24h")] = st.session_state.get(wkey("apap_ml_24h"), 0.0) + float(ap_given)
-with col2:
-    ib_given = st.number_input("IBU 실제 투여량(mL)", min_value=0.0, step=0.5, value=float(f"{ib_ml_1:.1f}"), key=wkey("ibu_given"))
-    if st.button("IBU 기록 + 다음 복용 .ics", key=wkey("ibu_log_ics")):
-        next_time = kst + _dt.timedelta(hours=6)
-        ics_text = _make_ics("다음 해열제(IBU) 복용 가능", next_time, 0, "IBU 최소 간격 6시간 (KST).")
-        base = _preferred_writable_base()
-        fname = f"next_IBU_{kst.strftime('%Y%m%d_%H%M%S')}.ics"
-        ics_path = os.path.join(base, fname)
-        write_ok = True
-        try:
-            with open(ics_path, "w", encoding="utf-8") as f:
-                f.write(ics_text)
-        except Exception as _e:
-            write_ok = False
-            st.warning(f"쓰기 권한 문제로 임시 다운로드만 제공합니다. ({type(_e).__name__})")
-        st.success(f"다음 IBU 가능 시각: {next_time.strftime('%Y-%m-%d %H:%M')} (KST)")
-        st.download_button("📅 .ics 내보내기 (IBU)", data=ics_text, file_name=fname, mime="text/calendar", key=wkey("ibu_ics_dl"))
-        st.session_state[wkey("ibu_ml_24h")] = st.session_state.get(wkey("ibu_ml_24h"), 0.0) + float(ib_given)
-
-# 24h 총량 소프트 배너(실제 하드 가드레일과 충돌 없이 알림만)
-ap24 = st.session_state.get(wkey("apap_ml_24h"), 0.0)
-ib24 = st.session_state.get(wkey("ibu_ml_24h"), 0.0)
-if ap24 > 0 or ib24 > 0:
-    st.caption(f"24시간 누적(세션 기준): APAP {ap24:.1f} mL / IBU {ib24:.1f} mL")# 24h 총량 소프트 배너(실제 하드 가드레일과 충돌 없이 알림만)
-ap24 = st.session_state.get(wkey("apap_ml_24h"), 0.0)
-ib24 = st.session_state.get(wkey("ibu_ml_24h"), 0.0)
-if ap24 > 0 or ib24 > 0:
-    st.caption(f"24시간 누적(세션 기준): APAP {ap24:.1f} mL / IBU {ib24:.1f} mL")
-st.caption("※ 금기/주의 질환은 반드시 의료진 지시를 따르세요. 중복 복용 주의.")
+    st.caption("※ 금기/주의 질환은 반드시 의료진 지시를 따르세요. 중복 복용 주의.")
 
 # --- ORS/탈수 ---
 with st.expander("🥤 ORS/탈수 가이드", expanded=False):
@@ -2802,101 +2596,3 @@ _ss_setdefault(wkey('home_fb_log_cache'), [])
 
 
 # ===== [/INLINE FEEDBACK] =====
-
-# === Developer Preflight (P0-5): ast.parse + imports + paths + key lint ===
-def _dev_preflight_checks():
-    import sys, importlib, ast as _ast, io as _io, traceback as _tb
-    from pathlib import Path as _Path
-    import datetime as _dt
-    _report = {"ts_kst": _dt.datetime.now(_dt.timezone(_dt.timedelta(hours=9))).isoformat()}
-    _files = [
-        _Path(__file__),
-        _Path(__file__).parent / "core_utils.py",
-        _Path(__file__).parent / "peds_dose.py",
-        _Path(__file__).parent / "peds_guide.py",
-        _Path(__file__).parent / "special_tests.py",
-        _Path(__file__).parent / "onco_map.py",
-        _Path(__file__).parent / "drug_db.py",
-        _Path(__file__).parent / "pdf_export.py",
-        _Path(__file__).parent / "branding.py",
-        _Path(__file__).parent / "ui_results.py",
-    ]
-    _ok_parse = {}
-    for fp in _files:
-        try:
-            if fp.exists():
-                src = fp.read_text(encoding="utf-8")
-                _ast.parse(src)
-                _ok_parse[str(fp.name)] = True
-            else:
-                _ok_parse[str(fp.name)] = None  # optional
-        except Exception as e:
-            _ok_parse[str(fp.name)] = f"syntax_error: {e}"
-    _report["syntax"] = _ok_parse
-
-    # Import smoke tests (optional modules wrapped)
-    def _smoke(name):
-        try:
-            import importlib
-            importlib.invalidate_caches()
-            importlib.import_module(name)
-            return True
-        except Exception as e:
-            return f"import_error: {e}"
-    _report["imports"] = {
-        "branding": _smoke("branding"),
-        "pdf_export": _smoke("pdf_export"),
-        "core_utils": _smoke("core_utils"),
-        "peds_guide": _smoke("peds_guide"),
-        "peds_dose": _smoke("peds_dose"),
-        "special_tests": _smoke("special_tests"),
-        "onco_map": _smoke("onco_map"),
-        "drug_db": _smoke("drug_db"),
-        "ui_results": _smoke("ui_results"),
-    }
-
-    # Dir write checks
-    base_candidates = ["/mnt/data", "/mount/data", "/tmp"]
-    writable = None
-    from pathlib import Path as P
-    for b in base_candidates:
-        p = P(b)
-        try:
-            p.mkdir(exist_ok=True)
-            test = p / ("_bm_wtest_" + str(int(_dt.datetime.now().timestamp())) + ".tmp")
-            test.write_text("ok", encoding="utf-8")
-            test.unlink(missing_ok=True)
-            writable = b
-            break
-        except Exception:
-            continue
-    _report["writable_base"] = writable
-
-    # Key lint: look for known risky patterns
-    try:
-        src_app = _Path(__file__).read_text(encoding="utf-8")
-        risky = []
-        import re as _re
-        for m in _re.finditer(r'key\s*=\s*f?["\\\']cl_del_\\{?idx\\}?', src_app):
-            risky.append({"span": m.span(), "text": m.group(0)})
-        _report["key_lint"] = {"cl_del_idx_without_wkey": risky}
-    except Exception as e:
-        _report["key_lint"] = {"error": str(e)}
-
-    return _report
-
-def render_dev_preflight_panel():
-    try:
-        import streamlit as st
-        rep = _dev_preflight_checks()
-        with st.expander("🧪 Developer Preflight (P0-5)", expanded=False):
-            st.json(rep)
-    except Exception:
-        pass
-
-# --- P2-1 tabs content ---
-with t_dm:
-    _render_diabetes_tab()
-with t_dialysis:
-    _render_dialysis_tab()
-# --- /P2-1 tabs content ---
