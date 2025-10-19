@@ -1304,6 +1304,8 @@ with t_labs:
 
 # DX
 with t_dx:
+    # Fixed-height slot for selection banner (prevents layout shift)
+    st.markdown('<div class="select-banner-slot"></div>', unsafe_allow_html=True)
     st.subheader("암 선택")
     if not ONCO:
         st.warning("onco_map 이 로드되지 않아 기본 목록이 비어있습니다. onco_map.py를 같은 폴더나 modules/ 에 두세요.")
