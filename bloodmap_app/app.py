@@ -2006,7 +2006,49 @@ def _qr_image_bytes(text: str) -> bytes:
         return b""
 
 # REPORT with side panel (tabs)
+
+# --- Report builder (md) ---
+def _build_report_md():
+    import datetime as _dt
+    md = []
+    md.append(f"# 진료 요약  \n생성: {_dt.datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    try:
+        sel = st.session_state.get(wkey('dx_disp')) or st.session_state.get('dx_disp')
+        if sel:
+            md.append(f"\n**선택 진단**: {sel}")
+    except Exception:
+        pass
+    flat = st.session_state.get(wkey('last_drugs_flat'), [])
+    if flat:
+        md.append("\n## 자동 추천 요약")
+        md.append("- 전체: " + _fmt_drug_or_regimen_list(flat))
+        se_md = _side_effects_from_items(flat)
+        if se_md:
+            md.append("\n### ⚠️ 부작용 요약\n" + se_md)
+    return "\n".join(md)
+# --- /Report builder ---
+
 with t_report:
+    # Report export (md/pdf)
+    try:
+        md = _build_report_md()
+        import os, time
+        os.makedirs("/mnt/data/report", exist_ok=True)
+        md_path = f"/mnt/data/report/report_{int(time.time())}.md"
+        with open(md_path, "w", encoding="utf-8") as _f:
+            _f.write(md)
+        st.download_button("📄 보고서(.md) 다운로드", data=md, file_name=os.path.basename(md_path), mime="text/markdown", key=wkey("dl_md"))
+        try:
+            import pdf_export as _pe
+            if hasattr(_pe, "md_to_pdf"):
+                pdf_path = md_path.replace(".md",".pdf")
+                _pe.md_to_pdf(md, pdf_path)
+                with open(pdf_path, "rb") as _pf:
+                    st.download_button("🧾 보고서(.pdf) 다운로드", data=_pf.read(), file_name=os.path.basename(pdf_path), mime="application/pdf", key=wkey("dl_pdf"))
+        except Exception:
+            pass
+    except Exception:
+        st.caption("보고서 생성 중 오류가 발생했습니다.")
     st.subheader("보고서 (.md/.txt/.pdf) — 모든 항목 포함")
 
     key_id = st.session_state.get("key", "(미설정)")

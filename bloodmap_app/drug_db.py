@@ -120,6 +120,19 @@ def key_from_label(label: str, db=None) -> str:
 
 # -*- coding: utf-8 -*-
 from typing import Dict, Any
+# --- DRUG_KO: English -> Korean drug names (non-destructive patch) ---
+DRUG_KO = {
+    "Imatinib":"이미티닙","Sunitinib":"수니티닙","Regorafenib":"레고라페닙","Ripretinib":"리프레티닙",
+    "Osimertinib":"오시머티닙","Erlotinib":"얼로티닙","Gefitinib":"게피티닙",
+    "Alectinib":"알렉티닙","Lorlatinib":"롤라티닙","Bevacizumab":"베바시주맙",
+    "Trastuzumab":"트라스투주맙","Rituximab":"리툭시맙",
+    "Pembrolizumab":"펨브롤리주맙","Nivolumab":"니볼루맙","Atezolizumab":"아테졸리주맙",
+    "Cyclophosphamide":"사이클로포스파마이드","Doxorubicin":"독소루비신","Vincristine":"빈크리스틴","Prednisone":"프레드니손",
+    "Paclitaxel":"파클리탁셀","Docetaxel":"도세탁셀","Capecitabine":"카페시타빈",
+    "Oxaliplatin":"옥살리플라틴","Cisplatin":"시스플라틴","Carboplatin":"카보플라틴","Irinotecan":"이리노테칸",
+    "Fluorouracil":"플루오로우라실","5-Fluorouracil":"플루오로우라실","5FU":"플루오로우라실","5-FU":"플루오로우라실",
+}
+# --- /DRUG_KO ---
 
 DRUG_DB: Dict[str, Dict[str, Any]] = {}
 
@@ -462,8 +475,8 @@ SIDE_EFFECTS_KO = {
 def drug_side_effects(name: str, lang: str = "ko"):
     base = str(name).strip()
     if lang.lower().startswith("ko"):
-        arr = SIDE_EFFECTS_KO.get(base) or SIDE_EFFECTS_KO.get(base.title()) or []
-        return list(arr)
+        arr = (_SIDE_KO_LC.get(_norm_drug(base)) if '_SIDE_KO_LC' in globals() else [])
+        return list(arr or [])
     return []
 
 def format_side_effects_bullets(drugs, lang: str = "ko"):
@@ -474,3 +487,217 @@ def format_side_effects_bullets(drugs, lang: str = "ko"):
             lines.append(f"- **{drug_kor(d) if 'drug_kor' in globals() else d}**: " + ", ".join(se))
     return "\n".join(lines)
 # --- /Side effects patch ---
+
+
+# --- Case-insensitive normalization for drug lookups ---
+def _norm_drug(s):
+    try:
+        return str(s).strip().lower()
+    except Exception:
+        return str(s)
+
+
+
+
+
+# --- Case-insensitive normalization (rebuilt) ---
+def _norm_drug(s):
+    try:
+        return str(s).strip().lower()
+    except Exception:
+        return str(s)
+
+_DRUG_KO_LC = {str(k).lower(): v for k, v in (DRUG_KO if 'DRUG_KO' in globals() else {}).items()}
+_SIDE_KO_LC = {str(k).lower(): v for k, v in (SIDE_EFFECTS_KO if 'SIDE_EFFECTS_KO' in globals() else {}).items()}
+# --- /Case-insensitive normalization ---
+
+
+# --- drug_kor helpers (re-added) ---
+def drug_kor(name: str) -> str:
+    base = str(name).strip()
+    try:
+        kor = (_DRUG_KO_LC.get(base.lower()) if '_DRUG_KO_LC' in globals() else None)
+        return f"{base}({kor})" if kor else base
+    except Exception:
+        return base
+
+def format_drug_list_kor(drugs) -> str:
+    seen=set(); out=[]
+    for d in drugs or []:
+        label = drug_kor(d)
+        if label not in seen:
+            seen.add(label); out.append(label)
+    return ", ".join(out)
+
+def drug_side_effects(name: str, lang: str = "ko"):
+    base = str(name).strip()
+    if lang.lower().startswith("ko"):
+        arr = (_SIDE_KO_LC.get(base.lower()) if '_SIDE_KO_LC' in globals() else [])
+        return list(arr or [])
+    return []
+# --- /drug_kor helpers ---
+
+
+
+# --- auto-extend KO/SE maps (patch) ---
+try:
+    DRUG_KO.update({
+        "6-MP":"6-머캅토퓨린","ATRA":"트레티노인(ATRA)","Ara-C":"시타라빈(Ara-C)","Arsenic Trioxide":"산화비소(As2O3)",
+        "Bendamustine":"벤다무스틴","Bleomycin":"블레오마이신","Brentuximab Vedotin":"브렌툭시맙 베도틴",
+        "Cabozantinib":"카보잔티닙","Capmatinib":"캡마티닙","Cetuximab":"세툭시맙","Chlorambucil":"클로람부실",
+        "Crizotinib":"크리조티닙","Cytarabine":"시타라빈","Dacarbazine":"다카바진","Daratumumab":"다라투무맙",
+        "Daunorubicin":"다우노루비신","Decitabine":"데시타빈","Dinutuximab":"디누툭시맙",
+        "Encorafenib":"엔코라페닙","Entrectinib":"엔트렉티닙","Epirubicin":"에피루비신","Etoposide":"에토포사이드",
+        "Everolimus":"에버롤리무스","Gilteritinib":"질테리티닙","Goserelin":"고세렐린",
+        "Ifosfamide":"이포스파미드","Idarubicin":"이다루비신","Ibrutinib":"이브루티닙","Ipilimumab":"이필리무맙",
+        "Lenvatinib":"렌바티닙","Lenalidomide":"레날리도마이드","Melphalan":"멜팔란","Methotrexate":"메토트렉세이트",
+        "Midostaurin":"미도스타우린","Mitomycin":"미토마이신","Necitumumab":"네시투무맙","Nilotinib":"닐로티닙",
+        "Obinutuzumab":"오비누투주맙","Ofatumumab":"오파투무맙","Olaparib":"올라파립","Panitumumab":"파니투뮤맙",
+        "Pertuzumab":"퍼투주맙","Polatuzumab Vedotin":"폴라투주맙 베도틴",
+        "Pralsetinib":"프랄세티닙","Ramucirumab":"라무시루맙","Selpercatinib":"셀퍼카티닙","Sorafenib":"소라페닙",
+        "Sotorasib":"소토라십","T-DM1":"트라스투주맙 엠탄신","Topotecan":"토포테칸",
+        "Trabectedin":"트라벡티딘","Trastuzumab deruxtecan":"트라스투주맙 데룩스테칸",
+        "Tucatinib":"투카티닙","Vandetanib":"반데타닙","Vinblastine":"빈블라스틴"
+    })
+except Exception:
+    pass
+
+try:
+    SIDE_EFFECTS_KO.update({
+        "6-MP":["골수억제","간수치 상승","구역"],
+        "ATRA":["분화증후군","두통","피부건조"],
+        "Ara-C":["골수억제","점막염","발열"],
+        "Arsenic Trioxide":["QT 연장","전해질 이상","피로"],
+        "Bendamustine":["골수억제","발열","피로"],
+        "Bleomycin":["폐독성","발열","피부변화"],
+        "Brentuximab Vedotin":["말초신경병증","주입반응","피로"],
+        "Cabozantinib":["고혈압","설사","손발증후군"],
+        "Capmatinib":["간수치 상승","부종","오심"],
+        "Cetuximab":["발진","저마그네슘혈증","주입반응"],
+        "Chlorambucil":["골수억제","오심/구토","감염"],
+        "Crizotinib":["시야장애","부종","간수치 상승"],
+        "Cytarabine":["골수억제","발열","점막염"],
+        "Dacarbazine":["오심/구토","피로","광과민"],
+        "Daratumumab":["주입반응","감염 위험","피로"],
+        "Daunorubicin":["심독성","골수억제","탈모"],
+        "Decitabine":["골수억제","감염","피로"],
+        "Dinutuximab":["통증","발열","저혈압"],
+        "Encorafenib":["피부발진","관절통","피로"],
+        "Entrectinib":["어지러움","체중증가","변비"],
+        "Epirubicin":["심독성","골수억제","탈모"],
+        "Etoposide":["골수억제","저혈압","오심/구토"],
+        "Everolimus":["구내염","고지혈증","감염"],
+        "Gilteritinib":["간수치 상승","QT 연장","피로"],
+        "Goserelin":["홍조","발한","골밀도 감소"],
+        "Ifosfamide":["신경독성","신독성","출혈성 방광염"],
+        "Idarubicin":["심독성","골수억제","탈모"],
+        "Ibrutinib":["출혈","감염","설사"],
+        "Ipilimumab":["면역관련 이상반응(장염/간염)","발진","피로"],
+        "Lenvatinib":["고혈압","단백뇨","수족증후군"],
+        "Lenalidomide":["혈전증","골수억제","피부발진"],
+        "Melphalan":["골수억제","오심/구토","탈모"],
+        "Methotrexate":["구내염","간독성","신독성"],
+        "Midostaurin":["오심/구토","QT 연장","피로"],
+        "Mitomycin":["골수억제","폐독성","신독성"],
+        "Necitumumab":["저마그네슘혈증","발진","주입반응"],
+        "Nilotinib":["QT 연장","혈당상승","간수치 상승"],
+        "Obinutuzumab":["주입반응","감염","호중구감소"],
+        "Ofatumumab":["주입반응","감염","피로"],
+        "Olaparib":["빈혈","오심/구토","피로"],
+        "Panitumumab":["발진","저마그네슘혈증","설사"],
+        "Pertuzumab":["심기능저하","설사","주입반응"],
+        "Polatuzumab Vedotin":["말초신경병증","골수억제","주입반응"],
+        "Pralsetinib":["간수치 상승","고혈압","피로"],
+        "Ramucirumab":["고혈압","단백뇨","출혈"],
+        "Selpercatinib":["고혈압","QT 연장","간수치 상승"],
+        "Sorafenib":["수족증후군","고혈압","설사"],
+        "Sotorasib":["설사","ALT/AST 상승","피로"],
+        "T-DM1":["혈소판감소","간수치 상승","피로"],
+        "Topotecan":["골수억제","오심/구토","탈모"],
+        "Trabectedin":["간독성","골수억제","오심/구토"],
+        "Trastuzumab deruxtecan":["간질성폐질환","구토","탈모"],
+        "Tucatinib":["설사","간수치 상승","피로"],
+        "Vandetanib":["QT 연장","설사","발진"],
+        "Vinblastine":["골수억제","신경독성","탈모"]
+    })
+except Exception:
+    pass
+# --- /auto-extend ---
+
+
+# --- rebuild lowercase lookup after updates ---
+_DRUG_KO_LC = {str(k).lower(): v for k, v in (DRUG_KO if 'DRUG_KO' in globals() else {}).items()}
+_SIDE_KO_LC = {str(k).lower(): v for k, v in (SIDE_EFFECTS_KO if 'SIDE_EFFECTS_KO' in globals() else {}).items()}
+
+
+# --- auto-extend #2 for remaining gaps ---
+try:
+    DRUG_KO.update({
+        "Gemcitabine":"젬시타빈","Pemetrexed":"페메트렉시드","Pazopanib":"파조파닙","Lapatinib":"라파티닙",
+        "Larotrectinib":"라로트렉티닙","Dactinomycin":"닥티노마이신","Octreotide":"옥트레오타이드",
+        "Niraparib":"니라파립","Nab-Paclitaxel":"나노입자 파클리탁셀","MTX":"메토트렉세이트",
+        "Durvalumab":"더발루맙","Atezolizumab":"아테졸리주맙","Nivolumab":"니볼루맙","Pembrolizumab":"펨브롤리주맙"
+    })
+except Exception:
+    pass
+
+try:
+    SIDE_EFFECTS_KO.update({
+        "Gemcitabine":["골수억제","발열","피로"],
+        "Pemetrexed":["골수억제","피로","구내염"],
+        "Pazopanib":["고혈압","간수치 상승","설사"],
+        "Lapatinib":["설사","발진","간수치 상승"],
+        "Larotrectinib":["간수치 상승","어지러움","피로"],
+        "Dactinomycin":["골수억제","오심/구토","점막염"],
+        "Octreotide":["위장관 증상","담석증","혈당변동"],
+        "Niraparib":["혈소판감소","빈혈","오심/구토"],
+        "Nab-Paclitaxel":["말초신경병증","골수억제","탈모"],
+        "MTX":["구내염","간독성","신독성"],
+        "Durvalumab":["면역관련 이상반응(폐렴/장염/간염)","피로","발진"],
+        "Atezolizumab":["면역관련 이상반응","피로","가려움"],
+        "Nivolumab":["면역관련 이상반응","피로","발진"],
+        "Pembrolizumab":["면역관련 이상반응","피로","발진"]
+    })
+except Exception:
+    pass
+
+# rebuild lowercase lookups
+_DRUG_KO_LC = {str(k).lower(): v for k, v in (DRUG_KO if 'DRUG_KO' in globals() else {}).items()}
+_SIDE_KO_LC = {str(k).lower(): v for k, v in (SIDE_EFFECTS_KO if 'SIDE_EFFECTS_KO' in globals() else {}).items()}
+# --- /auto-extend #2 ---
+
+
+# --- Regimen expansion patch (non-destructive) ---
+# Common regimens → component drugs
+REGIMEN_MAP = {
+    # Hematology
+    "CHOP": ["Cyclophosphamide","Doxorubicin","Vincristine","Prednisone"],
+    "R-CHOP": ["Rituximab","Cyclophosphamide","Doxorubicin","Vincristine","Prednisone"],
+    "EPOCH": ["Etoposide","Prednisone","Vincristine","Cyclophosphamide","Doxorubicin"],
+    "R-EPOCH": ["Rituximab","Etoposide","Prednisone","Vincristine","Cyclophosphamide","Doxorubicin"],
+    "ABVD": ["Doxorubicin","Bleomycin","Vinblastine","Dacarbazine"],
+    "FLAG-IDA": ["Fludarabine","Cytarabine","G-CSF","Idarubicin"],
+    # GI
+    "FOLFOX": ["Oxaliplatin","Leucovorin","Fluorouracil"],
+    "FOLFIRI": ["Irinotecan","Leucovorin","Fluorouracil"],
+    "FOLFOXIRI": ["Oxaliplatin","Irinotecan","Leucovorin","Fluorouracil"],
+    # GIST
+    "TKI-GIST": ["Imatinib","Sunitinib","Regorafenib","Ripretinib"],
+    # APL
+    "ATRA+ATO": ["ATRA","Arsenic Trioxide"],
+    # Myeloma / lymphoma supportive examples
+    "BR": ["Bendamustine","Rituximab"],
+}
+
+def expand_regimen(item):
+    key = str(item).strip().upper()
+    return REGIMEN_MAP.get(key, None)
+
+def expand_items(items):
+    out = []
+    for x in (items or []):
+        comp = expand_regimen(x)
+        if comp: out.extend(comp)
+        else: out.append(x)
+    return out
+# --- /Regimen expansion patch ---
