@@ -136,8 +136,16 @@ def _render_ors_pdf_button():
             md = "\n".join(lines)               # ✅ 리스트를 문자열로 변환
             pdf_bytes = _pdf.export_md_to_pdf(md)
             save_path = "/mnt/data/ORS_guide.pdf"
-            with open(save_path, "wb") as f:
-                f.write(pdf_bytes)
+            # ensure directory exists; fallback to current dir if needed
+            import os
+            try:
+                os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
+                with open(save_path, "wb") as f:
+                    f.write(pdf_bytes)
+            except Exception:
+                save_path = "ORS_guide.pdf"
+                with open(save_path, "wb") as f:
+                    f.write(pdf_bytes)
             with open(save_path, "rb") as f:
                 st.download_button(
                     "PDF 다운로드", f,
@@ -145,7 +153,7 @@ def _render_ors_pdf_button():
                     mime="application/pdf",
                     key=wkey('ors_pdf_dl')
                 )
-            st.success("ORS 가이드 PDF가 /mnt/data/ORS_guide.pdf 에 저장되었습니다.")
+            st.success(f"ORS 가이드 PDF 저장 완료: {save_path}")
         except Exception as e:
             st.error(f"PDF 생성 실패: {e}")
 
