@@ -411,9 +411,8 @@ def ensure_onco_drug_db(db):
     _upsert(db, "Mercaptopurine", "6-머캅토퓨린(6-MP)", "퓨린 유사체(항대사제)", "골수억제, 간독성(상호작용 주의)")
 
 # --- UI Helper: display_label ---
-
 def display_label(key: str, db: dict = None) -> str:
-    """약물 키를 사람이 읽기 쉬운 라벨(영문 + 한글 병기)로 변환.
+    """약물 키를 사람이 읽기 쉬운 라벨(한글 병기 alias)로 변환.
     - db가 주어지면 그 dict를, 아니면 모듈 전역 DRUG_DB 사용
     - 키는 따옴표/공백을 제거하여 조회 시도
     """
@@ -425,10 +424,346 @@ def display_label(key: str, db: dict = None) -> str:
     norm = k.strip().strip("'\"")
     entry = ref.get(norm) or ref.get(k)
     if isinstance(entry, dict):
-        alias = entry.get("alias")
-        if alias and alias != norm:
-            # 한글 병기: '영문 (한글)' 형태 고정
-            return f"{norm} ({alias})"
-        return alias or norm
+        return entry.get("alias") or norm
     return norm
 
+
+# ====== PATCH v2025-10-19: Fill missing AEs + Korean labels (emoji) ======
+try:
+    __prev_ensure = ensure_onco_drug_db  # chain previous layers
+except Exception:
+    __prev_ensure = None
+
+def ensure_onco_drug_db(db):
+    # keep everything previously registered
+    if __prev_ensure is not None:
+        __prev_ensure(db)
+
+    def _alias(k: str) -> str:
+        # Prefer existing alias → else fallback map
+        rec = (db or {}).get(k) or {}
+        a = rec.get("alias")
+        if a: 
+            return a
+        try:
+            # ALIAS_FALLBACK is defined earlier in this module
+            return ALIAS_FALLBACK.get(k, k)
+        except Exception:
+            return k
+
+    def add(k, alias=None, moa="", ae="", tags=None):
+        lab = alias or _alias(k)
+        _upsert(db, k, lab, moa or "항암/표적치료", ae or "(보강 필요)")
+        if tags:
+            rec = db.setdefault(k, {})
+            prev = set(rec.get("tags", []))
+            rec["tags"] = sorted(prev | set(tags))
+
+    # --- canonical minimal profiles (focus: 중요부작용 이모지) ---
+    PROFILES = {
+        "5-FU": {
+            "moa": "피리미딘 유사체(항대사제)",
+            "ae": "🩸 골수억제 · 🤢 오심/구토 · 💩 설사 · 💊 구내염 · 🖐️ 손발증후군",
+            "tags": ["myelosuppression","mucositis","hand_foot"]
+        },
+        "Ara-C": {
+            "moa": "피리미딘 유사체(항대사제)",
+            "ae": "🩸 골수억제 · 🌡️ 발열 · 💊 점막염 · 🧠 고용량 시 신경독성",
+            "tags": ["myelosuppression","neurotoxicity"]
+        },
+        "Capecitabine": {
+            "moa": "5‑FU 전구약물(항대사제)",
+            "ae": "🖐️ 손발증후군 · 💩 설사 · 💊 구내염 · 🩸 골수억제",
+            "tags": ["hand_foot","mucositis","myelosuppression"]
+        },
+        "Cisplatin": {
+            "moa": "백금제(알킬화 유사)",
+            "ae": "🧏‍♂️ 이독성 · 🚽 신독성 · 🤢 심한 구토 · 🩸 골수억제",
+            "tags": ["nephrotoxicity","ototoxicity","emetogenic","myelosuppression"]
+        },
+        "Carboplatin": {
+            "moa": "백금제",
+            "ae": "🩸 골수억제(혈소판↓) · 🤢 오심/구토 · ⚠️ 알레르기반응",
+            "tags": ["myelosuppression","hypersensitivity","emetogenic"]
+        },
+        "Oxaliplatin": {
+            "moa": "백금제",
+            "ae": "🧠 말초신경병증(저온 유발) · 🤢 오심/구토 · 🩸 골수억제",
+            "tags": ["neuropathy","myelosuppression","emetogenic"]
+        },
+        "Docetaxel": {
+            "moa": "탁산(Taxane)",
+            "ae": "🩸 골수억제 · 💧 부종/체액저류 · 🤧 과민반응",
+            "tags": ["myelosuppression","fluid_retention","hypersensitivity"]
+        },
+        "Paclitaxel": {
+            "moa": "탁산(Taxane)",
+            "ae": "🩸 골수억제 · 🧠 말초신경병증 · 🤧 과민반응",
+            "tags": ["myelosuppression","neuropathy","hypersensitivity"]
+        },
+        "Doxorubicin": {
+            "moa": "안트라사이클린(Topo II 억제)",
+            "ae": "❤️ 심근독성(누적 용량) · 🩸 골수억제 · 💊 점막염 · 🔴 주사혈관염/괴사(누출)",
+            "tags": ["cardiotoxicity","myelosuppression","mucositis","vesicant"]
+        },
+        "Etoposide": {
+            "moa": "Topo II 억제",
+            "ae": "🩸 골수억제 · 🤢 오심/구토 · 🦠 감염위험 증가",
+            "tags": ["myelosuppression"]
+        },
+        "Cyclophosphamide": {
+            "moa": "알킬화제",
+            "ae": "🩸 골수억제 · 🩸 혈뇨/출혈성 방광염(고용량) · 🤢 오심/구토",
+            "tags": ["myelosuppression","hemorrhagic_cystitis"]
+        },
+        "Ifosfamide": {
+            "moa": "알킬화제",
+            "ae": "🩸 골수억제 · 🧠 신경독성/섬망 · 🩸 출혈성 방광염(MESNA 병용)",
+            "tags": ["myelosuppression","neurotoxicity","hemorrhagic_cystitis"]
+        },
+        "Gemcitabine": {
+            "moa": "피리미딘 유사체",
+            "ae": "🩸 골수억제 · 😮‍💨 호흡곤란/간질성 폐질환 드묾 · 발열/피로",
+            "tags": ["myelosuppression","ild_pneumonitis"]
+        },
+        "Irinotecan": {
+            "moa": "Topo I 억제",
+            "ae": "💩 설사(급성·지연) · 🤢 오심/구토 · 🩸 골수억제",
+            "tags": ["diarrhea","myelosuppression"]
+        },
+        "Pemetrexed": {
+            "moa": "항대사제(엽산 경로)",
+            "ae": "🩸 골수억제 · 💊 구내염 · 🤢 오심/구토 (엽산/비12 보충 필요)",
+            "tags": ["myelosuppression","mucositis"]
+        },
+        "Bevacizumab": {
+            "moa": "VEGF 억제",
+            "ae": "🩸 출혈/상처치유 지연 · 🧠 혈전·허혈 · 💥 천공(드묾) · 💉 단백뇨/고혈압",
+            "tags": ["bleeding","hypertension","proteinuria","gi_perforation"]
+        },
+        "Ramucirumab": {
+            "moa": "VEGFR‑2 억제",
+            "ae": "🩸 출혈·고혈압 · 💉 단백뇨 · 상처치유 지연",
+            "tags": ["bleeding","hypertension","proteinuria"]
+        },
+        "Regorafenib": {
+            "moa": "멀티 TKI",
+            "ae": "🖐️ 손발증후군 · 🩸 고혈압 · 🧪 간독성",
+            "tags": ["hand_foot","hypertension","hepatotoxicity"]
+        },
+        "Sunitinib": {
+            "moa": "멀티 TKI",
+            "ae": "🩸 골수억제 · 🧪 간효소 상승 · 🥵 피로/식욕저하 · 🦷 점막염",
+            "tags": ["myelosuppression","hepatotoxicity","mucositis"]
+        },
+        "Imatinib": {
+            "moa": "TKI (BCR‑ABL, KIT)",
+            "ae": "💧 부종 · 🥵 피로 · 🩸 골수억제 · 속쓰림/구역",
+            "tags": ["myelosuppression","edema"]
+        },
+        "Ibrutinib": {
+            "moa": "BTK 억제",
+            "ae": "🩸 출혈 위험 · 💓 심방세동 · 설사/피로",
+            "tags": ["bleeding","arrhythmia"]
+        },
+        "Bendamustine": {
+            "moa": "알킬화제",
+            "ae": "🩸 골수억제 · 🤢 오심/구토 · 발열",
+            "tags": ["myelosuppression"]
+        },
+        "Chlorambucil": {
+            "moa": "알킬화제",
+            "ae": "🩸 골수억제 · 발진/오심",
+            "tags": ["myelosuppression"]
+        },
+        "Bleomycin": {
+            "moa": "DNA 손상",
+            "ae": "🫁 폐독성/섬유화 · 🤧 발열/오한 · 피부변화(선조/경결)",
+            "tags": ["pulmonary_toxicity"]
+        },
+        "Dacarbazine": {
+            "moa": "알킬화제",
+            "ae": "🤢 고위험 구토 · 🩸 골수억제 · 광과민",
+            "tags": ["emetogenic","myelosuppression"]
+        },
+        "Dactinomycin": {
+            "moa": "DNA 합성 억제",
+            "ae": "🩸 골수억제 · 💊 점막염 · 🔴 주사혈관염/괴사(누출)",
+            "tags": ["myelosuppression","mucositis","vesicant"]
+        },
+        "Trabectedin": {
+            "moa": "DNA groove 결합",
+            "ae": "🧪 간독성 · 🩸 골수억제 · 근육통/피로",
+            "tags": ["hepatotoxicity","myelosuppression"]
+        },
+        "Vincristine": {
+            "moa": "Vinca alkaloid",
+            "ae": "🧠 말초신경병증 · 변비/장폐색 · (상대적) 골수억제 적음",
+            "tags": ["neuropathy"]
+        },
+        "Vinblastine": {
+            "moa": "Vinca alkaloid",
+            "ae": "🩸 골수억제 · 🧠 말초신경병증 · 탈모",
+            "tags": ["myelosuppression","neuropathy"]
+        },
+        "Nivolumab": {
+            "moa": "PD‑1 억제(면역항암제)",
+            "ae": "🛡️ 면역관련 이상반응(피부/갑상선/폐/간/장) · 피로",
+            "tags": ["immunotherapy"]
+        },
+        "Pembrolizumab": {
+            "moa": "PD‑1 억제",
+            "ae": "🛡️ 면역관련 이상반응 · 발진/피로",
+            "tags": ["immunotherapy"]
+        },
+        "Obinutuzumab": {
+            "moa": "Anti‑CD20",
+            "ae": "💉 주입반응 · 🦠 감염위험 · 🩸 호중구감소",
+            "tags": ["infusion_reaction","myelosuppression"]
+        },
+        "Rituximab": {
+            "moa": "Anti‑CD20",
+            "ae": "💉 주입반응 · 💤 피로 · 드물게 PML",
+            "tags": ["infusion_reaction"]
+        },
+        "Polatuzumab Vedotin": {
+            "moa": "ADC(anti‑CD79b)",
+            "ae": "🩸 호중구감소 · 🧠 말초신경병증 · 💉 주입반응",
+            "tags": ["myelosuppression","neuropathy","infusion_reaction"]
+        },
+        "Brentuximab Vedotin": {
+            "moa": "ADC(anti‑CD30)",
+            "ae": "🧠 말초신경병증 · 🩸 호중구감소 · 💉 주입반응",
+            "tags": ["neuropathy","myelosuppression","infusion_reaction"]
+        },
+        "Trastuzumab": {
+            "moa": "HER2 억제",
+            "ae": "❤️ 심기능저하(좌심실) · 💉 주입반응",
+            "tags": ["cardiotoxicity","infusion_reaction"]
+        },
+        "Pertuzumab": {
+            "moa": "HER2 dimerization 억제",
+            "ae": "💩 설사 · 💉 주입반응 · ❤️ 심기능저하(드묾)",
+            "tags": ["diarrhea","cardiotoxicity","infusion_reaction"]
+        },
+        "T-DM1": {
+            "moa": "HER2 ADC",
+            "ae": "🩸 혈소판감소 · 🧪 간효소 상승 · 피로/오심",
+            "tags": ["myelosuppression","hepatotoxicity"]
+        },
+        "Trastuzumab deruxtecan": {
+            "moa": "HER2 ADC",
+            "ae": "🫁 간질성폐질환/폐렴 · 🩸 골수억제 · 오심",
+            "tags": ["ild_pneumonitis","myelosuppression"]
+        },
+        "Lapatinib": {
+            "moa": "HER2/EGFR TKI",
+            "ae": "💩 설사 · 발진 · 드물게 QT 연장",
+            "tags": ["diarrhea","qt_prolong"]
+        },
+        "Tucatinib": {
+            "moa": "HER2 TKI",
+            "ae": "💩 설사 · 🧪 간효소 상승",
+            "tags": ["diarrhea","hepatotoxicity"]
+        },
+        "Osimertinib": {
+            "moa": "EGFR TKI",
+            "ae": "🫁 ILD/폐렴(드묾) · ⚡ QT 연장 · 발진/설사",
+            "tags": ["ild_pneumonitis","qt_prolong"]
+        },
+        "Alectinib": {
+            "moa": "ALK TKI",
+            "ae": "🧪 간효소 상승 · 근육통/CPK↑ · 변비 · 드물게 ILD",
+            "tags": ["hepatotoxicity","ild_pneumonitis"]
+        },
+        "Crizotinib": {
+            "moa": "ALK/MET TKI",
+            "ae": "👀 시야 변화 · 💩 설사/변비 · 부종 · 간효소 상승",
+            "tags": ["hepatotoxicity"]
+        },
+        "Lorlatinib": {
+            "moa": "ALK TKI",
+            "ae": "🧠 인지/기분 변화 · 고지혈증 · 말초부종",
+            "tags": ["cns_effects"]
+        },
+        "Larotrectinib": {
+            "moa": "TRK TKI",
+            "ae": "🧠 어지럼/피로 · 간효소 상승",
+            "tags": ["hepatotoxicity"]
+        },
+        "Entrectinib": {
+            "moa": "TRK/ROS1/ALK TKI",
+            "ae": "🧠 어지럼/체중증가 · 💧 부종 · 간효소 상승",
+            "tags": ["hepatotoxicity"]
+        },
+        "Selpercatinib": {
+            "moa": "RET TKI",
+            "ae": "🩸 고혈압 · 간효소 상승 · 💩 설사 · QT 연장 가능",
+            "tags": ["hypertension","hepatotoxicity","qt_prolong"]
+        },
+        "Pralsetinib": {
+            "moa": "RET TKI",
+            "ae": "🩸 고혈압 · 간효소 상승 · 변비/설사",
+            "tags": ["hypertension","hepatotoxicity"]
+        },
+        "Vandetanib": {
+            "moa": "RET/EGFR/VEGFR TKI",
+            "ae": "⚡ QT 연장 · 💩 설사 · 발진",
+            "tags": ["qt_prolong"]
+        },
+        "Cabozantinib": {
+            "moa": "RET/MET/VEGFR TKI",
+            "ae": "🩸 고혈압 · 🖐️ 손발증후군 · 설사 · 피로",
+            "tags": ["hypertension","hand_foot"]
+        },
+        "Pazopanib": {
+            "moa": "멀티 TKI",
+            "ae": "🧪 간독성 · 🩸 고혈압 · 모발 탈색",
+            "tags": ["hepatotoxicity","hypertension"]
+        },
+        "Ripretinib": {
+            "moa": "KIT/PDGFRA 억제(GIST)",
+            "ae": "🧑‍🦲 탈모 · 🩸 고혈압 · 피로/통증",
+            "tags": ["hypertension"]
+        },
+        "Octreotide": {
+            "moa": "Somatostatin 유사체",
+            "ae": "💩 지방변/설사 · 복부불편감 · 담석",
+            "tags": ["diarrhea"]
+        },
+        "Everolimus": {
+            "moa": "mTOR 억제",
+            "ae": "🫁 ILD/폐렴 · 🩸 고혈당/고지혈증 · 구내염",
+            "tags": ["ild_pneumonitis","mucositis"]
+        },
+        "Ramucirumab": {
+            "moa": "VEGFR‑2 억제",
+            "ae": "🩸 출혈 · 고혈압 · 단백뇨",
+            "tags": ["bleeding","hypertension","proteinuria"]
+        },
+        "Prednisone": {
+            "moa": "코르티코스테로이드",
+            "ae": "😠 기분변화 · 🍽️ 식욕↑/체중↑ · 혈당↑ · 불면",
+            "tags": ["steroid"]
+        },
+        "Sotorasib": {
+            "moa": "KRAS G12C 억제",
+            "ae": "💩 설사 · 🧪 ALT/AST 상승 · 피로",
+            "tags": ["hepatotoxicity","diarrhea"]
+        },
+    }
+
+    for k, v in PROFILES.items():
+        add(k, alias=None, moa=v.get("moa",""), ae=v.get("ae",""), tags=v.get("tags"))
+
+
+# --- tiny patch: add Capmatinib profile ---
+try:
+    __prev_ensure_capmat = ensure_onco_drug_db
+except Exception:
+    __prev_ensure_capmat = None
+
+def ensure_onco_drug_db(db):
+    if __prev_ensure_capmat is not None:
+        __prev_ensure_capmat(db)
+    _upsert(db, "Capmatinib", ALIAS_FALLBACK.get("Capmatinib","캡마티닙(MET)"), "MET TKI", "말초부종 · 오심/구토 · 광과민 · 간효소 상승")
