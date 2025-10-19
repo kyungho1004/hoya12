@@ -1,268 +1,288 @@
-
 # -*- coding: utf-8 -*-
-"""
-onco_map.py (v3, expanded coverage)
-- 5 groups: 혈액암 / 림프종 / 육종 / 고형암 / 희귀암
-- build_onco_map(): returns grouped dict of diseases (keys shown in UI)
-- dx_display(group, dx): "group - EN (KO)" unless already Korean
-- auto_recs_by_dx(group, dx, db): minimal, DB-aware recommendations (safe defaults)
-- Non-breaking: same API names; safe import
-"""
+from typing import Dict, List, Any
 
-from __future__ import annotations
+# -----------------------------
+# Korean label helpers
+# -----------------------------
+def _is_korean(s: str) -> bool:
+    return any('\uac00' <= ch <= '\ud7a3' for ch in (s or ""))
 
-# --------------------------- KO Name Map ---------------------------
-_DX_KO = {
-    # Hematologic (non-lymphoma)
-    "ALL": "급성 림프구성 백혈병",
-    "AML": "급성 골수성 백혈병",
+def _norm(s: str) -> str:
+    if not s:
+        return ""
+    s2 = (s or "").strip()
+    code = s2.upper().replace(" ", "")
+    # normalize common codes
+    CODE_ALIASES = {
+        "DLBCL": "DLBCL", "PMBCL": "PMBCL", "HGBL": "HGBL", "BL": "BL",
+        "APL": "APL", "AML": "AML", "ALL": "ALL", "CML": "CML", "CLL": "CLL", "PCNSL": "PCNSL"
+    }
+    return CODE_ALIASES.get(code, s2)
+
+# Korean display names (병기)
+DX_KO: Dict[str, str] = {
+    # Hematology
     "APL": "급성 전골수성 백혈병",
+    "AML": "급성 골수성 백혈병",
+    "ALL": "급성 림프구성 백혈병",
     "CML": "만성 골수성 백혈병",
     "CLL": "만성 림프구성 백혈병",
-    "MDS": "골수이형성증후군",
-    "MPN": "골수증식성 종양",
-    "PV": "진성 다혈구증",
-    "ET": "본태성 혈소판증가증",
-    "MF": "골수섬유증",
-    "MM": "다발골수종",
-    "MGUS": "의미불명 단클론감마병증",
+    "PCNSL": "원발성 중추신경계 림프종",
 
-    # Lymphomas
-    "LYMPHOMA": "림프종",
+    # Lymphoma (with common Korean synonyms)
     "DLBCL": "미만성 거대 B세포 림프종",
+    "B거대세포종": "미만성 거대 B세포 림프종",
+    "B 거대세포종": "미만성 거대 B세포 림프종",
+    "B거대세포 림프종": "미만성 거대 B세포 림프종",
+    "b거대세포종": "미만성 거대 B세포 림프종",
     "PMBCL": "원발성 종격동 B세포 림프종",
     "HGBL": "고등급 B세포 림프종",
     "BL": "버킷 림프종",
     "FL": "여포성 림프종",
     "MZL": "변연부 림프종",
+    "MALT lymphoma": "점막연관 변연부 B세포 림프종",
     "MCL": "외투세포 림프종",
-    "CHL": "고전적 호지킨 림프종",
+    "cHL": "고전적 호지킨 림프종",
     "NLPHL": "결절성 림프구우세 호지킨 림프종",
     "PTCL-NOS": "말초 T세포 림프종 (NOS)",
     "AITL": "혈관면역모세포성 T세포 림프종",
     "ALCL (ALK+)": "역형성 대세포 림프종 (ALK 양성)",
-    "ALCL (ALK-)": "역형성 대세포 림프종 (ALK 음성)",
-    "ENKTL": "비인두 NK/T세포 림프종",
-    "MF/SS": "피부 T세포 림프종(미코시스 퐁고이데스/쇠자병)",
+    "ALCL (ALK−)": "역형성 대세포 림프종 (ALK 음성)",
 
-    # Solid tumors
-    "Breast": "유방암",
-    "Colon": "결장암",
-    "Rectal": "직장암",
-    "CRC": "결장·직장암",
-    "Gastric": "위암",
-    "Esophageal": "식도암",
-    "Pancreatic": "췌장암",
-    "Hepatocellular carcinoma": "간세포암",
-    "Cholangiocarcinoma": "담관암",
-    "Gallbladder": "담낭암",
-    "Lung": "폐암",
-    "NSCLC": "비소세포폐암",
-    "SCLC": "소세포폐암",
-    "Head & Neck": "두경부 편평상피암",
-    "Thyroid (PTC)": "갑상선 유두암",
-    "Thyroid (FTC)": "갑상선 여포암",
-    "MTC": "수질성 갑상선암",
-    "ATC": "역형성 갑상선암",
-    "Kidney (RCC)": "신장암(신세포암)",
-    "Urothelial": "요로상피암(방광/요관)",
-    "Prostate": "전립선암",
-    "Ovary": "난소암",
-    "Cervical": "자궁경부암",
-    "Endometrial": "자궁내막암",
-    "Testicular (Seminoma)": "고환종양(세미노마)",
-    "Testicular (NSGCT)": "고환종양(비세미노마)",
-    "GIST": "위장관기저종양",
-    "NET": "신경내분비종양",
-
-    # Sarcomas
+    # Sarcoma
     "Osteosarcoma": "골육종",
     "Ewing sarcoma": "유잉육종",
     "Rhabdomyosarcoma": "횡문근육종",
-    "Synovial Sarcoma": "윤활막 육종",
+    "Synovial sarcoma": "활막육종",
     "Leiomyosarcoma": "평활근육종",
     "Liposarcoma": "지방육종",
-    "MPNST": "말초신경초종양",
-    "DFSP": "피부섬유육종",
     "UPS": "미분화 다형성 육종",
     "Angiosarcoma": "혈관육종",
+    "MPNST": "악성 말초신경초종",
+    "DFSP": "피부섬유종증성 육종(DFSP)",
+    "Clear cell sarcoma": "투명세포 육종",
+    "Epithelioid sarcoma": "상피양 육종",
 
-    # Rare / Pediatric / Others
-    "Neuroblastoma": "신경모세포종",
-    "Wilms tumor": "윌름스 종양",
-    "Hepatoblastoma": "간모세포종",
-    "Retinoblastoma": "망막모세포종",
-    "Medulloblastoma": "수모세포종",
-    "Ependymoma": "상의세포종",
-    "Chordoma": "척삭종",
-    "Mesothelioma": "악성 중피종",
-    "ACC": "부신피질암",
-    "Pheochromocytoma/Paraganglioma": "갈색세포종/부신외갈색세포종",
-    "Thymic carcinoma": "흉선암",
-    "Histiocytosis": "조직구증(히스티오사이토시스)",
+    # Solid & Rare
+    "폐선암": "폐선암",
+    "유방암": "유방암",
+    "대장암": "결장/직장 선암",
+    "위암": "위선암",
+    "간세포암": "간세포암(HCC)",
+    "췌장암": "췌장암",
+    "난소암": "난소암",
+    "자궁경부암": "자궁경부암",
+    "방광암": "방광암",
+    "식도암": "식도암",
+    "GIST": "위장관기저종양",
+    "NET": "신경내분비종양",
+    "MTC": "수질성 갑상선암",
+}
+# -----------------------------
+# Canonical drug key mapping
+# -----------------------------
+KEY_ALIAS = {
+    "Ara-C": "Cytarabine",
+    "ATO": "Arsenic Trioxide",
+    "ATRA": "ATRA",
+    "6-MP": "6-MP",
+    "5-FU": "5-FU",
+    "T-DM1": "T-DM1",
+    "ALCL (ALK−)": "ALCL (ALK-)"
+}
+def _canon(key: str) -> str:
+    return KEY_ALIAS.get(key, key)
+
+
+# Display 'code - 한글병기' without '암' and with compact spacing
+# --- KOR DX DISPLAY (robust) ---
+def _dx_norm_key(s: str) -> str:
+    # normalize: lowercase, remove spaces, hyphens, slashes, plus/minus, and parentheses
+    if not s:
+        return ""
+    t = str(s).lower()
+    # drop parenthetical contents
+    import re
+    t = re.sub(r"\([^\)]*\)", "", t)
+    # remove non-alnum (keep letters/numbers only)
+    t = re.sub(r"[^a-z0-9]", "", t)
+    return t
+
+_DX_ALIAS = {
+    # lymphoma common variants
+    "dlbcl":"dlbcl",
+    "diffuselargebcelllymphoma":"dlbcl",
+    "aitl":"aitl",
+    "angioimmunoblastictcelllymphoma":"aitl",
+    "alcl":"alcl",
+    "alclalk":"alcl",
+    "alclalkplus":"alcl",
+    "alclalkminus":"alcl",
+    "fl":"fl",
+    "follicularlymphoma":"fl",
+    "hchl":"hchl", "hl":"hchl", "hodgkinlymphoma":"hchl",
+    # leukemia examples
+    "apl":"apl", "amlm3":"apl", "acutepromyelocyticleukemia":"apl",
+    # add more as needed
 }
 
-# --------------------------- Helpers ---------------------------
-def _is_korean(s: str) -> bool:
-    return any('\uac00' <= ch <= '\ud7a3' for ch in (s or ""))
+def dx_display_kor(dx: str) -> str:
+    key_upper = _norm(dx).upper() if '_norm' in globals() else str(dx).upper()
+    # KO lookup: try exact map first
+    ko = DX_KO.get(key_upper)
+    if not ko:
+        # try alias route using robust normalization
+        k = _dx_norm_key(dx)
+        alias = _DX_ALIAS.get(k)
+        if alias:
+            ko = DX_KO.get(alias.upper())
+    if not ko:
+        # fallback to original text as ko (but compacted)
+        ko = str(dx)
+    ko2 = str(ko).replace(" ", "")
+    if ko2.endswith("암"):
+        ko2 = ko2[:-1]
+    return f"{key_upper.lower()} - {ko2}"
+# --- /KOR DX DISPLAY ---
 
-def _norm_key(s: str) -> str:
-    if not s: return ""
-    u = " ".join(s.strip().replace("_"," ").replace("-"," ").split())
-    return u
+def dx_display_kor(dx: str) -> str:
+    key = _norm(dx).upper()
+    ko = DX_KO.get(key) or DX_KO.get(dx) or dx
+    ko2 = (ko or "").replace(" ", "")
+    # remove a trailing '암' if present (유방암 -> 유방, 간암 -> 간 등)
+    if ko2.endswith("암"):
+        ko2 = ko2[:-1]
+    return f"{key.lower()} - {ko2}"
 
-# --------------------------- Group Builder ---------------------------
-def build_onco_map() -> dict:
-    """
-    Five groups with an expanded set of diseases.
-    Keys (Korean): 혈액암 / 림프종 / 육종 / 고형암 / 희귀암
-    Values: dict of disease labels (keys only; values reserved for future).
-    """
-    heme = {
-        "ALL": {}, "AML": {}, "APL": {}, "CML": {}, "CLL": {},
-        "MDS": {}, "MPN": {}, "PV": {}, "ET": {}, "MF": {}, "MM": {}, "MGUS": {},
-    }
-    lymphoma = {
-        "DLBCL": {}, "PMBCL": {}, "HGBL": {}, "BL": {},
-        "FL": {}, "MZL": {}, "MCL": {}, "CHL": {}, "NLPHL": {},
-        "PTCL-NOS": {}, "AITL": {}, "ALCL (ALK+)": {}, "ALCL (ALK-)": {},
-        "ENKTL": {}, "MF/SS": {}, "Lymphoma": {},
-    }
-    sarcoma = {
-        "Osteosarcoma": {}, "Ewing sarcoma": {}, "Rhabdomyosarcoma": {},
-        "Synovial Sarcoma": {}, "Leiomyosarcoma": {}, "Liposarcoma": {},
-        "MPNST": {}, "DFSP": {}, "UPS": {}, "Angiosarcoma": {},
-    }
-    solid = {
-        "Breast": {}, "Colon": {}, "Rectal": {}, "CRC": {},
-        "Gastric": {}, "Esophageal": {}, "Pancreatic": {},
-        "Hepatocellular carcinoma": {}, "Cholangiocarcinoma": {}, "Gallbladder": {},
-        "Lung": {}, "NSCLC": {}, "SCLC": {}, "Head & Neck": {},
-        "Thyroid (PTC)": {}, "Thyroid (FTC)": {}, "MTC": {}, "ATC": {},
-        "Kidney (RCC)": {}, "Urothelial": {}, "Prostate": {},
-        "Ovary": {}, "Cervical": {}, "Endometrial": {},
-        "Testicular (Seminoma)": {}, "Testicular (NSGCT)": {},
-        "GIST": {}, "NET": {},
-    }
-    rare = {
-        "Neuroblastoma": {}, "Wilms tumor": {}, "Hepatoblastoma": {}, "Retinoblastoma": {},
-        "Medulloblastoma": {}, "Ependymoma": {}, "Chordoma": {}, "Mesothelioma": {},
-        "ACC": {}, "Pheochromocytoma/Paraganglioma": {}, "Thymic carcinoma": {}, "Histiocytosis": {},
-    }
-    return {"혈액암": heme, "림프종": lymphoma, "육종": sarcoma, "고형암": solid, "희귀암": rare}
-
-# --------------------------- Display ---------------------------
 def dx_display(group: str, dx: str) -> str:
-    group = (group or "").strip()
-    dx_raw = (dx or "").strip()
-    if _is_korean(dx_raw):
-        return f"{group} - {dx_raw}" if group else dx_raw
-    ko = _DX_KO.get(dx_raw) or _DX_KO.get(_norm_key(dx_raw).upper()) or _DX_KO.get(_norm_key(dx_raw))
+    dx = (dx or "").strip()
+    key = _norm(dx)
+    ko = DX_KO.get(key) or DX_KO.get(dx)
+    if _is_korean(dx):
+        return f"{group} - {dx}"
     if ko:
-        return f"{group} - {dx_raw} ({ko})" if group else f"{dx_raw} ({ko})"
-    return f"{group} - {dx_raw}" if group else dx_raw
+        return f"{group} - {dx} ({ko})"
+    return f"{group} - {dx}"
 
-# --------------------------- Minimal DB-aware Recommendations ---------------------------
-_REC = {
-    # Hematologic
-    "ALL": {"chemo": ["Vincristine", "Cyclophosphamide", "Doxorubicin", "Ara-C", "Methotrexate", "6-MP", "Prednisone"], "targeted": ["Imatinib", "Rituximab"]},
-    "AML": {"chemo": ["Ara-C", "Etoposide", "Idarubicin", "Daunorubicin"], "targeted": []},
-    "APL": {"chemo": ["Ara-C"], "targeted": ["ATRA", "Arsenic trioxide"]},
-    "CML": {"chemo": [], "targeted": ["Imatinib", "Dasatinib", "Nilotinib"]},
-    "CLL": {"chemo": ["Cyclophosphamide"], "targeted": ["Ibrutinib", "Obinutuzumab", "Rituximab"]},
-    "MM": {"chemo": ["Cyclophosphamide"], "targeted": []},
+# -----------------------------
+# Treatment map
+# -----------------------------
+def build_onco_map() -> Dict[str, Dict[str, Dict[str, List[str]]]]:
+    return {
+        "혈액암": {
+            "APL": {"chemo": ["ATRA", "Arsenic Trioxide", "Idarubicin", "MTX", "6-MP", "Cytarabine"], "targeted": [], "abx": []},
+            "AML": {"chemo": ["Cytarabine","Daunorubicin","Idarubicin"], "targeted": [], "abx": []},
+            "ALL": {"chemo": ["Vincristine","Ara-C","MTX","6-MP","Cyclophosphamide","Prednisone"], "targeted": [], "abx": []},
+            "CML": {"chemo": [], "targeted": ["Imatinib"], "abx": []},
+            "CLL": {"chemo": ["Cyclophosphamide","Prednisone","Chlorambucil"], "targeted": ["Rituximab"], "abx": []},
+            "PCNSL": {"chemo": ["MTX","Ara-C"], "targeted": ["Rituximab"], "abx": []},
+        },
+        "림프종": {
+            "DLBCL": {"chemo": ["Cyclophosphamide","Doxorubicin","Vincristine","Prednisone"], "targeted": ["Rituximab","Polatuzumab Vedotin"], "abx": []},
+            "B거대세포종": {"chemo": ["Cyclophosphamide","Doxorubicin","Vincristine","Prednisone"], "targeted": ["Rituximab"], "abx": []},
+            "PMBCL": {"chemo": ["Cyclophosphamide","Doxorubicin","Vincristine","Prednisone"], "targeted": ["Rituximab","Pembrolizumab"], "abx": []},
+            "HGBL": {"chemo": ["Etoposide","Doxorubicin","Cyclophosphamide","Vincristine","Prednisone"], "targeted": ["Rituximab"], "abx": []},
+            "BL": {"chemo": ["Cyclophosphamide","Doxorubicin","Vincristine","MTX","Ara-C"], "targeted": ["Rituximab"], "abx": []},
+            "FL": {"chemo": ["Cyclophosphamide","Doxorubicin","Vincristine","Prednisone","Bendamustine"], "targeted": ["Rituximab","Obinutuzumab"], "abx": []},
+            "MZL": {"chemo": ["Bendamustine","Chlorambucil"], "targeted": ["Rituximab"], "abx": []},
+            "MALT lymphoma": {"chemo": ["Chlorambucil"], "targeted": ["Rituximab"], "abx": []},
+            "MCL": {"chemo": ["Cyclophosphamide","Doxorubicin","Vincristine","Prednisone","Bendamustine"], "targeted": ["Rituximab","Ibrutinib"], "abx": []},
+            "cHL": {"chemo": ["Doxorubicin","Bleomycin","Vinblastine","Dacarbazine"], "targeted": ["Brentuximab Vedotin","Nivolumab","Pembrolizumab"], "abx": []},
+            "NLPHL": {"chemo": ["Cyclophosphamide","Doxorubicin","Vincristine","Prednisone"], "targeted": ["Rituximab"], "abx": []},
+            "PTCL-NOS": {"chemo": ["Cyclophosphamide","Doxorubicin","Vincristine","Prednisone"], "targeted": [], "abx": []},
+            "AITL": {"chemo": ["Cyclophosphamide","Doxorubicin","Vincristine","Prednisone"], "targeted": [], "abx": []},
+            "ALCL (ALK+)": {"chemo": ["Cyclophosphamide","Doxorubicin","Vincristine","Prednisone"], "targeted": ["Brentuximab Vedotin"], "abx": []},
+            "ALCL (ALK−)": {"chemo": ["Cyclophosphamide","Doxorubicin","Vincristine","Prednisone"], "targeted": ["Brentuximab Vedotin"], "abx": []},
+        },
+        "고형암": {
+            "폐선암": {"chemo": ["Cisplatin","Pemetrexed"], "targeted": ["Osimertinib","Alectinib","Crizotinib","Larotrectinib","Entrectinib","Capmatinib","Sotorasib","Lorlatinib"], "abx": []},
+            "유방암": {"chemo": ["Doxorubicin","Cyclophosphamide","Paclitaxel"], "targeted": ["Trastuzumab","Pertuzumab","T-DM1","Trastuzumab deruxtecan","Lapatinib","Tucatinib"], "abx": []},
+            "대장암": {"chemo": ["Oxaliplatin","5-FU","Irinotecan","Capecitabine"], "targeted": ["Bevacizumab","Cetuximab","Panitumumab","Regorafenib"], "abx": []},
+            "위암": {"chemo": ["Cisplatin","5-FU","Capecitabine"], "targeted": ["Trastuzumab","Ramucirumab"], "abx": []},
+            "간세포암": {"chemo": [], "targeted": ["Sorafenib","Lenvatinib","Atezolizumab","Bevacizumab","Durvalumab"], "abx": []},
+            "췌장암": {"chemo": ["Oxaliplatin","Irinotecan","5-FU","Gemcitabine","Nab-Paclitaxel"], "targeted": [], "abx": []},
+            "난소암": {"chemo": ["Carboplatin","Paclitaxel","Topotecan"], "targeted": ["Bevacizumab","Olaparib","Niraparib"], "abx": []},
+            "자궁경부암": {"chemo": ["Cisplatin"], "targeted": ["Bevacizumab"], "abx": []},
+            "방광암": {"chemo": ["Gemcitabine","Cisplatin"], "targeted": ["Pembrolizumab","Nivolumab","Atezolizumab"], "abx": []},
+            "식도암": {"chemo": ["Cisplatin","5-FU"], "targeted": [], "abx": []},
+            "GIST": {"chemo": [], "targeted": ["Imatinib","Sunitinib","Regorafenib","Ripretinib"], "abx": []},
+            "NET": {"chemo": [], "targeted": ["Everolimus","Octreotide"], "abx": []},
+            "MTC": {"chemo": [], "targeted": ["Vandetanib","Cabozantinib","Selpercatinib","Pralsetinib"], "abx": []},
+        },
+        "육종": {
+            "Osteosarcoma": {"chemo": ["MTX","Doxorubicin","Cisplatin"], "targeted": [], "abx": []},
+            "Ewing sarcoma": {"chemo": ["Vincristine","Doxorubicin","Cyclophosphamide","Ifosfamide","Etoposide"], "targeted": [], "abx": []},
+            "Rhabdomyosarcoma": {"chemo": ["Vincristine","Dactinomycin","Cyclophosphamide"], "targeted": [], "abx": []},
+            "Synovial sarcoma": {"chemo": ["Ifosfamide","Doxorubicin"], "targeted": ["Pazopanib"], "abx": []},
+            "Leiomyosarcoma": {"chemo": ["Doxorubicin","Ifosfamide","Gemcitabine","Docetaxel"], "targeted": ["Pazopanib"], "abx": []},
+            "Liposarcoma": {"chemo": ["Doxorubicin","Ifosfamide","Trabectedin"], "targeted": [], "abx": []},
+            "UPS": {"chemo": ["Doxorubicin","Ifosfamide","Gemcitabine","Docetaxel"], "targeted": [], "abx": []},
+            "Angiosarcoma": {"chemo": ["Paclitaxel","Doxorubicin"], "targeted": ["Pazopanib"], "abx": []},
+            "MPNST": {"chemo": ["Doxorubicin","Ifosfamide"], "targeted": [], "abx": []},
+            "DFSP": {"chemo": [], "targeted": ["Imatinib"], "abx": []},
+            "Clear cell sarcoma": {"chemo": ["Doxorubicin","Ifosfamide"], "targeted": ["Pazopanib"], "abx": []},
+            "Epithelioid sarcoma": {"chemo": ["Doxorubicin","Ifosfamide"], "targeted": ["Pazopanib"], "abx": []},
+        },
+        "희귀암": {
+            "GIST": {"chemo": [], "targeted": ["Imatinib","Sunitinib","Regorafenib","Ripretinib"], "abx": []},
+            "NET": {"chemo": [], "targeted": ["Everolimus","Octreotide"], "abx": []},
+            "MTC": {"chemo": [], "targeted": ["Vandetanib","Cabozantinib","Selpercatinib","Pralsetinib"], "abx": []},
+        },
+    }
 
-    # Lymphoma
-    "DLBCL": {"chemo": ["Cyclophosphamide", "Doxorubicin", "Vincristine", "Prednisone"], "targeted": ["Rituximab", "Polatuzumab Vedotin"]},
-    "PMBCL": {"chemo": ["Cyclophosphamide", "Doxorubicin", "Vincristine", "Prednisone", "Etoposide"], "targeted": ["Rituximab"]},
-    "HGBL": {"chemo": ["Cyclophosphamide", "Doxorubicin", "Vincristine", "Prednisone", "Etoposide"], "targeted": ["Rituximab"]},
-    "BL": {"chemo": ["Cyclophosphamide", "Doxorubicin", "Vincristine", "Ara-C", "Methotrexate"], "targeted": ["Rituximab"]},
-    "FL": {"chemo": ["Cyclophosphamide", "Doxorubicin", "Vincristine", "Prednisone", "Bendamustine"], "targeted": ["Rituximab", "Obinutuzumab"]},
-    "MZL": {"chemo": ["Cyclophosphamide", "Bendamustine"], "targeted": ["Rituximab", "Obinutuzumab"]},
-    "MCL": {"chemo": ["Cyclophosphamide", "Bendamustine"], "targeted": ["Ibrutinib", "Rituximab"]},
-    "CHL": {"chemo": ["Doxorubicin", "Vinblastine", "Dacarbazine", "Bleomycin"], "targeted": ["Brentuximab Vedotin", "Nivolumab", "Pembrolizumab"]},
-    "NLPHL": {"chemo": ["Cyclophosphamide", "Doxorubicin", "Vincristine", "Prednisone"], "targeted": ["Rituximab"]},
-    "PTCL-NOS": {"chemo": ["Cyclophosphamide", "Doxorubicin", "Etoposide"], "targeted": []},
-    "AITL": {"chemo": ["Cyclophosphamide", "Doxorubicin", "Etoposide"], "targeted": []},
-    "ALCL (ALK+)": {"chemo": ["Cyclophosphamide", "Doxorubicin", "Etoposide"], "targeted": []},
-    "ALCL (ALK-)": {"chemo": ["Cyclophosphamide", "Doxorubicin", "Etoposide"], "targeted": []},
-    "ENKTL": {"chemo": ["Cyclophosphamide", "Doxorubicin", "Etoposide"], "targeted": []},
-    "MF/SS": {"chemo": [], "targeted": []},
-    "Lymphoma": {"chemo": ["Cyclophosphamide", "Doxorubicin", "Vincristine", "Prednisone"], "targeted": ["Rituximab"]},
-
-    # Sarcoma
-    "Osteosarcoma": {"chemo": ["Doxorubicin", "Cisplatin", "Methotrexate", "Ifosfamide", "Etoposide"], "targeted": []},
-    "Ewing sarcoma": {"chemo": ["Vincristine", "Doxorubicin", "Cyclophosphamide", "Ifosfamide", "Etoposide"], "targeted": []},
-    "Rhabdomyosarcoma": {"chemo": ["Vincristine", "Dactinomycin", "Cyclophosphamide", "Ifosfamide", "Etoposide"], "targeted": []},
-    "Synovial Sarcoma": {"chemo": ["Ifosfamide", "Doxorubicin"], "targeted": []},
-    "Leiomyosarcoma": {"chemo": ["Doxorubicin", "Ifosfamide"], "targeted": ["Pazopanib"]},
-    "Liposarcoma": {"chemo": ["Doxorubicin", "Ifosfamide"], "targeted": []},
-    "MPNST": {"chemo": ["Doxorubicin", "Ifosfamide"], "targeted": []},
-    "DFSP": {"chemo": [], "targeted": ["Imatinib"]},
-    "UPS": {"chemo": ["Doxorubicin", "Ifosfamide", "Paclitaxel"], "targeted": ["Pazopanib"]},
-    "Angiosarcoma": {"chemo": ["Paclitaxel", "Doxorubicin"], "targeted": ["Bevacizumab", "Pazopanib"]},
-
-    # Solid
-    "Breast": {"chemo": ["Paclitaxel", "Docetaxel", "Doxorubicin", "Cyclophosphamide"], "targeted": ["Trastuzumab", "Pertuzumab", "T-DM1", "Trastuzumab deruxtecan", "Tucatinib"]},
-    "Colon": {"chemo": ["Oxaliplatin", "Irinotecan", "Capecitabine", "5-FU"], "targeted": ["Bevacizumab", "Ramucirumab", "Regorafenib"]},
-    "Rectal": {"chemo": ["Oxaliplatin", "5-FU", "Capecitabine"], "targeted": ["Bevacizumab"]},
-    "Gastric": {"chemo": ["Oxaliplatin", "Capecitabine", "5-FU", "Irinotecan"], "targeted": ["Trastuzumab", "Ramucirumab"]},
-    "Esophageal": {"chemo": ["Cisplatin", "5-FU", "Paclitaxel"], "targeted": ["Nivolumab", "Pembrolizumab"]},
-    "Pancreatic": {"chemo": ["Gemcitabine", "FOLFIRINOX", "Nab-Paclitaxel"], "targeted": []},
-    "Hepatocellular carcinoma": {"chemo": [], "targeted": ["Regorafenib", "Sorafenib", "Cabozantinib"]},
-    "Cholangiocarcinoma": {"chemo": ["Gemcitabine", "Cisplatin"], "targeted": ["Pemigatinib"]},
-    "Gallbladder": {"chemo": ["Gemcitabine", "Cisplatin"], "targeted": []},
-    "Lung": {"chemo": ["Carboplatin", "Cisplatin", "Pemetrexed", "Docetaxel", "Paclitaxel"], "targeted": ["Osimertinib", "Nivolumab", "Pembrolizumab", "Alectinib", "Lorlatinib", "Capmatinib", "Entrectinib", "Crizotinib", "Sotorasib"]},
-    "NSCLC": {"chemo": ["Carboplatin", "Pemetrexed"], "targeted": ["Osimertinib", "Alectinib", "Lorlatinib", "Capmatinib", "Sotorasib"]},
-    "SCLC": {"chemo": ["Carboplatin", "Etoposide"], "targeted": ["Atezolizumab"]},
-    "Head & Neck": {"chemo": ["Cisplatin", "5-FU", "Paclitaxel"], "targeted": ["Pembrolizumab"]},
-    "Thyroid (PTC)": {"chemo": [], "targeted": []},
-    "Thyroid (FTC)": {"chemo": [], "targeted": []},
-    "MTC": {"chemo": [], "targeted": ["Vandetanib", "Cabozantinib"]},
-    "ATC": {"chemo": ["Paclitaxel"], "targeted": ["BRAF/MEK"]},
-    "Kidney (RCC)": {"chemo": [], "targeted": ["Sunitinib", "Pazopanib", "Nivolumab", "Cabozantinib"]},
-    "Urothelial": {"chemo": ["Cisplatin", "Gemcitabine"], "targeted": ["Pembrolizumab"]},
-    "Prostate": {"chemo": ["Docetaxel"], "targeted": []},
-    "Ovary": {"chemo": ["Carboplatin", "Paclitaxel"], "targeted": ["Bevacizumab"]},
-    "Cervical": {"chemo": ["Cisplatin", "Paclitaxel"], "targeted": ["Bevacizumab", "Pembrolizumab"]},
-    "Endometrial": {"chemo": ["Carboplatin", "Paclitaxel"], "targeted": ["Pembrolizumab"]},
-    "Testicular (Seminoma)": {"chemo": ["Cisplatin", "Etoposide", "Bleomycin"], "targeted": []},
-    "Testicular (NSGCT)": {"chemo": ["Cisplatin", "Etoposide", "Bleomycin"], "targeted": []},
-    "GIST": {"chemo": [], "targeted": ["Imatinib", "Sunitinib", "Regorafenib", "Ripretinib"]},
-    "NET": {"chemo": [], "targeted": ["Octreotide", "Everolimus"]},
-
-    # Rare
-    "Neuroblastoma": {"chemo": ["Cyclophosphamide", "Cisplatin", "Etoposide"], "targeted": []},
-    "Wilms tumor": {"chemo": ["Vincristine", "Dactinomycin", "Doxorubicin"], "targeted": []},
-    "Hepatoblastoma": {"chemo": ["Cisplatin", "Doxorubicin"], "targeted": []},
-    "Retinoblastoma": {"chemo": ["Carboplatin", "Vincristine", "Etoposide"], "targeted": []},
-    "Medulloblastoma": {"chemo": ["Cisplatin", "Cyclophosphamide", "Vincristine"], "targeted": []},
-    "Ependymoma": {"chemo": [], "targeted": []},
-    "Chordoma": {"chemo": [], "targeted": ["Imatinib"]},
-    "Mesothelioma": {"chemo": ["Cisplatin", "Pemetrexed"], "targeted": []},
-    "ACC": {"chemo": [], "targeted": ["Cabozantinib"]},
-    "Pheochromocytoma/Paraganglioma": {"chemo": [], "targeted": []},
-    "Thymic carcinoma": {"chemo": ["Carboplatin", "Paclitaxel"], "targeted": []},
-    "Histiocytosis": {"chemo": ["Vinblastine", "Prednisone"], "targeted": []},
-}
-
-def _dedup(seq):
-    out, seen = [], set()
-    for x in seq or []:
-        if x not in seen:
-            out.append(x); seen.add(x)
+def auto_recs_by_dx(group: str, dx: str, DRUG_DB: Dict[str, Dict[str, Any]] = None,
+                    ONCO_MAP: Dict[str, Dict[str, Dict[str, List[str]]]] = None) -> Dict[str, List[str]]:
+    """Return drug lists for the selected diagnosis with safe canonicalization."""
+    out = {"chemo": [], "targeted": [], "abx": []}
+    omap = ONCO_MAP or build_onco_map()
+    gmap = omap.get(group or "", {})
+    dmap = gmap.get(dx or "", {})
+    for k in out.keys():
+        picks = [ _canon(p) for p in dmap.get(k, []) ]
+        if DRUG_DB:
+            # include if key exists OR lower() exists OR alias exists
+            filtered = []
+            for p in picks:
+                if p in DRUG_DB or p.lower() in DRUG_DB:
+                    filtered.append(p)
+                    continue
+                # alias check
+                for kk, vv in DRUG_DB.items():
+                    if isinstance(vv, dict) and vv.get("alias") == p:
+                        filtered.append(kk)
+                        break
+            out[k] = filtered or picks
+        else:
+            out[k] = picks
     return out
 
-def _in_db_only(keys, db):
-    return [k for k in keys if k in (db or {})]
 
-def auto_recs_by_dx(group: str, dx: str, db=None):
-    """
-    Return {'chemo': [...], 'targeted': [...], 'abx': []} filtered by DRUG_DB membership.
-    Non-breaking: if key not found in _REC, returns empty lists.
-    """
-    d = (dx or "").strip()
-    rec = _REC.get(d) or _REC.get(d.upper()) or _REC.get(d.title()) or {}
-    chemo = _in_db_only(rec.get("chemo", []), db)
-    targeted = _in_db_only(rec.get("targeted", []), db)
-    return {"chemo": _dedup(chemo), "targeted": _dedup(targeted), "abx": []}
+# === AML 유지항암(6-MP/MTX) 보강: build_onco_map 래핑 ===
+try:
+    __orig_build_onco_map = build_onco_map
+except NameError:
+    __orig_build_onco_map = None
+
+def build_onco_map():
+    M = __orig_build_onco_map() if __orig_build_onco_map else {}
+    try:
+        heme = M.get("혈액암", {})
+        aml = heme.get("AML", {})
+        # maintenance ensure
+        maint = list(aml.get("maintenance") or [])
+        for x in ["6-MP", "MTX"]:
+            if x not in maint:
+                maint.append(x)
+        aml["maintenance"] = maint
+        # chemo에도 fallback로 추가(중복 방지)
+        chemo = list(aml.get("chemo") or [])
+        for x in ["6-MP", "MTX"]:
+            if x not in chemo:
+                chemo.append(x)
+        aml["chemo"] = chemo
+        heme["AML"] = aml
+        M["혈액암"] = heme
+    except Exception:
+        pass
+    return M
+
