@@ -652,53 +652,21 @@ def build_peds_notes(
         lines.append("(특이 소견 없음)")
     return "\\n".join(lines)
 
-# --- P2-1 tabs helpers (diabetes/dialysis) ---
-def _render_diabetes_tab():
-    st.markdown('<div id="cat_diabetes"></div>', unsafe_allow_html=True)
-    st.subheader("🍬 당뇨")
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        st.number_input("HbA1c(%)", min_value=0.0, max_value=25.0, step=0.1, key=wkey("dm_hba1c"))
-    with c2:
-        st.number_input("공복혈당(mg/dL)", min_value=0.0, max_value=1000.0, step=1.0, key=wkey("dm_fpg"))
-    with c3:
-        st.number_input("식후2시간혈당(mg/dL)", min_value=0.0, max_value=1000.0, step=1.0, key=wkey("dm_ppg"))
-    st.caption("※ 해석 로직은 다음 패치에서 연결됩니다.")
-def _render_dialysis_tab():
-    st.markdown('<div id="cat_dialysis"></div>', unsafe_allow_html=True)
-    st.subheader("💧 투석")
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        st.number_input("Na(mmol/L)", min_value=0.0, max_value=200.0, step=1.0, key=wkey("dx_na"))
-        st.number_input("K(mmol/L)", min_value=0.0, max_value=10.0, step=0.1, key=wkey("dx_k"))
-    with c2:
-        st.number_input("Albumin(g/dL)", min_value=0.0, max_value=10.0, step=0.1, key=wkey("dx_alb"))
-        st.number_input("CRP(mg/L)", min_value=0.0, max_value=1000.0, step=0.1, key=wkey("dx_crp"))
-    with c3:
-        st.number_input("Calcium(mg/dL)", min_value=0.0, max_value=20.0, step=0.1, key=wkey("dx_ca"))
-        st.number_input("Phosphorus(mg/dL)", min_value=0.0, max_value=20.0, step=0.1, key=wkey("dx_phos"))
-    st.number_input("염도(나트륨 농도, g/L 또는 ％)", min_value=0.0, max_value=200.0, step=0.1, key=wkey("dx_salt"))
-    st.caption("※ 투석 카테고리 해석 로직 및 염도 해석은 다음 패치에서 연결됩니다.")
-# --- /P2-1 tabs helpers ---
 
-
-# --- Drug list formatter (English + Korean) ---
-def _fmt_drug_list(arr):
+# --- Drug side-effects formatter ---
+def _fmt_side_effects(drugs):
     try:
         import drug_db as _dd
-        if hasattr(_dd, "format_drug_list_kor"):
-            return _dd.format_drug_list_kor(arr)
+        if hasattr(_dd, "format_side_effects_bullets"):
+            return _dd.format_side_effects_bullets(drugs, "ko")
     except Exception:
         pass
-    try:
-        return ", ".join([str(x) for x in (arr or [])])
-    except Exception:
-        return ""
-# --- /Drug list formatter ---
+    return ""
+# --- /Drug side-effects formatter ---
 
 # ---------- Tabs ----------
-tab_labels = ["🏠 홈", "👶 소아 증상", "🧬 암 선택", "💊 항암제(진단 기반)", "🧪 피수치 입력", "🔬 특수검사", "📄 보고서", "📊 기록/그래프", "🍬 당뇨", "💧 투석"]
-t_home, t_peds, t_dx, t_chemo, t_labs, t_special, t_report, t_graph, t_dm, t_dialysis = st.tabs(tab_labels)
+tab_labels = ["🏠 홈", "👶 소아 증상", "🧬 암 선택", "💊 항암제(진단 기반)", "🧪 피수치 입력", "🔬 특수검사", "📄 보고서", "📊 기록/그래프"]
+t_home, t_peds, t_dx, t_chemo, t_labs, t_special, t_report, t_graph = st.tabs(tab_labels)
 
 # HOME
 with t_home:
@@ -1319,64 +1287,47 @@ with t_labs:
 
 # DX
 with t_dx:
-    # DX 전용 컨테이너 (모든 DX 출력 고정화)
-    dx_wrap = st.container()
-    # DX 전용 배너 슬롯 (다른 탭 영향 없음)
-    dx_banner = st.empty()
-    # Fixed-height slot for selection banner (prevents layout shift)
     st.subheader("암 선택")
     if not ONCO:
         st.warning("onco_map 이 로드되지 않아 기본 목록이 비어있습니다. onco_map.py를 같은 폴더나 modules/ 에 두세요.")
     groups = sorted(ONCO.keys()) if ONCO else ["혈액암", "고형암"]
     group = st.selectbox("암 그룹", options=groups, index=0, key=wkey("onco_group_sel"))
     diseases = sorted(ONCO.get(group, {}).keys()) if ONCO else ["ALL", "AML", "Lymphoma", "Breast", "Colon", "Lung"]
-    def _local_fmt_dx_kor(x):
-        try:
-            return _fmt_dx_kor(x)
-        except Exception:
-            try:
-                import onco_map as _om
-                if hasattr(_om, 'dx_display_kor'):
-                    return _om.dx_display_kor(x)
-            except Exception:
-                pass
-            return str(x).lower()
-    _diseases_pairs = [(_local_fmt_dx_kor(x), x) for x in diseases]
-    _disease_idx = st.selectbox(
-        '의심/진단명',
-        options=list(range(len(_diseases_pairs))),
-        index=0,
-        key=wkey('onco_disease_sel'),
-        format_func=lambda i: _diseases_pairs[i][0]
-    )
-    disease = _diseases_pairs[_disease_idx][1]
-disp = dx_display(group, disease)
-
-
-# Korean display override: code - ko (암 제거, 붙여쓰기)
-_dx_disp_kor = None
-try:
-    import onco_map as _om
-    if hasattr(_om, "dx_display_kor"):
-        _dx_disp_kor = _om.dx_display_kor(disease)
-except Exception:
-    _dx_disp_kor = None
-if _dx_disp_kor:
-    disp = _dx_disp_kor
+    disease = st.selectbox("의심/진단명", options=diseases, index=0, key=wkey("onco_disease_sel"))
+    disp = dx_display(group, disease)
     st.session_state["onco_group"] = group
     st.session_state["onco_disease"] = disease
     st.session_state["dx_disp"] = disp
-    dx_banner.markdown(f'<div class="select-banner">선택: {disp}</div>', unsafe_allow_html=True)
+    st.info(f"선택: {disp}")
 
     recs = auto_recs_by_dx(group, disease, DRUG_DB) or {}
     if any(recs.values()):
-        dx_wrap.markdown("**자동 추천 요약**")
+        st.markdown("**자동 추천 요약**")
         for cat, arr in recs.items():
             if not arr:
                 continue
-            dx_wrap.write(f"- {cat}: " + _fmt_drug_list(arr))
+            st.write(f"- {cat}: " + ", ".join(arr))
     st.session_state["recs_by_dx"] = recs
 
+
+# --- Side-effects UI (DX) ---
+try:
+    # best-effort find lists in scope
+    se_lists = []
+    for cand in ['targets', 'chemos', 'drugs', 'arr']:
+        if cand in locals() and isinstance(locals()[cand], (list, tuple)):
+            se_lists.extend(list(locals()[cand]))
+    se_lists = list(dict.fromkeys(se_lists))  # dedup preserve order
+    if se_lists:
+        with st.expander("⚠️ 부작용 요약", expanded=False):
+            md = _fmt_side_effects(se_lists)
+            if md:
+                dx_wrap.markdown(md)
+            else:
+                dx_wrap.caption("등록된 요약이 없는 약물이거나 빈 목록입니다.")
+except Exception as _e:
+    dx_wrap.caption("부작용 요약을 불러오지 못했습니다.")
+# --- /Side-effects UI ---
 # ---------- Chemo helpers ----------
 def _to_set_or_empty(x):
     s = set()
@@ -1925,99 +1876,7 @@ with st.expander("🌡️ 해열제 가이드/계산", expanded=False):
         ap_ml_1 = ap_ml_max = ib_ml_1 = ib_ml_max = 0.0
     st.write(f"- 아세트아미노펜(160mg/5mL): **{ap_ml_1:.1f} mL** (최대 {ap_ml_max:.1f} mL) — 최소 간격 **4h**")
     st.write(f"- 이부프로펜(100mg/5mL): **{ib_ml_1:.1f} mL** (최대 {ib_ml_max:.1f} mL) — 최소 간격 **6h**")
-    
-# --- P1-2: Antipyretic schedule chain (.ics + care hint) ---
-import datetime as _dt
-from zoneinfo import ZoneInfo as _ZoneInfo
-import tempfile as _tmp
-
-def _preferred_writable_base():
-    # Try known writable locations in order
-    for p in ["/mnt/data/care_log", "/mount/data/care_log", "/tmp/care_log"]:
-        try:
-            os.makedirs(p, exist_ok=True)
-            test_fp = os.path.join(p, ".touch")
-            with open(test_fp, "w", encoding="utf-8") as _f:
-                _f.write("ok")
-            try:
-                os.remove(test_fp)
-            except Exception:
-                pass
-            return p
-        except Exception:
-            continue
-    # Extreme fallback
-    return _tmp.gettempdir()
-
-def _make_ics(title:str, start: _dt.datetime, minutes:int=0, description:str="") -> str:
-    tzid = "Asia/Seoul"
-    dtstart = start.strftime("%Y%m%dT%H%M%S")
-    dtend = (start + _dt.timedelta(minutes=minutes)).strftime("%Y%m%dT%H%M%S") if minutes>0 else None
-    uid = f"{dtstart}-{title.replace(' ','_')}@bloodmap"
-    lines = [
-        "BEGIN:VCALENDAR",
-        "VERSION:2.0",
-        "PRODID:-//BloodMap//Peds Antipyretic//KR",
-        "CALSCALE:GREGORIAN",
-        "METHOD:PUBLISH",
-        "BEGIN:VEVENT",
-        f"UID:{uid}",
-        f"DTSTAMP:{_dt.datetime.now(_ZoneInfo(tzid)).strftime('%Y%m%dT%H%M%S')}",
-        f"DTSTART;TZID={tzid}:{dtstart}",
-    ]
-    if dtend:
-        lines.append(f"DTEND;TZID={tzid}:{dtend}")
-    lines += [
-        f"SUMMARY:{title}",
-        f"DESCRIPTION:{description}".replace("\n","\\n"),
-        "END:VEVENT",
-        "END:VCALENDAR",
-        ""
-    ]
-    return "\n".join(lines)
-
-kst = _dt.datetime.now(_ZoneInfo("Asia/Seoul"))
-col1, col2 = st.columns(2)
-with col1:
-    ap_given = st.number_input("APAP 실제 투여량(mL)", min_value=0.0, step=0.5, value=float(f"{ap_ml_1:.1f}"), key=wkey("apap_given"))
-    if st.button("APAP 기록 + 다음 복용 .ics", key=wkey("apap_log_ics")):
-        next_time = kst + _dt.timedelta(hours=4)
-        ics_text = _make_ics("다음 해열제(APAP) 복용 가능", next_time, 0, "APAP 최소 간격 4시간 (KST).")
-        base = _preferred_writable_base()
-        fname = f"next_APAP_{kst.strftime('%Y%m%d_%H%M%S')}.ics"
-        ics_path = os.path.join(base, fname)
-        try:
-            with open(ics_path, "w", encoding="utf-8") as f:
-                f.write(ics_text)
-        except Exception as _e:
-            st.warning(f"쓰기 권한 문제로 임시 다운로드만 제공합니다. ({type(_e).__name__})")
-        st.success(f"다음 APAP 가능 시각: {next_time.strftime('%Y-%m-%d %H:%M')} (KST)")
-        st.download_button("📅 .ics 내보내기 (APAP)", data=ics_text, file_name=fname, mime="text/calendar", key=wkey("apap_ics_dl"))
-        st.session_state[wkey("apap_ml_24h")] = st.session_state.get(wkey("apap_ml_24h"), 0.0) + float(ap_given)
-with col2:
-    ib_given = st.number_input("IBU 실제 투여량(mL)", min_value=0.0, step=0.5, value=float(f"{ib_ml_1:.1f}"), key=wkey("ibu_given"))
-    if st.button("IBU 기록 + 다음 복용 .ics", key=wkey("ibu_log_ics")):
-        next_time = kst + _dt.timedelta(hours=6)
-        ics_text = _make_ics("다음 해열제(IBU) 복용 가능", next_time, 0, "IBU 최소 간격 6시간 (KST).")
-        base = _preferred_writable_base()
-        fname = f"next_IBU_{kst.strftime('%Y%m%d_%H%M%S')}.ics"
-        ics_path = os.path.join(base, fname)
-        try:
-            with open(ics_path, "w", encoding="utf-8") as f:
-                f.write(ics_text)
-        except Exception as _e:
-            st.warning(f"쓰기 권한 문제로 임시 다운로드만 제공합니다. ({type(_e).__name__})")
-        st.success(f"다음 IBU 가능 시각: {next_time.strftime('%Y-%m-%d %H:%M')} (KST)")
-        st.download_button("📅 .ics 내보내기 (IBU)", data=ics_text, file_name=fname, mime="text/calendar", key=wkey("ibu_ics_dl"))
-        st.session_state[wkey("ibu_ml_24h")] = st.session_state.get(wkey("ibu_ml_24h"), 0.0) + float(ib_given)
-
-# 24h 총량 소프트 배너(실제 하드 가드레일과 충돌 없이 알림만)
-ap24 = st.session_state.get(wkey("apap_ml_24h"), 0.0)
-ib24 = st.session_state.get(wkey("ibu_ml_24h"), 0.0)
-if ap24 > 0 or ib24 > 0:
-    st.caption(f"24시간 누적(세션 기준): APAP {ap24:.1f} mL / IBU {ib24:.1f} mL")
-# --- /P1-2 ---
-st.caption("※ 금기/주의 질환은 반드시 의료진 지시를 따르세요. 중복 복용 주의.")
+    st.caption("※ 금기/주의 질환은 반드시 의료진 지시를 따르세요. 중복 복용 주의.")
 
 # --- ORS/탈수 ---
 with st.expander("🥤 ORS/탈수 가이드", expanded=False):
@@ -2768,8 +2627,3 @@ _ss_setdefault(wkey('home_fb_log_cache'), [])
 
 
 # ===== [/INLINE FEEDBACK] =====
-
-with t_dm:
-    _render_diabetes_tab()
-with t_dialysis:
-    _render_dialysis_tab()

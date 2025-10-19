@@ -428,36 +428,49 @@ def display_label(key: str, db: dict = None) -> str:
     return norm
 
 
-# --- KOR names for oncology drugs (non-destructive patch) ---
-DRUG_KO = {
-    # TKIs & targeted
-    "Imatinib":"이미티닙","Sunitinib":"수니티닙","Regorafenib":"레고라페닙","Ripretinib":"리프레티닙",
-    "Osimertinib":"오시머티닙","Erlotinib":"얼로티닙","Gefitinib":"게피티닙",
-    "Alectinib":"알렉티닙","Lorlatinib":"롤라티닙","Bevacizumab":"베바시주맙",
-    "Trastuzumab":"트라스투주맙","Rituximab":"리툭시맙",
-    "Pembrolizumab":"펨브롤리주맙","Nivolumab":"니볼루맙","Atezolizumab":"아테졸리주맙",
-    # Chemo classics
-    "Cyclophosphamide":"사이클로포스파마이드","Doxorubicin":"독소루비신","Vincristine":"빈크리스틴","Prednisone":"프레드니손",
-    "Paclitaxel":"파클리탁셀","Docetaxel":"도세탁셀","Capecitabine":"카페시타빈",
-    "Oxaliplatin":"옥살리플라틴","Cisplatin":"시스플라틴","Carboplatin":"카보플라틴","Irinotecan":"이리노테칸",
-    "Fluorouracil":"플루오로우라실","5-Fluorouracil":"플루오로우라실","5FU":"플루오로우라실","5-FU":"플루오로우라실",
+# --- Side effects (KO) patch (non-destructive) ---
+SIDE_EFFECTS_KO = {
+    "Imatinib": ["부종", "발진", "설사", "근육통", "골수억제(빈혈/호중구감소)"],
+    "Sunitinib": ["고혈압", "수족증후군", "갑상선기능저하", "피로", "설사"],
+    "Regorafenib": ["수족피부반응(HFSR)", "간독성(ALT/AST 상승)", "고혈압", "설사", "피로"],
+    "Ripretinib": ["탈모", "근육통", "고혈압", "피로", "설사"],
+    "Cyclophosphamide": ["골수억제", "오심/구토", "방광염(출혈성)", "탈모"],
+    "Doxorubicin": ["심독성", "골수억제", "오심/구토", "탈모", "점막염"],
+    "Vincristine": ["말초신경병증", "변비/장폐색", "복통"],
+    "Prednisone": ["고혈당", "체중증가", "불면", "위장관 자극"],
+    "Bevacizumab": ["고혈압", "단백뇨", "출혈/혈전", "상처치유 지연"],
+    "Trastuzumab": ["심기능저하", "주입반응", "설사"],
+    "Rituximab": ["주입반응", "감염 위험 증가", "발열/오한"],
+    "Osimertinib": ["설사", "발진", "QT 연장", "간수치 상승"],
+    "Erlotinib": ["발진", "설사", "간수치 상승"],
+    "Gefitinib": ["발진", "설사", "간수치 상승"],
+    "Alectinib": ["변비", "피로", "근육통", "간수치 상승"],
+    "Lorlatinib": ["고지혈증", "부종", "정신신경 증상"],
+    "Paclitaxel": ["말초신경병증", "골수억제", "탈모", "과민반응"],
+    "Docetaxel": ["무과립구열", "부종", "피로", "손발톱 변화"],
+    "Capecitabine": ["수족증후군", "설사", "구내염"],
+    "Oxaliplatin": ["말초감각이상", "골수억제", "오심/구토"],
+    "Cisplatin": ["신독성", "오심/구토", "청각독성", "말초신경병증"],
+    "Carboplatin": ["골수억제", "오심/구토", "피로"],
+    "Irinotecan": ["설사(급성/지연)", "골수억제", "오심/구토"],
+    "Fluorouracil": ["점막염", "설사", "골수억제"],
+    "5-Fluorouracil": ["점막염", "설사", "골수억제"],
+    "5FU": ["점막염", "설사", "골수억제"],
+    "5-FU": ["점막염", "설사", "골수억제"],
 }
 
-def drug_kor(name: str) -> str:
-    try:
-        base = str(name).strip()
-        kor = DRUG_KO.get(base) or DRUG_KO.get(base.title())
-        return f"{base}({kor})" if kor else base
-    except Exception:
-        return str(name)
+def drug_side_effects(name: str, lang: str = "ko"):
+    base = str(name).strip()
+    if lang.lower().startswith("ko"):
+        arr = SIDE_EFFECTS_KO.get(base) or SIDE_EFFECTS_KO.get(base.title()) or []
+        return list(arr)
+    return []
 
-def format_drug_list_kor(drugs) -> str:
-    seen = set()
-    out = []
+def format_side_effects_bullets(drugs, lang: str = "ko"):
+    lines = []
     for d in drugs or []:
-        label = drug_kor(d)
-        if label not in seen:
-            seen.add(label)
-            out.append(label)
-    return ", ".join(out)
-# --- /KOR names patch ---
+        se = drug_side_effects(d, lang)
+        if se:
+            lines.append(f"- **{drug_kor(d) if 'drug_kor' in globals() else d}**: " + ", ".join(se))
+    return "\n".join(lines)
+# --- /Side effects patch ---
