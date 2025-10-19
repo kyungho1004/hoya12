@@ -1865,6 +1865,31 @@ with st.expander("🌡️ 해열제 가이드/계산", expanded=False):
 import datetime as _dt
 from zoneinfo import ZoneInfo as _ZoneInfo
 
+# [patched:P1-2] Writable base resolver for Streamlit Cloud (fallbacks)
+import os as _os
+
+def _writable_base_dirs():
+    return ["/mnt/data", "/mount/data", "/tmp"]
+
+def _resolve_writable_base() -> str:
+    for root in _writable_base_dirs():
+        try:
+            _os.makedirs(root, exist_ok=True)
+            test_path = _os.path.join(root, ".bm_probe")
+            with open(test_path, "w", encoding="utf-8") as f:
+                f.write("ok")
+            _os.remove(test_path)
+            return root
+        except Exception:
+            continue
+    # last resort
+    return "/tmp"
+
+def _ensure_care_dir() -> str:
+    base = _os.path.join(_resolve_writable_base(), "care_log")
+    _os.makedirs(base, exist_ok=True)
+    return base
+
 def _ensure_dir(p):
     import os
     os.makedirs(p, exist_ok=True)
@@ -1905,7 +1930,7 @@ with col1:
     if st.button("APAP 기록 + 다음 복용 .ics", key=wkey("apap_log_ics")):
         next_time = kst + _dt.timedelta(hours=4)
         ics_text = _make_ics("다음 해열제(APAP) 복용 가능", next_time, 0, "APAP 최소 간격 4시간 (KST).")
-        base = _ensure_dir("/mnt/data/care_log")
+        base = _ensure_care_dir()
         ics_path = f"{base}/next_APAP_{kst.strftime('%Y%m%d_%H%M%S')}.ics"
         with open(ics_path, "w", encoding="utf-8") as f:
             f.write(ics_text)
@@ -1918,7 +1943,7 @@ with col2:
     if st.button("IBU 기록 + 다음 복용 .ics", key=wkey("ibu_log_ics")):
         next_time = kst + _dt.timedelta(hours=6)
         ics_text = _make_ics("다음 해열제(IBU) 복용 가능", next_time, 0, "IBU 최소 간격 6시간 (KST).")
-        base = _ensure_dir("/mnt/data/care_log")
+        base = _ensure_care_dir()
         ics_path = f"{base}/next_IBU_{kst.strftime('%Y%m%d_%H%M%S')}.ics"
         with open(ics_path, "w", encoding="utf-8") as f:
             f.write(ics_text)
