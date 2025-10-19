@@ -809,3 +809,46 @@ def ensure_onco_drug_db(db):
         return
     finally:
         g['_ENSURE_GUARD'] = False
+
+# === FINAL OVERLAY LAYER (patch): replace placeholder AEs with detailed PROFILES ===
+try:
+    _FINAL_PREV_ENSURE = ensure_onco_drug_db
+except Exception:
+    _FINAL_PREV_ENSURE = None
+
+def _overlay_from_profiles(db):
+    ref = db if isinstance(db, dict) else globals().get('DRUG_DB', {})
+    profiles = globals().get('PROFILES', {})
+    aliases = globals().get('ALIAS_FALLBACK', {})
+    if not isinstance(ref, dict) or not isinstance(profiles, dict):
+        return
+    for k, prof in profiles.items():
+        cur = ref.setdefault(k, {})
+        ae_cur = cur.get('ae')
+        # Only overwrite if missing or placeholder
+        if not ae_cur or str(ae_cur).strip() in {"", "부작용 정보 필요"}:
+            cur['alias'] = cur.get('alias') or aliases.get(k) or k
+            if prof.get('moa'):
+                cur['moa'] = prof['moa']
+            if prof.get('ae'):
+                cur['ae'] = prof['ae']
+            # also sync lowercase/alias keys for lookups
+            for alt in {k, k.lower(), cur['alias'], str(cur['alias']).lower()}:
+                ref.setdefault(alt, {}).update({'alias': cur['alias'], 'moa': cur.get('moa',''), 'ae': cur.get('ae','')})
+
+def ensure_onco_drug_db(db):
+    # guard to avoid recursion
+    g = globals()
+    if g.get('_ENSURE_GUARD2', False):
+        return
+    g['_ENSURE_GUARD2'] = True
+    try:
+        if callable(_FINAL_PREV_ENSURE):
+            try:
+                _FINAL_PREV_ENSURE(db)
+            except Exception:
+                pass
+        _overlay_from_profiles(db)
+        return
+    finally:
+        g['_ENSURE_GUARD2'] = False
