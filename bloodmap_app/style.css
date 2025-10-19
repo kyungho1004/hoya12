@@ -3,3 +3,7 @@
 .block-container { padding-top: 1rem; }
 h1, h2, h3 { letter-spacing: 0.2px; }
 .badge { border-radius: 9999px; padding: 2px 8px; font-size: 12px; }
+
+
+/* Inline selection banner (non-sticky, compact) */
+.select-banner { background:#e8f0fe; color:#1a73e8; padding:6px 10px; border-radius:8px; display:inline-block; margin:6px 0 8px; position:static; font-weight:600; }

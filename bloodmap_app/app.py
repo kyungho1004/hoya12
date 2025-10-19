@@ -1346,7 +1346,7 @@ if _dx_disp_kor:
     st.session_state["onco_group"] = group
     st.session_state["onco_disease"] = disease
     st.session_state["dx_disp"] = disp
-    st.info(f"선택: {disp}")
+    st.markdown(f'<div class="select-banner">선택: {disp}</div>', unsafe_allow_html=True)
 
     recs = auto_recs_by_dx(group, disease, DRUG_DB) or {}
     if any(recs.values()):
