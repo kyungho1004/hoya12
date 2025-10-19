@@ -1511,6 +1511,22 @@ with t_chemo:
 # PEDS
 with t_peds:
     st.subheader("소아 증상 기반 점수 + 보호자 설명 + 해열제 계산")
+    # PATCH[P1]: Sticky quick-nav for Peds
+    st.markdown(
+        '''
+        <style>
+        .peds-sticky{position:sticky; top:64px; z-index:9; background:rgba(250,250,250,0.9); padding:8px 8px; border:1px solid #eee; border-radius:10px;}
+        .peds-sticky a{margin-right:10px; font-weight:600; text-decoration:none;}
+        </style>
+        <div class="peds-sticky">
+        <a href="#peds_constipation">변비</a>
+        <a href="#peds_diarrhea">설사</a>
+        <a href="#peds_vomit">구토</a>
+        <a href="#peds_antipyretic">해열제</a>
+        <a href="#peds_ors">ORS</a>
+        </div>
+        ''', unsafe_allow_html=True
+    )
     render_peds_nav_md()
     c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
@@ -1851,6 +1867,21 @@ with st.expander("🌡️ 해열제 가이드/계산", expanded=False):
 
 # --- ORS/탈수 ---
 with st.expander("🥤 ORS/탈수 가이드", expanded=False):
+    # PATCH[P1]: ORS one-click PDF
+    try:
+        import pdf_export as _pdf
+    except Exception:
+        _pdf = None
+    if st.button('ORS 가이드 PDF 저장', key=wkey('ors_pdf_btn')):
+        try:
+            path = _pdf.export_ors_onepager() if _pdf and hasattr(_pdf, 'export_ors_onepager') else None
+            if path:
+                with open(path, 'rb') as f:
+                    st.download_button('PDF 다운로드', f, file_name='ORS_guide.pdf', mime='application/pdf', key=wkey('ors_pdf_dl'))
+            else:
+                st.info('pdf_export.export_ors_onepager를 찾지 못했습니다.')
+        except Exception as e:
+            st.warning('PDF 생성 오류: ' + str(e))
     st.write("- 5~10분마다 소량씩 자주, 토하면 10~15분 휴식 후 재개")
     st.write("- 2시간 이상 소변 없음/입마름/눈물 감소/축 늘어짐 → 진료")
     st.write("- 가능하면 스포츠음료 대신 **ORS** 용액 사용")
@@ -1964,6 +1995,36 @@ def _qr_image_bytes(text: str) -> bytes:
 
 # REPORT with side panel (tabs)
 with t_report:
+    # PATCH[P1]: Special Notes editor
+    with st.expander('📝 Special Notes (환자별 메모)', expanded=False):
+        import os
+        notes_path = '/mnt/data/profile/special_notes.txt'
+        try:
+            os.makedirs('/mnt/data/profile', exist_ok=True)
+            if 'special_notes' not in st.session_state:
+                if os.path.exists(notes_path):
+                    st.session_state['special_notes'] = open(notes_path,'r',encoding='utf-8').read()
+                else:
+                    st.session_state['special_notes'] = ''
+        except Exception:
+            st.session_state['special_notes'] = st.session_state.get('special_notes','')
+        val = st.text_area('메모(보고서/PDF에 첨부 용)', st.session_state.get('special_notes',''), height=140, key=wkey('special_notes_ta'))
+        colA, colB = st.columns([1,1])
+        with colA:
+            if st.button('저장', key=wkey('special_notes_save')):
+                try:
+                    open(notes_path,'w',encoding='utf-8').write(val or '')
+                    st.session_state['special_notes'] = val or ''
+                    st.success('저장 완료')
+                except Exception as e:
+                    st.warning('저장 오류: ' + str(e))
+        with colB:
+            if st.button('초기화', key=wkey('special_notes_reset')):
+                st.session_state['special_notes'] = ''
+                try:
+                    open(notes_path,'w',encoding='utf-8').write('')
+                except Exception:
+                    pass
     st.subheader("보고서 (.md/.txt/.pdf) — 모든 항목 포함")
 
     key_id = st.session_state.get("key", "(미설정)")
