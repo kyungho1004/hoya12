@@ -22,7 +22,7 @@ def _norm(s: str) -> str:
 # Korean display names (병기)
 DX_KO: Dict[str, str] = {
     # Hematology
-    "APL": "급성 전골수구성 백혈병",
+    "APL": "급성 전골수성 백혈병",
     "AML": "급성 골수성 백혈병",
     "ALL": "급성 림프구성 백혈병",
     "CML": "만성 골수성 백혈병",
@@ -93,6 +93,66 @@ KEY_ALIAS = {
 def _canon(key: str) -> str:
     return KEY_ALIAS.get(key, key)
 
+
+# Display 'code - 한글병기' without '암' and with compact spacing
+# --- KOR DX DISPLAY (robust) ---
+def _dx_norm_key(s: str) -> str:
+    # normalize: lowercase, remove spaces, hyphens, slashes, plus/minus, and parentheses
+    if not s:
+        return ""
+    t = str(s).lower()
+    # drop parenthetical contents
+    import re
+    t = re.sub(r"\([^\)]*\)", "", t)
+    # remove non-alnum (keep letters/numbers only)
+    t = re.sub(r"[^a-z0-9]", "", t)
+    return t
+
+_DX_ALIAS = {
+    # lymphoma common variants
+    "dlbcl":"dlbcl",
+    "diffuselargebcelllymphoma":"dlbcl",
+    "aitl":"aitl",
+    "angioimmunoblastictcelllymphoma":"aitl",
+    "alcl":"alcl",
+    "alclalk":"alcl",
+    "alclalkplus":"alcl",
+    "alclalkminus":"alcl",
+    "fl":"fl",
+    "follicularlymphoma":"fl",
+    "hchl":"hchl", "hl":"hchl", "hodgkinlymphoma":"hchl",
+    # leukemia examples
+    "apl":"apl", "amlm3":"apl", "acutepromyelocyticleukemia":"apl",
+    # add more as needed
+}
+
+def dx_display_kor(dx: str) -> str:
+    key_upper = _norm(dx).upper() if '_norm' in globals() else str(dx).upper()
+    # KO lookup: try exact map first
+    ko = DX_KO.get(key_upper)
+    if not ko:
+        # try alias route using robust normalization
+        k = _dx_norm_key(dx)
+        alias = _DX_ALIAS.get(k)
+        if alias:
+            ko = DX_KO.get(alias.upper())
+    if not ko:
+        # fallback to original text as ko (but compacted)
+        ko = str(dx)
+    ko2 = str(ko).replace(" ", "")
+    if ko2.endswith("암"):
+        ko2 = ko2[:-1]
+    return f"{key_upper.lower()} - {ko2}"
+# --- /KOR DX DISPLAY ---
+
+def dx_display_kor(dx: str) -> str:
+    key = _norm(dx).upper()
+    ko = DX_KO.get(key) or DX_KO.get(dx) or dx
+    ko2 = (ko or "").replace(" ", "")
+    # remove a trailing '암' if present (유방암 -> 유방, 간암 -> 간 등)
+    if ko2.endswith("암"):
+        ko2 = ko2[:-1]
+    return f"{key.lower()} - {ko2}"
 
 def dx_display(group: str, dx: str) -> str:
     dx = (dx or "").strip()
