@@ -1860,7 +1860,78 @@ with st.expander("🌡️ 해열제 가이드/계산", expanded=False):
         ap_ml_1 = ap_ml_max = ib_ml_1 = ib_ml_max = 0.0
     st.write(f"- 아세트아미노펜(160mg/5mL): **{ap_ml_1:.1f} mL** (최대 {ap_ml_max:.1f} mL) — 최소 간격 **4h**")
     st.write(f"- 이부프로펜(100mg/5mL): **{ib_ml_1:.1f} mL** (최대 {ib_ml_max:.1f} mL) — 최소 간격 **6h**")
-    st.caption("※ 금기/주의 질환은 반드시 의료진 지시를 따르세요. 중복 복용 주의.")
+    
+# --- P1-2: Antipyretic schedule chain (.ics + care hint) ---
+import datetime as _dt
+from zoneinfo import ZoneInfo as _ZoneInfo
+
+def _ensure_dir(p):
+    import os
+    os.makedirs(p, exist_ok=True)
+    return p
+
+def _make_ics(title:str, start: _dt.datetime, minutes:int=0, description:str="") -> str:
+    # KST aware DTSTART with TZID=Asia/Seoul (no DST)
+    tzid = "Asia/Seoul"
+    dtstart = start.strftime("%Y%m%dT%H%M%S")
+    dtend = (start + _dt.timedelta(minutes=minutes)).strftime("%Y%m%dT%H%M%S") if minutes>0 else None
+    uid = f"{dtstart}-{title.replace(' ','_')}@bloodmap"
+    lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//BloodMap//Peds Antipyretic//KR",
+        "CALSCALE:GREGORIAN",
+        "METHOD:PUBLISH",
+        "BEGIN:VEVENT",
+        f"UID:{uid}",
+        f"DTSTAMP:{_dt.datetime.now(_ZoneInfo(tzid)).strftime('%Y%m%dT%H%M%S')}",
+        f"DTSTART;TZID={tzid}:{dtstart}",
+    ]
+    if dtend:
+        lines.append(f"DTEND;TZID={tzid}:{dtend}")
+    lines += [
+        f"SUMMARY:{title}",
+        f"DESCRIPTION:{description}".replace("\n","\\n"),
+        "END:VEVENT",
+        "END:VCALENDAR",
+        ""
+    ]
+    return "\n".join(lines)
+
+kst = _dt.datetime.now(_ZoneInfo("Asia/Seoul"))
+col1, col2 = st.columns(2)
+with col1:
+    ap_given = st.number_input("APAP 실제 투여량(mL)", min_value=0.0, step=0.5, value=float(f"{ap_ml_1:.1f}"), key=wkey("apap_given"))
+    if st.button("APAP 기록 + 다음 복용 .ics", key=wkey("apap_log_ics")):
+        next_time = kst + _dt.timedelta(hours=4)
+        ics_text = _make_ics("다음 해열제(APAP) 복용 가능", next_time, 0, "APAP 최소 간격 4시간 (KST).")
+        base = _ensure_dir("/mnt/data/care_log")
+        ics_path = f"{base}/next_APAP_{kst.strftime('%Y%m%d_%H%M%S')}.ics"
+        with open(ics_path, "w", encoding="utf-8") as f:
+            f.write(ics_text)
+        st.success(f"다음 APAP 가능 시각: {next_time.strftime('%Y-%m-%d %H:%M')} (KST)")
+        st.download_button("📅 .ics 내보내기 (APAP)", data=ics_text, file_name=os.path.basename(ics_path), mime="text/calendar", key=wkey("apap_ics_dl"))
+        # 24h 누적(세션 한정, 기존 가드레일과 중복되지 않게 소프트 표시)
+        st.session_state[wkey("apap_ml_24h")] = st.session_state.get(wkey("apap_ml_24h"), 0.0) + float(ap_given)
+with col2:
+    ib_given = st.number_input("IBU 실제 투여량(mL)", min_value=0.0, step=0.5, value=float(f"{ib_ml_1:.1f}"), key=wkey("ibu_given"))
+    if st.button("IBU 기록 + 다음 복용 .ics", key=wkey("ibu_log_ics")):
+        next_time = kst + _dt.timedelta(hours=6)
+        ics_text = _make_ics("다음 해열제(IBU) 복용 가능", next_time, 0, "IBU 최소 간격 6시간 (KST).")
+        base = _ensure_dir("/mnt/data/care_log")
+        ics_path = f"{base}/next_IBU_{kst.strftime('%Y%m%d_%H%M%S')}.ics"
+        with open(ics_path, "w", encoding="utf-8") as f:
+            f.write(ics_text)
+        st.success(f"다음 IBU 가능 시각: {next_time.strftime('%Y-%m-%d %H:%M')} (KST)")
+        st.download_button("📅 .ics 내보내기 (IBU)", data=ics_text, file_name=os.path.basename(ics_path), mime="text/calendar", key=wkey("ibu_ics_dl"))
+        st.session_state[wkey("ibu_ml_24h")] = st.session_state.get(wkey("ibu_ml_24h"), 0.0) + float(ib_given)
+
+# 24h 총량 소프트 배너(실제 하드 가드레일과 충돌 없이 알림만)
+ap24 = st.session_state.get(wkey("apap_ml_24h"), 0.0)
+ib24 = st.session_state.get(wkey("ibu_ml_24h"), 0.0)
+if ap24 > 0 or ib24 > 0:
+    st.caption(f"24시간 누적(세션 기준): APAP {ap24:.1f} mL / IBU {ib24:.1f} mL")
+st.caption("※ 금기/주의 질환은 반드시 의료진 지시를 따르세요. 중복 복용 주의.")
 
 # --- ORS/탈수 ---
 with st.expander("🥤 ORS/탈수 가이드", expanded=False):
