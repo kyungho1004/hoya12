@@ -3,9 +3,3 @@
 .block-container { padding-top: 1rem; }
 h1, h2, h3 { letter-spacing: 0.2px; }
 .badge { border-radius: 9999px; padding: 2px 8px; font-size: 12px; }
-
-
-/* --- P1-4 scroll-margin-top for anchored sections (mobile header offset) --- */
-[id^='peds_'] { scroll-margin-top: 76px; }
-:target { scroll-margin-top: 76px; }
-/* --- /P1-4 --- */
