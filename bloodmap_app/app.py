@@ -231,6 +231,8 @@ except Exception:
 # ---------- Page & Banner ----------
 st.set_page_config(page_title=f"Bloodmap {APP_VERSION}", layout="wide")
 st.title(f"Bloodmap {APP_VERSION}")
+
+st.caption("Bloodmap 항상 여러분들의 힘이 되도록 노력하겠습니다. 여러분들의 피드백이 업데이트에 많은 도움이 됩니다")
 st.markdown(
     """> In memory of Eunseo, a little star now shining in the sky.
 > This app is made with the hope that she is no longer in pain,
@@ -653,8 +655,8 @@ def build_peds_notes(
     return "\\n".join(lines)
 
 # ---------- Tabs ----------
-tab_labels = ["🏠 홈", "🧪 피수치 입력", "🧬 암 선택", "💊 항암제(진단 기반)", "👶 소아 증상", "🔬 특수검사", "📄 보고서", "📊 기록/그래프"]
-t_home, t_labs, t_dx, t_chemo, t_peds, t_special, t_report, t_graph = st.tabs(tab_labels)
+tab_labels = ["🏠 홈","👶 소아 증상","🧬 암 선택","💊 항암제(진단 기반)","🧪 피수치 입력","🔬 특수검사","📄 보고서","📊 기록/그래프"]
+t_home, t_peds, t_dx, t_chemo, t_labs, t_special, t_report, t_graph = st.tabs(tab_labels)
 
 # HOME
 with t_home:
