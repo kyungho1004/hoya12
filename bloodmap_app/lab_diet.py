@@ -55,3 +55,45 @@ def lab_diet_guides(labs: Dict, heme_flag: bool = False) -> List[str]:
             caution="딱딱/자극 음식·술 피하고, 양치 시 부드러운 칫솔 사용")
 
     return L
+
+
+# --- P2-2: Fixed 5-food recommendations (agreed lists) ---
+def fixed_food5(lab_key: str, state: str):
+    # lab_key 예: 'Alb','K','Hb','Na','Ca'; state 예: 'low' 등
+    low_lists = {
+        'Alb': ['달걀','연두부','흰살 생선','닭가슴살','귀리죽'],
+        'K':   ['바나나','감자','호박죽','고구마','오렌지'],
+        'Hb':  ['소고기','시금치','두부','달걀 노른자','렌틸콩'],
+        'Na':  ['전해질 음료','미역국','바나나','오트밀죽','삶은 감자'],
+        'Ca':  ['연어통조림','두부','케일','브로콜리','참깨 제외'],
+    }
+    if state!='low':
+        return []
+    return low_lists.get(lab_key, [])
+
+def lab_diet_guides_fixed(labs, heme_flag=False):
+    guides=[]
+    try:
+        Alb=labs.get('Alb',None); K=labs.get('K',None); Hb=labs.get('Hb',None); Na=labs.get('Na',None); Ca=labs.get('Ca',None)
+    except Exception:
+        Alb=K=Hb=Na=Ca=None
+    if Alb is not None and Alb<3.5:
+        foods=fixed_food5('Alb','low');
+        if foods: guides.append(('알부민 낮음', foods))
+    if K is not None and K<3.5:
+        foods=fixed_food5('K','low');
+        if foods: guides.append(('칼륨 낮음', foods))
+    if Hb is not None and Hb<11.5:
+        foods=fixed_food5('Hb','low');
+        if foods: guides.append(('헤모글로빈 낮음', foods))
+    if Na is not None and Na<135:
+        foods=fixed_food5('Na','low');
+        if foods: guides.append(('나트륨 낮음', foods))
+    if Ca is not None and Ca<8.5:
+        foods=fixed_food5('Ca','low');
+        if foods: guides.append(('칼슘 낮음', foods))
+    return guides
+# --- /P2-2 ---
+
+
+# 참고: 기존 lab_diet_guides가 있으면 호출부에서 lab_diet_guides_fixed를 선택적으로 사용할 수 있습니다.
