@@ -385,7 +385,7 @@ def emergency_level(labs: dict, temp_c, hr, symptoms: dict):
     if symptoms.get("visual_change"):
         add("시야 이상/복시/암점", 2, "w_visual_change")
 
-    risk = sum(item["score"] for item in contrib)
+    risk = sum(item["score"] for item in contrib) + st.session_state.get(wkey('peds_days_weight'), 0)
     level = "🚨 응급" if risk >= 5 else ("🟧 주의" if risk >= 2 else "🟢 안심")
     return level, reasons, contrib
 
@@ -607,7 +607,51 @@ def build_peds_notes(
     *, stool, fever, persistent_vomit, oliguria, cough, nasal, eye, abd_pain, ear_pain, rash, hives, migraine, hfmd, sputum=None, wheeze=None,
     duration=None, score=None, max_temp=None, red_seizure=False, red_bloodstool=False, red_night=False, red_dehydration=False
 ) -> str:
-    """소아 증상 선택을 요약하여 보고서용 텍스트를 생성."""
+    """소아 증상 선택을 요약하여 
+# --- P1-3: 결과 저장 append 보장 + 중복 제거 ---
+import csv, datetime as _dt
+from zoneinfo import ZoneInfo as _ZoneInfo
+def _graph_dir_candidates():
+    return ['/mnt/data/bloodmap_graph','/mount/data/bloodmap_graph','/tmp/bloodmap_graph']
+def _ensure_graph_dir():
+    import os
+    for d in _graph_dir_candidates():
+        try:
+            os.makedirs(d, exist_ok=True)
+            test = os.path.join(d, '.touch')
+            with open(test, 'w', encoding='utf-8') as f:
+                f.write('ok')
+            try:
+                os.remove(test)
+            except Exception:
+                pass
+            return d
+        except Exception:
+            continue
+    import tempfile as _tmp
+    return _tmp.gettempdir()
+
+def _append_labs_row(uid: str, row: dict):
+    import os
+    base = _ensure_graph_dir()
+    path = os.path.join(base, f"{uid}.labs.csv")
+    write_header = not os.path.exists(path)
+    with open(path, 'a', encoding='utf-8', newline='') as f:
+        w = csv.DictWriter(f, fieldnames=list(row.keys()))
+        if write_header:
+            w.writeheader()
+        w.writerow(row)
+    try:
+        import pandas as _pd
+        df = _pd.read_csv(path)
+        key_cols = [c for c in ['timestamp','WBC','Hb','PLT','CRP','ANC','Na','K','Alb','Ca','AST','ALT','Glucose'] if c in df.columns]
+        if key_cols:
+            df = df.drop_duplicates(subset=key_cols, keep='last')
+            df.to_csv(path, index=False)
+    except Exception:
+        pass
+
+보고서용 텍스트를 생성."""
     lines = []
     if duration:
         lines.append(f"[지속일수] {duration}")
@@ -1823,6 +1867,24 @@ st.markdown('<div id="peds_diarrhea"></div>', unsafe_allow_html=True)
 st.markdown('<div id="peds_vomit"></div>', unsafe_allow_html=True)
 st.markdown('<div id="peds_antipyretic"></div>', unsafe_allow_html=True)
 st.markdown('<div id="peds_ors"></div>', unsafe_allow_html=True)
+
+# --- P1-1: 지속일수 가중치 (소아 증상 점수 연동) ---
+def _peds_duration_weight(days_text: str) -> int:
+    # '지속일수' 값을 받아 가중치 점수를 반환: 1일=0, 2일=+1, 3일 이상=+2
+    if not days_text:
+        return 0
+    t = str(days_text)
+    if '3' in t:
+        return 2
+    if '2' in t:
+        return 1
+    return 0
+
+_peds_days = st.selectbox('증상 지속일수', ['1일','2일','3일 이상'], index=0, key=wkey('peds_days'))
+_peds_days_w = _peds_duration_weight(_peds_days)
+st.session_state[wkey('peds_days_weight')] = _peds_days_w
+
+
 st.markdown('<div id="peds_respiratory"></div>', unsafe_allow_html=True)
 
 # --- 변비 ---
@@ -1864,39 +1926,27 @@ with st.expander("🌡️ 해열제 가이드/계산", expanded=False):
 # --- P1-2: Antipyretic schedule chain (.ics + care hint) ---
 import datetime as _dt
 from zoneinfo import ZoneInfo as _ZoneInfo
+import tempfile as _tmp
 
-# [patched:P1-2] Writable base resolver for Streamlit Cloud (fallbacks)
-import os as _os
-
-def _writable_base_dirs():
-    return ["/mnt/data", "/mount/data", "/tmp"]
-
-def _resolve_writable_base() -> str:
-    for root in _writable_base_dirs():
+def _preferred_writable_base():
+    # Try known writable locations in order
+    for p in ["/mnt/data/care_log", "/mount/data/care_log", "/tmp/care_log"]:
         try:
-            _os.makedirs(root, exist_ok=True)
-            test_path = _os.path.join(root, ".bm_probe")
-            with open(test_path, "w", encoding="utf-8") as f:
-                f.write("ok")
-            _os.remove(test_path)
-            return root
+            os.makedirs(p, exist_ok=True)
+            test_fp = os.path.join(p, ".touch")
+            with open(test_fp, "w", encoding="utf-8") as _f:
+                _f.write("ok")
+            try:
+                os.remove(test_fp)
+            except Exception:
+                pass
+            return p
         except Exception:
             continue
-    # last resort
-    return "/tmp"
-
-def _ensure_care_dir() -> str:
-    base = _os.path.join(_resolve_writable_base(), "care_log")
-    _os.makedirs(base, exist_ok=True)
-    return base
-
-def _ensure_dir(p):
-    import os
-    os.makedirs(p, exist_ok=True)
-    return p
+    # Extreme fallback
+    return _tmp.gettempdir()
 
 def _make_ics(title:str, start: _dt.datetime, minutes:int=0, description:str="") -> str:
-    # KST aware DTSTART with TZID=Asia/Seoul (no DST)
     tzid = "Asia/Seoul"
     dtstart = start.strftime("%Y%m%dT%H%M%S")
     dtend = (start + _dt.timedelta(minutes=minutes)).strftime("%Y%m%dT%H%M%S") if minutes>0 else None
@@ -1930,28 +1980,43 @@ with col1:
     if st.button("APAP 기록 + 다음 복용 .ics", key=wkey("apap_log_ics")):
         next_time = kst + _dt.timedelta(hours=4)
         ics_text = _make_ics("다음 해열제(APAP) 복용 가능", next_time, 0, "APAP 최소 간격 4시간 (KST).")
-        base = _ensure_care_dir()
-        ics_path = f"{base}/next_APAP_{kst.strftime('%Y%m%d_%H%M%S')}.ics"
-        with open(ics_path, "w", encoding="utf-8") as f:
-            f.write(ics_text)
+        base = _preferred_writable_base()
+        fname = f"next_APAP_{kst.strftime('%Y%m%d_%H%M%S')}.ics"
+        ics_path = os.path.join(base, fname)
+        write_ok = True
+        try:
+            with open(ics_path, "w", encoding="utf-8") as f:
+                f.write(ics_text)
+        except Exception as _e:
+            write_ok = False
+            st.warning(f"쓰기 권한 문제로 임시 다운로드만 제공합니다. ({type(_e).__name__})")
         st.success(f"다음 APAP 가능 시각: {next_time.strftime('%Y-%m-%d %H:%M')} (KST)")
-        st.download_button("📅 .ics 내보내기 (APAP)", data=ics_text, file_name=os.path.basename(ics_path), mime="text/calendar", key=wkey("apap_ics_dl"))
-        # 24h 누적(세션 한정, 기존 가드레일과 중복되지 않게 소프트 표시)
+        st.download_button("📅 .ics 내보내기 (APAP)", data=ics_text, file_name=fname, mime="text/calendar", key=wkey("apap_ics_dl"))
         st.session_state[wkey("apap_ml_24h")] = st.session_state.get(wkey("apap_ml_24h"), 0.0) + float(ap_given)
 with col2:
     ib_given = st.number_input("IBU 실제 투여량(mL)", min_value=0.0, step=0.5, value=float(f"{ib_ml_1:.1f}"), key=wkey("ibu_given"))
     if st.button("IBU 기록 + 다음 복용 .ics", key=wkey("ibu_log_ics")):
         next_time = kst + _dt.timedelta(hours=6)
         ics_text = _make_ics("다음 해열제(IBU) 복용 가능", next_time, 0, "IBU 최소 간격 6시간 (KST).")
-        base = _ensure_care_dir()
-        ics_path = f"{base}/next_IBU_{kst.strftime('%Y%m%d_%H%M%S')}.ics"
-        with open(ics_path, "w", encoding="utf-8") as f:
-            f.write(ics_text)
+        base = _preferred_writable_base()
+        fname = f"next_IBU_{kst.strftime('%Y%m%d_%H%M%S')}.ics"
+        ics_path = os.path.join(base, fname)
+        write_ok = True
+        try:
+            with open(ics_path, "w", encoding="utf-8") as f:
+                f.write(ics_text)
+        except Exception as _e:
+            write_ok = False
+            st.warning(f"쓰기 권한 문제로 임시 다운로드만 제공합니다. ({type(_e).__name__})")
         st.success(f"다음 IBU 가능 시각: {next_time.strftime('%Y-%m-%d %H:%M')} (KST)")
-        st.download_button("📅 .ics 내보내기 (IBU)", data=ics_text, file_name=os.path.basename(ics_path), mime="text/calendar", key=wkey("ibu_ics_dl"))
+        st.download_button("📅 .ics 내보내기 (IBU)", data=ics_text, file_name=fname, mime="text/calendar", key=wkey("ibu_ics_dl"))
         st.session_state[wkey("ibu_ml_24h")] = st.session_state.get(wkey("ibu_ml_24h"), 0.0) + float(ib_given)
 
 # 24h 총량 소프트 배너(실제 하드 가드레일과 충돌 없이 알림만)
+ap24 = st.session_state.get(wkey("apap_ml_24h"), 0.0)
+ib24 = st.session_state.get(wkey("ibu_ml_24h"), 0.0)
+if ap24 > 0 or ib24 > 0:
+    st.caption(f"24시간 누적(세션 기준): APAP {ap24:.1f} mL / IBU {ib24:.1f} mL")# 24h 총량 소프트 배너(실제 하드 가드레일과 충돌 없이 알림만)
 ap24 = st.session_state.get(wkey("apap_ml_24h"), 0.0)
 ib24 = st.session_state.get(wkey("ibu_ml_24h"), 0.0)
 if ap24 > 0 or ib24 > 0:
