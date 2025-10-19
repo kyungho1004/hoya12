@@ -126,7 +126,7 @@ if 'peds_actions' not in st.session_state:
     st.session_state['peds_actions'] = []
 
 
-APP_VERSION = "항상 여러분들의 힘이 되도록 노력하겠습니다. 여러분들의 피드백이 업데이트에 많은 도움이 됩니다"
+APP_VERSION = "v7.24 (Graphs Bands • Peds Checklist+Schedule • Onco-DB Guard • Special Notes+)"
 
 # ---------- Safe Import Helper ----------
 def _load_local_module(mod_name: str, rel_paths):
@@ -653,8 +653,8 @@ def build_peds_notes(
     return "\\n".join(lines)
 
 # ---------- Tabs ----------
-tab_labels = ["🏠 홈", "👶 소아 증상", "🧬 암 선택", "💊 항암제(진단 기반)", "🧪 피수치 입력", "🔬 특수검사", "📄 보고서", "📊 기록/그래프"]
-t_home, t_peds, t_dx, t_chemo, t_labs, t_special, t_report, t_graph = st.tabs(tab_labels)
+tab_labels = ["🏠 홈", "🧪 피수치 입력", "🧬 암 선택", "💊 항암제(진단 기반)", "👶 소아 증상", "🔬 특수검사", "📄 보고서", "📊 기록/그래프"]
+t_home, t_labs, t_dx, t_chemo, t_peds, t_special, t_report, t_graph = st.tabs(tab_labels)
 
 # HOME
 with t_home:
@@ -1849,20 +1849,6 @@ with st.expander("🌡️ 해열제 가이드/계산", expanded=False):
 
 # --- ORS/탈수 ---
 with st.expander("🥤 ORS/탈수 가이드", expanded=False):
-    with st.expander("🏠 ORS 집에서 만드는 법(WHO 권장 비율)", expanded=False):
-        st.markdown("**재료 (1 L 기준)**")
-        st.write("- 끓였다 식힌 물 **1 L**")
-        st.write("- 설탕 **작은술 6스푼(평평하게)** ≈ 27 g")
-        st.write("- 소금 **작은술 1/2 스푼(평평하게)** ≈ 2.5 g")
-        st.markdown("**만드는 법/복용**")
-        st.write("- 깨끗한 용기에 모두 넣고 완전히 녹을 때까지 저어주세요.")
-        st.write("- **5~10분마다 소량씩** 마시고, **토하면 10~15분 쉬었다 재개**하세요.")
-        st.write("- 맛은 '살짝 짠 단물(눈물맛)' 정도가 정상입니다. 너무 짜거나 달면 **물을 더** 넣어 희석하세요.")
-        st.markdown("**주의**")
-        st.write("- 과일주스·탄산·순수한 물만 대량 섭취는 피하세요(전해질 불균형 위험).")
-        st.write("- **6개월 미만 영아/만성질환/신생아**는 반드시 의료진과 상의 후 사용하세요.")
-        st.write("- 설탕 대신 꿀을 쓰지 마세요(영아 보툴리누스 위험).")
-
     st.write("- 5~10분마다 소량씩 자주, 토하면 10~15분 휴식 후 재개")
     st.write("- 2시간 이상 소변 없음/입마름/눈물 감소/축 늘어짐 → 진료")
     st.write("- 가능하면 스포츠음료 대신 **ORS** 용액 사용")
