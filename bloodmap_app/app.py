@@ -192,23 +192,48 @@ with t_report:
     st.markdown("### 🏥 ER 원페이지 PDF")
     if st.button("ER 원페이지 PDF 만들기", key=wkey("er_pdf_btn")):
         try:
+            import pdf_export as _pdf
+        except Exception:
+            _pdf = None
+        try:
+            path = None
             if _pdf and hasattr(_pdf, "export_er_onepager"):
                 path = _pdf.export_er_onepager(st.session_state)
             elif _pdf and hasattr(_pdf, "build_er_onepager"):
                 path = _pdf.build_er_onepager(st.session_state)
-            else:
-                path = None
+            if not path and _pdf and hasattr(_pdf, "export_md_to_pdf"):
+                lines_md = [
+                    "# ER 원페이지 요약",
+                    "- 환자 기본정보: 보고서 상단 요약을 여기에 정리",
+                    "- 최근 주요 피수치: WBC/Hb/Plt, ANC, Cr/eGFR 등",
+                    "- 최근 복약/케어 포인트: 해열제, 수분 섭취, ORS 권고",
+                    "- 경고 신호: 2시간 무뇨·입마름·눈물 감소·축 늘어짐 등",
+                    "- 연락처/다음 내원: 담당자/병동/응급실 번호",
+                ]
+                md = "\n".join(lines_md)
+                pdf_bytes = _pdf.export_md_to_pdf(md)
+                save_path = "/mnt/data/ER_onepage.pdf"
+                import os
+                try:
+                    os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
+                    with open(save_path, "wb") as f:
+                        f.write(pdf_bytes)
+                    path = save_path
+                except Exception:
+                    with open("ER_onepage.pdf", "wb") as f:
+                        f.write(pdf_bytes)
+                    path = "ER_onepage.pdf"
             if path:
                 with open(path, "rb") as f:
                     st.download_button("PDF 다운로드", f,
                         file_name="bloodmap_ER_onepage.pdf",
                         mime="application/pdf",
                         key=wkey("er_pdf_dl"))
+                st.success("ER 원페이지 PDF 저장 완료: " + str(path))
             else:
-                st.info("pdf_export 모듈에서 원페이지 함수를 찾지 못했습니다.")
+                st.info("pdf_export 모듈에서 원페이지 함수를 찾지 못했고, 폴백 생성도 실패했습니다.")
         except Exception as e:
-            st.warning("PDF 생성 중 오류: " + str(e))
-
+            st.warning("ER PDF 생성 중 오류: " + str(e))
     # ----- Special Notes (환자별 메모) -----
     with st.expander('📝 Special Notes (환자별 메모)', expanded=False):
         import os
