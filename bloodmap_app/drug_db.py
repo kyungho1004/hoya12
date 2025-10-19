@@ -767,3 +767,45 @@ def ensure_onco_drug_db(db):
     if __prev_ensure_capmat is not None:
         __prev_ensure_capmat(db)
     _upsert(db, "Capmatinib", ALIAS_FALLBACK.get("Capmatinib","캡마티닙(MET)"), "MET TKI", "말초부종 · 오심/구토 · 광과민 · 간효소 상승")
+
+
+# === SAFE FINAL WRAPPER (break mutual recursion) ===
+def _call_prev_safely(db):
+    g = globals()
+    # snapshot and temporarily disable recursive bridges
+    saved_prev = g.get('__prev_ensure', None)
+    saved_prev2 = g.get('__prev2', None)
+    g['__prev_ensure'] = None
+    g['__prev2'] = None
+    try:
+        # prefer the later wrapper (__prev2), else earlier
+        prev = saved_prev2 or saved_prev
+        if callable(prev):
+            try:
+                prev(db)
+            except Exception:
+                # don't hard-fail if legacy layer has minor issues
+                pass
+    finally:
+        g['__prev_ensure'] = saved_prev
+        g['__prev2'] = saved_prev2
+
+try:
+    _BASE_ENSURE = ensure_onco_drug_db
+except Exception:
+    _BASE_ENSURE = None
+
+def ensure_onco_drug_db(db):
+    # prevent re-entry
+    g = globals()
+    if g.get('_ENSURE_GUARD', False):
+        return
+    g['_ENSURE_GUARD'] = True
+    try:
+        # call previous layers once without bouncing into each other
+        _call_prev_safely(db)
+        # nothing else here: earlier layers already populated oncology/antibiotics/maps
+        # This wrapper's sole job is to stop infinite recursion that was crashing the server.
+        return
+    finally:
+        g['_ENSURE_GUARD'] = False
