@@ -1304,6 +1304,8 @@ with t_labs:
 
 # DX
 with t_dx:
+    # DX 전용 컨테이너 (모든 DX 출력 고정화)
+    dx_wrap = st.container()
     # DX 전용 배너 슬롯 (다른 탭 영향 없음)
     dx_banner = st.empty()
     # Fixed-height slot for selection banner (prevents layout shift)
