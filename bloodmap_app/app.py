@@ -2,13 +2,28 @@
 
 # ===== Robust import guard (auto-injected) =====
 import importlib, types
-from peds_guide import render_section_constipation, render_section_diarrhea, render_section_vomit
+# [patched:P0-1] removed hard import from peds_guide
 
 def _safe_import(modname):
     try:
         return importlib.import_module(modname)
     except Exception:
         return None
+
+# [patched:P0-1] safe-bind peds_guide functions
+_pg = _safe_import("peds_guide")
+if _pg is not None:
+    render_section_constipation = getattr(_pg, "render_section_constipation", lambda *a, **k: None)
+    render_section_diarrhea    = getattr(_pg, "render_section_diarrhea", lambda *a, **k: None)
+    render_section_vomit       = getattr(_pg, "render_section_vomit", lambda *a, **k: None)
+else:
+    import streamlit as st
+    def render_section_constipation(*a, **k):
+        st.info("🔧 안전모드: peds_guide 모듈이 없어 변비 섹션을 대체 안내로 표시합니다.")
+    def render_section_diarrhea(*a, **k):
+        st.info("🔧 안전모드: peds_guide 모듈이 없어 설사 섹션을 대체 안내로 표시합니다.")
+    def render_section_vomit(*a, **k):
+        st.info("🔧 안전모드: peds_guide 모듈이 없어 구토 섹션을 대체 안내로 표시합니다.")
 
 def _call_first(mod, names):
     """Call functions by name on module if they exist."""
@@ -69,7 +84,7 @@ html { scroll-behavior: smooth; }
 
 
 # --- HTML-only pediatric navigator (no rerun) ---
-def render_peds_nav_md():
+def render_peds_nav_iframe():
     from streamlit.components.v1 import html as _html
     _html("""
     <style>
@@ -2596,3 +2611,94 @@ _ss_setdefault(wkey('home_fb_log_cache'), [])
 
 
 # ===== [/INLINE FEEDBACK] =====
+
+# === Developer Preflight (P0-5): ast.parse + imports + paths + key lint ===
+def _dev_preflight_checks():
+    import sys, importlib, ast as _ast, io as _io, traceback as _tb
+    from pathlib import Path as _Path
+    import datetime as _dt
+    _report = {"ts_kst": _dt.datetime.now(_dt.timezone(_dt.timedelta(hours=9))).isoformat()}
+    _files = [
+        _Path(__file__),
+        _Path(__file__).parent / "core_utils.py",
+        _Path(__file__).parent / "peds_dose.py",
+        _Path(__file__).parent / "peds_guide.py",
+        _Path(__file__).parent / "special_tests.py",
+        _Path(__file__).parent / "onco_map.py",
+        _Path(__file__).parent / "drug_db.py",
+        _Path(__file__).parent / "pdf_export.py",
+        _Path(__file__).parent / "branding.py",
+        _Path(__file__).parent / "ui_results.py",
+    ]
+    _ok_parse = {}
+    for fp in _files:
+        try:
+            if fp.exists():
+                src = fp.read_text(encoding="utf-8")
+                _ast.parse(src)
+                _ok_parse[str(fp.name)] = True
+            else:
+                _ok_parse[str(fp.name)] = None  # optional
+        except Exception as e:
+            _ok_parse[str(fp.name)] = f"syntax_error: {e}"
+    _report["syntax"] = _ok_parse
+
+    # Import smoke tests (optional modules wrapped)
+    def _smoke(name):
+        try:
+            import importlib
+            importlib.invalidate_caches()
+            importlib.import_module(name)
+            return True
+        except Exception as e:
+            return f"import_error: {e}"
+    _report["imports"] = {
+        "branding": _smoke("branding"),
+        "pdf_export": _smoke("pdf_export"),
+        "core_utils": _smoke("core_utils"),
+        "peds_guide": _smoke("peds_guide"),
+        "peds_dose": _smoke("peds_dose"),
+        "special_tests": _smoke("special_tests"),
+        "onco_map": _smoke("onco_map"),
+        "drug_db": _smoke("drug_db"),
+        "ui_results": _smoke("ui_results"),
+    }
+
+    # Dir write checks
+    base_candidates = ["/mnt/data", "/mount/data", "/tmp"]
+    writable = None
+    from pathlib import Path as P
+    for b in base_candidates:
+        p = P(b)
+        try:
+            p.mkdir(exist_ok=True)
+            test = p / ("_bm_wtest_" + str(int(_dt.datetime.now().timestamp())) + ".tmp")
+            test.write_text("ok", encoding="utf-8")
+            test.unlink(missing_ok=True)
+            writable = b
+            break
+        except Exception:
+            continue
+    _report["writable_base"] = writable
+
+    # Key lint: look for known risky patterns
+    try:
+        src_app = _Path(__file__).read_text(encoding="utf-8")
+        risky = []
+        import re as _re
+        for m in _re.finditer(r'key\s*=\s*f?["\\\']cl_del_\\{?idx\\}?', src_app):
+            risky.append({"span": m.span(), "text": m.group(0)})
+        _report["key_lint"] = {"cl_del_idx_without_wkey": risky}
+    except Exception as e:
+        _report["key_lint"] = {"error": str(e)}
+
+    return _report
+
+def render_dev_preflight_panel():
+    try:
+        import streamlit as st
+        rep = _dev_preflight_checks()
+        with st.expander("🧪 Developer Preflight (P0-5)", expanded=False):
+            st.json(rep)
+    except Exception:
+        pass
