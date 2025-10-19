@@ -90,30 +90,31 @@ def _carelog_save():
     except Exception:
         pass
 
-def _render_carelog_input():
+def _render_carelog_input(scope: str = ""):
     """해열제 복용 입력 + 최근 기록 테이블/삭제"""
+    kk = lambda name: (wkey(f"{scope}_" + name) if scope else wkey(name))
     _carelog_load()
     st.markdown("#### 🧾 해열제 복용 기록 추가")
     col1, col2, col3, col4 = st.columns([1,1,1,1])
     with col1:
-        drug = st.selectbox("약물", ["Acetaminophen(APAP)", "Ibuprofen(IBU)", "기타"], index=0, key="cl_drug")
+        drug = st.selectbox("약물", ["Acetaminophen(APAP)", "Ibuprofen(IBU)", "기타"], index=0, key=kk("cl_drug"))
     with col2:
-        mg = st.number_input("용량 (mg)", min_value=0.0, step=50.0, key="cl_mg")
+        mg = st.number_input("용량 (mg)", min_value=0.0, step=50.0, key=kk("cl_mg"))
     with col3:
         # Streamlit 버전에 따른 입력 폴백
         dt_widget = getattr(st, "datetime_input", None)
         if dt_widget:
-            ts = dt_widget("복용 시각", value=_dt.now(_KST), key="cl_ts_dt")
+            ts = dt_widget("복용 시각", value=_dt.now(_KST), key=kk("cl_ts_dt"))
         else:
-            d = st.date_input("복용 날짜", value=_dt.now(_KST).date(), key="cl_dt_d")
-            t = st.time_input("복용 시간", value=_dt.now(_KST).time(), key="cl_dt_t")
+            d = st.date_input("복용 날짜", value=_dt.now(_KST).date(), key=kk("cl_dt_d"))
+            t = st.time_input("복용 시간", value=_dt.now(_KST).time(), key=kk("cl_dt_t"))
             ts = _dt.combine(d, t)
     with col4:
-        note = st.text_input("메모(선택)", key="cl_note")
+        note = st.text_input("메모(선택)", key=kk("cl_note"))
 
     cc1, cc2, cc3 = st.columns([1,1,1])
     with cc1:
-        if st.button("기록 추가", key="cl_add"):
+        if st.button("기록 추가", key=kk("cl_add")):
             st.session_state["care_log"].append({
                 "drug": drug,
                 "mg": float(mg or 0),
@@ -123,7 +124,7 @@ def _render_carelog_input():
             _carelog_save()
             st.success("복용 기록이 추가되었습니다.")
     with cc2:
-        if st.button("오늘 기록 초기화", key="cl_reset_today"):
+        if st.button("오늘 기록 초기화", key=kk("cl_reset_today")):
             today = _dt.now(_KST).date()
             newlog = []
             for r in st.session_state["care_log"]:
@@ -137,7 +138,7 @@ def _render_carelog_input():
             _carelog_save()
             st.info("오늘 기록을 초기화했습니다.")
     with cc3:
-        if st.button("전체 기록 비우기", key="cl_clear_all"):
+        if st.button("전체 기록 비우기", key=kk("cl_clear_all")):
             st.session_state["care_log"] = []
             _carelog_save()
             st.warning("전체 기록을 삭제했습니다.")
@@ -266,12 +267,12 @@ def _render_er_onepage_button():
 # =================== Render Tabs ===================
 with t_home:
     _render_antipyretic_badges()
-    _render_carelog_input()
+    _render_carelog_input('home')
 
 with t_peds:
     _peds_sticky_nav()
     _render_antipyretic_badges()
-    _render_carelog_input()
+    _render_carelog_input('peds')
     _render_ors_pdf_button()
 
 with t_dx:
