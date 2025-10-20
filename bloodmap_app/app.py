@@ -107,6 +107,38 @@ def render_peds_nav_md():
 
 def _scroll_now(target: str):
     from streamlit.components.v1 import html as _html
+
+# === Sticky Navigation Guard (patch: prevent unwanted return to home) ===
+import streamlit as _st_patch  # safe alias to avoid name shadowing
+
+if "active_page" not in _st_patch.session_state:
+    # Initialize only once
+    _st_patch.session_state["active_page"] = "home"
+# Backward-compat: if legacy 'page' was used earlier, inherit once
+if "page" in _st_patch.session_state and "active_page" not in _st_patch.session_state:
+    _st_patch.session_state["active_page"] = _st_patch.session_state.get("page", "home")
+
+# Sticky logic: if something resets to home without our intent, restore last page
+if "_last_page" not in _st_patch.session_state:
+    _st_patch.session_state["_last_page"] = _st_patch.session_state.get("active_page", "home")
+if "_nav_intent" not in _st_patch.session_state:
+    _st_patch.session_state["_nav_intent"] = False
+
+if (_st_patch.session_state.get("active_page") == "home"
+    and _st_patch.session_state.get("_last_page") not in (None, "home")
+    and not _st_patch.session_state.get("_nav_intent", False)):
+    _st_patch.session_state["active_page"] = _st_patch.session_state["_last_page"]
+
+def navigate(page: str):
+    """Set target page; no explicit rerun to avoid state loss."""
+    _st_patch.session_state["active_page"] = page
+    _st_patch.session_state["_nav_intent"] = True
+
+# After routing later in the file, remember to set:
+# _st_patch.session_state["_last_page"] = _st_patch.session_state.get("active_page", "home")
+# _st_patch.session_state["_nav_intent"] = False
+# === End Sticky Navigation Guard ===
+
     if not target:
         return
     _html(f"""
@@ -653,7 +685,7 @@ def build_peds_notes(
     return "\\n".join(lines)
 
 # ---------- Tabs ----------
-tab_labels = ["🏠 홈", "👶 소아(추정병명 및 보호자설명)", "🧬 암 선택", "💊 항암제(부작용)", "🧪 피수치 입력", "🔬 특수검사", "📄 보고서", "📊 기록/그래프"]
+tab_labels = ["🏠 홈", "👶 소아 증상", "🧬 암 선택", "💊 항암제(진단 기반)", "🧪 피수치 입력", "🔬 특수검사", "📄 보고서", "📊 기록/그래프"]
 t_home, t_peds, t_dx, t_chemo, t_labs, t_special, t_report, t_graph = st.tabs(tab_labels)
 
 # HOME
@@ -2689,21 +2721,11 @@ _ss_setdefault(wkey('home_fb_log_cache'), [])
 
 # ===== [/INLINE FEEDBACK] =====
 
-# === Patch End: Disable browser auto-translation on medical labels ===
-def __bloodmap_disable_autotranslate():
-    html = (
-        '<meta name="google" content="notranslate">'
-        '<style>.notranslate, .stApp { translate: no; }</style>'
-        '<script>document.documentElement.classList.add("notranslate");'
-        'document.documentElement.setAttribute("translate","no");</script>'
-    )
-    try:
-        st.markdown(html, unsafe_allow_html=True)
-    except Exception:
-        pass
-
-# Call once at end (safe if re-run)
+# === Sticky Navigation Footer (patch) ===
 try:
-    __bloodmap_disable_autotranslate()
+    import streamlit as _st_patch2
+    _st_patch2.session_state["_last_page"] = _st_patch2.session_state.get("active_page", "home")
+    _st_patch2.session_state["_nav_intent"] = False
 except Exception:
     pass
+# === End Sticky Navigation Footer ===
