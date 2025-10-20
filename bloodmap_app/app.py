@@ -1,3 +1,5 @@
+
+
 # app.py
 
 # ===== Robust import guard (auto-injected) =====
@@ -107,6 +109,38 @@ def render_peds_nav_md():
 
 def _scroll_now(target: str):
     from streamlit.components.v1 import html as _html
+
+# === Sticky Navigation Guard (patch: prevent unwanted return to home) ===
+import streamlit as _st_patch  # safe alias to avoid name shadowing
+
+if "active_page" not in _st_patch.session_state:
+    # Initialize only once
+    _st_patch.session_state["active_page"] = "home"
+# Backward-compat: if legacy 'page' was used earlier, inherit once
+if "page" in _st_patch.session_state and "active_page" not in _st_patch.session_state:
+    _st_patch.session_state["active_page"] = _st_patch.session_state.get("page", "home")
+
+# Sticky logic: if something resets to home without our intent, restore last page
+if "_last_page" not in _st_patch.session_state:
+    _st_patch.session_state["_last_page"] = _st_patch.session_state.get("active_page", "home")
+if "_nav_intent" not in _st_patch.session_state:
+    _st_patch.session_state["_nav_intent"] = False
+
+if (_st_patch.session_state.get("active_page") == "home"
+    and _st_patch.session_state.get("_last_page") not in (None, "home")
+    and not _st_patch.session_state.get("_nav_intent", False)):
+    _st_patch.session_state["active_page"] = _st_patch.session_state["_last_page"]
+
+def navigate(page: str):
+    """Set target page; no explicit rerun to avoid state loss."""
+    _st_patch.session_state["active_page"] = page
+    _st_patch.session_state["_nav_intent"] = True
+
+# After routing later in the file, remember to set:
+# _st_patch.session_state["_last_page"] = _st_patch.session_state.get("active_page", "home")
+# _st_patch.session_state["_nav_intent"] = False
+# === End Sticky Navigation Guard ===
+
     if not target:
         return
     _html(f"""
@@ -231,6 +265,8 @@ except Exception:
 # ---------- Page & Banner ----------
 st.set_page_config(page_title=f"Bloodmap {APP_VERSION}", layout="wide")
 st.title(f"Bloodmap {APP_VERSION}")
+
+
 st.markdown(
     """> In memory of Eunseo, a little star now shining in the sky.
 > This app is made with the hope that she is no longer in pain,
@@ -238,8 +274,14 @@ st.markdown(
 )
 st.markdown("---")
 render_deploy_banner("https://bloodmap.streamlit.app/", "제작: Hoya/GPT · 자문: Hoya/GPT")
-st.caption(f"모듈 경로 — special_tests: {SPECIAL_PATH or '(not found)'} | onco_map: {ONCO_PATH or '(not found)'} | drug_db: {DRUGDB_PATH or '(not found)'}")
 
+# (patch) usage counter & badge (below 제작 line)
+try:
+    increment_usage_once_per_session()
+    render_usage_badge()
+except Exception:
+    pass
+# (patch) removed corrupted debug caption
 # ---------- Helpers ----------
 def wkey(name: str) -> str:
     who = st.session_state.get("key", "guest#PIN")
@@ -655,6 +697,7 @@ def build_peds_notes(
 # ---------- Tabs ----------
 tab_labels = ["🏠 홈", "👶 소아 증상", "🧬 암 선택", "💊 항암제(진단 기반)", "🧪 피수치 입력", "🔬 특수검사", "📄 보고서", "📊 기록/그래프"]
 t_home, t_peds, t_dx, t_chemo, t_labs, t_special, t_report, t_graph = st.tabs(tab_labels)
+
 
 # HOME
 with t_home:
@@ -2689,21 +2732,230 @@ _ss_setdefault(wkey('home_fb_log_cache'), [])
 
 # ===== [/INLINE FEEDBACK] =====
 
-# === Patch End: Disable browser auto-translation on medical labels ===
-def __bloodmap_disable_autotranslate():
-    html = (
-        '<meta name="google" content="notranslate">'
-        '<style>.notranslate, .stApp { translate: no; }</style>'
-        '<script>document.documentElement.classList.add("notranslate");'
-        'document.documentElement.setAttribute("translate","no");</script>'
+
+# === Feedback (New UI, patch) ===
+import os as _os_fb, json as _json_fb
+from datetime import datetime as _dt_fb, timedelta as _td_fb, timezone as _tz_fb
+import streamlit as _st_fb
+
+def _fb_kst_now_iso():
+    KST = _tz_fb(_td_fb(hours=9))
+    return _dt_fb.now(KST).isoformat(timespec="seconds")
+
+def _fb_save(payload: dict):
+    root = "/mnt/data/feedback"
+    _os_fb.makedirs(root, exist_ok=True)
+    day = _fb_kst_now_iso()[:10].replace("-", "")
+    path = _os_fb.path.join(root, f"feedback_{day}.jsonl")
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(_json_fb.dumps(payload, ensure_ascii=False) + "\n")
+
+def render_feedback_new(section_title: str = "🗳️ 도움이 되었나요? (한 번만 클릭해도 OK!)"):
+    _st_fb.markdown("#### " + section_title)
+    score = _st_fb.radio(
+        "", ["👍 도움이 되었어요", "😐 그냥 그래요", "👎 도움이 안 됐어요"],
+        horizontal=True, label_visibility="collapsed", key="fb_score_new"
     )
+
+    # one-shot per session guard
+    if "fb_submitted_new" not in _st_fb.session_state:
+        _st_fb.session_state["fb_submitted_new"] = False
+
+    if score and not _st_fb.session_state["fb_submitted_new"]:
+        _st_fb.success("의견 감사합니다! 아래 선택은 선택사항이에요 💬")
+        tags = _st_fb.multiselect("어떤 점이 좋았나요 / 아쉬웠나요?", [
+            "설명이 쉬웠어요", "결과가 빠르게 나왔어요", "UI가 직관적이에요",
+            "기능이 부족해요", "모바일에서 불편했어요", "기대와 달랐어요"
+        ], key="fb_tags_new")
+        text = _st_fb.text_area(
+            "추가로 남기고 싶은 말이 있다면 자유롭게 적어주세요!",
+            placeholder="예: 수치 해석이 구체적이라서 좋았어요",
+            key="fb_text_new"
+        )
+
+        if _st_fb.button("제출하기", key="fb_submit_new"):
+            # normalize score
+            score_raw = _st_fb.session_state.get("fb_score_new")
+            score_map = {
+                "👍 도움이 되었어요": "up",
+                "😐 그냥 그래요": "meh",
+                "👎 도움이 안 됐어요": "down",
+            }
+            norm = score_map.get(score_raw, "unknown")
+            payload = {
+                "ts_kst": _fb_kst_now_iso(),
+                "active_page": _st_fb.session_state.get("active_page", None),
+                "nickname": _st_fb.session_state.get("profile", {}).get("nickname") if isinstance(_st_fb.session_state.get("profile"), dict) else None,
+                "score_raw": score_raw,
+                "score": norm,
+                "tags": _st_fb.session_state.get("fb_tags_new", []),
+                "text": _st_fb.session_state.get("fb_text_new", "").strip(),
+                "app_ver": _st_fb.session_state.get("app_version", None),
+            }
+            try:
+                _fb_save(payload)
+                _st_fb.success("피드백이 전송되었습니다! 💌 감사합니다.")
+                _st_fb.session_state["fb_submitted_new"] = True
+            except Exception as e:
+                _st_fb.error(f"저장 중 문제가 발생했어요: {e}")
+    elif _st_fb.session_state.get("fb_submitted_new", False):
+        _st_fb.info("이미 피드백을 제출하셨어요. 고맙습니다! 🙏")
+# === End Feedback (New UI, patch) ===
+
+
+# === Feedback Mini Dashboard (patch) ===
+import os as _os_fd, json as _json_fd, glob as _glob_fd
+from datetime import datetime as _dt_fd
+import streamlit as _st_fd
+
+def _fd_load_records(root="/mnt/data/feedback"):
+    recs = []
     try:
-        st.markdown(html, unsafe_allow_html=True)
+        for path in sorted(_glob_fd.glob(_os_fd.path.join(root, "feedback_*.jsonl"))):
+            with open(path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        rec = _json_fd.loads(line)
+                        # normalize date
+                        ts = rec.get("ts_kst") or rec.get("ts")
+                        if ts:
+                            try:
+                                rec["_date"] = ts[:10]
+                            except Exception:
+                                rec["_date"] = None
+                        else:
+                            rec["_date"] = None
+                        recs.append(rec)
+                    except Exception:
+                        # skip malformed
+                        pass
     except Exception:
         pass
+    return recs
 
-# Call once at end (safe if re-run)
+def _fd_daily_counts(recs):
+    daily = {}
+    for r in recs:
+        d = r.get("_date")
+        s = r.get("score")
+        if not d or not s:
+            continue
+        if d not in daily:
+            daily[d] = {"up":0, "meh":0, "down":0, "total":0}
+        if s in ("up","meh","down"):
+            daily[d][s] += 1
+            daily[d]["total"] += 1
+    # sort by date
+    keys = sorted(daily.keys())
+    rows = [{"date": k, **daily[k]} for k in keys]
+    return rows
+
+def _fd_top_tags(recs, topn=8):
+    from collections import Counter
+    c = Counter()
+    for r in recs:
+        tags = r.get("tags") or []
+        for t in tags:
+            if isinstance(t, str) and t.strip():
+                c[t.strip()] += 1
+    return c.most_common(topn)
+
+def _fd_recent_comments(recs, maxn=8):
+    out = []
+    for r in recs:
+        txt = (r.get("text") or "").strip()
+        if not txt:
+            continue
+        out.append({
+            "ts": r.get("ts_kst") or r.get("ts"),
+            "page": r.get("active_page"),
+            "score": r.get("score"),
+            "text": txt
+        })
+    # sort by ts desc (lexicographic ok for ISO)
+    out.sort(key=lambda x: x.get("ts") or "", reverse=True)
+    return out[:maxn]
+
+def render_feedback_dashboard():
+    recs = _fd_load_records()
+    import matplotlib.pyplot as plt  # per policy: matplotlib only
+    _st_fd.markdown("### 📊 사용자 통계 & 피드백 대시보드")
+    if not recs:
+        _st_fd.info("아직 집계할 피드백이 없습니다.")
+        return
+
+    # Daily chart
+    daily = _fd_daily_counts(recs)
+    if daily:
+        dates = [r["date"] for r in daily]
+        ups   = [r["up"] for r in daily]
+        mehs  = [r["meh"] for r in daily]
+        downs = [r["down"] for r in daily]
+
+        fig = plt.figure()  # single plot, no specific colors
+        plt.plot(dates, ups, marker="o", label="도움됨(up)")
+        plt.plot(dates, mehs, marker="o", label="보통(meh)")
+        plt.plot(dates, downs, marker="o", label="아쉬움(down)")
+        plt.xticks(rotation=30, ha="right")
+        plt.title("일자별 피드백 추이 (KST)")
+        plt.legend()
+        _st_fd.pyplot(fig)
+
+    # Top tags
+    top_tags = _fd_top_tags(recs, topn=8)
+    if top_tags:
+        cols = _st_fd.columns(2)
+        with cols[0]:
+            _st_fd.markdown("**상위 태그**")
+            for tag, cnt in top_tags:
+                _st_fd.write(f"- {tag}: {cnt}")
+        # Recent comments
+        recent = _fd_recent_comments(recs, maxn=8)
+        with cols[1]:
+            _st_fd.markdown("**최근 코멘트**")
+            if recent:
+                for r in recent:
+                    ts = r.get("ts") or ""
+                    pg = r.get("page") or "-"
+                    sc = r.get("score") or "-"
+                    _st_fd.markdown(f"- `{ts}` · **{pg}** · {sc} — {r.get('text')}")
+            else:
+                _st_fd.write("표시할 코멘트가 없습니다.")
+    else:
+        _st_fd.markdown("**상위 태그**: 데이터 없음")
+        recent = _fd_recent_comments(recs, maxn=8)
+        _st_fd.markdown("**최근 코멘트**")
+        if recent:
+            for r in recent:
+                ts = r.get("ts") or ""
+                pg = r.get("page") or "-"
+                sc = r.get("score") or "-"
+                _st_fd.markdown(f"- `{ts}` · **{pg}** · {sc} — {r.get('text')}")
+        else:
+            _st_fd.write("표시할 코멘트가 없습니다.")
+# === End Feedback Mini Dashboard (patch) ===
+
+
+
+# === Sticky Navigation Footer (patch) ===
 try:
-    __bloodmap_disable_autotranslate()
+    import streamlit as _st_patch2
+    _st_patch2.session_state["_last_page"] = _st_patch2.session_state.get("active_page", "home")
+    _st_patch2.session_state["_nav_intent"] = False
 except Exception:
     pass
+# === End Sticky Navigation Footer ===
+
+
+# (patch) override usage badge with credits
+
+def render_usage_badge():
+    try:
+        today_count, total_count = get_usage_counts()
+    except Exception:
+        today_count, total_count = 0, 0
+    import streamlit as _st_uc
+    _st_uc.caption(f"**오늘 방문자: {today_count} · 누적: {total_count}** · 제작: Hoya/GPT · 자문: Hoya/GPT")
