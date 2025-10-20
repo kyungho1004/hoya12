@@ -2812,3 +2812,14 @@ try:
 except Exception:
     pass
 # === End Sticky Navigation Footer ===
+
+
+# (patch) override usage badge with credits
+
+def render_usage_badge():
+    try:
+        today_count, total_count = get_usage_counts()
+    except Exception:
+        today_count, total_count = 0, 0
+    import streamlit as _st_uc
+    _st_uc.caption(f"**오늘 방문자: {today_count} · 누적: {total_count}** · 제작: Hoya/GPT · 자문: Hoya/GPT")
