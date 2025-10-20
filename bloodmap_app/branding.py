@@ -54,3 +54,36 @@ def render_deploy_banner(app_url: str, made_by: str) -> None:
 </div>
 """
     st.markdown(html, unsafe_allow_html=True)
+
+
+# === Usage Badge Inline (patch) ===
+def _uc_kst_today_inline():
+    from datetime import datetime, timedelta, timezone
+    KST = timezone(timedelta(hours=9))
+    return datetime.now(KST).strftime("%Y-%m-%d")
+
+def _uc_load_inline():
+    import os, json
+    root = "/mnt/data/metrics"
+    os.makedirs(root, exist_ok=True)
+    path = os.path.join(root, "usage.json")
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f), path
+        except Exception:
+            pass
+    return {"total": 0, "by_date": {}}, path
+
+def get_usage_counts_inline():
+    data, _ = _uc_load_inline()
+    today = _uc_kst_today_inline()
+    return int(data.get("by_date", {}).get(today, 0)), int(data.get("total", 0))
+
+def render_usage_badge_inline():
+    try:
+        today_count, total_count = get_usage_counts_inline()
+    except Exception:
+        today_count, total_count = 0, 0
+    st.caption(f"**오늘 방문자: {today_count} · 누적: {total_count}** · 제작: Hoya/GPT · 자문: Hoya/GPT")
+# === End Usage Badge Inline (patch) ===
