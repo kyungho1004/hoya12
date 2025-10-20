@@ -701,6 +701,13 @@ def build_peds_notes(
 tab_labels = ["🏠 홈", "👶 소아 증상", "🧬 암 선택", "💊 항암제(진단 기반)", "🧪 피수치 입력", "🔬 특수검사", "📄 보고서", "📊 기록/그래프"]
 t_home, t_peds, t_dx, t_chemo, t_labs, t_special, t_report, t_graph = st.tabs(tab_labels)
 
+
+# (patch) usage counter & badge (below tabs)
+try:
+    increment_usage_once_per_session()
+    render_usage_badge()
+except Exception:
+    pass
 # HOME
 with t_home:
     st.subheader("응급도 요약")
