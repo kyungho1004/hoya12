@@ -66,6 +66,8 @@ ALIAS_FALLBACK: Dict[str,str] = {
     "6-MP": "6-머캅토퓨린",
     "Nab-Paclitaxel": "나브-파클리탁셀",
     "Ado-trastuzumab emtansine": "트라스투주맙 엠탄신(T-DM1)",
+    "ATRA": "트레티노인(ATRA)",
+    "Arsenic Trioxide": "비소트리옥사이드(ATO)",
 }
 
 def _clean_alias_text(s: str) -> str:
@@ -162,8 +164,7 @@ def ensure_onco_drug_db(db: Dict[str, Dict[str, Any]]):
         "Lorlatinib","Nivolumab","Obinutuzumab","Octreotide","Osimertinib","Oxaliplatin","Paclitaxel","Pazopanib",
         "Pembrolizumab","Pemetrexed","Pertuzumab","Polatuzumab Vedotin","Pralsetinib","Prednisone","Ramucirumab",
         "Regorafenib","Ripretinib","Rituximab","Selpercatinib","Sotorasib","Sunitinib","T-DM1","Trabectedin",
-        "Topotecan","Daunorubicin","Idarubicin","Cytarabine","MTX","6-MP","Nab-Paclitaxel","Ado-trastuzumab emtansine"
-    ]
+        "Topotecan","Daunorubicin","Idarubicin","Cytarabine","MTX","6-MP","Nab-Paclitaxel","Ado-trastuzumab emtansine", "ATRA","Arsenic Trioxide"]
     for k in base_keys:
         alias = db.get(k, {}).get("alias") or ALIAS_FALLBACK.get(k, k)
         db.setdefault(k, {"alias": alias, "moa": "", "ae": PLACEHOLDER_AE})
@@ -175,6 +176,10 @@ def ensure_onco_drug_db(db: Dict[str, Dict[str, Any]]):
 
     # alias mirroring (Canon <- alias)
     alias_map = {
+        "bendamustine": "Bendamustine",
+        "bleomycin": "Bleomycin",
+        "베바시주맙": "Bevacizumab",
+        "시타라빈": "Cytarabine",
         "AraC": "Cytarabine",
         "Ara-C": "Cytarabine",
         "Nab-Paclitaxel": "Paclitaxel",
