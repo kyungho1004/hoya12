@@ -1,10 +1,5 @@
 
 
-# (patch) usage counter
-try:
-    increment_usage_once_per_session()
-except Exception:
-    pass
 # app.py
 
 # ===== Robust import guard (auto-injected) =====
@@ -271,7 +266,12 @@ except Exception:
 st.set_page_config(page_title=f"Bloodmap {APP_VERSION}", layout="wide")
 st.title(f"Bloodmap {APP_VERSION}")
 
-# (patch) usage badge (moved below title)
+
+# (patch) usage counter & badge (below title)
+try:
+    increment_usage_once_per_session()
+except Exception:
+    pass
 try:
     render_usage_badge()
 except Exception:
