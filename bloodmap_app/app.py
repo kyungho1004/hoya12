@@ -112,6 +112,47 @@ def _scroll_now(target: str):
 
 # === Sticky Navigation Guard (patch: prevent unwanted return to home) ===
 import streamlit as _st_patch  # safe alias to avoid name shadowing
+# === USERS BADGE (inline, order-safe) ===
+import os as _os_ib, json as _json_ib
+from datetime import datetime as _dt_ib, timezone as _tz_ib, timedelta as _td_ib
+import streamlit as _st_ib
+
+_KST_ib = _tz_ib(_td_ib(hours=9))
+_today_ib = _dt_ib.now(_KST_ib).strftime("%Y-%m-%d")
+_dir_ib = "/mnt/data/metrics"
+_os_ib.makedirs(_dir_ib, exist_ok=True)
+_path_ib = _os_ib.path.join(_dir_ib, "usage.json")
+
+_key_ib = f"_usage_counted_{_today_ib}"
+if _st_ib.session_state.get(_key_ib) is not True:
+    _data_ib = {}
+    if _os_ib.path.exists(_path_ib):
+        try:
+            with open(_path_ib, "r", encoding="utf-8") as f:
+                _data_ib = _json_ib.load(f)
+        except Exception:
+            _data_ib = {}
+    _total_ib = int(_data_ib.get("total", 0)) + 1
+    _bydate_ib = _data_ib.get("by_date", {})
+    _bydate_ib[_today_ib] = int(_bydate_ib.get(_today_ib, 0)) + 1
+    _data_ib = {"total": _total_ib, "by_date": _bydate_ib}
+    try:
+        with open(_path_ib, "w", encoding="utf-8") as f:
+            _json_ib.dump(_data_ib, f, ensure_ascii=False, indent=2)
+        _st_ib.session_state[_key_ib] = True
+    except Exception:
+        pass
+
+try:
+    with open(_path_ib, "r", encoding="utf-8") as f:
+        _data_ib = _json_ib.load(f)
+    _today_count_ib = int(_data_ib.get("by_date", {}).get(_today_ib, 0))
+    _total_count_ib = int(_data_ib.get("total", 0))
+except Exception:
+    _today_count_ib, _total_count_ib = 0, 0
+
+_st_ib.caption(f"**오늘 방문자: {_today_count_ib} · 누적: {_total_count_ib}** · 제작: Hoya/GPT · 자문: Hoya/GPT")
+# === END USERS BADGE ===
 
 if "active_page" not in _st_patch.session_state:
     # Initialize only once
