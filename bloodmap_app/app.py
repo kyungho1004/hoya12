@@ -1,9 +1,4 @@
 
-# (patch) usage badge
-try:
-    render_usage_badge()
-except Exception:
-    pass
 
 # (patch) usage counter
 try:
@@ -275,6 +270,12 @@ except Exception:
 # ---------- Page & Banner ----------
 st.set_page_config(page_title=f"Bloodmap {APP_VERSION}", layout="wide")
 st.title(f"Bloodmap {APP_VERSION}")
+
+# (patch) usage badge (moved below title)
+try:
+    render_usage_badge()
+except Exception:
+    pass
 st.markdown(
     """> In memory of Eunseo, a little star now shining in the sky.
 > This app is made with the hope that she is no longer in pain,
@@ -2802,6 +2803,143 @@ def render_feedback_new(section_title: str = "🗳️ 도움이 되었나요? (�
     elif _st_fb.session_state.get("fb_submitted_new", False):
         _st_fb.info("이미 피드백을 제출하셨어요. 고맙습니다! 🙏")
 # === End Feedback (New UI, patch) ===
+
+
+# === Feedback Mini Dashboard (patch) ===
+import os as _os_fd, json as _json_fd, glob as _glob_fd
+from datetime import datetime as _dt_fd
+import streamlit as _st_fd
+
+def _fd_load_records(root="/mnt/data/feedback"):
+    recs = []
+    try:
+        for path in sorted(_glob_fd.glob(_os_fd.path.join(root, "feedback_*.jsonl"))):
+            with open(path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        rec = _json_fd.loads(line)
+                        # normalize date
+                        ts = rec.get("ts_kst") or rec.get("ts")
+                        if ts:
+                            try:
+                                rec["_date"] = ts[:10]
+                            except Exception:
+                                rec["_date"] = None
+                        else:
+                            rec["_date"] = None
+                        recs.append(rec)
+                    except Exception:
+                        # skip malformed
+                        pass
+    except Exception:
+        pass
+    return recs
+
+def _fd_daily_counts(recs):
+    daily = {}
+    for r in recs:
+        d = r.get("_date")
+        s = r.get("score")
+        if not d or not s:
+            continue
+        if d not in daily:
+            daily[d] = {"up":0, "meh":0, "down":0, "total":0}
+        if s in ("up","meh","down"):
+            daily[d][s] += 1
+            daily[d]["total"] += 1
+    # sort by date
+    keys = sorted(daily.keys())
+    rows = [{"date": k, **daily[k]} for k in keys]
+    return rows
+
+def _fd_top_tags(recs, topn=8):
+    from collections import Counter
+    c = Counter()
+    for r in recs:
+        tags = r.get("tags") or []
+        for t in tags:
+            if isinstance(t, str) and t.strip():
+                c[t.strip()] += 1
+    return c.most_common(topn)
+
+def _fd_recent_comments(recs, maxn=8):
+    out = []
+    for r in recs:
+        txt = (r.get("text") or "").strip()
+        if not txt:
+            continue
+        out.append({
+            "ts": r.get("ts_kst") or r.get("ts"),
+            "page": r.get("active_page"),
+            "score": r.get("score"),
+            "text": txt
+        })
+    # sort by ts desc (lexicographic ok for ISO)
+    out.sort(key=lambda x: x.get("ts") or "", reverse=True)
+    return out[:maxn]
+
+def render_feedback_dashboard():
+    recs = _fd_load_records()
+    import matplotlib.pyplot as plt  # per policy: matplotlib only
+    _st_fd.markdown("### 📊 사용자 통계 & 피드백 대시보드")
+    if not recs:
+        _st_fd.info("아직 집계할 피드백이 없습니다.")
+        return
+
+    # Daily chart
+    daily = _fd_daily_counts(recs)
+    if daily:
+        dates = [r["date"] for r in daily]
+        ups   = [r["up"] for r in daily]
+        mehs  = [r["meh"] for r in daily]
+        downs = [r["down"] for r in daily]
+
+        fig = plt.figure()  # single plot, no specific colors
+        plt.plot(dates, ups, marker="o", label="도움됨(up)")
+        plt.plot(dates, mehs, marker="o", label="보통(meh)")
+        plt.plot(dates, downs, marker="o", label="아쉬움(down)")
+        plt.xticks(rotation=30, ha="right")
+        plt.title("일자별 피드백 추이 (KST)")
+        plt.legend()
+        _st_fd.pyplot(fig)
+
+    # Top tags
+    top_tags = _fd_top_tags(recs, topn=8)
+    if top_tags:
+        cols = _st_fd.columns(2)
+        with cols[0]:
+            _st_fd.markdown("**상위 태그**")
+            for tag, cnt in top_tags:
+                _st_fd.write(f"- {tag}: {cnt}")
+        # Recent comments
+        recent = _fd_recent_comments(recs, maxn=8)
+        with cols[1]:
+            _st_fd.markdown("**최근 코멘트**")
+            if recent:
+                for r in recent:
+                    ts = r.get("ts") or ""
+                    pg = r.get("page") or "-"
+                    sc = r.get("score") or "-"
+                    _st_fd.markdown(f"- `{ts}` · **{pg}** · {sc} — {r.get('text')}")
+            else:
+                _st_fd.write("표시할 코멘트가 없습니다.")
+    else:
+        _st_fd.markdown("**상위 태그**: 데이터 없음")
+        recent = _fd_recent_comments(recs, maxn=8)
+        _st_fd.markdown("**최근 코멘트**")
+        if recent:
+            for r in recent:
+                ts = r.get("ts") or ""
+                pg = r.get("page") or "-"
+                sc = r.get("score") or "-"
+                _st_fd.markdown(f"- `{ts}` · **{pg}** · {sc} — {r.get('text')}")
+        else:
+            _st_fd.write("표시할 코멘트가 없습니다.")
+# === End Feedback Mini Dashboard (patch) ===
+
 
 
 # === Sticky Navigation Footer (patch) ===
