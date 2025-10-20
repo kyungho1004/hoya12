@@ -82,11 +82,14 @@ _DX_KO = {
     "Retinoblastoma": "망막모세포종",
     "Medulloblastoma": "수모세포종",
     "Ependymoma": "상의세포종",
+    "Germinoma": "배세포종(중추신경계)",
     "Chordoma": "척삭종",
+    "Desmoid tumor": "데스모이드 종양",
     "Mesothelioma": "악성 중피종",
     "ACC": "부신피질암",
     "Pheochromocytoma/Paraganglioma": "갈색세포종/부신외갈색세포종",
     "Thymic carcinoma": "흉선암",
+    "Thymoma": "흉선종",
     "Histiocytosis": "조직구증(히스티오사이토시스)",
 }
 
@@ -99,7 +102,7 @@ def _norm_key(s: str) -> str:
     return u
 
 def build_onco_map() -> dict:
-    heme = {"ALL": {}, "AML": {}, "APL": {}, "CML": {}, "CLL": {}, "PCNSL": {}}
+    heme = {"ALL": {}, "AML": {}, "APL": {"chemo": ["Ara-C","Daunorubicin","Idarubicin", "MTX", "6-MP"], "targeted": ["ATRA","Arsenic Trioxide"]}, "CML": {}, "CLL": {}, "PCNSL": {"chemo": ["MTX", "Ara-C"], "targeted": ["Rituximab"]}}
     lymphoma = {
         "DLBCL": {}, "PMBCL": {}, "HGBL": {}, "BL": {},
         "FL": {}, "MZL": {}, "MCL": {}, "CHL": {}, "NLPHL": {},
@@ -122,9 +125,12 @@ def build_onco_map() -> dict:
         "GIST": {}, "NET": {},
     }
     rare = {
-        "Neuroblastoma": {}, "Wilms tumor": {}, "Hepatoblastoma": {}, "Retinoblastoma": {},
+"Neuroblastoma": {}, "Wilms tumor": {}, "Hepatoblastoma": {}, "Retinoblastoma": {},
         "Medulloblastoma": {}, "Ependymoma": {}, "Chordoma": {}, "Mesothelioma": {},
         "ACC": {}, "Pheochromocytoma/Paraganglioma": {}, "Thymic carcinoma": {}, "Histiocytosis": {},
+        "Thymoma": {"chemo": ["Carboplatin","Paclitaxel"], "targeted": [], "abx": []},
+        "Desmoid tumor": {"chemo": [], "targeted": ["Imatinib"], "abx": []},
+        "Germinoma": {"chemo": ["Carboplatin","Etoposide"], "targeted": [], "abx": []},
     }
     return {"혈액암": heme, "림프종": lymphoma, "육종": sarcoma, "고형암": solid, "희귀암": rare}
 
@@ -140,9 +146,9 @@ def dx_display(group: str, dx: str) -> str:
 
 # Minimal recommendation seeds (use only keys likely present; final filter happens by DB)
 _REC = {
-    "ALL": {"chemo": ["Vincristine","Cyclophosphamide","Doxorubicin","Ara-C","Prednisone"], "targeted": ["Imatinib","Rituximab"]},
+    "ALL": {"chemo": ["6-MP, Ara-C, Cyclophosphamide, Doxorubicin, MTX, Prednisone, Vincristine"], "targeted": ["Imatinib","Rituximab"]},
     "AML": {"chemo": ["Ara-C","Etoposide","Doxorubicin"], "targeted": []},
-    "APL": {"chemo": ["Ara-C"], "targeted": []},
+    "APL": {"chemo": ["Ara-C","Daunorubicin","Idarubicin"], "targeted": ["ATRA","Arsenic Trioxide"]},
     "CML": {"chemo": [], "targeted": ["Imatinib"]},
     "CLL": {"chemo": ["Cyclophosphamide","Chlorambucil","Prednisone"], "targeted": ["Ibrutinib","Obinutuzumab","Rituximab"]},
     "PCNSL": {"chemo": ["Ara-C"], "targeted": ["Rituximab"]},
@@ -182,8 +188,8 @@ _REC = {
     "Hepatocellular carcinoma": {"chemo": [], "targeted": ["Regorafenib","Cabozantinib"]},
     "Cholangiocarcinoma": {"chemo": ["Gemcitabine","Cisplatin"], "targeted": []},
     "Gallbladder": {"chemo": ["Gemcitabine","Cisplatin"], "targeted": []},
-    "Lung": {"chemo": ["Carboplatin","Cisplatin","Pemetrexed","Docetaxel","Paclitaxel"], "targeted": ["Osimertinib","Nivolumab","Pembrolizumab","Alectinib","Lorlatinib","Capmatinib","Entrectinib","Crizotinib","Sotorasib"]},
-    "NSCLC": {"chemo": ["Carboplatin","Pemetrexed"], "targeted": ["Osimertinib","Alectinib","Lorlatinib","Capmatinib","Sotorasib"]},
+    "Lung": {"chemo": ["Carboplatin","Cisplatin","Pemetrexed","Docetaxel","Paclitaxel"], "targeted": ["Larotrectinib", "Osimertinib","Nivolumab","Pembrolizumab","Alectinib","Lorlatinib","Capmatinib","Entrectinib","Crizotinib","Sotorasib"]},
+    "NSCLC": {"chemo": ["Carboplatin","Pemetrexed"], "targeted": ["Larotrectinib", "Osimertinib","Alectinib","Lorlatinib","Capmatinib","Sotorasib"]},
     "SCLC": {"chemo": ["Carboplatin","Etoposide"], "targeted": []},
     "Head & Neck": {"chemo": ["Cisplatin","5-FU","Paclitaxel"], "targeted": ["Pembrolizumab"]},
     "Thyroid (PTC)": {"chemo": [], "targeted": []},
