@@ -1,3 +1,15 @@
+
+# (patch) usage badge
+try:
+    render_usage_badge()
+except Exception:
+    pass
+
+# (patch) usage counter
+try:
+    increment_usage_once_per_session()
+except Exception:
+    pass
 # app.py
 
 # ===== Robust import guard (auto-injected) =====
@@ -2720,6 +2732,77 @@ _ss_setdefault(wkey('home_fb_log_cache'), [])
 
 
 # ===== [/INLINE FEEDBACK] =====
+
+
+# === Feedback (New UI, patch) ===
+import os as _os_fb, json as _json_fb
+from datetime import datetime as _dt_fb, timedelta as _td_fb, timezone as _tz_fb
+import streamlit as _st_fb
+
+def _fb_kst_now_iso():
+    KST = _tz_fb(_td_fb(hours=9))
+    return _dt_fb.now(KST).isoformat(timespec="seconds")
+
+def _fb_save(payload: dict):
+    root = "/mnt/data/feedback"
+    _os_fb.makedirs(root, exist_ok=True)
+    day = _fb_kst_now_iso()[:10].replace("-", "")
+    path = _os_fb.path.join(root, f"feedback_{day}.jsonl")
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(_json_fb.dumps(payload, ensure_ascii=False) + "\n")
+
+def render_feedback_new(section_title: str = "🗳️ 도움이 되었나요? (한 번만 클릭해도 OK!)"):
+    _st_fb.markdown("#### " + section_title)
+    score = _st_fb.radio(
+        "", ["👍 도움이 되었어요", "😐 그냥 그래요", "👎 도움이 안 됐어요"],
+        horizontal=True, label_visibility="collapsed", key="fb_score_new"
+    )
+
+    # one-shot per session guard
+    if "fb_submitted_new" not in _st_fb.session_state:
+        _st_fb.session_state["fb_submitted_new"] = False
+
+    if score and not _st_fb.session_state["fb_submitted_new"]:
+        _st_fb.success("의견 감사합니다! 아래 선택은 선택사항이에요 💬")
+        tags = _st_fb.multiselect("어떤 점이 좋았나요 / 아쉬웠나요?", [
+            "설명이 쉬웠어요", "결과가 빠르게 나왔어요", "UI가 직관적이에요",
+            "기능이 부족해요", "모바일에서 불편했어요", "기대와 달랐어요"
+        ], key="fb_tags_new")
+        text = _st_fb.text_area(
+            "추가로 남기고 싶은 말이 있다면 자유롭게 적어주세요!",
+            placeholder="예: 수치 해석이 구체적이라서 좋았어요",
+            key="fb_text_new"
+        )
+
+        if _st_fb.button("제출하기", key="fb_submit_new"):
+            # normalize score
+            score_raw = _st_fb.session_state.get("fb_score_new")
+            score_map = {
+                "👍 도움이 되었어요": "up",
+                "😐 그냥 그래요": "meh",
+                "👎 도움이 안 됐어요": "down",
+            }
+            norm = score_map.get(score_raw, "unknown")
+            payload = {
+                "ts_kst": _fb_kst_now_iso(),
+                "active_page": _st_fb.session_state.get("active_page", None),
+                "nickname": _st_fb.session_state.get("profile", {}).get("nickname") if isinstance(_st_fb.session_state.get("profile"), dict) else None,
+                "score_raw": score_raw,
+                "score": norm,
+                "tags": _st_fb.session_state.get("fb_tags_new", []),
+                "text": _st_fb.session_state.get("fb_text_new", "").strip(),
+                "app_ver": _st_fb.session_state.get("app_version", None),
+            }
+            try:
+                _fb_save(payload)
+                _st_fb.success("피드백이 전송되었습니다! 💌 감사합니다.")
+                _st_fb.session_state["fb_submitted_new"] = True
+            except Exception as e:
+                _st_fb.error(f"저장 중 문제가 발생했어요: {e}")
+    elif _st_fb.session_state.get("fb_submitted_new", False):
+        _st_fb.info("이미 피드백을 제출하셨어요. 고맙습니다! 🙏")
+# === End Feedback (New UI, patch) ===
+
 
 # === Sticky Navigation Footer (patch) ===
 try:
