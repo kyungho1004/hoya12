@@ -50,16 +50,6 @@ ALIAS_FALLBACK: Dict[str,str] = {
     "Brentuximab Vedotin": "브렌툭시맙 베도틴",
     "Polatuzumab Vedotin": "폴라투주맙 베도틴",
     "Prednisone": "프레드니손",
-    "Daunorubicin": "다우노루비신",
-    "Idarubicin": "이다루비신",
-    "MTX": "메토트렉세이트",
-    "6-MP": "6-머캡토퓨린",
-    "ATRA": "비스무수 레티노산(ATRA)",
-    "Arsenic Trioxide": "삼산화비소",
-    "Cetuximab": "세툭시맙",
-    "Cytarabine (HDAC)": "Cytarabine (HDAC)",
-    "L-asparaginase": "L-아스파라기나아제",
-    "Leucovorin": "류코보린(폴린산)",
 }
 
 def display_label(key: str, db: Dict[str, Dict[str, Any]]|None=None) -> str:
@@ -113,16 +103,10 @@ PROFILES: Dict[str, Dict[str, Any]] = {
     "Rituximab": {"moa": "CD20 항체", "ae": "💉 주입반응 · 감염위험 · HBV 재활성 경고"},
     "Octreotide": {"moa": "Somatostatin 유사체", "ae": "💩 지방변/설사 · 복부불편감 · 담석"},
     "Prednisone": {"moa": "코르티코스테로이드", "ae": "😠 기분변화 · 🍽️ 식욕↑/체중↑ · 혈당↑ · 불면"},
-    "Daunorubicin": {"moa": "안트라사이클린", "ae": "❤️ 심근독성(누적) · 🩸 골수억제 · 💊 점막염"},
-    "Idarubicin": {"moa": "안트라사이클린", "ae": "❤️ 심근독성(누적) · 🩸 골수억제 · 💊 점막염"},
-    "MTX": {"moa": "항대사제(엽산길항)", "ae": "💊 구내염 · 간효소↑ · 골수억제 · 신독성(고용량)"},
-    "6-MP": {"moa": "항대사제(퓨린)", "ae": "🩸 골수억제 · 간효소↑ · 발진"},
-    "ATRA": {"moa": "APL 유도치료", "ae": "두통 · 피부/점막 건조 · 분화증후군"},
-    "Arsenic Trioxide": {"moa": "APL 유도치료", "ae": "QT 연장 · 전해질 이상 · APL 분화증후군"},
-    "Cetuximab": {"moa": "EGFR mAb", "ae": "여드름양 발진 · 저Mg혈증 · 주입반응"},
-    "Cytarabine (HDAC)": {"moa": "", "ae": "부작용 정보 필요"},
-    "L-asparaginase": {"moa": "효소요법(Asparagine 고갈)", "ae": "🤧 과민반응/아나필락시스 · 🫛 췌장염 · 🫀 혈전/출혈 위험 · 🧪 간효소↑ · 혈당↑"},
-    "Leucovorin": {"moa": "엽산 대사체(5-FU 보조/MTX 구제)", "ae": "🤢 오심/구토 · 드문 알레르기 · (단독 독성 낮음)"},
+    "Cytarabine": {"moa": "시티딘 유사체(항대사제)", "ae": "🩸 골수억제 · 🤢 오심/구토 · 💊 구내염"},
+    "Cytarabine IV": {"moa": "시티딘 유사체(정맥)", "ae": "🩸 골수억제 · 🤢 오심/구토 · 💊 구내염"},
+    "Cytarabine SC": {"moa": "시티딘 유사체(피하)", "ae": "🩸 골수억제 · 주사부위 반응"},
+    "Cytarabine (HDAC)": {"moa": "고용량 Ara-C", "ae": "🧠 소뇌독성/실조 · 👁️ 각결막염 · 🩸 골수억제"},
 }
 
 PLACEHOLDER_AE = "부작용 정보 필요"
