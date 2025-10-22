@@ -2870,3 +2870,40 @@ _ss_setdefault(wkey('home_fb_log_cache'), [])
 
 
 # ===== [/INLINE FEEDBACK] =====
+# ---- Tab auto-select (route sync hack) ----
+def _select_tab_by_label(label: str):
+    try:
+        import streamlit as st
+        st.markdown("""
+        <script>
+        (function(){
+          const trySelect = () => {
+            const tabs = window.parent.document.querySelectorAll('button[role="tab"]');
+            for (const t of tabs) {
+              if ((t.innerText || '').trim().startsWith(label)) { t.click(); return true; }
+            }
+            return false;
+          };
+          // Try immediately and a bit later to survive reruns
+          if (!trySelect()) { setTimeout(trySelect, 80); setTimeout(trySelect, 200); }
+        })();
+        </script>
+        """, unsafe_allow_html=True)
+    except Exception:
+        pass
+
+_label_by_route = {
+    "home": "🏠 홈",
+    "peds": "👶 소아 증상",
+    "dx": "🧬 암 선택",
+    "chemo": "💊 항암제(진단 기반)",
+    "labs": "🧪 피수치 입력",
+    "special": "🔬 특수검사",
+    "report": "📄 보고서",
+    "graph": "📊 기록/그래프",
+}
+_cur_route = st.session_state.get("_route")
+if _cur_route and _cur_route in _label_by_route and _cur_route != "home":
+    _select_tab_by_label(_label_by_route[_cur_route])
+# ---- End Tab auto-select ----
+
