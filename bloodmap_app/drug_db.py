@@ -499,3 +499,617 @@ def ensure_onco_drug_db(db):
             pass
     _finalize_fill_daca_dacti(db)
 # === [/PATCH] ===
+
+# === [PATCH 2025-10-22 KST] Human-friendly AE details ===
+def _attach_ae_details(db: Dict[str, Dict[str, Any]]) -> None:
+    """
+    'ae_detail' 필드(사람이 보기 쉬운 요약)를 추가한다.
+    구조: {
+      "common": [ ... ],          # 흔한 부작용(간단 설명)
+      "serious": [ ... ],         # 중대한 경고(간단 설명)
+      "tips": [ ... ],            # 예방/관리 팁
+      "call": [ ... ],            # 즉시 연락해야 할 신호
+      "notes": [ ... ],           # 기타
+    }
+    """
+    def put(key, data):
+        if key in db and isinstance(db[key], dict):
+            rec = db[key]
+            if not isinstance(rec.get("ae_detail"), dict):
+                rec["ae_detail"] = {}
+            # 병합(덮어쓰기 없이 추가)
+            for k, v in data.items():
+                if not v:
+                    continue
+                arr = list(rec["ae_detail"].get(k, [])) if isinstance(rec["ae_detail"].get(k), (list, tuple)) else []
+                for item in v:
+                    if item not in arr:
+                        arr.append(item)
+                rec["ae_detail"][k] = arr
+
+    # 5-FU / Capecitabine (손발증후군/위장관)
+    fluoropy = {
+      "common": ["피부: 손발증후군(따가움·붉어짐·갈라짐)", "위장관: 설사, 구내염, 오심/구토", "혈액: 백혈구/혈소판 감소로 감염·출혈 위험"],
+      "serious": ["심장: 흉통/호흡곤란(드묾, 심근허혈)", "중증 설사로 탈수"],
+      "tips": ["손발 보습·마찰/열 피하기", "수분섭취 유지, 설사 지속 시 지침에 따라 약 복용", "구강위생·입안 자극 음식 피하기"],
+      "call": ["37.8–38.0℃ 이상 발열 또는 오한", "혈변/검은변, 멈추지 않는 구토/설사", "숨가쁨·흉통"],
+    }
+    for k in ["5-FU","Capecitabine","capecitabine","5-fu","5-플루오로우라실","Capecitabine (카페시타빈)","카페시타빈 (Capecitabine)"]:
+        put(k, fluoropy)
+
+    # Cisplatin / Carboplatin / Oxaliplatin (백금계)
+    cis_detail = {
+      "common": ["오심/구토(예방약 필수)", "피로", "혈액: 혈구감소"],
+      "serious": ["신장: 크레아티닌↑, 전해질(Mg/K)↓", "청력: 이명/난청", "신경: 손저림·저림감(말초신경병증)"],
+      "tips": ["수액 충분히(병원 지침)", "이명·청력저하 즉시 알리기", "Mg/K 정기 체크"],
+      "call": ["소변 급감/붉은 소변", "심한 어지럼·근육경련(전해질 이상 의심)"],
+    }
+    for k in ["Cisplatin","cisplatin","Cisplatin (시스플라틴)","시스플라틴 (Cisplatin)"]:
+        put(k, cis_detail)
+
+    carbo_detail = {
+      "common": ["혈소판감소(멍/코피)","오심/구토","피로"],
+      "serious": ["과민반응(누적 주기에서 갑자기 나타날 수 있음)"],
+      "tips": ["멍/코피 잘 생기면 곧바로 알리기", "주사 중 입·몸 가려움/답답함 느끼면 즉시 손들기"],
+      "call": ["호흡곤란·두드러기·어지럼(알레르기 의심)"],
+    }
+    for k in ["Carboplatin","carboplatin","Carboplatin (카보플라틴)","카보플라틴 (Carboplatin)"]:
+        put(k, carbo_detail)
+
+    oxali_detail = {
+      "common": ["손발·입 주위 저림/찌릿(특히 찬 것 접촉 시)", "오심/구토", "설사"],
+      "serious": ["지속되는 감각저하·운동장애(누적 신경독성)"],
+      "tips": ["치료 후 며칠간 차가운 음식/음료·찬 바람 피하기", "따뜻한 장갑/마스크 사용"],
+      "call": ["젓가락 잡기 어려움·버튼 잠그기 힘듦 등 기능장애 진행"],
+    }
+    for k in ["Oxaliplatin","oxaliplatin","Oxaliplatin (옥살리플라틴)","옥살리플라틴 (Oxaliplatin)"]:
+        put(k, oxali_detail)
+
+    # Doxorubicin (안트라사이클린)
+    doxo = {
+      "common": ["피로, 탈모, 점막염", "혈액: 골수억제"],
+      "serious": ["심장: 누적용량에 따른 심기능저하(심부전)"],
+      "tips": ["누적용량/심장초음파 일정 확인", "구강 케어 철저·자극 음식 피하기"],
+      "call": ["숨가쁨·부종·갑작스런 체중증가(심부전 의심)"],
+    }
+    for k in ["Doxorubicin","독소루비신"]:
+        put(k, doxo)
+
+    # Docetaxel / Paclitaxel (탁산계)
+    doce = {
+      "common": ["손발 저림/무감각(말초신경병증)","손발톱 변화","부종/체액저류","발열성 호중구감소증 위험"],
+      "serious": ["과민반응(초반 주기)"],
+      "tips": ["부종 발생 시 양말/다리 올리기 등 생활관리 + 의료진 상의", "과민증상 즉시 알리기"],
+      "call": ["38℃ 전후 발열·오한", "호흡곤란·가슴답답·몸 가려움(주입 중)"],
+    }
+    for k in ["Docetaxel","docetaxel","Docetaxel (도세탁셀)","도세탁셀 (Docetaxel)"]:
+        put(k, doce)
+
+    pacli = {
+      "common": ["말초신경병증(저림/통증)","골수억제","주입 과민반응 가능"],
+      "serious": ["중증 과민반응(혈압저하·호흡곤란)"],
+      "tips": ["초반 주기 모니터 강화(과민)","손발 시림·통증 지속 시 용량조절 상담"],
+      "call": ["호흡곤란·어지럼·전신 두드러기(즉시)"],
+    }
+    for k in ["Paclitaxel","paclitaxel","Paclitaxel (파클리탁셀)","파클리탁셀 (Paclitaxel)"]:
+        put(k, pacli)
+
+    # Irinotecan
+    iri = {
+      "common": ["설사(급성: 투여 중/직후, 지연: 수일 후)","복통","골수억제"],
+      "serious": ["중증 탈수/전해질 이상"],
+      "tips": ["급성 설사: 의료진 처방 약 즉시 복용(예: 아트로핀)", "지연 설사: 지침대로 지사제 복용·수분 보충"],
+      "call": ["24시간 이상 지속되는 설사/혈변·열 동반"],
+    }
+    for k in ["Irinotecan","irinotecan","Irinotecan (이리노테칸)","이리노테칸 (Irinotecan)"]:
+        put(k, iri)
+
+    # Pemetrexed
+    pem = {
+      "common": ["피로, 구내염, 발진", "골수억제"],
+      "serious": ["중증 점막염/감염"],
+      "tips": ["엽산(B9)·비타민B12 보충 필수", "햇빛 노출 과다 피하기"],
+      "call": ["입안 통증/궤양으로 음식·수분 섭취 곤란", "38℃ 전후 발열"],
+    }
+    for k in ["Pemetrexed","pemetrexed","Pemetrexed (페메트렉시드)","페메트렉시드 (Pemetrexed)"]:
+        put(k, pem)
+
+    # Bevacizumab / Ramucirumab (anti-VEGF/VEGFR)
+    beva = {
+      "common": ["혈압상승(고혈압)","소변 단백뇨"],
+      "serious": ["출혈·혈전","상처치유 지연·천공(드묾)"],
+      "tips": ["집에서도 혈압 기록하기","소변 단백뇨 추적(외래 검사)"],
+      "call": ["심한 두통·시야이상·가슴통증·호흡곤란", "혈변/복통(천공 의심)"],
+    }
+    for k in ["Bevacizumab","bevacizumab","Bevacizumab (베바시주맙)","베바시주맙 (Bevacizumab)"]:
+        put(k, beva)
+    ramu = {
+      "common": ["혈압상승(고혈압)","단백뇨"],
+      "serious": ["출혈·혈전"],
+      "tips": ["혈압 매일 측정·기록","소변 단백뇨 주기적 확인"],
+      "call": ["갑작스런 신경증상/흉통/호흡곤란"],
+    }
+    for k in ["Ramucirumab","ramucirumab"]:
+        put(k, ramu)
+
+    # HER2 축
+    trastu = {
+      "common": ["주입반응(오한/발열)"],
+      "serious": ["심기능저하(LVEF 감소)"],
+      "tips": ["심초음파 일정 준수"],
+      "call": ["숨가쁨·부종·갑작스런 체중증가"],
+    }
+    for k in ["Trastuzumab","trastuzumab","Trastuzumab (트라스투주맙)","트라스투주맙 (Trastuzumab)"]:
+        put(k, trastu)
+    tdm1 = {
+      "common": ["피로, 오심","혈소판감소","간효소 상승"],
+      "serious": ["중증 간독성"],
+      "tips": ["혈소판/간기능 정기 체크"],
+      "call": ["코피 멈추지 않음·멍 많아짐", "황달"],
+    }
+    for k in ["T-DM1","t-dm1"]:
+        put(k, tdm1)
+    deru = {
+      "common": ["오심","피로"],
+      "serious": ["ILD/약물성 폐렴(중요)"],
+      "tips": ["기침/호흡곤란 새로 생기면 지체없이 보고"],
+      "call": ["숨가쁨·가슴통증·발열 동반 호흡기 증상"],
+    }
+    for k in ["Trastuzumab deruxtecan","trastuzumab deruxtecan"]:
+        put(k, deru)
+
+    # EGFR/ALK/RET/TRK
+    osi = {
+      "common": ["설사·발진", "피로"],
+      "serious": ["ILD 드묾"],
+      "tips": ["피부건조 관리·자극 피하기","설사 시 수분 보충"],
+      "call": ["기침·호흡곤란·발열 동반시"],
+    }
+    for k in ["Osimertinib","osimertinib","Osimertinib (오시머티닙)","오시머티닙 (Osimertinib)"]:
+        put(k, osi)
+
+    alect = {
+      "common": ["근육통/통증","변비","간효소 상승","부종"],
+      "serious": ["근육효소(CPK) 상승 드묾"],
+      "tips": ["근육통 심하면 진통제 조절 상담","부종 시 소금섭취 조절"],
+      "call": ["소변 갈색·근육통 극심(횡문근융해 의심 드묾)"],
+    }
+    for k in ["Alectinib","alectinib","Alectinib (알렉티닙)","알렉티닙 (Alectinib)"]:
+        put(k, alect)
+
+    selp = {
+      "common": ["고혈압","간효소 상승","변비/설사"],
+      "serious": ["QT 연장(심장리듬)"],
+      "tips": ["혈압 자가측정·기록","맥박 불규칙·어지럼 시 즉시 보고"],
+      "call": ["실신·심계항진·흉통"],
+    }
+    for k in ["Selpercatinib","selpercatinib"]:
+        put(k, selp)
+
+    prale = {
+      "common": ["고혈압","간효소 상승","변비/설사","피로"],
+      "serious": ["간질성 폐질환 드묾"],
+      "tips": ["혈압관리·간기능 추적","기침/호흡곤란 새로 생기면 즉시 보고"],
+      "call": ["숨가쁨·가슴통증·산소포화도 저하"],
+    }
+    for k in ["Pralsetinib","pralsetinib"]:
+        put(k, prale)
+
+    lorl = {
+      "common": ["인지/기분 변화","지질상승","체중증가","말초부종"],
+      "serious": ["중대한 신경정신 증상 드묾"],
+      "tips": ["집중력·기분 변화 기록·상담","지질 수치 추적"],
+      "call": ["혼동/극심한 불안·우울·환시 등"],
+    }
+    for k in ["Lorlatinib","lorlatinib"]:
+        put(k, lorl)
+
+    larotrk = {
+      "common": ["어지럼","피로","간효소 상승","체중증가"],
+      "serious": [],
+      "tips": ["어지럼 시 운전·위험 작업 주의","간기능 정기 체크"],
+      "call": ["지속되는 심한 어지럼·구토"],
+    }
+    for k in ["Larotrectinib","larotrectinib"]:
+        put(k, larotrk)
+
+    entre = {
+      "common": ["어지럼","체중증가","설사/변비","간효소 상승"],
+      "serious": ["QT 연장 드묾"],
+      "tips": ["어지럼 시 안전 주의","심전도 필요 시 병원 지침"],
+      "call": ["실신·어지럼 악화"],
+    }
+    for k in ["Entrectinib","entrectinib"]:
+        put(k, entre)
+
+    # Multi-TKI / mTOR
+    rego = {
+      "common": ["손발증후군","피로","고혈압"],
+      "serious": ["간독성"],
+      "tips": ["손발 보습/마찰 회피","혈압 기록·간기능 추적"],
+      "call": ["피부 벗겨짐·궤양, 심한 피로·황달"],
+    }
+    for k in ["Regorafenib","regorafenib"]:
+        put(k, rego)
+
+    suni = {
+      "common": ["고혈압","손발증후군","갑상선기능저하","피로","구내염"],
+      "serious": ["심혈관 사건 드묾"],
+      "tips": ["혈압·갑상선 기능 추적","손발 관리"],
+      "call": ["흉통·호흡곤란"],
+    }
+    for k in ["Sunitinib","sunitinib"]:
+        put(k, suni)
+
+    pazo = {
+      "common": ["고혈압","간독성","설사","탈모/피부변화"],
+      "serious": ["간부전 드묾"],
+      "tips": ["혈압·간기능 정기 체크"],
+      "call": ["황달·심한 피로·복부통증"],
+    }
+    for k in ["Pazopanib","pazopanib"]:
+        put(k, pazo)
+
+    evero = {
+      "common": ["구내염","고혈당/지질 이상","피부 발진"],
+      "serious": ["ILD/폐렴"],
+      "tips": ["구강 케어·매운 음식 피하기","혈당/지질 추적"],
+      "call": ["기침·호흡곤란·발열"],
+    }
+    for k in ["Everolimus","everolimus"]:
+        put(k, evero)
+
+    # 면역항암제
+    pembro_nivo = {
+      "common": ["피부 발진/가려움","피로","경미한 설사"],
+      "serious": ["면역관련 이상반응: 대장염/간염/폐렴/내분비(갑상선/부신)"],
+      "tips": ["새로운 증상은 작게라도 기록 후 보고","TFT/LFT/Cr/eGFR 정기 체크"],
+      "call": ["혈성 설사/지속 설사","지속 발열·기침/호흡곤란","심한 피로·현기증(내분비)"],
+    }
+    for k in ["Nivolumab","nivolumab","Pembrolizumab","pembrolizumab"]:
+        put(k, pembro_nivo)
+
+    # Ara-C 제형
+    arac_common = {
+      "common": ["골수억제(감염/출혈 위험)","오심/구토","점막염","결막염(점안 예방)"],
+      "serious": ["고용량에서 소뇌독성(걷기 휘청·말 더듬)"],
+      "tips": ["HDAC 시 스테로이드 점안·소뇌 증상 매일 체크"],
+      "call": ["시야흐림/눈 통증·분비물 증가","손떨림·말더듬·걸음 불안정"],
+    }
+    for k in ["Ara-C","Cytarabine","Ara-C IV","Ara-C SC","Ara-C HDAC","Cytarabine HDAC"]:
+        put(k, arac_common)
+
+_prev_aedetail = globals().get("ensure_onco_drug_db")
+def ensure_onco_drug_db(db):
+    if callable(_prev_aedetail):
+        try:
+            _prev_aedetail(db)
+        except Exception:
+            pass
+    _attach_ae_details(db)
+# === [/PATCH] ===
+
+# === [PATCH 2025-10-22 KST] AE detail: extend coverage ===
+def _extend_ae_details_more(db: Dict[str, Dict[str, Any]]) -> None:
+    def put(key, data):
+        if key in db and isinstance(db[key], dict):
+            rec = db[key]
+            if not isinstance(rec.get("ae_detail"), dict):
+                rec["ae_detail"] = {}
+            for k, v in data.items():
+                if not v: continue
+                arr = list(rec["ae_detail"].get(k, [])) if isinstance(rec["ae_detail"].get(k), (list, tuple)) else []
+                for item in v:
+                    if item not in arr:
+                        arr.append(item)
+                rec["ae_detail"][k] = arr
+
+    simple = lambda common=None, serious=None, tips=None, call=None: {
+        "common": common or [], "serious": serious or [], "tips": tips or [], "call": call or []
+    }
+
+    # mAbs/IO: Atezolizumab, Durvalumab, Cetuximab, Panitumumab
+    be_io = simple(
+        common=["피부 발진/가려움", "경미한 설사/피로"],
+        serious=["면역관련 이상반응(대장염/간염/폐렴/내분비)"],
+        tips=["새 증상은 기록 후 보고", "TFT/LFT/Cr 주기 체크"],
+        call=["혈성 설사·지속 설사", "지속 발열/기침·호흡곤란"]
+    )
+    for k in ["Atezolizumab","atezolizumab","Durvalumab","durvalumab"]:
+        put(k, be_io)
+
+    anti_egfr = simple(
+        common=["여드름양 발진", "설사", "저마그네슘혈증", "손발톱 변화"],
+        serious=["중증 피부독성 드묾"],
+        tips=["보습·자극 피하기", "Mg 주기 확인"],
+        call=["광범위 피부통증/고열"]
+    )
+    for k in ["Cetuximab","cetuximab","Panitumumab","panitumumab"]:
+        put(k, anti_egfr)
+
+    # PARP: Olaparib, Niraparib
+    parp = simple(
+        common=["빈혈/혈소판감소", "피로", "오심"],
+        serious=["골수형성이상 드묾"],
+        tips=["혈구수치 주기 체크", "Niraparib은 혈압 기록"],
+        call=["어지럼·실신(빈혈), 지속 출혈"]
+    )
+    for k in ["Olaparib","olaparib","Niraparib","niraparib"]:
+        put(k, parp)
+
+    # Multi-TKI: Lenvatinib, Sorafenib, Cabozantinib
+    mtk = simple(
+        common=["고혈압", "손발증후군", "설사", "피로", "구내염"],
+        serious=["간독성"],
+        tips=["혈압기록/간기능 추적", "손발 보습"],
+        call=["황달·심한 피로·피부 벗겨짐"]
+    )
+    for k in ["Lenvatinib","lenvatinib","Sorafenib","sorafenib","Cabozantinib","cabozantinib"]:
+        put(k, mtk)
+
+    # ALK/ROS/MET: Crizotinib, Capmatinib
+    alkmet = simple(
+        common=["부종", "설사/변비", "간효소 상승"],
+        serious=["시야장애(Crizotinib)"],
+        tips=["부종 시 염분 조절", "시야 이상/황달 즉시 보고"],
+        call=["시야 흐림·복시, 황달"]
+    )
+    for k in ["Crizotinib","crizotinib","Capmatinib","capmatinib"]:
+        put(k, alkmet)
+
+    # TRK: Larotrectinib, Entrectinib (이미 일부 있음 → 보강)
+    trk_more = simple(
+        common=["어지럼", "피로", "간효소 상승", "체중증가"],
+        serious=["QT 연장(Entrectinib 드묾)"],
+        tips=["어지럼 시 운전 주의", "간기능 체크"],
+        call=["실신·어지럼 악화"]
+    )
+    for k in ["Larotrectinib","larotrectinib","Entrectinib","entrectinib"]:
+        put(k, trk_more)
+
+    # Anthracycline 확장: Daunorubicin, Idarubicin
+    anth = simple(
+        common=["피로", "점막염", "탈모", "골수억제"],
+        serious=["심장기능저하(누적)"],
+        tips=["심초음파 일정 준수", "구강 케어"],
+        call=["숨가쁨·부종·갑작스런 체중증가"]
+    )
+    for k in ["Daunorubicin","daunorubicin","Idarubicin","idarubicin"]:
+        put(k, anth)
+
+    # Topoisomerase: Topotecan
+    topo = simple(
+        common=["골수억제", "오심/구토", "탈모", "피로"],
+        serious=["중증 골수억제"],
+        tips=["CBC 주기 체크", "감염 예방 교육"],
+        call=["38℃ 전후 발열, 출혈"]
+    )
+    for k in ["Topotecan","topotecan"]:
+        put(k, topo)
+
+    # nab-Paclitaxel
+    nabp = simple(
+        common=["말초신경병증", "골수억제", "피로"],
+        serious=["과민반응 드묾(용제↓)"],
+        tips=["손발 저림 지속 시 상담", "초기 주기 주입 모니터"],
+        call=["호흡곤란·전신 두드러기"]
+    )
+    for k in ["Nab-Paclitaxel","nab-paclitaxel"]:
+        put(k, nabp)
+
+    # Hormone/GI support: Octreotide
+    octr = simple(
+        common=["지방변/설사", "복부 불편", "담석"],
+        tips=["지방 많은 음식 조절", "복통·황달 시 보고"],
+        call=["발열 동반 우상복부 통증(담낭염 의심)"]
+    )
+    for k in ["Octreotide","octreotide"]:
+        put(k, octr)
+
+    # Steroid: Prednisone
+    pred = simple(
+        common=["식욕/체중 증가", "불면", "기분 변화", "혈당 상승"],
+        tips=["식사/운동 관리", "수면 위생", "혈당 기록"],
+        call=["기분 심각 악화·정신증상, 조절 안되는 고혈당"]
+    )
+    for k in ["Prednisone","prednisone"]:
+        put(k, pred)
+
+_prev_more = globals().get("ensure_onco_drug_db")
+def ensure_onco_drug_db(db):
+    if callable(_prev_more):
+        try:
+            _prev_more(db)
+        except Exception:
+            pass
+    _extend_ae_details_more(db)
+# === [/PATCH] ===
+
+# === [PATCH 2025-10-22 KST] Auto-generate ae_detail for remaining drugs ===
+def _autogen_ae_detail_for_all(db: Dict[str, Dict[str, Any]]) -> None:
+    import re
+
+    def has_detail(rec):
+        return isinstance(rec.get("ae_detail"), dict) and any(rec["ae_detail"].get(k) for k in ("common","serious","tips","call","notes"))
+
+    # Keyword maps
+    serious_kw = {
+        "ILD": ["ILD","폐렴","간질성","호흡곤란"],
+        "Cardio": ["심근","LVEF","심부전","QT","부정맥","흉통"],
+        "Renal": ["신독성","크레아티닌","혈뇨","방광염"],
+        "Bleed": ["출혈","혈전","천공"],
+        "Allergy": ["과민반응","아나필락시스"],
+        "Neuro": ["소뇌","혼동","신경독성","말초신경병증","이독성","난청"],
+        "Hepatic": ["간독성","간효소","황달"],
+        "Myelo": ["발열성","호중구감소","골수억제"]
+    }
+
+    tip_by_class = {
+        "VEGF": ["혈압 집에서도 기록", "소변 단백뇨 정기 체크"],
+        "HER2": ["심초음파 일정 준수"],
+        "mTOR": ["혈당/지질 주기 체크", "구내염 예방·관리가이드 준수"],
+        "PARP": ["혈구수치 주기 체크", "어지럼/실신 시 즉시 보고"],
+        "TKI": ["피부/설사 관리", "심전도·혈압 등 병원 지침 준수"],
+        "Anthracycline": ["누적용량·심초음파 확인", "숨가쁨/부종 발생 시 즉시 연락"],
+        "Taxane": ["과민반응 초기 모니터", "손발 저림 지속 시 상담"],
+        "Platinum": ["수액·전해질 관리", "이명/청력저하 즉시 보고"],
+        "Vinca": ["변비 예방(수분·식이섬유)", "장폐색 증상 시 즉시 연락"],
+        "Antimetabolite": ["구강 위생·자극 음식 피하기"],
+        "Topo": ["설사/골수억제 교육", "발열 시 즉시 연락"],
+    }
+
+    def cls_from_moa(moa: str) -> str:
+        s = (moa or "").lower()
+        if "vegf" in s or "vegfr" in s: return "VEGF"
+        if "her2" in s: return "HER2"
+        if "mtor" in s: return "mTOR"
+        if "parp" in s: return "PARP"
+        if "tki" in s or "inhibitor" in s and any(k in s for k in ["egfr","alk","ret","trk","met","ros"]): return "TKI"
+        if "anthracycline" in s: return "Anthracycline"
+        if "taxane" in s: return "Taxane"
+        if "platin" in s: return "Platinum"
+        if "vinca" in s: return "Vinca"
+        if "antimetabolite" in s: return "Antimetabolite"
+        if "topo" in s: return "Topo"
+        return ""
+
+    def split_ae(ae: str):
+        if not ae: return []
+        # split by · or , or · bullets
+        parts = re.split(r"[·•,;/]\s*|\s{2,}", ae)
+        parts = [p.strip() for p in parts if p.strip()]
+        return parts
+
+    for key, rec in list(db.items()):
+        if not isinstance(rec, dict): 
+            continue
+        if has_detail(rec):
+            continue
+        ae = (rec.get("ae") or "").strip()
+        if not ae or "부작용 정보 필요" in ae:
+            continue
+
+        moa = rec.get("moa", "")
+        cls = cls_from_moa(moa)
+        parts = split_ae(ae)
+        common = []
+        serious = []
+        call = []
+        tips = []
+
+        # classify parts
+        for p in parts:
+            # serious flags
+            low = p.lower()
+            is_serious = False
+            for tag, kws in serious_kw.items():
+                if any(k.lower() in low for k in kws):
+                    is_serious = True
+                    break
+            if is_serious:
+                serious.append(p)
+            else:
+                common.append(p)
+
+        # generic "call now" rules
+        if any("골수억제" in x or "호중구" in x for x in parts):
+            call.append("38℃ 전후 발열/오한(발열성 호중구감소 의심)")
+        if any(any(k in x for k in ["출혈","혈변","코피","혈소판"]) for x in parts):
+            call.append("멈추지 않는 출혈·혈변/흑변")
+        if any(any(k in x for k in ["설사","오심","구토"]) for x in parts):
+            call.append("하루 이상 지속되는 심한 구토/설사·탈수")
+        if any(any(k in x for k in ["호흡","폐렴","ILD"]) for x in parts):
+            call.append("기침/호흡곤란·흉통·발열 동반 시")
+        if any(any(k in x for k in ["심", "LVEF", "QT", "부정맥", "흉통"]) for x in parts):
+            call.append("흉통·실신·심계항진")
+
+        # class tips
+        tips.extend(tip_by_class.get(cls, []))
+
+        # remove dups
+        def uniq(xs): 
+            u=[]
+            for x in xs:
+                if x not in u: u.append(x)
+            return u
+
+        rec["ae_detail"] = {
+            "common": uniq(common)[:8],
+            "serious": uniq(serious)[:6],
+            "tips": uniq(tips)[:6],
+            "call": uniq(call)[:6],
+        }
+
+_prev_autogen = globals().get("ensure_onco_drug_db")
+def ensure_onco_drug_db(db):
+    if callable(_prev_autogen):
+        try:
+            _prev_autogen(db)
+        except Exception:
+            pass
+    _autogen_ae_detail_for_all(db)
+# === [/PATCH] ===
+
+# === [PATCH 2025-10-22 KST] Cardiotoxicity detail reinforcement ===
+def _reinforce_cardiotox_details(db: Dict[str, Dict[str, Any]]) -> None:
+    def add(k, data):
+        if k not in db or not isinstance(db[k], dict): 
+            return
+        rec = db[k]
+        det = rec.get("ae_detail") if isinstance(rec.get("ae_detail"), dict) else {}
+        for sec, items in data.items():
+            if not items: 
+                continue
+            arr = list(det.get(sec, [])) if isinstance(det.get(sec), (list,tuple)) else []
+            for it in items:
+                if it not in arr:
+                    arr.append(it)
+            det[sec] = arr
+        rec["ae_detail"] = det
+
+    anthracycline_targets = ["Doxorubicin","Daunorubicin","Idarubicin"]
+    anthracycline_add = {
+        "serious": [
+            "심기능저하(LVEF 감소/심부전) — 누적용량 관련",
+            "심낭삼출/심낭염 드묾"
+        ],
+        "tips": [
+            "누적용량 추적(도옥소루비신 환산)",
+            "기저/주기적 심초음파(LVEF)",
+            "고위험군: 덱스라조산(Dexrazoxane) 고려(센터 프로토콜)"
+        ],
+        "call": [
+            "숨가쁨·밤에 숨차서 깸·발목부종·갑작스런 체중↑",
+            "가슴 통증/압박감"
+        ]
+    }
+    for k in anthracycline_targets + [x.lower() for x in anthracycline_targets]:
+        add(k, anthracycline_add)
+
+    her2_targets = ["Trastuzumab","Pertuzumab","T-DM1","Trastuzumab deruxtecan"]
+    her2_add = {
+        "serious": ["심기능저하(LVEF)"],
+        "tips": ["기저/주기 심초음파(LVEF) — 보통 3개월 간격"],
+        "call": ["숨가쁨·부종·갑작스런 체중↑"]
+    }
+    for k in her2_targets + [x.lower() for x in her2_targets]:
+        add(k, her2_add)
+
+    qtrisk_targets = ["Vandetanib","Selpercatinib","Pralsetinib","Osimertinib","Lapatinib","Entrectinib"]
+    qt_add = {
+        "serious": ["QT 연장/부정맥(드묾)"],
+        "tips": ["기저/필요 시 ECG, 전해질(K≥4.0, Mg≥2.0) 보정"],
+        "call": ["실신·심계항진·어지럼"]
+    }
+    for k in qtrisk_targets + [x.lower() for x in qtrisk_targets]:
+        add(k, qt_add)
+
+_prev_cardio = globals().get("ensure_onco_drug_db")
+def ensure_onco_drug_db(db):
+    if callable(_prev_cardio):
+        try:
+            _prev_cardio(db)
+        except Exception:
+            pass
+    _reinforce_cardiotox_details(db)
+# === [/PATCH] ===
