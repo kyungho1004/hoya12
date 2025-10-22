@@ -1645,7 +1645,7 @@ with t_chemo:
 
         ae_map = _aggregate_all_aes(picked_keys, DRUG_DB)
       st.markdown("### 항암제 부작용(전체)")
-if ae_map:
+    if ae_map:
     # --- Ara-C 제형 선택(IV/SC/HDAC) 전용 래핑 ---
     try:
         from ae_resolve import resolve_key, get_ae, get_checks
