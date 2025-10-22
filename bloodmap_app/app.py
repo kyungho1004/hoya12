@@ -43,6 +43,55 @@ if "wkey" not in globals():
             return str(x)
 
 # ===== End import guard =====
+
+# ---- Patch: Sticky route/tab keeper (idempotent) ----
+try:
+    import streamlit as st
+    # 1) Read current query params once per run
+    _qp = st.query_params if hasattr(st, "query_params") else st.experimental_get_query_params()
+    # 2) Bootstrap route from query OR keep session route
+    _route_ss = st.session_state.get("_route")
+    _route_qp = (_qp.get("route") if isinstance(_qp.get("route"), str) else (_qp.get("route", [""])[0] if _qp.get("route") else "")) if _qp else ""
+    if not _route_ss and _route_qp:
+        st.session_state["_route"] = _route_qp
+    elif _route_ss and (not _route_qp or _route_qp != _route_ss):
+        # sync to URL so reruns won't drop it
+        try:
+            st.query_params.update(route=_route_ss)
+        except Exception:
+            st.experimental_set_query_params(route=_route_ss)
+
+    # 3) Sticky active tab
+    _tab_ss = st.session_state.get("_active_tab")
+    _tab_qp = (_qp.get("tab") if isinstance(_qp.get("tab"), str) else (_qp.get("tab", [""])[0] if _qp.get("tab") else "")) if _qp else ""
+    if not _tab_ss and _tab_qp:
+        st.session_state["_active_tab"] = _tab_qp
+    elif _tab_ss and (not _tab_qp or _tab_qp != _tab_ss):
+        try:
+            st.query_params.update(tab=_tab_ss)
+        except Exception:
+            st.experimental_set_query_params(tab=_tab_ss)
+
+    # 4) Small helpers (non-invasive)
+    if "set_route" not in globals():
+        def set_route(name: str):
+            st.session_state["_route"] = name or "home"
+            try:
+                st.query_params.update(route=st.session_state["_route"])
+            except Exception:
+                st.experimental_set_query_params(route=st.session_state["_route"])
+
+    if "set_active_tab" not in globals():
+        def set_active_tab(name: str):
+            st.session_state["_active_tab"] = name
+            try:
+                st.query_params.update(tab=name)
+            except Exception:
+                st.experimental_set_query_params(tab=name)
+except Exception:
+    pass
+# ---- End Patch ----
+
 from ae_bridge import ae_map, user_check_map  # (patch) AE maps & user checklist
 
 import datetime as _dt
