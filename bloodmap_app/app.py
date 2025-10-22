@@ -44,6 +44,100 @@ if "wkey" not in globals():
 
 # ===== End import guard =====
 
+# ---- Patch: AE & checklist resolvers (label→key safe) ----
+try:
+    from drug_db import key_from_label
+    from ae_bridge import ae_map, user_check_map
+
+    if "_to_drug_key" not in globals():
+        def _to_drug_key(label_or_key: str) -> str:
+            if not label_or_key:
+                return ""
+            k = key_from_label(label_or_key)
+            # If still not found, try raw
+            if k in ae_map or k in user_check_map:
+                return k
+            # Final fallback: original string (may already be the key)
+            return label_or_key
+
+    if "get_ae_text" not in globals():
+        def get_ae_text(label_or_key: str) -> str:
+            k = _to_drug_key(label_or_key)
+            return ae_map.get(k, "") or ae_map.get("Cytarabine", "부작용 정보가 없습니다.")
+
+    if "get_user_checks" not in globals():
+        def get_user_checks(label_or_key: str):
+            k = _to_drug_key(label_or_key)
+            return user_check_map.get(k, [])
+except Exception:
+    pass
+# ---- End Patch ----
+
+
+# ---- Patch: Ara-C & Maintenance wrappers (idempotent) ----
+try:
+    import streamlit as st
+    from ae_bridge import ae_map, user_check_map
+    from drug_db import display_label, key_from_label, ALIAS_FALLBACK
+
+    if "get_onco_regimens" not in globals():
+        def get_onco_regimens() -> dict:
+            try:
+                base = dict(ONCO_REGIMENS)
+            except Exception:
+                base = {}
+            return ensure_onco_map(base)
+
+    if "render_arac_wrapper" not in globals():
+        def render_arac_wrapper(label: str = "Ara-C 제형 선택", default: str = "Cytarabine") -> str:
+            # Ara-C를 IV/SC/HDAC로 안전 래핑하여 반환. 기존 구조는 유지.
+            options = [
+                ("Cytarabine IV", "정맥(IV)"),
+                ("Cytarabine SC", "피하(SC)"),
+                ("Cytarabine (HDAC)", "고용량(HDAC)"),
+            ]
+            default_key = "Cytarabine IV" if default in ("Cytarabine", "Ara-C") else default
+            keys = [k for k, _ in options]
+            labels = [f"{txt} · {display_label(k)}" for k, txt in options]
+            try:
+                idx_default = keys.index(default_key)
+            except ValueError:
+                idx_default = 0
+            pick = st.radio(
+                label,
+                options=keys,
+                index=idx_default,
+                format_func=lambda k: labels[keys.index(k)],
+                key=wkey("arac_form_pick")
+            )
+            st.caption(ae_map.get(pick, ae_map.get("Cytarabine", "")))
+            for item in user_check_map.get(pick, []):
+                st.checkbox(item, key=wkey(f"chk_{pick}_{item}"))
+            return pick
+
+    if "render_maintenance_for_dx" not in globals():
+        def render_maintenance_for_dx(dx_key: str) -> list:
+            # 진단명 기준 유지요법 약물을 정돈해 UI로 표기하고 리스트 반환.
+            reg = get_onco_regimens()
+            phases = reg.get(dx_key, {})
+            maint = list(phases.get("maintenance", []))
+            if not maint:
+                st.info("유지요법 표준이 없거나 상황에 따라 다릅니다.")
+                return []
+            st.markdown("#### 🧩 유지요법")
+            for d in maint:
+                st.write(f"- {display_label(d)}")
+                st.caption(ae_map.get(d, "부작용 정보가 없습니다."))
+                for item in user_check_map.get(d, []):
+                    st.checkbox(item, key=wkey(f"chk_{d}_{item}"))
+            return maint
+except Exception:
+    pass
+# ---- End Patch (Ara-C & Maintenance) ----
+
+from onco_map import ensure_onco_map, ONCO_REGIMENS  # (patch) onco map access
+
+
 # ---- Patch: Sticky route/tab keeper (idempotent) ----
 try:
     import streamlit as st
