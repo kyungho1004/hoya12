@@ -60,11 +60,6 @@ except Exception:
     pass
 # ---- End hard redirect guard v2 ----
 
-try:
-    _sticky_route_guard()  # early stabilize
-except NameError:
-    pass
-
 
 # ---- Initial route bootstrap (anti first-click→home) ----
 try:
@@ -93,32 +88,6 @@ except Exception:
     pass
 # ---- End initial route bootstrap ----
 
-
-# ---- Sticky route guard (prevents unintended 'home' fallback) ----
-def _sticky_route_guard(expected: str = ""):
-    try:
-        import streamlit as st
-        ss = st.session_state
-        # If route is 'home' but user didn't explicitly intend home, restore last/expected
-        if ss.get("_route") == "home" and not ss.get("_home_intent", False):
-            fallback = ss.get("_route_last") or (expected or "chemo")
-            if fallback and fallback != "home":
-                ss["_route"] = fallback
-                ss["_route_last"] = fallback
-                try:
-                    if st.query_params.get("route") != fallback:
-                        st.query_params.update(route=fallback)
-                except Exception:
-                    st.experimental_set_query_params(route=fallback)
-                st.rerun()
-    except Exception:
-        pass
-# ---- End sticky route guard ----
-
-try:
-    _block_spurious_home()
-except Exception:
-    pass
 
 
 # app.py
@@ -1444,6 +1413,22 @@ with t_labs:
 # DX
 with t_dx:
 
+    # ---- Safe DX display formatter: EN — KO (always returns str) ----
+    def _dx_fmt(x):
+        try:
+            s = str(x)
+            # If already has Hangul, show as is
+            if any("\uac00" <= ch <= "\ud7a3" for ch in s):
+                return s
+            try:
+                ko = DX_KO.get(_dx_norm(s)) or DX_KO.get(s) or s
+            except Exception:
+                ko = s
+            return f"{s} — {ko}"
+        except Exception:
+            return str(x)
+    # ---- End formatter ----
+
     # ---- DX label fallbacks (avoid NameError) ----
     try:
         DX_KO  # type: ignore
@@ -1467,7 +1452,7 @@ with t_dx:
     groups = sorted(ONCO.keys()) if ONCO else ["혈액암", "고형암"]
     group = st.selectbox("암 그룹", options=groups, index=0, key=wkey("onco_group_sel"))
     diseases = sorted(ONCO.get(group, {}).keys()) if ONCO else ["ALL", "AML", "Lymphoma", "Breast", "Colon", "Lung"]
-    disease = st.selectbox("의심/진단명", options=diseases, index=0, key=wkey("onco_disease_sel"), format_func=lambda x: (f"{x} (" + (DX_KO.get(_dx_norm(x)) or DX_KO.get(x) or x) + ")") if not any("\uac00" <= ch <= "\ud7a3" for ch in str(x)) else str(x))
+    disease = st.selectbox("의심/진단명", options=diseases, index=0, key=wkey("onco_disease_sel", format_func=_dx_fmt), format_func=lambda x: (f"{x} (" + (DX_KO.get(_dx_norm(x)) or DX_KO.get(x) or x) + ")") if not any("\uac00" <= ch <= "\ud7a3" for ch in str(x)) else str(x))
 
     disp = dx_display(group, disease)
     st.session_state["onco_group"] = group
