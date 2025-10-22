@@ -43,6 +43,50 @@ if "wkey" not in globals():
             return str(x)
 
 # ===== End import guard =====
+
+# ---- Sticky router v2: keep route/tab across reruns & clicks ----
+import streamlit as st
+
+def _qp_get(name: str) -> str:
+    try:
+        v = st.query_params.get(name)
+        return v[0] if isinstance(v, list) else (v or "")
+    except Exception:
+        v = st.experimental_get_query_params().get(name, [""])
+        return v[0]
+
+def _qp_set(**kwargs):
+    try:
+        st.query_params.update(**kwargs)
+    except Exception:
+        st.experimental_set_query_params(**kwargs)
+
+# 1) First-run bootstrap (URL > SS > default)
+if "_router_init" not in st.session_state:
+    route = _qp_get("route") or st.session_state.get("_route") or "home"
+    tab   = _qp_get("tab")   or st.session_state.get("_active_tab") or ""
+    st.session_state["_route"] = route
+    st.session_state["_active_tab"] = tab
+    st.session_state["_router_init"] = True
+
+# 2) Keep URL in sync with session_state (no overwrite of SS)
+if _qp_get("route") != st.session_state.get("_route"):
+    _qp_set(route=st.session_state["_route"])
+if st.session_state.get("_active_tab") and _qp_get("tab") != st.session_state["_active_tab"]:
+    _qp_set(tab=st.session_state["_active_tab"])
+
+# 3) Public helpers
+def set_route(name: str, rerun: bool = True):
+    st.session_state["_route"] = name or "home"
+    _qp_set(route=st.session_state["_route"])
+    if rerun: st.rerun()
+
+def set_active_tab(name: str, rerun: bool = False):
+    st.session_state["_active_tab"] = name or ""
+    _qp_set(tab=st.session_state["_active_tab"])
+    if rerun: st.rerun()
+# ---- End sticky router v2 ----
+
 from ae_resolve import get_ae, get_checks, resolve_key  # (patch) robust AE/label resolver
 
 
