@@ -87,7 +87,10 @@ try:
 except Exception:
     pass
 # ---- End initial route bootstrap ----
-
+try:
+    _block_spurious_home()
+except Exception:
+    pass
 
 
 # app.py
