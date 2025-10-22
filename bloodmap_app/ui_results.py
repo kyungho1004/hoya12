@@ -3,6 +3,13 @@ from __future__ import annotations
 from typing import List, Dict, Tuple, Iterable
 import re
 
+for k in drug_keys:
+    # Ara-C formulation override (robust)
+    if _is_arac_like(k):
+        pick = _arac_formulation_picker(st, db)
+        if pick:
+            k = pick
+    e = _get_entry(db, k)
 # === [PATCH 2025-10-22 KST] ❤️ Cardio-Guard renderer ===
 def _render_cardio_guard(st, rec: Dict):
     name = (rec.get("alias") or "").lower()
