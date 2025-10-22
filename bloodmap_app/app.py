@@ -16,9 +16,17 @@ def _block_spurious_home():
         except Exception:
             st.experimental_set_query_params(route=last)
         # do not rerun here; early/anti guards will sync on next pass
+    # Remember last non-home route if current is valid
+    try:
+        if ss.get("_route") and ss["_route"] != "home":
+            ss["_route_last"] = ss["_route"]
+    except Exception:
+        pass
+
 # ---- End HomeBlocker v1 ----
 
-# ---- Hard redirect guard (pre-render, prevents 1st-click → home) ----
+
+# ---- Hard redirect guard v2 (pre-render; URL-only hydrate, safer) ----
 try:
     import streamlit as st  # ultra-early
     def __hr_qp(name: str) -> str:
@@ -33,25 +41,25 @@ try:
     ss = st.session_state
     cur = ss.get("_route")
     last = ss.get("_route_last")
-    want = url_route or last or cur or "home"
 
-    # [PATCH] Prevent unintended fallback to home
-    if (want == "home") and last and (last != "home"):
-        want = last
-    # If current route differs from the desired (esp. cur == 'home' but want != 'home'),
-    # set it and rerun immediately BEFORE any UI is drawn.
-    if cur != want:
-        ss["_route"] = want
-        ss["_route_last"] = want
-        try:
-            if st.query_params.get("route") != want:
-                st.query_params.update(route=want)
-        except Exception:
-            st.experimental_set_query_params(route=want)
-        st.rerun()
+    # Run once per session to hydrate from URL only.
+    # Do NOT force 'home' implicitly on initial interaction; avoid 1st-click → home jump.
+    if not ss.get("_hrg_v2_done", False):
+        ss["_hrg_v2_done"] = True
+        if url_route:
+            want = url_route
+            if cur != want:
+                ss["_route"] = want
+                ss["_route_last"] = want
+                try:
+                    if st.query_params.get("route") != want:
+                        st.query_params.update(route=want)
+                except Exception:
+                    st.experimental_set_query_params(route=want)
+                st.rerun()
 except Exception:
     pass
-# ---- End hard redirect guard ----
+# ---- End hard redirect guard v2 ----
 
 # app.py
 
@@ -1620,37 +1628,36 @@ with t_chemo:
         else:
             _used_shared_renderer = False
         # === [/PATCH] ===
-    if not _used_shared_renderer:
 
-            if ae_map:
-                # --- Ara-C 제형 선택(IV/SC/HDAC) ---
-                try:
-                    from ae_resolve import resolve_key, get_ae, get_checks
-                    from drug_db import display_label
-                    if ("Cytarabine" in ae_map) or ("Ara-C" in ae_map):
-                        st.markdown("**Ara-C 제형 선택**")
-                        picked_key = render_arac_wrapper("Ara-C 제형 선택", default="Cytarabine")
-                        st.write(f"- **{display_label(picked_key)}**")
-                        st.caption(get_ae(picked_key))
-                        for _ln in get_checks(picked_key):
-                            st.checkbox(_ln, key=wkey(f"chk_{picked_key}_{_ln}"))
-                        st.divider()
-                except Exception:
-                    pass
+        if ae_map:
+            # --- Ara-C 제형 선택(IV/SC/HDAC) ---
+            try:
+                from ae_resolve import resolve_key, get_ae, get_checks
+                from drug_db import display_label
+                if ("Cytarabine" in ae_map) or ("Ara-C" in ae_map):
+                    st.markdown("**Ara-C 제형 선택**")
+                    picked_key = render_arac_wrapper("Ara-C 제형 선택", default="Cytarabine")
+                    st.write(f"- **{display_label(picked_key)}**")
+                    st.caption(get_ae(picked_key))
+                    for _ln in get_checks(picked_key):
+                        st.checkbox(_ln, key=wkey(f"chk_{picked_key}_{_ln}"))
+                    st.divider()
+            except Exception:
+                pass
 
-                for k, arr in ae_map.items():
-                    if resolve_key(k) in ("Cytarabine", "Ara-C"):
-                        continue
-                    st.write(f"- **{label_map.get(k, str(k))}**")
-                    if isinstance(arr, (list, tuple)):
-                        for ln in arr:
-                            st.write(f"  - {ln}")
-                    elif isinstance(arr, str) and arr.strip():
-                        st.write(f"  - {arr}")
-                    else:
-                        st.write("  - (부작용 정보 없음)")
-            else:
-                st.write("- (DB에 상세 부작용 없음)")
+            for k, arr in ae_map.items():
+                if resolve_key(k) in ("Cytarabine", "Ara-C"):
+                    continue
+                st.write(f"- **{label_map.get(k, str(k))}**")
+                if isinstance(arr, (list, tuple)):
+                    for ln in arr:
+                        st.write(f"  - {ln}")
+                elif isinstance(arr, str) and arr.strip():
+                    st.write(f"  - {arr}")
+                else:
+                    st.write("  - (부작용 정보 없음)")
+        else:
+            st.write("- (DB에 상세 부작용 없음)")
 
 _block_spurious_home()
 
