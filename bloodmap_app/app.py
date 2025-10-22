@@ -43,6 +43,8 @@ if "wkey" not in globals():
             return str(x)
 
 # ===== End import guard =====
+from ae_resolve import get_ae, get_checks, resolve_key  # (patch) robust AE/label resolver
+
 
 # ---- Patch: AE & checklist resolvers (label→key safe) ----
 try:
@@ -110,7 +112,7 @@ try:
                 format_func=lambda k: labels[keys.index(k)],
                 key=wkey("arac_form_pick")
             )
-            st.caption(get_ae_text(pick))
+            st.caption(get_ae(pick))
             for item in user_check_map.get(pick, []):
                 st.checkbox(item, key=wkey(f"chk_{pick}_{item}"))
             return pick
@@ -127,7 +129,7 @@ try:
             st.markdown("#### 🧩 유지요법")
             for d in maint:
                 st.write(f"- {display_label(d)}")
-                st.caption(get_ae_text(d))
+                st.caption(get_ae(d))
                 for item in user_check_map.get(d, []):
                     st.checkbox(item, key=wkey(f"chk_{d}_{item}"))
             return maint
