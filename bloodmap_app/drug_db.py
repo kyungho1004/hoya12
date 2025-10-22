@@ -170,3 +170,54 @@ def ensure_onco_drug_db(db: Dict[str, Dict[str, Any]]):
         entry = db["Ara-C"]
         _upsert(db, "Cytarabine", entry.get("alias","시타라빈(Ara-C)"), entry.get("moa",""), entry.get("ae",""))
     return db
+
+
+# === [PATCH 2025-10-22 KST] Fill missing ONCO_MAP refs (maintenance + targeted) ===
+def _safe_extend_missing_onco_refs(db):
+    _u = _upsert
+    # Antimetabolites / maintenance
+    _u(db, "6-MP", "6-머캅토퓨린", "항암제(Thiopurine)", "🩸 골수억제 · 간수치 상승 · 구역")
+    _u(db, "MTX", "메토트렉세이트", "항암제(Antimetabolite)", "🩸 골수억제 · 💊 구내염 · 간수치↑ · 신독성(고용량) · 광과민")
+    _u(db, "ATRA", "베사노이드(ATRA)", "분화유도제", "두통 · 피부건조 · 지질↑ · 📛 RA‑증후군(호흡곤란/발열/체액저류) 경고")
+    _u(db, "Arsenic Trioxide", "삼산화비소(ATO)", "분화유도제", "QT 연장 · 전해질 이상 · 📛 RA‑증후군")
+
+    # Classic anthracyclines
+    _u(db, "Daunorubicin", "다우노루비신", "항암제(Anthracycline)", "❤️ 심근독성(누적) · 🩸 골수억제 · 탈모")
+    _u(db, "Idarubicin", "이다루비신", "항암제(Anthracycline)", "❤️ 심근독성(누적) · 🩸 골수억제 · 구역")
+
+    # Solid tumor/targeted add-ons
+    _u(db, "Atezolizumab", "아테졸리주맙", "면역항암제(PD‑L1)", "면역관련 이상반응(폐렴/대장염/간염/내분비)")
+    _u(db, "Durvalumab", "더발루맙", "면역항암제(PD‑L1)", "면역관련 이상반응(폐렴/대장염/간염/내분비)")
+    _u(db, "Cetuximab", "세툭시맙", "표적치료(EGFR)", "여드름양 발진 · 저마그네슘혈증 · 과민반응")
+    _u(db, "Panitumumab", "파니투무맙", "표적치료(EGFR)", "여드름양 발진 · 저마그네슘혈증")
+    _u(db, "Sorafenib", "소라페닙", "표적치료(MTKI)", "손발증후군 · 고혈압 · 피로")
+    _u(db, "Lenvatinib", "렌바티닙", "표적치료(MTKI)", "고혈압 · 단백뇨 · 피로 · 설사")
+    _u(db, "Olaparib", "올라파립", "표적치료(PARP)", "오심 · 피로 · 빈혈")
+    _u(db, "Niraparib", "니라파립", "표적치료(PARP)", "혈소판감소 · 오심 · 피로")
+
+    # Chemo add-ons
+    _u(db, "Topotecan", "토포테칸", "항암제(Topoisomerase I)", "🩸 골수억제 · 오심/구토 · 탈모")
+    _u(db, "Nab-Paclitaxel", "나노입자 파클리탁셀", "항암제(Taxane)", "🧠 말초신경병증 · 🩸 골수억제")
+
+    # Lowercase mirrors for robustness
+    for key in ["6-MP","MTX","ATRA","Arsenic Trioxide","Daunorubicin","Idarubicin",
+                "Atezolizumab","Durvalumab","Cetuximab","Panitumumab","Sorafenib","Lenvatinib",
+                "Olaparib","Niraparib","Topotecan","Nab-Paclitaxel"]:
+        rec = db.get(key, {})
+        _u(db, key.lower(), rec.get("alias", key), rec.get("class",""), rec.get("ae",""))
+
+try:
+    __prev_ensure  # type: ignore
+except NameError:
+    __prev_ensure = None
+
+# chain patch into ensure_onco_drug_db
+_prev = globals().get("ensure_onco_drug_db")
+def ensure_onco_drug_db(db):
+    if callable(_prev):
+        try:
+            _prev(db)
+        except Exception:
+            pass
+    _safe_extend_missing_onco_refs(db)
+# === [END PATCH] ===
