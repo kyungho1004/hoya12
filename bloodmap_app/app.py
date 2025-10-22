@@ -77,7 +77,7 @@ if st.session_state.get("_active_tab") and _qp_get("tab") != st.session_state["_
 
 # 3) Public helpers
 def set_route(name: str, rerun: bool = True):
-    st.session_state["_route"] = name or ""
+    st.session_state["_route"] = name or "home"
     _qp_set(route=st.session_state["_route"])
     if rerun: st.rerun()
 
@@ -86,6 +86,25 @@ def set_active_tab(name: str, rerun: bool = False):
     _qp_set(tab=st.session_state["_active_tab"])
     if rerun: st.rerun()
 # ---- End sticky router v2 ----
+
+# ---- Anti-rollback guard (fixes: first click → home once) ----
+# 아이디어: 직전 라우트(_route_last)를 기록했다가,
+# 이번 렌더에서 route가 "home"으로 돌아갔지만 직전 값이 "home"이 아니면 즉시 복원.
+def _anti_rollback_guard():
+    prev = st.session_state.get("_route_last", "")
+    cur_url = _qp_get("route")
+    cur = st.session_state.get("_route") or cur_url or ""
+    # 첫 클릭/리런 시 알 수 없는 초기화로 home이 찍히면, 직전 라우트로 복귀
+    if prev and prev != "home" and (cur == "home" or not cur):
+        st.session_state["_route"] = prev
+        _qp_set(route=prev)
+    # 현재 확정된 라우트를 마지막 라우트로 기록(빈 값이면 home로 취급)
+    st.session_state["_route_last"] = st.session_state.get("_route") or cur or "home"
+
+# 반드시 상단 초기화 직후에 호출
+_anti_rollback_guard()
+# ---- End Anti-rollback guard ----
+
 
 from ae_resolve import get_ae, get_checks, resolve_key  # (patch) robust AE/label resolver
 
