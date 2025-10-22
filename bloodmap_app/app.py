@@ -61,6 +61,33 @@ except Exception:
     pass
 # ---- End hard redirect guard v2 ----
 
+
+# ---- Initial route bootstrap (anti first-click→home) ----
+try:
+    import streamlit as st
+    ss = st.session_state
+    # If no current route and no URL route, prefer last; if none, fall back to 'chemo' (not 'home').
+    if not ss.get("_route"):
+        url_route = (st.query_params.get("route")[0] 
+                     if isinstance(st.query_params.get("route"), list) else st.query_params.get("route"))
+        if not url_route:
+            last = ss.get("_route_last")
+            if last and last != "home":
+                ss["_route"] = last
+            else:
+                ss["_route"] = "chemo"
+                ss["_route_last"] = "chemo"
+            try:
+                if st.query_params.get("route") != ss["_route"]:
+                    st.query_params.update(route=ss["_route"])
+            except Exception:
+                st.experimental_set_query_params(route=ss["_route"])
+            st.rerun()
+except Exception:
+    pass
+# ---- End initial route bootstrap ----
+
+
 # app.py
 
 # ===== Robust import guard (auto-injected) =====
