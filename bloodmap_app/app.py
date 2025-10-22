@@ -43,7 +43,6 @@ try:
     last = ss.get("_route_last")
 
     # Run once per session to hydrate from URL only.
-    # Do NOT force 'home' implicitly on initial interaction; avoid 1st-click → home jump.
     if not ss.get("_hrg_v2_done", False):
         ss["_hrg_v2_done"] = True
         if url_route:
@@ -66,11 +65,13 @@ except Exception:
 try:
     import streamlit as st
     ss = st.session_state
-    # If no current route and no URL route, prefer last; if none, fall back to 'chemo' (not 'home').
     if not ss.get("_route"):
-        url_route = (st.query_params.get("route")[0] 
-                     if isinstance(st.query_params.get("route"), list) else st.query_params.get("route"))
-        if not url_route:
+        try:
+            url_r = st.query_params.get("route")
+            url_r = url_r[0] if isinstance(url_r, list) else url_r
+        except Exception:
+            url_r = (st.experimental_get_query_params().get("route") or [""])[0]
+        if not url_r:
             last = ss.get("_route_last")
             if last and last != "home":
                 ss["_route"] = last
@@ -86,6 +87,7 @@ try:
 except Exception:
     pass
 # ---- End initial route bootstrap ----
+
 
 
 # app.py
@@ -1416,7 +1418,8 @@ with t_dx:
     groups = sorted(ONCO.keys()) if ONCO else ["혈액암", "고형암"]
     group = st.selectbox("암 그룹", options=groups, index=0, key=wkey("onco_group_sel"))
     diseases = sorted(ONCO.get(group, {}).keys()) if ONCO else ["ALL", "AML", "Lymphoma", "Breast", "Colon", "Lung"]
-    disease = st.selectbox("의심/진단명", options=diseases, index=0, key=wkey("onco_disease_sel"))
+    disease = st.selectbox("의심/진단명", options=diseases, index=0, key=wkey("onco_disease_sel"), format_func=lambda x: (f"{x} (" + (DX_KO.get(_dx_norm(x)) or DX_KO.get(x) or x) + ")") if not any("\uac00" <= ch <= "\ud7a3" for ch in str(x)) else str(x))
+
     disp = dx_display(group, disease)
     st.session_state["onco_group"] = group
     st.session_state["onco_disease"] = disease
@@ -1556,7 +1559,6 @@ def _aggregate_all_aes(meds, db):
         if uniq:
             result[k] = uniq
     return result
-
 # CHEMO
 with t_chemo:
     st.subheader("항암제(진단 기반)")
@@ -2884,7 +2886,6 @@ def _select_tab_by_label(label: str):
             }
             return false;
           };
-          // Try immediately and a bit later to survive reruns
           if (!trySelect()) { setTimeout(trySelect, 80); setTimeout(trySelect, 200); }
         })();
         </script>
