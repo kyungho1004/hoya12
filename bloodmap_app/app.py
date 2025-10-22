@@ -1568,10 +1568,15 @@ with t_chemo:
     pool_labels = [label_map.get(k, str(k)) for k in pool_keys]
     unique_pairs = sorted(set(zip(pool_labels, pool_keys)), key=lambda x: x[0].lower())
     pool_labels_sorted = [p[0] for p in unique_pairs]
-    picked_labels = st.multiselect("투여/계획 약물 선택", options=pool_labels_sorted, key=wkey("drug_pick"))
+    picked_labels = st.multiselect("투여/계획 약물 선택", options=pool_labels_sorted, default=pool_labels_sorted, key=wkey("drug_pick"))
     label_to_key = {lbl: key for lbl, key in unique_pairs}
     picked_keys = [label_to_key.get(lbl) for lbl in picked_labels if lbl in label_to_key]
     st.session_state["chemo_keys"] = picked_keys
+    # 자동 복구: 사용자가 전부 해제해도 빈 화면 방지
+    if not picked_keys:
+        st.caption("선택된 항암제가 없어 기본값으로 복구했어요.")
+        picked_keys = [label_to_key.get(lbl) for lbl in pool_labels_sorted]
+        st.session_state["chemo_keys"] = picked_keys
 
     if picked_keys:
         # 선택한 약물 DB 비어있으면 경고
