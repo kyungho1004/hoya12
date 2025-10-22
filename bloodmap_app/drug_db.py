@@ -1113,3 +1113,54 @@ def ensure_onco_drug_db(db):
             pass
     _reinforce_cardiotox_details(db)
 # === [/PATCH] ===
+
+# === [PATCH 2025-10-22 KST] KR key backfill for user-listed items ===
+def _backfill_kr_keys_user_list(db: Dict[str, Dict[str, Any]]) -> None:
+    MAP = {
+        "카보잔티닙": ("Cabozantinib", "설사 · 손발증후군 · 고혈압 · 피로 · 구내염"),
+        "크리조티닙": ("Crizotinib", "시야장애 · 설사/변비 · 부종 · 간효소↑ · 피로"),
+        "투카티닙": ("Tucatinib", "설사 · 손발증후군 드묾 · 간효소↑"),
+        "페메트렉시드": ("Pemetrexed", "피로 · 골수억제 · 발진 · 구내염 · 비타민B9/B12 보충 필요"),
+        "폴라투주맙 베도틴": ("Polatuzumab Vedotin", "🩸 골수억제 · 말초신경병증 · 감염"),
+        "프랄세티닙": ("Pralsetinib", "고혈압 · 간효소↑ · 변비/설사 · 피로 · 간질성폐질환 드묾"),
+        "카보플라틴": ("Carboplatin", "🩸 골수억제(혈소판↓) · 🤢 오심/구토 · 알레르기반응(누적)"),
+        "젬시타빈": ("Gemcitabine", "🩸 골수억제 · 발열 · 발진 · 간효소↑ · 폐독성 드묾"),
+        "이리노테칸": ("Irinotecan", "💩 설사(급성/지연) · 골수억제 · 복통 · 탈모"),
+        "옥살리플라틴": ("Oxaliplatin", "🧊 냉유발 감각이상 · 말초신경병증 · 오심/구토 · 설사 · 골수억제"),
+        "엔트렉티닙": ("Entrectinib", "어지럼 · 체중증가 · 설사/변비 · 간효소↑ · QT 연장 드묾"),
+        "시스플라틴": ("Cisplatin", "🛎️ 이독성 · 🔔 말초신경병증 · 🤢 중증 오심/구토 · 🧂 전해질 이상(Mg/K↓) · 신독성"),
+        "소토라십": ("Sotorasib", "설사 · 오심 · 간효소↑ · 피로"),
+        "셀퍼카티닙": ("Selpercatinib", "고혈압 · 간효소↑ · QT 연장 · 변비/설사"),
+        "빈블라스틴": ("Vinblastine", "골수억제 · 변비 · 말초신경병증"),
+        "브렌툭시맙 베도틴": ("Brentuximab Vedotin", "🧠 말초신경병증 · 피로 · 오심 · 혈구감소"),
+        "반데타닙": ("Vandetanib", "QT 연장 · 설사 · 발진 · 갑상선기능저하"),
+        "로를라티닙": ("Lorlatinib", "💭 인지/기분 변화 · 지질↑ · 체중↑ · 말초부종"),
+        "라로트렉티닙": ("Larotrectinib", "어지럼 · 피로 · 간효소↑ · 체중증가"),
+        "도세탁셀": ("Docetaxel", "🖐️ 손발부종/무감각 · 🩸 골수억제 · 발열성 호중구감소증 · 손발톱 변화 · 체액저류"),
+        "닥티노마이신": ("Dactinomycin", "💊 점막염 · 오심/구토 · 골수억제 · 피부괴사(누출 시)"),
+        "다카바진": ("Dacarbazine", "🤢 심한 오심/구토 · 광과민 · 골수억제"),
+        "Ibrutinib": ("Ibrutinib", "출혈위험 · 심방세동 · 설사 · 감염"),
+        "ibrutinib (Ibrutinib)": ("Ibrutinib", "출혈위험 · 심방세동 · 설사 · 감염"),
+        "dactinomycin (Dactinomycin)": ("Dactinomycin", "💊 점막염 · 오심/구토 · 골수억제 · 피부괴사(누출 시)"),
+        "dacarbazine (Dacarbazine)": ("Dacarbazine", "🤢 심한 오심/구토 · 광과민 · 골수억제"),
+    }
+    for kr, (eng, ae) in MAP.items():
+        base = db.get(eng, {})
+        alias = kr
+        moa = base.get("moa","") if isinstance(base, dict) else ""
+        _upsert(db, kr, alias, moa, ae)
+        # also create composite both ways
+        comp1 = f"{eng} ({kr})"
+        comp2 = f"{kr} ({eng})"
+        _upsert(db, comp1, alias, moa, ae)
+        _upsert(db, comp2, alias, moa, ae)
+
+_prev_krfill = globals().get("ensure_onco_drug_db")
+def ensure_onco_drug_db(db):
+    if callable(_prev_krfill):
+        try:
+            _prev_krfill(db)
+        except Exception:
+            pass
+    _backfill_kr_keys_user_list(db)
+# === [/PATCH] ===

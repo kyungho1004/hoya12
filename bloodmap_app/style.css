@@ -16,3 +16,6 @@ h1, h2, h3 { letter-spacing: 0.2px; }
   background: rgba(0,0,0,0.04);
 }
 .subtle-note { opacity: .9; font-size: 0.9em; }
+/* === PATCH 2025-10-22 KST: Cardio-Guard box === */
+.cardio-guard { margin-top: .5rem; padding: .5rem .75rem; border-left: 4px solid #e11d48; background: rgba(225,29,72,.05); border-radius: .5rem; }
+.cardio-guard .title { font-weight: 700; margin-bottom: .25rem; }
