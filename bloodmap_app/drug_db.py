@@ -103,40 +103,6 @@ PROFILES: Dict[str, Dict[str, Any]] = {
     "Rituximab": {"moa": "CD20 항체", "ae": "💉 주입반응 · 감염위험 · HBV 재활성 경고"},
     "Octreotide": {"moa": "Somatostatin 유사체", "ae": "💩 지방변/설사 · 복부불편감 · 담석"},
     "Prednisone": {"moa": "코르티코스테로이드", "ae": "😠 기분변화 · 🍽️ 식욕↑/체중↑ · 혈당↑ · 불면"},
-    "Ara-C": {"moa": "시타라빈(항대사제)", "ae": "🩸 골수억제 · 🤢 오심/구토 · 💊 점막염 · 👁️ 결막염(점안 예방) · 🧠 소뇌독성(고용량) · 발열/발진"},
-    "Cytarabine": {"moa": "시타라빈(항대사제)", "ae": "🩸 골수억제 · 🤢 오심/구토 · 💊 점막염 · 👁️ 결막염(점안 예방) · 🧠 소뇌독성(고용량) · 발열/발진"},
-    "Bendamustine": {"moa": "알킬화제", "ae": "🩸 골수억제 · 발열/감염 · 피부발진 · 피로"},
-    "Bleomycin": {"moa": "항종양 항생제", "ae": "🫁 폐독성(섬유화) · 발열 · 피부색소침착 · 손발가려움"},
-    "Brentuximab Vedotin": {"moa": "CD30 표적 ADC", "ae": "🧠 말초신경병증 · 피로 · 오심 · 혈구감소"},
-    "Cabozantinib": {"moa": "멀티 TKI (MET/VEGFR 등)", "ae": "설사 · 손발증후군 · 고혈압 · 피로 · 구내염"},
-    "Carboplatin": {"moa": "백금제(Platinum)", "ae": "🩸 골수억제(혈소판↓) · 🤢 오심/구토 · 알레르기반응(누적)"},
-    "Chlorambucil": {"moa": "알킬화제", "ae": "🩸 골수억제 · 오심 · 발진 · 불임 가능"},
-    "Cisplatin": {"moa": "백금제(Platinum)", "ae": "🛎️ 이독성 · 🔔 말초신경병증 · 🤢 중증 오심/구토 · 🧂 전해질 이상(Mg/K↓) · 신독성"},
-    "Crizotinib": {"moa": "ALK/ROS1 TKI", "ae": "시야장애 · 설사/변비 · 부종 · 간효소↑ · 피로"},
-    "Dacarbazine": {"moa": "알킬화제(트리아진)", "ae": "🤢 심한 오심/구토 · 광과민 · 골수억제"},
-    "Dactinomycin": {"moa": "항종양 항생제", "ae": "💊 점막염 · 오심/구토 · 골수억제 · 피부괴사(누출 시)"},
-    "Docetaxel": {"moa": "탁산", "ae": "🖐️ 손발부종/무감각 · 🩸 골수억제 · 발열성 호중구감소증 · 손발톱 변화 · 체액저류"},
-    "Entrectinib": {"moa": "TRK/ROS1/ALK TKI", "ae": "어지럼 · 체중증가 · 설사/변비 · 간효소↑ · QT 연장 드묾"},
-    "Gemcitabine": {"moa": "핵산유사체", "ae": "🩸 골수억제 · 발열 · 발진 · 간효소↑ · 폐독성 드묾"},
-    "Ibrutinib": {"moa": "BTK 억제제", "ae": "출혈위험 · 심방세동 · 설사 · 감염"},
-    "Ifosfamide": {"moa": "알킬화제", "ae": "🩸 골수억제 · 🧠 신경독성(혼동) · 🩸 혈뇨/방광염(아크롤레인) · 전해질 이상"},
-    "Irinotecan": {"moa": "Topo I 억제", "ae": "💩 설사(급성/지연) · 골수억제 · 복통 · 탈모"},
-    "Lapatinib": {"moa": "HER2/EGFR TKI", "ae": "설사 · 발진 · 간효소↑ · 심기능↓ 드묾"},
-    "Larotrectinib": {"moa": "TRK TKI", "ae": "어지럼 · 피로 · 간효소↑ · 체중증가"},
-    "Lorlatinib": {"moa": "ALK/ROS1 TKI", "ae": "💭 인지/기분 변화 · 지질↑ · 체중↑ · 말초부종"},
-    "Obinutuzumab": {"moa": "anti‑CD20 mAb", "ae": "💉 주입반응 · 감염 · 중성구감소 · HBV 재활성 경고"},
-    "Oxaliplatin": {"moa": "백금제(Platinum)", "ae": "🧊 냉유발 감각이상 · 말초신경병증 · 오심/구토 · 설사 · 골수억제"},
-    "Pazopanib": {"moa": "멀티 TKI", "ae": "고혈압 · 간독성 · 설사 · 탈모/피부변화"},
-    "Pemetrexed": {"moa": "항대사제(엽산길항)", "ae": "피로 · 골수억제 · 발진 · 구내염 · 비타민B9/B12 보충 필요"},
-    "Polatuzumab Vedotin": {"moa": "anti‑CD79b ADC", "ae": "🩸 골수억제 · 말초신경병증 · 감염"},
-    "Pralsetinib": {"moa": "RET TKI", "ae": "고혈압 · 간효소↑ · 변비/설사 · 피로 · 간질성폐질환 드묾"},
-    "Selpercatinib": {"moa": "RET TKI", "ae": "고혈압 · 간효소↑ · QT 연장 · 변비/설사"},
-    "Sotorasib": {"moa": "KRAS G12C 억제제", "ae": "설사 · 오심 · 간효소↑ · 피로"},
-    "Sunitinib": {"moa": "멀티 TKI", "ae": "고혈압 · 손발증후군 · 갑상선기능저하 · 피로 · 구내염"},
-    "Trabectedin": {"moa": "DNA 결합제(육종)", "ae": "간효소↑ · 근육통(CPK↑) · 골수억제 · 피로"},
-    "Tucatinib": {"moa": "HER2 TKI", "ae": "설사 · 손발증후군 드묾 · 간효소↑"},
-    "Vandetanib": {"moa": "RET/VEGFR/EGFR TKI", "ae": "QT 연장 · 설사 · 발진 · 갑상선기능저하"},
-    "Vinblastine": {"moa": "Vinca 알칼로이드", "ae": "골수억제 · 변비 · 말초신경병증"},
 }
 
 PLACEHOLDER_AE = "부작용 정보 필요"
@@ -171,53 +137,196 @@ def ensure_onco_drug_db(db: Dict[str, Dict[str, Any]]):
         _upsert(db, "Cytarabine", entry.get("alias","시타라빈(Ara-C)"), entry.get("moa",""), entry.get("ae",""))
     return db
 
-
-# === [PATCH 2025-10-22 KST] Fill missing ONCO_MAP refs (maintenance + targeted) ===
-def _safe_extend_missing_onco_refs(db):
+# === [PATCH 2025-10-22 KST] Add missing onco_map drugs with AE ===
+def _extend_onco_missing_from_map(db: Dict[str, Dict[str, Any]]) -> None:
     _u = _upsert
-    # Antimetabolites / maintenance
-    _u(db, "6-MP", "6-머캅토퓨린", "항암제(Thiopurine)", "🩸 골수억제 · 간수치 상승 · 구역")
-    _u(db, "MTX", "메토트렉세이트", "항암제(Antimetabolite)", "🩸 골수억제 · 💊 구내염 · 간수치↑ · 신독성(고용량) · 광과민")
-    _u(db, "ATRA", "베사노이드(ATRA)", "분화유도제", "두통 · 피부건조 · 지질↑ · 📛 RA‑증후군(호흡곤란/발열/체액저류) 경고")
-    _u(db, "Arsenic Trioxide", "삼산화비소(ATO)", "분화유도제", "QT 연장 · 전해질 이상 · 📛 RA‑증후군")
+    # Immunotherapy / mAbs
+    _u(db, "Atezolizumab", "아테졸리주맙", "면역항암제(PD-L1)", "면역관련 이상반응(피부/대장염/간염/폐렴/내분비)",)
+    _u(db, "Durvalumab", "더발루맙", "면역항암제(PD-L1)", "면역관련 이상반응(피부/대장염/간염/폐렴/내분비)",)
+    _u(db, "Cetuximab", "세툭시맙", "표적치료(anti-EGFR)", "여드름양 발진 · 설사/저Mg · 주입반응 · 손발톱변화")
+    _u(db, "Panitumumab", "파니투무맙", "표적치료(anti-EGFR)", "여드름양 발진 · 설사/저Mg · 주입반응")
+    # PARP inhibitors
+    _u(db, "Olaparib", "올라파립", "표적치료(PARP)", "빈혈/혈소판감소 · 피로 · 오심 · 구내염")
+    _u(db, "Niraparib", "니라파립", "표적치료(PARP)", "혈소판감소/빈혈 · 고혈압 · 피로 · 오심")
+    # Multi-TKI
+    _u(db, "Lenvatinib", "렌바티닙", "표적치료(MTKI)", "고혈압 · 단백뇨 · 설사 · 피로 · 손발증후군")
+    _u(db, "Sorafenib", "소라페닙", "표적치료(MTKI)", "손발증후군 · 설사 · 고혈압 · 피로")
+    # Cytotoxics
+    _u(db, "Topotecan", "토포테칸", "항암제(Topo I inhibitor)", "골수억제 · 오심/구토 · 탈모 · 피로")
+    _u(db, "Nab-Paclitaxel", "나노입자 파클리탁셀", "항암제(Taxane)", "말초신경병증 · 골수억제 · 과민반응(용제↓) · 피로")
+    _u(db, "Daunorubicin", "다우노루비신", "항암제(Anthracycline)", "심독성(누적) · 골수억제 · 점막염 · 오심/구토")
+    _u(db, "Idarubicin", "이다루비신", "항암제(Anthracycline)", "심독성(누적) · 골수억제 · 점막염 · 오심/구토")
 
-    # Classic anthracyclines
-    _u(db, "Daunorubicin", "다우노루비신", "항암제(Anthracycline)", "❤️ 심근독성(누적) · 🩸 골수억제 · 탈모")
-    _u(db, "Idarubicin", "이다루비신", "항암제(Anthracycline)", "❤️ 심근독성(누적) · 🩸 골수억제 · 구역")
+    # lowercase mirrors
+    for k in ["Atezolizumab","Durvalumab","Cetuximab","Panitumumab","Olaparib","Niraparib","Lenvatinib","Sorafenib","Topotecan","Nab-Paclitaxel","Daunorubicin","Idarubicin"]:
+        rec = db.get(k, {})
+        _u(db, k.lower(), rec.get("alias", k), rec.get("moa",""), rec.get("ae",""))
 
-    # Solid tumor/targeted add-ons
-    _u(db, "Atezolizumab", "아테졸리주맙", "면역항암제(PD‑L1)", "면역관련 이상반응(폐렴/대장염/간염/내분비)")
-    _u(db, "Durvalumab", "더발루맙", "면역항암제(PD‑L1)", "면역관련 이상반응(폐렴/대장염/간염/내분비)")
-    _u(db, "Cetuximab", "세툭시맙", "표적치료(EGFR)", "여드름양 발진 · 저마그네슘혈증 · 과민반응")
-    _u(db, "Panitumumab", "파니투무맙", "표적치료(EGFR)", "여드름양 발진 · 저마그네슘혈증")
-    _u(db, "Sorafenib", "소라페닙", "표적치료(MTKI)", "손발증후군 · 고혈압 · 피로")
-    _u(db, "Lenvatinib", "렌바티닙", "표적치료(MTKI)", "고혈압 · 단백뇨 · 피로 · 설사")
-    _u(db, "Olaparib", "올라파립", "표적치료(PARP)", "오심 · 피로 · 빈혈")
-    _u(db, "Niraparib", "니라파립", "표적치료(PARP)", "혈소판감소 · 오심 · 피로")
-
-    # Chemo add-ons
-    _u(db, "Topotecan", "토포테칸", "항암제(Topoisomerase I)", "🩸 골수억제 · 오심/구토 · 탈모")
-    _u(db, "Nab-Paclitaxel", "나노입자 파클리탁셀", "항암제(Taxane)", "🧠 말초신경병증 · 🩸 골수억제")
-
-    # Lowercase mirrors for robustness
-    for key in ["6-MP","MTX","ATRA","Arsenic Trioxide","Daunorubicin","Idarubicin",
-                "Atezolizumab","Durvalumab","Cetuximab","Panitumumab","Sorafenib","Lenvatinib",
-                "Olaparib","Niraparib","Topotecan","Nab-Paclitaxel"]:
-        rec = db.get(key, {})
-        _u(db, key.lower(), rec.get("alias", key), rec.get("class",""), rec.get("ae",""))
-
-try:
-    __prev_ensure  # type: ignore
-except NameError:
-    __prev_ensure = None
-
-# chain patch into ensure_onco_drug_db
-_prev = globals().get("ensure_onco_drug_db")
+_prev_oncomiss = globals().get("ensure_onco_drug_db")
 def ensure_onco_drug_db(db):
-    if callable(_prev):
+    if callable(_prev_oncomiss):
         try:
-            _prev(db)
+            _prev_oncomiss(db)
         except Exception:
             pass
-    _safe_extend_missing_onco_refs(db)
-# === [END PATCH] ===
+    _extend_onco_missing_from_map(db)
+# === [/PATCH] ===
+
+# === [PATCH 2025-10-22 KST] Add ATRA/ATO ===
+def _extend_apl_core_agents(db: Dict[str, Dict[str, Any]]) -> None:
+    _u = _upsert
+    _u(db, "ATRA", "ATRA(베사노이드)", "분화유도제", "RA-증후군(발열/호흡곤란/부종) · 두통/피부건조 · 간효소↑ · 고지혈증")
+    _u(db, "Arsenic Trioxide", "비소 트리옥사이드(ATO)", "분화유도제", "QT 연장 · 전해질 이상(K/Mg) · 피로 · 간효소↑ · RA-유사 증후군")
+    _u(db, "ATO", "비소 트리옥사이드(ATO)", "분화유도제", "QT 연장 · 전해질 이상(K/Mg) · 피로 · 간효소↑ · RA-유사 증후군")
+    for k in ["ATRA","Arsenic Trioxide","ATO"]:
+        rec = db.get(k, {})
+        _u(db, k.lower(), rec.get("alias", k), rec.get("moa",""), rec.get("ae",""))
+
+_prev_apl = globals().get("ensure_onco_drug_db")
+def ensure_onco_drug_db(db):
+    if callable(_prev_apl):
+        try:
+            _prev_apl(db)
+        except Exception:
+            pass
+    _extend_apl_core_agents(db)
+# === [/PATCH] ===
+
+# === [PATCH 2025-10-22 KST] Add MTX and 6-MP for maintenance ===
+def _extend_maintenance_core(db: Dict[str, Dict[str, Any]]) -> None:
+    _u = _upsert
+    _u(db, "MTX", "메토트렉세이트(MTX)", "항암제/면역조절(Antimetabolite)", "간효소↑ · 구내염 · 골수억제 · 신독성(고용량) · 광과민/피부발진")
+    _u(db, "Methotrexate", "메토트렉세이트(MTX)", "항암제/면역조절(Antimetabolite)", "간효소↑ · 구내염 · 골수억제 · 신독성(고용량) · 광과민/피부발진")
+    _u(db, "6-MP", "6-머캅토퓨린(6-MP)", "항대사제", "골수억제 · 간독성 · 오심/구토 · 발진")
+    _u(db, "Mercaptopurine", "6-머캅토퓨린(6-MP)", "항대사제", "골수억제 · 간독성 · 오심/구토 · 발진")
+    for k in ["MTX","Methotrexate","6-MP","Mercaptopurine"]:
+        rec = db.get(k, {})
+        _u(db, k.lower(), rec.get("alias", k), rec.get("moa",""), rec.get("ae",""))
+
+_prev_maint = globals().get("ensure_onco_drug_db")
+def ensure_onco_drug_db(db):
+    if callable(_prev_maint):
+        try:
+            _prev_maint(db)
+        except Exception:
+            pass
+    _extend_maintenance_core(db)
+# === [/PATCH] ===
+
+# === [PATCH 2025-10-22 KST] Monitoring checklist metadata ===
+def _attach_monitoring_metadata(db: Dict[str, Dict[str, Any]]) -> None:
+    """각 약물/군별 모니터링 체크리스트를 'monitor' 필드로 추가(추가만, 기존 필드 보존)."""
+    def add_mon(keys, items):
+        for k in keys:
+            if k in db:
+                rec = db[k]
+                mons = list(rec.get("monitor", [])) if isinstance(rec.get("monitor"), (list, tuple)) else []
+                for it in items:
+                    if it not in mons:
+                        mons.append(it)
+                rec["monitor"] = mons
+            if k.lower() in db:
+                rec = db[k.lower()]
+                mons = list(rec.get("monitor", [])) if isinstance(rec.get("monitor"), (list, tuple)) else []
+                for it in items:
+                    if it not in mons:
+                        mons.append(it)
+                rec["monitor"] = mons
+
+    # 공통 세포독성
+    add_mon([
+        "Cyclophosphamide","Ifosfamide","Cytarabine","Ara-C","Ara-C IV","Ara-C SC","Ara-C HDAC",
+        "Gemcitabine","Dacarbazine","Dactinomycin","Topotecan","Vincristine","Vinblastine",
+        "Paclitaxel","Docetaxel","Chlorambucil","Bendamustine","Trabectedin","Daunorubicin","Idarubicin","Doxorubicin"
+    ], ["CBC","LFT","Renal(eGFR)","Electrolytes","Fever/Sepsis","Mucositis","N/V","Diarrhea"])
+
+    # Ara-C 고용량 특이
+    add_mon(["Ara-C HDAC","Cytarabine HDAC"], ["Cerebellar exam","Conjunctivitis(스테로이드 점안)"])
+
+    # Platinum
+    add_mon(["Cisplatin"], ["Renal(eGFR)","Mg/K","Ototoxicity","Neuropathy"])
+    add_mon(["Carboplatin"], ["CBC(Platelet)","Allergy"])
+    add_mon(["Oxaliplatin"], ["Cold-induced neuropathy","Neuropathy"])
+
+    # Taxane
+    add_mon(["Paclitaxel","Docetaxel","Nab-Paclitaxel"], ["Neuropathy","Hypersensitivity","Edema(Doce)"])
+
+    # Anthracycline
+    add_mon(["Doxorubicin","Daunorubicin","Idarubicin"], ["Echo/LVEF","BNP/NT-proBNP"])
+
+    # Anti-VEGF/VEGFR
+    add_mon(["Bevacizumab","Ramucirumab","Lenvatinib","Sorafenib","Regorafenib","Sunitinib","Pazopanib","Ripretinib"],
+            ["BP","Proteinuria(UPCR)","Wound healing/bleeding"])
+
+    # HER2 축
+    add_mon(["Trastuzumab","Pertuzumab","T-DM1","Trastuzumab deruxtecan"], ["Echo/LVEF","Platelet(T-DM1)","ILD(deruxte칸)"])
+
+    # EGFR/ALK/RET/TRK TKI
+    add_mon(["Osimertinib"], ["Rash/Diarrhea","ILD","LFT"])
+    add_mon(["Alectinib","Crizotinib","Capmatinib","Lorlatinib"], ["Edema","LFT","Lipids(Lorlatinib)"])
+    add_mon(["Selpercatinib","Pralsetinib","Entrectinib","Larotrectinib","Tucatinib"], ["BP","LFT","QT(ECG)"])
+
+    # mTOR
+    add_mon(["Everolimus"], ["Glucose","Lipids","LFT","ILD"])
+
+    # PARP
+    add_mon(["Olaparib","Niraparib"], ["CBC(Anemia/Platelet)","BP(Nira)","Fatigue/Nausea"])
+
+    # 면역항암제
+    add_mon(["Nivolumab","Pembrolizumab","Atezolizumab","Durvalumab"], ["TFT","LFT","Renal(eGFR)","Cortisol±ACTH","iRAE screening","SpO2(if respiratory)"])
+
+    # 호르몬/지지요법
+    add_mon(["Octreotide"], ["Stool/Fatty stool","Gallstone"])
+
+    # 스테로이드
+    add_mon(["Prednisone"], ["Glucose","BP","Sleep/Mood","Weight"])
+
+    # 유지요법
+    add_mon(["MTX","Methotrexate"], ["LFT","Renal(eGFR)","Mucositis","Photosensitivity"])
+    add_mon(["6-MP","Mercaptopurine"], ["CBC","LFT","Rash/Nausea"])
+
+_prev_monitor = globals().get("ensure_onco_drug_db")
+def ensure_onco_drug_db(db):
+    if callable(_prev_monitor):
+        try:
+            _prev_monitor(db)
+        except Exception:
+            pass
+    _attach_monitoring_metadata(db)
+# === [/PATCH] ===
+
+# === [PATCH 2025-10-22 KST] Final placeholder cleanup (last in chain) ===
+def _final_placeholder_cleanup(db: Dict[str, Dict[str, Any]]) -> None:
+    # For each alias bucket, copy the richest non-placeholder AE to all variants.
+    buckets: Dict[str, Dict[str, Any]] = {}
+    for k, v in list(db.items()):
+        if not isinstance(v, dict):
+            continue
+        alias = (v.get("alias") or k)
+        ae = (v.get("ae") or "").strip()
+        if "부작용 정보 필요" in ae:
+            ae = ""
+        cur = buckets.get(alias)
+        if (cur is None) or (len(ae) > len((cur.get("ae") or ""))):
+            # store a shallow copy with cleaned ae for comparison
+            buckets[alias] = {"ae": ae}
+
+    # propagate
+    for k, v in list(db.items()):
+        if not isinstance(v, dict):
+            continue
+        alias = (v.get("alias") or k)
+        best = buckets.get(alias, {})
+        best_ae = (best.get("ae") or "").strip()
+        if best_ae and ((v.get("ae") or "").strip() != best_ae):
+            v["ae"] = best_ae
+
+_prev_final = globals().get("ensure_onco_drug_db")
+def ensure_onco_drug_db(db):
+    if callable(_prev_final):
+        try:
+            _prev_final(db)
+        except Exception:
+            pass
+    _final_placeholder_cleanup(db)
+# === [/PATCH] ===
