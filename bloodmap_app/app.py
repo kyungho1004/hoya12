@@ -1,25 +1,3 @@
-# ---- Early route prebootstrap (anti-home on first click) ----
-try:
-    import streamlit as st  # early import
-    def __early_qp_get(name: str) -> str:
-        try:
-            v = st.query_params.get(name)
-            return v[0] if isinstance(v, list) else (v or "")
-        except Exception:
-            v = st.experimental_get_query_params().get(name, [""])
-            return v[0]
-    # Initialize route before any downstream code reads it with a default "home"
-    if "_route" not in st.session_state:
-        _r = __early_qp_get("route")
-        if _r:
-            st.session_state["_route"] = _r
-    # Track last route baseline to aid later anti-rollback
-    if "_route_last" not in st.session_state:
-        st.session_state["_route_last"] = st.session_state.get("_route") or "home"
-except Exception:
-    pass
-# ---- End early prebootstrap ----
-
 # app.py
 
 # ===== Robust import guard (auto-injected) =====
@@ -65,216 +43,51 @@ if "wkey" not in globals():
             return str(x)
 
 # ===== End import guard =====
-
-# ---- Sticky router v2: keep route/tab across reruns & clicks ----
-import streamlit as st
-
-def _qp_get(name: str) -> str:
-    try:
-        v = st.query_params.get(name)
-        return v[0] if isinstance(v, list) else (v or "")
-    except Exception:
-        v = st.experimental_get_query_params().get(name, [""])
-        return v[0]
-
-def _qp_set(**kwargs):
-    try:
-        st.query_params.update(**kwargs)
-    except Exception:
-        st.experimental_set_query_params(**kwargs)
-
-# 1) First-run bootstrap (URL > SS > default)
-if "_router_init" not in st.session_state:
-    route = _qp_get("route") or st.session_state.get("_route") or "home"
-    tab   = _qp_get("tab")   or st.session_state.get("_active_tab") or ""
-    st.session_state["_route"] = route
-    st.session_state["_active_tab"] = tab
-    st.session_state["_router_init"] = True
-
-# 2) Keep URL in sync with session_state (no overwrite of SS)
-if _qp_get("route") != st.session_state.get("_route"):
-    _qp_set(route=st.session_state["_route"])
-if st.session_state.get("_active_tab") and _qp_get("tab") != st.session_state["_active_tab"]:
-    _qp_set(tab=st.session_state["_active_tab"])
-
-# 3) Public helpers
-def set_route(name: str, rerun: bool = True):
-    st.session_state["_route"] = name or "home"
-    _qp_set(route=st.session_state["_route"])
-    if rerun: st.rerun()
-
-def set_active_tab(name: str, rerun: bool = False):
-    st.session_state["_active_tab"] = name or ""
-    _qp_set(tab=st.session_state["_active_tab"])
-    if rerun: st.rerun()
-# ---- End sticky router v2 ----
-
-# ---- Anti-rollback guard (fixes: first click → home once) ----
-# 아이디어: 직전 라우트(_route_last)를 기록했다가,
-# 이번 렌더에서 route가 "home"으로 돌아갔지만 직전 값이 "home"이 아니면 즉시 복원.
-def _anti_rollback_guard():
-    prev = st.session_state.get("_route_last", "")
-    cur_url = _qp_get("route")
-    cur = st.session_state.get("_route") or cur_url or ""
-    # 첫 클릭/리런 시 알 수 없는 초기화로 home이 찍히면, 직전 라우트로 복귀
-    if prev and prev != "home" and (cur == "home" or not cur):
-        st.session_state["_route"] = prev
-        _qp_set(route=prev)
-    # 현재 확정된 라우트를 마지막 라우트로 기록(빈 값이면 home로 취급)
-    st.session_state["_route_last"] = st.session_state.get("_route") or cur or "home"
-
-# 반드시 상단 초기화 직후에 호출
-_anti_rollback_guard()
-# ---- End Anti-rollback guard ----
-
-
-from ae_resolve import get_ae, get_checks, resolve_key  # (patch) robust AE/label resolver
-
-
-# ---- Patch: AE & checklist resolvers (label→key safe) ----
+# ---- Onco import shim (robust) ----
+import sys
+from pathlib import Path
 try:
-    from drug_db import key_from_label
-    from ae_bridge import ae_map, user_check_map
-
-    if "_to_drug_key" not in globals():
-        def _to_drug_key(label_or_key: str) -> str:
-            if not label_or_key:
-                return ""
-            k = key_from_label(label_or_key)
-            # If still not found, try raw
-            if k in ae_map or k in user_check_map:
-                return k
-            # Final fallback: original string (may already be the key)
-            return label_or_key
-
-    if "get_ae_text" not in globals():
-        def get_ae_text(label_or_key: str) -> str:
-            k = _to_drug_key(label_or_key)
-            return ae_map.get(k, "") or ae_map.get("Cytarabine", "부작용 정보가 없습니다.")
-
-    if "get_user_checks" not in globals():
-        def get_user_checks(label_or_key: str):
-            k = _to_drug_key(label_or_key)
-            return user_check_map.get(k, [])
+    # 1) Standard import if available
+    from onco_map import ensure_onco_map, ONCO_REGIMENS, build_onco_map, auto_recs_by_dx  # type: ignore
 except Exception:
-    pass
-# ---- End Patch ----
+    # 2) Dynamic load from multiple candidate paths
+    def _load_local_module(mod_name: str, file_path: str):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(mod_name, file_path)
+        m = importlib.util.module_from_spec(spec)
+        sys.modules[mod_name] = m
+        spec.loader.exec_module(m)
+        return m
 
-
-# ---- Patch: Ara-C & Maintenance wrappers (idempotent) ----
-try:
-    import streamlit as st
-    from ae_bridge import ae_map, user_check_map
-    from drug_db import display_label, key_from_label, ALIAS_FALLBACK
-
-    if "get_onco_regimens" not in globals():
-        def get_onco_regimens() -> dict:
-            try:
-                base = dict(ONCO_REGIMENS)
-            except Exception:
-                base = {}
-            return ensure_onco_map(base)
-
-    if "render_arac_wrapper" not in globals():
-        def render_arac_wrapper(label: str = "Ara-C 제형 선택", default: str = "Cytarabine") -> str:
-            # Ara-C를 IV/SC/HDAC로 안전 래핑하여 반환. 기존 구조는 유지.
-            options = [
-                ("Cytarabine IV", "정맥(IV)"),
-                ("Cytarabine SC", "피하(SC)"),
-                ("Cytarabine (HDAC)", "고용량(HDAC)"),
-            ]
-            default_key = "Cytarabine IV" if default in ("Cytarabine", "Ara-C") else default
-            keys = [k for k, _ in options]
-            labels = [f"{txt} · {display_label(k)}" for k, txt in options]
-            try:
-                idx_default = keys.index(default_key)
-            except ValueError:
-                idx_default = 0
-            pick = st.radio(
-                label,
-                options=keys,
-                index=idx_default,
-                format_func=lambda k: labels[keys.index(k)],
-                key=wkey("arac_form_pick")
-            )
-            st.caption(get_ae(pick))
-            for item in user_check_map.get(pick, []):
-                st.checkbox(item, key=wkey(f"chk_{pick}_{item}"))
-            return pick
-
-    if "render_maintenance_for_dx" not in globals():
-        def render_maintenance_for_dx(dx_key: str) -> list:
-            # 진단명 기준 유지요법 약물을 정돈해 UI로 표기하고 리스트 반환.
-            reg = get_onco_regimens()
-            phases = reg.get(dx_key, {})
-            maint = list(phases.get("maintenance", []))
-            if not maint:
-                st.info("유지요법 표준이 없거나 상황에 따라 다릅니다.")
-                return []
-            st.markdown("#### 🧩 유지요법")
-            for d in maint:
-                st.write(f"- {display_label(d)}")
-                st.caption(get_ae(d))
-                for item in user_check_map.get(d, []):
-                    st.checkbox(item, key=wkey(f"chk_{d}_{item}"))
-            return maint
-except Exception:
-    pass
-# ---- End Patch (Ara-C & Maintenance) ----
-
-from onco_map import ensure_onco_map, ONCO_REGIMENS  # (patch) onco map access
-
-
-# ---- Patch: Sticky route/tab keeper (idempotent) ----
-try:
-    import streamlit as st
-    # 1) Read current query params once per run
-    _qp = st.query_params if hasattr(st, "query_params") else st.experimental_get_query_params()
-    # 2) Bootstrap route from query OR keep session route
-    _route_ss = st.session_state.get("_route")
-    _route_qp = (_qp.get("route") if isinstance(_qp.get("route"), str) else (_qp.get("route", [""])[0] if _qp.get("route") else "")) if _qp else ""
-    if not _route_ss and _route_qp:
-        st.session_state["_route"] = _route_qp
-    elif _route_ss and (not _route_qp or _route_qp != _route_ss):
-        # sync to URL so reruns won't drop it
+    _onco = None
+    _candidates = [
+        Path(__file__).parent / "onco_map.py",
+        Path(__file__).parent / "modules" / "onco_map.py",
+        Path("/mount/src/hoya12/bloodmap_app/onco_map.py"),
+        Path("/mount/src/hoya12/bloodmap_app/modules/onco_map.py"),
+        Path("/mnt/data/onco_map.py"),
+    ]
+    for _p in _candidates:
         try:
-            st.query_params.update(route=_route_ss)
+            if _p.is_file():
+                _onco = _load_local_module("onco_map", str(_p))
+                break
         except Exception:
-            st.experimental_set_query_params(route=_route_ss)
+            pass
 
-    # 3) Sticky active tab
-    _tab_ss = st.session_state.get("_active_tab")
-    _tab_qp = (_qp.get("tab") if isinstance(_qp.get("tab"), str) else (_qp.get("tab", [""])[0] if _qp.get("tab") else "")) if _qp else ""
-    if not _tab_ss and _tab_qp:
-        st.session_state["_active_tab"] = _tab_qp
-    elif _tab_ss and (not _tab_qp or _tab_qp != _tab_ss):
-        try:
-            st.query_params.update(tab=_tab_ss)
-        except Exception:
-            st.experimental_set_query_params(tab=_tab_ss)
-
-    # 4) Small helpers (non-invasive)
-    if "set_route" not in globals():
-        def set_route(name: str):
-            st.session_state["_route"] = name or "home"
-            try:
-                st.query_params.update(route=st.session_state["_route"])
-            except Exception:
-                st.experimental_set_query_params(route=st.session_state["_route"])
-
-    if "set_active_tab" not in globals():
-        def set_active_tab(name: str):
-            st.session_state["_active_tab"] = name
-            try:
-                st.query_params.update(tab=name)
-            except Exception:
-                st.experimental_set_query_params(tab=name)
-except Exception:
-    pass
-# ---- End Patch ----
-
-from ae_bridge import ae_map, user_check_map  # (patch) AE maps & user checklist
-
+    if _onco is None:
+        # 3) Safe fallbacks to keep app running
+        def ensure_onco_map(m): return m
+        ONCO_REGIMENS = {}
+        def build_onco_map(): return {}
+        def auto_recs_by_dx(*args, **kwargs): return {"chemo": [], "targeted": [], "abx": []}
+    else:
+        ensure_onco_map = getattr(_onco, "ensure_onco_map", lambda m: m)
+        ONCO_REGIMENS  = getattr(_onco, "ONCO_REGIMENS", {})
+        build_onco_map = getattr(_onco, "build_onco_map", lambda: {})
+        auto_recs_by_dx = getattr(_onco, "auto_recs_by_dx",
+                                  lambda *a, **k: {"chemo": [], "targeted": [], "abx": []})
+# ---- End Onco import shim ----
 import datetime as _dt
 from zoneinfo import ZoneInfo as _ZoneInfo
 KST = _ZoneInfo("Asia/Seoul")
@@ -1731,11 +1544,10 @@ with t_chemo:
         ae_map = _aggregate_all_aes(picked_keys, DRUG_DB)
         st.markdown("### 항암제 부작용(전체)")
         if ae_map:
-            # --- Ara-C 제형 선택(IV/SC/HDAC) 전용 래핑 ---
+            # --- Ara-C 제형 선택(IV/SC/HDAC) ---
             try:
                 from ae_resolve import resolve_key, get_ae, get_checks
                 from drug_db import display_label
-                # Cytarabine이 목록에 있으면 먼저 제형을 선택하게 함
                 if ("Cytarabine" in ae_map) or ("Ara-C" in ae_map):
                     st.markdown("**Ara-C 제형 선택**")
                     picked_key = render_arac_wrapper("Ara-C 제형 선택", default="Cytarabine")
@@ -1746,7 +1558,7 @@ with t_chemo:
                     st.divider()
             except Exception:
                 pass
-            # --- 나머지 약물은 기존 방식 유지 ---
+
             for k, arr in ae_map.items():
                 if resolve_key(k) in ("Cytarabine", "Ara-C"):
                     continue
@@ -1760,7 +1572,6 @@ with t_chemo:
                     st.write("  - (부작용 정보 없음)")
         else:
             st.write("- (DB에 상세 부작용 없음)")
-
 
 # PEDS
 with t_peds:
