@@ -1413,22 +1413,6 @@ with t_labs:
 # DX
 with t_dx:
 
-    # ---- Safe DX display formatter: EN — KO (always returns str) ----
-    def _dx_fmt(x):
-        try:
-            s = str(x)
-            # If already has Hangul, show as is
-            if any("\uac00" <= ch <= "\ud7a3" for ch in s):
-                return s
-            try:
-                ko = DX_KO.get(_dx_norm(s)) or DX_KO.get(s) or s
-            except Exception:
-                ko = s
-            return f"{s} — {ko}"
-        except Exception:
-            return str(x)
-    # ---- End formatter ----
-
     # ---- DX label fallbacks (avoid NameError) ----
     try:
         DX_KO  # type: ignore
@@ -1452,7 +1436,7 @@ with t_dx:
     groups = sorted(ONCO.keys()) if ONCO else ["혈액암", "고형암"]
     group = st.selectbox("암 그룹", options=groups, index=0, key=wkey("onco_group_sel"))
     diseases = sorted(ONCO.get(group, {}).keys()) if ONCO else ["ALL", "AML", "Lymphoma", "Breast", "Colon", "Lung"]
-    disease = st.selectbox("의심/진단명", options=diseases, index=0, key=wkey("onco_disease_sel", format_func=_dx_fmt), format_func=lambda x: (f"{x} (" + (DX_KO.get(_dx_norm(x)) or DX_KO.get(x) or x) + ")") if not any("\uac00" <= ch <= "\ud7a3" for ch in str(x)) else str(x))
+    disease = st.selectbox("의심/진단명", options=diseases, index=0, key=wkey("onco_disease_sel"), format_func=lambda x: (f"{x} (" + (DX_KO.get(_dx_norm(x)) or DX_KO.get(x) or x) + ")") if not any("\uac00" <= ch <= "\ud7a3" for ch in str(x)) else str(x))
 
     disp = dx_display(group, disease)
     st.session_state["onco_group"] = group
