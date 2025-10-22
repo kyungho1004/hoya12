@@ -3,6 +3,57 @@ from __future__ import annotations
 from typing import List, Dict, Tuple, Iterable
 import re
 
+# === [PATCH 2025-10-22 KST] Monitoring checklist renderer ===
+
+def _render_monitoring_chips(st, rec: Dict):
+    mons = rec.get("monitor") if isinstance(rec, dict) else None
+    if not mons:
+        return
+
+    ICONS = [
+        ("CBC", "🩸 CBC"),
+        ("LFT", "🧪 LFT"),
+        ("Renal", "🧪 Renal(eGFR)"),
+        ("Electrolytes", "⚡ Electrolytes"),
+        ("Fever/Sepsis", "🌡️ Fever/Sepsis"),
+        ("Mucositis", "💊 Mucositis"),
+        ("N/V", "🤢 N/V"),
+        ("Diarrhea", "💩 Diarrhea"),
+        ("Cerebellar", "🧠 Cerebellar exam"),
+        ("Conjunctivitis", "👁️ Conjunctivitis"),
+        ("Ototoxicity", "👂 Ototoxicity"),
+        ("Neuropathy", "🧠 Neuropathy"),
+        ("Cold-induced neuropathy", "🧊 Cold neuropathy"),
+        ("Allergy", "🤧 Allergy"),
+        ("Hypersensitivity", "🤧 Hypersensitivity"),
+        ("Edema", "💧 Edema"),
+        ("Echo/LVEF", "❤️ Echo/LVEF"),
+        ("BNP", "❤️ BNP/NT-proBNP"),
+        ("BP", "📈 BP"),
+        ("Proteinuria", "🧪 Proteinuria(UPCR)"),
+        ("Wound healing/bleeding", "🩹 Wound/bleeding"),
+        ("ILD", "🫁 ILD"),
+        ("QT", "🫀 QT(ECG)"),
+        ("Lipids", "🧪 Lipids"),
+        ("Glucose", "🧪 Glucose"),
+        ("TFT", "🧪 TFT"),
+        ("Cortisol", "🧪 Cortisol±ACTH"),
+        ("iRAE", "⚠️ iRAE screening"),
+        ("SpO2", "🌬️ SpO₂"),
+        ("Rash", "🧴 Rash"),
+    ]
+
+    def prettify(x: str) -> str:
+        s = str(x)
+        for key, label in ICONS:
+            if key.lower() in s.lower():
+                return label
+        return s
+
+    chips_html = "".join([f"<span class='chip'>{prettify(x)}</span>" for x in mons])
+    st.markdown(f"<div class='monitor-chips'>🩺 {chips_html}</div>", unsafe_allow_html=True)
+
+
 # 심각도 규칙 (키워드 기반 하이라이트)
 AE_RULES: List[Tuple[str, List[str]]] = [
     ("🚨 위중", [
