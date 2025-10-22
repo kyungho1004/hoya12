@@ -1164,3 +1164,31 @@ def ensure_onco_drug_db(db):
             pass
     _backfill_kr_keys_user_list(db)
 # === [/PATCH] ===
+
+# === [PATCH 2025-10-22 KST] Ara-C HDAC cardiopericardial note ===
+def _arac_hdac_cardiopericard_detail(db: Dict[str, Dict[str, Any]]) -> None:
+    targets = ["Ara-C HDAC","Cytarabine HDAC"]
+    add_serious = ["심장: 심낭염/심낭삼출 드묾(흉통·호흡곤란)"]
+    add_tips    = ["HDAC에서 흉통·호흡곤란 발생 시 즉시 보고", "증상 시 ECG/효소(Troponin) 평가 고려(센터 프로토콜)"]
+    add_call    = ["가슴 통증·압박감, 숨가쁨·누우면 더 힘듦(심낭삼출 의심)"]
+    for key in targets:
+        if key in db and isinstance(db[key], dict):
+            rec = db[key]
+            det = rec.get("ae_detail") if isinstance(rec.get("ae_detail"), dict) else {}
+            for sec, arr in [("serious", add_serious), ("tips", add_tips), ("call", add_call)]:
+                cur = list(det.get(sec, [])) if isinstance(det.get(sec), (list,tuple)) else []
+                for it in arr:
+                    if it not in cur:
+                        cur.append(it)
+                det[sec] = cur
+            rec["ae_detail"] = det
+
+_prev_arac_cardio = globals().get("ensure_onco_drug_db")
+def ensure_onco_drug_db(db):
+    if callable(_prev_arac_cardio):
+        try:
+            _prev_arac_cardio(db)
+        except Exception:
+            pass
+    _arac_hdac_cardiopericard_detail(db)
+# === [/PATCH] ===

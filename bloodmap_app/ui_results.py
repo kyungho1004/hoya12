@@ -12,8 +12,9 @@ def _render_cardio_guard(st, rec: Dict):
     show_anthr = any_in(name, ["doxorubicin","daunorubicin","idarubicin"]) or "anthracycline" in moa
     show_her2  = any_in(name, ["trastuzumab","pertuzumab","t-dm1","deruxtecan"]) or "her2" in moa
     show_qt    = any_in(name, ["vandetanib","selpercatinib","pralsetinib","osimertinib","lapatinib","entrectinib"]) or ("qt" in (rec.get("ae","").lower()))
+    show_arac = ('ara-c hdac' in name) or ('cytarabine hdac' in name)
 
-    if not (show_anthr or show_her2 or show_qt):
+    if not (show_anthr or show_her2 or show_qt or show_arac):
         return
 
     bullets = []
@@ -29,6 +30,11 @@ def _render_cardio_guard(st, rec: Dict):
         bullets += [
             "Trastuzumab 계열: LVEF 기저 및 주기적(보통 q3mo)",
             "LVEF 저하 또는 심부전 증상 시 보류·심장평가"
+        ]
+    if show_arac:
+        bullets += [
+            'Ara-C 고용량(HDAC)에서 드문 심낭염/심낭삼출 보고: 흉통·호흡곤란 시 즉시 보고',
+            '증상 시 ECG/심장효소(Troponin) 평가 고려'
         ]
     if show_qt:
         bullets += [
