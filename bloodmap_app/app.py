@@ -1,3 +1,23 @@
+
+
+# ---- HomeBlocker v1 ----
+def _block_spurious_home():
+    ss = st.session_state
+    cur = ss.get("_route") or "home"
+    last = ss.get("_route_last")
+    intent_home = ss.get("_home_intent", False)
+    # If we have a known last non-home route and no explicit intent to go home,
+    # prevent accidental drop to 'home' (e.g., first click anomalies).
+    if (cur == "home") and (last and last != "home") and (not intent_home):
+        ss["_route"] = last
+        try:
+            if st.query_params.get("route") != last:
+                st.query_params.update(route=last)
+        except Exception:
+            st.experimental_set_query_params(route=last)
+        # do not rerun here; early/anti guards will sync on next pass
+# ---- End HomeBlocker v1 ----
+
 # ---- Hard redirect guard (pre-render, prevents 1st-click → home) ----
 try:
     import streamlit as st  # ultra-early
@@ -1604,6 +1624,8 @@ with t_chemo:
                     st.write("  - (부작용 정보 없음)")
         else:
             st.write("- (DB에 상세 부작용 없음)")
+
+_block_spurious_home()
 
 # PEDS
 with t_peds:
