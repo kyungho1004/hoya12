@@ -89,6 +89,30 @@ except Exception:
 # ---- End initial route bootstrap ----
 
 
+# ---- Pre-route from DX selection (run before tabs) ----
+def _preroute_from_dx():
+    try:
+        import streamlit as st
+        ss = st.session_state
+        cur_dx = ss.get("onco_disease_sel")
+        if cur_dx != ss.get("_dx_prev"):
+            ss["_dx_prev"] = cur_dx
+            # Any DX selection/change means user is working in 'dx'
+            ss["_home_intent"] = False
+            if ss.get("_route") != "dx":
+                ss["_route"] = "dx"
+                ss["_route_last"] = "dx"
+            try:
+                if st.query_params.get("route") != "dx":
+                    st.query_params.update(route="dx")
+            except Exception:
+                st.experimental_set_query_params(route="dx")
+    except Exception:
+        pass
+# ---- End pre-route from DX selection ----
+
+
+
 
 # app.py
 
@@ -791,6 +815,8 @@ def build_peds_notes(
 
 # ---------- Tabs ----------
 tab_labels = ["🏠 홈", "👶 소아 증상", "🧬 암 선택", "💊 항암제(진단 기반)", "🧪 피수치 입력", "🔬 특수검사", "📄 보고서", "📊 기록/그래프"]
+
+_preroute_from_dx()
 t_home, t_peds, t_dx, t_chemo, t_labs, t_special, t_report, t_graph = st.tabs(tab_labels)
 
 # HOME
