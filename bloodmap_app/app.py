@@ -60,6 +60,11 @@ except Exception:
     pass
 # ---- End hard redirect guard v2 ----
 
+try:
+    _sticky_route_guard()  # early stabilize
+except NameError:
+    pass
+
 
 # ---- Initial route bootstrap (anti first-click→home) ----
 try:
@@ -88,6 +93,32 @@ except Exception:
     pass
 # ---- End initial route bootstrap ----
 
+
+# ---- Sticky route guard (prevents unintended 'home' fallback) ----
+def _sticky_route_guard(expected: str = ""):
+    try:
+        import streamlit as st
+        ss = st.session_state
+        # If route is 'home' but user didn't explicitly intend home, restore last/expected
+        if ss.get("_route") == "home" and not ss.get("_home_intent", False):
+            fallback = ss.get("_route_last") or (expected or "chemo")
+            if fallback and fallback != "home":
+                ss["_route"] = fallback
+                ss["_route_last"] = fallback
+                try:
+                    if st.query_params.get("route") != fallback:
+                        st.query_params.update(route=fallback)
+                except Exception:
+                    st.experimental_set_query_params(route=fallback)
+                st.rerun()
+    except Exception:
+        pass
+# ---- End sticky route guard ----
+
+try:
+    _block_spurious_home()
+except Exception:
+    pass
 
 
 # app.py
