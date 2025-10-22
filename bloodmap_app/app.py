@@ -1,3 +1,25 @@
+# ---- Early route prebootstrap (anti-home on first click) ----
+try:
+    import streamlit as st  # early import
+    def __early_qp_get(name: str) -> str:
+        try:
+            v = st.query_params.get(name)
+            return v[0] if isinstance(v, list) else (v or "")
+        except Exception:
+            v = st.experimental_get_query_params().get(name, [""])
+            return v[0]
+    # Initialize route before any downstream code reads it with a default "home"
+    if "_route" not in st.session_state:
+        _r = __early_qp_get("route")
+        if _r:
+            st.session_state["_route"] = _r
+    # Track last route baseline to aid later anti-rollback
+    if "_route_last" not in st.session_state:
+        st.session_state["_route_last"] = st.session_state.get("_route") or "home"
+except Exception:
+    pass
+# ---- End early prebootstrap ----
+
 # app.py
 
 # ===== Robust import guard (auto-injected) =====

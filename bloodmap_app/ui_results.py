@@ -35,43 +35,9 @@ def _scan_hits(text: str) -> Dict[str, List[str]]:
     return hits
 
 def _get_entry(db: Dict, key: str) -> Dict:
-    # Return entry from DB using label/key/alias robust matching.
     if not key:
         return {}
-    try:
-        from drug_db import key_from_label, ALIAS_FALLBACK
-    except Exception:
-        # Fallback minimal
-        def key_from_label(x: str) -> str:
-            pos = x.find(" (")
-            return x[:pos] if pos > 0 else x
-        ALIAS_FALLBACK = {}
-
-    # 1) Direct hit or stripped quotes
-    v = db.get(key) or db.get(key.strip("'\""))
-    if isinstance(v, dict) and v:
-        return v
-
-    # 2) Label → canonical key (e.g., "Cytarabine (시타라빈(Ara-C))" → "Cytarabine")
-    k2 = key_from_label(key)
-    v = db.get(k2) or db.get(k2.lower())
-    if isinstance(v, dict) and v:
-        return v
-
-    # 3) Alias matching: try Korean alias map and DB alias fields
-    alias = ALIAS_FALLBACK.get(k2) or ALIAS_FALLBACK.get(key) or key
-    for kk, vv in db.items():
-        if isinstance(vv, dict) and (vv.get("alias") == alias or vv.get("alias") == k2):
-            return vv
-
-    # 4) Last resort: partial fallback on alias substring
-    for kk, vv in db.items():
-        if isinstance(vv, dict):
-            al = vv.get("alias") or ""
-            if al and (al in key or key in al):
-                return vv
-
-    return {}
+    return db.get(key) or db.get(key.strip("'\"")) or {}
 
 def collect_top_ae_alerts(drug_keys: Iterable[str], db: Dict | None = None) -> List[str]:
     """선택된 약물들 중 중요 경고만 모아 Top 리스트를 반환"""
