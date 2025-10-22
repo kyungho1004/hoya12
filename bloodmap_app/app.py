@@ -1,3 +1,35 @@
+# ---- Hard redirect guard (pre-render, prevents 1st-click → home) ----
+try:
+    import streamlit as st  # ultra-early
+    def __hr_qp(name: str) -> str:
+        try:
+            v = st.query_params.get(name)
+            return v[0] if isinstance(v, list) else (v or "")
+        except Exception:
+            v = st.experimental_get_query_params().get(name, [""])
+            return v[0]
+
+    url_route = __hr_qp("route")
+    ss = st.session_state
+    cur = ss.get("_route")
+    last = ss.get("_route_last")
+    want = url_route or last or cur or "home"
+
+    # If current route differs from the desired (esp. cur == 'home' but want != 'home'),
+    # set it and rerun immediately BEFORE any UI is drawn.
+    if cur != want:
+        ss["_route"] = want
+        ss["_route_last"] = want
+        try:
+            if st.query_params.get("route") != want:
+                st.query_params.update(route=want)
+        except Exception:
+            st.experimental_set_query_params(route=want)
+        st.rerun()
+except Exception:
+    pass
+# ---- End hard redirect guard ----
+
 # app.py
 
 # ===== Robust import guard (auto-injected) =====
