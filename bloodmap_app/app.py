@@ -77,7 +77,7 @@ if st.session_state.get("_active_tab") and _qp_get("tab") != st.session_state["_
 
 # 3) Public helpers
 def set_route(name: str, rerun: bool = True):
-    st.session_state["_route"] = name or "home"
+    st.session_state["_route"] = name or ""
     _qp_set(route=st.session_state["_route"])
     if rerun: st.rerun()
 
