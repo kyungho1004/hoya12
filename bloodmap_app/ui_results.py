@@ -2,33 +2,21 @@
 from typing import Dict, Any, List
 import re
 
-# Public API
 def render_adverse_effects(st, drug_keys: List[str], db: Dict[str, Dict[str, Any]]):
+    """
+    Shared renderer: shows (in order)
+      1) AE summary
+      2) Monitoring chips
+      3) Easy-detail expander
+      4) ❤️ Cardio-Guard when relevant
+    Includes Ara-C formulation picker (IV/SC/HDAC) up front when any Ara-C-like key is present.
+    """
     if not drug_keys:
         st.caption("선택된 항암제가 없습니다.")
         return
 
-    # 1) 라벨/키 정리
-    label_map = {k: db.get(k, {}).get("alias", k) for k in drug_keys}
-
-    # 2) Ara-C 제형 라디오 (혼합 표기 모두 감지)
-    def _is_arac_like(name: str) -> bool:
-        s = (name or "").lower()
-        return ("ara-c" in s) or ("cytarabine" in s) or ("시타라빈" in s)
-
-    def _arac_formulation_picker(st, db: Dict[str, Dict[str, Any]]):
-        opts = []
-        label_map2 = {"Ara-C IV":"정맥(IV)","Ara-C SC":"피하(SC)","Ara-C HDAC":"고용량(HDAC)"}
-        for key in ["Ara-C IV","Ara-C SC","Ara-C HDAC","Cytarabine IV","Cytarabine SC","Cytarabine HDAC"]:
-            if key in db:
-                opts.append(key if key.startswith("Ara-C") else key.replace("Cytarabine","Ara-C"))
-        opts = sorted(set(opts))
-        if not opts:
-            return None
-        return st.radio("Ara-C 제형 선택", opts, format_func=lambda k: label_map2.get(k, k), key="arac_form_pick")
-
-    # 3) 렌더 루프
     for k in drug_keys:
+        # --- Ara-C formulation override (robust) ---
         if _is_arac_like(k):
             pick = _arac_formulation_picker(st, db)
             if pick:
@@ -38,24 +26,41 @@ def render_adverse_effects(st, drug_keys: List[str], db: Dict[str, Dict[str, Any
         alias = rec.get("alias", k)
         st.write(f"- **{alias}**")
 
-        # 요약 AE
+        # 1) AE summary
         ae = rec.get("ae", "")
         if ae and "부작용 정보 필요" not in ae:
             st.caption(ae)
         else:
             st.caption("요약 부작용 정보가 부족합니다.")
 
-        # 모니터링 칩
+        # 2) Monitoring chips
         _render_monitoring_chips(st, rec)
 
-        # 쉬운말 상세
+        # 3) Easy-detail
         _render_ae_detail(st, rec)
 
-        # Cardio-Guard
+        # 4) Cardio-Guard
         _render_cardio_guard(st, rec)
 
         st.divider()
 
+
+# ---------- Helpers ----------
+def _is_arac_like(name: str) -> bool:
+    s = (name or "").lower()
+    return ("ara-c" in s) or ("cytarabine" in s) or ("시타라빈" in s)
+
+def _arac_formulation_picker(st, db: Dict[str, Dict[str, Any]]):
+    opts = []
+    label_map = {"Ara-C IV":"정맥(IV)","Ara-C SC":"피하(SC)","Ara-C HDAC":"고용량(HDAC)"}
+    for key in ["Ara-C IV","Ara-C SC","Ara-C HDAC","Cytarabine IV","Cytarabine SC","Cytarabine HDAC"]:
+        if key in db:
+            # Normalize Cytarabine* label to Ara-C for consistency in UI
+            opts.append(key if key.startswith("Ara-C") else key.replace("Cytarabine","Ara-C"))
+    opts = sorted(set(opts))
+    if not opts:
+        return None
+    return st.radio("Ara-C 제형 선택", opts, format_func=lambda k: label_map.get(k,k), key="arac_form_pick")
 
 def _render_monitoring_chips(st, rec: Dict[str, Any]):
     chips = []
@@ -76,7 +81,6 @@ def _render_monitoring_chips(st, rec: Dict[str, Any]):
     if chips:
         st.markdown(" ".join([f"<span class='chip'>{c}</span>" for c in chips]), unsafe_allow_html=True)
 
-
 def _render_ae_detail(st, rec: Dict[str, Any]):
     det = rec.get("ae_detail") if isinstance(rec, dict) else None
     if not isinstance(det, dict) or not det:
@@ -93,7 +97,6 @@ def _render_ae_detail(st, rec: Dict[str, Any]):
         html += bullet("바로 연락해야 할 때", det.get("call"))
         if html:
             st.markdown(f"<div class='ae-detail'>{html}</div>", unsafe_allow_html=True)
-
 
 def _render_cardio_guard(st, rec: Dict[str, Any]):
     name = (rec.get("alias") or "").lower()
