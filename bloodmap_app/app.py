@@ -16,17 +16,9 @@ def _block_spurious_home():
         except Exception:
             st.experimental_set_query_params(route=last)
         # do not rerun here; early/anti guards will sync on next pass
-    # Remember last non-home route if current is valid
-    try:
-        if ss.get("_route") and ss["_route"] != "home":
-            ss["_route_last"] = ss["_route"]
-    except Exception:
-        pass
-
 # ---- End HomeBlocker v1 ----
 
-
-# ---- Hard redirect guard v2 (pre-render; URL-only hydrate, safer) ----
+# ---- Hard redirect guard (pre-render, prevents 1st-click → home) ----
 try:
     import streamlit as st  # ultra-early
     def __hr_qp(name: str) -> str:
@@ -41,54 +33,25 @@ try:
     ss = st.session_state
     cur = ss.get("_route")
     last = ss.get("_route_last")
+    want = url_route or last or cur or "home"
 
-    # Run once per session to hydrate from URL only.
-    if not ss.get("_hrg_v2_done", False):
-        ss["_hrg_v2_done"] = True
-        if url_route:
-            want = url_route
-            if cur != want:
-                ss["_route"] = want
-                ss["_route_last"] = want
-                try:
-                    if st.query_params.get("route") != want:
-                        st.query_params.update(route=want)
-                except Exception:
-                    st.experimental_set_query_params(route=want)
-                st.rerun()
-except Exception:
-    pass
-# ---- End hard redirect guard v2 ----
-
-
-# ---- Initial route bootstrap (anti first-click→home) ----
-try:
-    import streamlit as st
-    ss = st.session_state
-    if not ss.get("_route"):
+    # [PATCH] Prevent unintended fallback to home
+    if (want == "home") and last and (last != "home"):
+        want = last
+    # If current route differs from the desired (esp. cur == 'home' but want != 'home'),
+    # set it and rerun immediately BEFORE any UI is drawn.
+    if cur != want:
+        ss["_route"] = want
+        ss["_route_last"] = want
         try:
-            url_r = st.query_params.get("route")
-            url_r = url_r[0] if isinstance(url_r, list) else url_r
+            if st.query_params.get("route") != want:
+                st.query_params.update(route=want)
         except Exception:
-            url_r = (st.experimental_get_query_params().get("route") or [""])[0]
-        if not url_r:
-            last = ss.get("_route_last")
-            if last and last != "home":
-                ss["_route"] = last
-            else:
-                ss["_route"] = "chemo"
-                ss["_route_last"] = "chemo"
-            try:
-                if st.query_params.get("route") != ss["_route"]:
-                    st.query_params.update(route=ss["_route"])
-            except Exception:
-                st.experimental_set_query_params(route=ss["_route"])
-            st.rerun()
+            st.experimental_set_query_params(route=want)
+        st.rerun()
 except Exception:
     pass
-# ---- End initial route bootstrap ----
-
-
+# ---- End hard redirect guard ----
 
 # app.py
 
@@ -1418,8 +1381,7 @@ with t_dx:
     groups = sorted(ONCO.keys()) if ONCO else ["혈액암", "고형암"]
     group = st.selectbox("암 그룹", options=groups, index=0, key=wkey("onco_group_sel"))
     diseases = sorted(ONCO.get(group, {}).keys()) if ONCO else ["ALL", "AML", "Lymphoma", "Breast", "Colon", "Lung"]
-    disease = st.selectbox("의심/진단명", options=diseases, index=0, key=wkey("onco_disease_sel"), format_func=lambda x: (f"{x} (" + (DX_KO.get(_dx_norm(x)) or DX_KO.get(x) or x) + ")") if not any("\uac00" <= ch <= "\ud7a3" for ch in str(x)) else str(x))
-
+    disease = st.selectbox("의심/진단명", options=diseases, index=0, key=wkey("onco_disease_sel"))
     disp = dx_display(group, disease)
     st.session_state["onco_group"] = group
     st.session_state["onco_disease"] = disease
@@ -1559,6 +1521,7 @@ def _aggregate_all_aes(meds, db):
         if uniq:
             result[k] = uniq
     return result
+
 # CHEMO
 with t_chemo:
     st.subheader("항암제(진단 기반)")
@@ -1657,36 +1620,37 @@ with t_chemo:
         else:
             _used_shared_renderer = False
         # === [/PATCH] ===
+    if not _used_shared_renderer:
 
-        if ae_map:
-            # --- Ara-C 제형 선택(IV/SC/HDAC) ---
-            try:
-                from ae_resolve import resolve_key, get_ae, get_checks
-                from drug_db import display_label
-                if ("Cytarabine" in ae_map) or ("Ara-C" in ae_map):
-                    st.markdown("**Ara-C 제형 선택**")
-                    picked_key = render_arac_wrapper("Ara-C 제형 선택", default="Cytarabine")
-                    st.write(f"- **{display_label(picked_key)}**")
-                    st.caption(get_ae(picked_key))
-                    for _ln in get_checks(picked_key):
-                        st.checkbox(_ln, key=wkey(f"chk_{picked_key}_{_ln}"))
-                    st.divider()
-            except Exception:
-                pass
+            if ae_map:
+                # --- Ara-C 제형 선택(IV/SC/HDAC) ---
+                try:
+                    from ae_resolve import resolve_key, get_ae, get_checks
+                    from drug_db import display_label
+                    if ("Cytarabine" in ae_map) or ("Ara-C" in ae_map):
+                        st.markdown("**Ara-C 제형 선택**")
+                        picked_key = render_arac_wrapper("Ara-C 제형 선택", default="Cytarabine")
+                        st.write(f"- **{display_label(picked_key)}**")
+                        st.caption(get_ae(picked_key))
+                        for _ln in get_checks(picked_key):
+                            st.checkbox(_ln, key=wkey(f"chk_{picked_key}_{_ln}"))
+                        st.divider()
+                except Exception:
+                    pass
 
-            for k, arr in ae_map.items():
-                if resolve_key(k) in ("Cytarabine", "Ara-C"):
-                    continue
-                st.write(f"- **{label_map.get(k, str(k))}**")
-                if isinstance(arr, (list, tuple)):
-                    for ln in arr:
-                        st.write(f"  - {ln}")
-                elif isinstance(arr, str) and arr.strip():
-                    st.write(f"  - {arr}")
-                else:
-                    st.write("  - (부작용 정보 없음)")
-        else:
-            st.write("- (DB에 상세 부작용 없음)")
+                for k, arr in ae_map.items():
+                    if resolve_key(k) in ("Cytarabine", "Ara-C"):
+                        continue
+                    st.write(f"- **{label_map.get(k, str(k))}**")
+                    if isinstance(arr, (list, tuple)):
+                        for ln in arr:
+                            st.write(f"  - {ln}")
+                    elif isinstance(arr, str) and arr.strip():
+                        st.write(f"  - {arr}")
+                    else:
+                        st.write("  - (부작용 정보 없음)")
+            else:
+                st.write("- (DB에 상세 부작용 없음)")
 
 _block_spurious_home()
 
@@ -2872,39 +2836,3 @@ _ss_setdefault(wkey('home_fb_log_cache'), [])
 
 
 # ===== [/INLINE FEEDBACK] =====
-# ---- Tab auto-select (route sync hack) ----
-def _select_tab_by_label(label: str):
-    try:
-        import streamlit as st
-        st.markdown("""
-        <script>
-        (function(){
-          const trySelect = () => {
-            const tabs = window.parent.document.querySelectorAll('button[role="tab"]');
-            for (const t of tabs) {
-              if ((t.innerText || '').trim().startsWith(label)) { t.click(); return true; }
-            }
-            return false;
-          };
-          if (!trySelect()) { setTimeout(trySelect, 80); setTimeout(trySelect, 200); }
-        })();
-        </script>
-        """, unsafe_allow_html=True)
-    except Exception:
-        pass
-
-_label_by_route = {
-    "home": "🏠 홈",
-    "peds": "👶 소아 증상",
-    "dx": "🧬 암 선택",
-    "chemo": "💊 항암제(진단 기반)",
-    "labs": "🧪 피수치 입력",
-    "special": "🔬 특수검사",
-    "report": "📄 보고서",
-    "graph": "📊 기록/그래프",
-}
-_cur_route = st.session_state.get("_route")
-if _cur_route and _cur_route in _label_by_route and _cur_route != "home":
-    _select_tab_by_label(_label_by_route[_cur_route])
-# ---- End Tab auto-select ----
-
