@@ -103,22 +103,6 @@ PROFILES: Dict[str, Dict[str, Any]] = {
     "Rituximab": {"moa": "CD20 항체", "ae": "💉 주입반응 · 감염위험 · HBV 재활성 경고"},
     "Octreotide": {"moa": "Somatostatin 유사체", "ae": "💩 지방변/설사 · 복부불편감 · 담석"},
     "Prednisone": {"moa": "코르티코스테로이드", "ae": "😠 기분변화 · 🍽️ 식욕↑/체중↑ · 혈당↑ · 불면"},
-    "6-MP": {"moa": "항대사제(치오프린)", "ae": "🩸 골수억제 · 간독성(담즙정체) · 구역"},
-    "MTX": {"moa": "항대사제(엽산길항)", "ae": "💊 구내염 · 🧪 간독성 · 신독성(고용량) · 광과민"},
-    "ATRA": {"moa": "분화유도제", "ae": "RA‑증후군 · 두통 · 피부/점막 건조"},
-    "Arsenic Trioxide": {"moa": "분화유도/아포토시스 유도", "ae": "QT 연장 · 저칼륨/저마그네슘 · APL 분화증후군"},
-    "Daunorubicin": {"moa": "안트라사이클린", "ae": "❤️ 누적 심독성 · 🩸 골수억제 · 탈모"},
-    "Idarubicin": {"moa": "안트라사이클린", "ae": "❤️ 누적 심독성 · 🩸 골수억제 · 점막염"},
-    "Topotecan": {"moa": "Topo I 억제", "ae": "🩸 골수억제 · 설사 · 피로"},
-    "Cetuximab": {"moa": "EGFR mAb", "ae": "여드름양 발진 · 저마그네슘혈증 · 주입반응"},
-    "Panitumumab": {"moa": "EGFR mAb", "ae": "여드름양 발진 · 저마그네슘혈증"},
-    "Olaparib": {"moa": "PARP 억제", "ae": "피로 · 오심 · 빈혈"},
-    "Niraparib": {"moa": "PARP 억제", "ae": "혈소판감소 · 빈혈 · 오심"},
-    "Atezolizumab": {"moa": "PD‑L1 억제제", "ae": "면역관련 이상반응(폐렴/대장염/간염/내분비)"},
-    "Durvalumab": {"moa": "PD‑L1 억제제", "ae": "면역관련 이상반응(폐렴/대장염/간염/내분비)"},
-    "Sorafenib": {"moa": "멀티 TKI", "ae": "🖐️ 손발증후군 · 고혈압 · 설사"},
-    "Lenvatinib": {"moa": "멀티 TKI", "ae": "고혈압 · 단백뇨 · 피로 · 설사"},
-    "Nab-Paclitaxel": {"moa": "탁산(알부민 결합)", "ae": "🧠 말초신경병증 · 🩸 골수억제 · 피로"},
 }
 
 PLACEHOLDER_AE = "부작용 정보 필요"
