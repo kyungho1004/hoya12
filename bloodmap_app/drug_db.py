@@ -330,3 +330,172 @@ def ensure_onco_drug_db(db):
             pass
     _final_placeholder_cleanup(db)
 # === [/PATCH] ===
+
+# === [PATCH 2025-10-22 KST] Robust key-variant expansion (EN/KR/composite/lowercase) ===
+
+def _expand_key_variants(db: Dict[str, Dict[str, Any]]) -> None:
+    """
+    Robust key variants: eng, eng.lower, alias, alias.lower, "eng (alias)", "alias (eng)", and their lowercase.
+    Only propagate from records that already have non-placeholder AE.
+    """
+    def up(src_key: str, dest_key: str):
+        src = db.get(src_key, {})
+        if not isinstance(src, dict):
+            return
+        _upsert(db, dest_key, src.get("alias") or src_key, src.get("moa") or "", src.get("ae") or "")
+
+    base_items = [(k, v) for k, v in list(db.items()) if isinstance(v, dict)]
+    for eng, rec in base_items:
+        alias = (rec.get("alias") or eng).strip()
+        ae = (rec.get("ae") or "").strip()
+        if (not ae) or ("부작용 정보 필요" in ae):
+            continue
+
+        # base
+        up(eng, eng.lower())
+        if alias and alias != eng:
+            up(eng, alias)
+            up(eng, alias.lower())
+            comp1 = f"{eng} ({alias})"
+            comp2 = f"{alias} ({eng})"
+            up(eng, comp1)
+            up(eng, comp2)
+            up(eng, comp1.lower())
+            up(eng, comp2.lower())
+
+_prev_expand = globals().get("ensure_onco_drug_db")
+def ensure_onco_drug_db(db):
+    if callable(_prev_expand):
+        try:
+            _prev_expand(db)
+        except Exception:
+            pass
+    _expand_key_variants(db)
+# === [/PATCH] ===
+
+# === [PATCH 2025-10-22 KST] ULTIMATE FINAL FILL (runs last) ===
+def _ultimate_final_fill(db: Dict[str, Dict[str, Any]]) -> None:
+    AE = {
+        "Bendamustine": "🩸 골수억제 · 발열/감염 · 피부발진 · 피로",
+        "Bleomycin": "🫁 폐독성(섬유화) · 발열 · 피부색소침착 · 손발가려움",
+        "Carboplatin": "🩸 골수억제(혈소판↓) · 🤢 오심/구토 · 알레르기반응(누적)",
+        "Cisplatin": "🛎️ 이독성 · 🔔 말초신경병증 · 🤢 중증 오심/구토 · 🧂 전해질 이상(Mg/K↓) · 신독성",
+        "Chlorambucil": "🩸 골수억제 · 오심 · 발진 · 불임 가능",
+        "Docetaxel": "🖐️ 손발부종/무감각 · 🩸 골수억제 · 발열성 호중구감소증 · 손발톱 변화 · 체액저류",
+        "Gemcitabine": "🩸 골수억제 · 발열 · 발진 · 간효소↑ · 폐독성 드묾",
+        "Ifosfamide": "🩸 골수억제 · 🧠 신경독성(혼동) · 🩸 혈뇨/방광염(아크롤레인) · 전해질 이상",
+        "Irinotecan": "💩 설사(급성/지연) · 골수억제 · 복통 · 탈모",
+        "Lapatinib": "설사 · 발진 · 간효소↑ · 심기능↓ 드묾",
+        "Larotrectinib": "어지럼 · 피로 · 간효소↑ · 체중증가",
+        "Lorlatinib": "💭 인지/기분 변화 · 지질↑ · 체중↑ · 말초부종",
+        "Obinutuzumab": "💉 주입반응 · 감염 · 중성구감소 · HBV 재활성 경고",
+        "Oxaliplatin": "🧊 냉유발 감각이상 · 말초신경병증 · 오심/구토 · 설사 · 골수억제",
+        "Pazopanib": "고혈압 · 간독성 · 설사 · 탈모/피부변화",
+        "Pemetrexed": "피로 · 골수억제 · 발진 · 구내염 · 비타민B9/B12 보충 필요",
+        "Polatuzumab Vedotin": "🩸 골수억제 · 말초신경병증 · 감염",
+        "Pralsetinib": "고혈압 · 간효소↑ · 변비/설사 · 피로 · 간질성폐질환 드묾",
+        "Selpercatinib": "고혈압 · 간효소↑ · QT 연장 · 변비/설사",
+        "Sotorasib": "설사 · 오심 · 간효소↑ · 피로",
+        "Sunitinib": "고혈압 · 손발증후군 · 갑상선기능저하 · 피로 · 구내염",
+        "Trabectedin": "간효소↑ · 근육통(CPK↑) · 골수억제 · 피로",
+        "Tucatinib": "설사 · 손발증후군 드묾 · 간효소↑",
+        "Vandetanib": "QT 연장 · 설사 · 발진 · 갑상선기능저하",
+        "Vinblastine": "골수억제 · 변비 · 말초신경병증",
+        "Crizotinib": "시야장애 · 설사/변비 · 부종 · 간효소↑ · 피로",
+        "Entrectinib": "어지럼 · 체중증가 · 설사/변비 · 간효소↑ · QT 연장 드묾",
+        "Alectinib": "근육통 · 변비 · 🧪 간효소 상승",
+        "Capmatinib": "💧 말초부종 · 🧪 간효소 상승",
+        "Gemcitabine": "🩸 골수억제 · 발열 · 발진 · 간효소↑ · 폐독성 드묾",
+        "Brentuximab Vedotin": "🧠 말초신경병증 · 피로 · 오심 · 혈구감소",
+        "Cabozantinib": "설사 · 손발증후군 · 고혈압 · 피로 · 구내염",
+        "Bevacizumab": "🩸 출혈 · 고혈압 · 단백뇨 · 상처치유 지연",
+        "Cytarabine": "🩸 골수억제 · 🤢 오심/구토 · 💊 점막염 · 👁️ 결막염(점안 예방) · 🧠 소뇌독성(고용량) · 발열/발진",
+        "Ara-C": "🩸 골수억제 · 🤢 오심/구토 · 💊 점막염 · 👁️ 결막염(점안 예방) · 🧠 소뇌독성(고용량) · 발열/발진",
+    }
+    # Apply to canonical keys and common variants (lower/composite)
+    for eng, ae in AE.items():
+        alias = db.get(eng, {}).get("alias") or eng
+        _upsert(db, eng, alias, db.get(eng, {}).get("moa",""), ae)
+        _upsert(db, eng.lower(), alias, db.get(eng, {}).get("moa",""), ae)
+        comp1 = f"{eng} ({alias})"
+        comp2 = f"{alias} ({eng})"
+        _upsert(db, comp1, alias, db.get(eng, {}).get("moa",""), ae)
+        _upsert(db, comp2, alias, db.get(eng, {}).get("moa",""), ae)
+        _upsert(db, comp1.lower(), alias, db.get(eng, {}).get("moa",""), ae)
+        _upsert(db, comp2.lower(), alias, db.get(eng, {}).get("moa",""), ae)
+
+_prev_ultimate = globals().get("ensure_onco_drug_db")
+def ensure_onco_drug_db(db):
+    if callable(_prev_ultimate):
+        try:
+            _prev_ultimate(db)
+        except Exception:
+            pass
+    _ultimate_final_fill(db)
+# === [/PATCH] ===
+
+# === [PATCH 2025-10-22 KST] Alias-KR mapping + mixed-case composites (very last) ===
+def _ultimate_alias_kr_and_composites(db: Dict[str, Dict[str, Any]]) -> None:
+    KR = {
+        "Bendamustine":"벤다무스틴",
+        "Chlorambucil":"클로람부실",
+        "Dacarbazine":"다카바진",
+        "Dactinomycin":"닥티노마이신",
+        "Ifosfamide":"이포스파마이드",
+        "Lapatinib":"라파티닙",
+        "Obinutuzumab":"오비누투주맙",
+        "Pazopanib":"파조파닙",
+        "Sunitinib":"수니티닙",
+        "Trabectedin":"트라벡테딘",
+    }
+    for eng, kr in KR.items():
+        if eng in db and isinstance(db[eng], dict):
+            rec = db[eng]
+            ae = (rec.get("ae") or "").strip()
+            moa = rec.get("moa","")
+            if ae:
+                _upsert(db, eng, kr, moa, ae)  # update alias to KR while preserving AE
+                # generate composites with mixed-case variants
+                L = eng.lower()
+                K = kr  # Korean lower same
+                combos = [
+                    f"{eng} ({kr})", f"{kr} ({eng})",
+                    f"{L} ({kr})",   f"{eng} ({kr.lower()})",
+                    f"{kr} ({L})",   f"{kr.lower()} ({eng})",
+                    f"{L} ({kr.lower()})", f"{kr.lower()} ({L})",
+                ]
+                for c in combos:
+                    _upsert(db, c, kr, moa, ae)
+
+_prev_ultimate2 = globals().get("ensure_onco_drug_db")
+def ensure_onco_drug_db(db):
+    if callable(_prev_ultimate2):
+        try:
+            _prev_ultimate2(db)
+        except Exception:
+            pass
+    _ultimate_alias_kr_and_composites(db)
+# === [/PATCH] ===
+
+# === [PATCH 2025-10-22 KST] Mini fill: Dacarbazine & Dactinomycin ===
+def _finalize_fill_daca_dacti(db: Dict[str, Dict[str, Any]]) -> None:
+    items = {
+        "Dacarbazine": ("다카바진", "🤢 심한 오심/구토 · 광과민 · 골수억제"),
+        "Dactinomycin": ("닥티노마이신", "💊 점막염 · 오심/구토 · 골수억제 · 피부괴사(누출 시)"),
+    }
+    for eng, (kr, ae) in items.items():
+        moa = db.get(eng, {}).get("moa","")
+        _upsert(db, eng, kr, moa, ae)
+        L = eng.lower()
+        for c in [f"{eng} ({kr})", f"{kr} ({eng})", f"{L} ({kr})", f"{kr} ({L})"]:
+            _upsert(db, c, kr, moa, ae)
+
+_prev_daca = globals().get("ensure_onco_drug_db")
+def ensure_onco_drug_db(db):
+    if callable(_prev_daca):
+        try:
+            _prev_daca(db)
+        except Exception:
+            pass
+    _finalize_fill_daca_dacti(db)
+# === [/PATCH] ===
