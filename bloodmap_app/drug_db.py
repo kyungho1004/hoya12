@@ -1192,3 +1192,35 @@ def ensure_onco_drug_db(db):
             pass
     _arac_hdac_cardiopericard_detail(db)
 # === [/PATCH] ===
+
+# === [PATCH 2025-10-22 KST] Ensure Ara-C formulation keys exist ===
+def _ensure_arac_formulations(db: Dict[str, Dict[str, Any]]) -> None:
+    base = db.get("Cytarabine") or db.get("Ara-C") or {}
+    moa  = base.get("moa","") if isinstance(base, dict) else "Antimetabolite (pyrimidine analog)"
+    alias = base.get("alias","시타라빈(Ara-C)") if isinstance(base, dict) else "시타라빈(Ara-C)"
+    # Common AE
+    common = "🩸 골수억제 · 🤢 오심/구토 · 💊 점막염 · 👁️ 결막염(점안 예방)"
+    # Form-specific notes
+    hdac_note = " · 🧠 소뇌독성(고용량) · 발열/발진"
+    iv_note   = " · 주입 관련 오심/구토 관리 필요"
+    sc_note   = " · 주사부위 통증/발적 가능"
+    entries = {
+        "Ara-C IV": (alias, moa, common + iv_note),
+        "Ara-C SC": (alias, moa, common + sc_note),
+        "Ara-C HDAC": (alias, moa, common + hdac_note),
+        "Cytarabine IV": (alias, moa, common + iv_note),
+        "Cytarabine SC": (alias, moa, common + sc_note),
+        "Cytarabine HDAC": (alias, moa, common + hdac_note),
+    }
+    for k, (al, m, ae) in entries.items():
+        _upsert(db, k, al, m, ae)
+
+_prev_arac_forms = globals().get("ensure_onco_drug_db")
+def ensure_onco_drug_db(db):
+    if callable(_prev_arac_forms):
+        try:
+            _prev_arac_forms(db)
+        except Exception:
+            pass
+    _ensure_arac_formulations(db)
+# === [/PATCH] ===
