@@ -1644,15 +1644,23 @@ with t_chemo:
                 st.info(n)
 
         ae_map = _aggregate_all_aes(picked_keys, DRUG_DB)
-        st.markdown("### 항암제 부작용(전체)")
-        if ae_map:
-            for k, arr in ae_map.items():
-                st.write(f"- **{label_map.get(k, str(k))}**")
-                for ln in arr:
-                    st.write(f"  - {ln}")
-        else:
-            st.write("- (DB에 상세 부작용 없음)")
-
+      st.markdown("### 항암제 부작용(전체)")
+if ae_map:
+    # --- Ara-C 제형 선택(IV/SC/HDAC) 전용 래핑 ---
+    try:
+        from ae_resolve import resolve_key, get_ae, get_checks
+        from drug_db import display_label
+        # Cytarabine이 목록에 있으면 먼저 제형을 선택하게 함
+        if ("Cytarabine" in ae_map) or ("Ara-C" in ae_map):
+            st.markdown("**Ara-C 제형 선택**")
+            picked_key = render_arac_wrapper("Ara-C 제형 선택", default="Cytarabine")
+            st.write(f"- **{display_label(picked_key)}**")
+            st.caption(get_ae(picked_key))
+            for _ln in get_checks(picked_key):
+                st.checkbox(_ln, key=wkey(f"chk_{picked_key}_{_ln}"))
+            st.divider()
+    except Exception:
+        pass
 # PEDS
 with t_peds:
     st.subheader("소아 증상 기반 점수 + 보호자 설명 + 해열제 계산")
