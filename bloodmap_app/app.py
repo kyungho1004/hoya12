@@ -1597,60 +1597,57 @@ with t_chemo:
             st.markdown("### ℹ️ 참고(데이터베이스 기재)")
             for n in notes:
                 st.info(n)
-        if not _used_shared_renderer:
-            
-            
-                    ae_map = _aggregate_all_aes(picked_keys, DRUG_DB)
-                    st.markdown("### 항암제 부작용(전체)")
-                    # === [PATCH 2025-10-22 KST] Prefer shared renderer (ui_results) for AE + Ara-C picker ===
-                    _used_shared_renderer = False
-                    try:
-                        from ui_results_final import render_adverse_effects as _render_aes_shared  # fallback to final if present
-                    except Exception:
-                        try:
-                            from ui_results import render_adverse_effects as _render_aes_shared
-                        except Exception:
-                            _render_aes_shared = None
-                    if _render_aes_shared is not None:
-                        try:
-                            _render_aes_shared(st, picked_keys, DRUG_DB)
-                            _used_shared_renderer = True
-                        except Exception:
-                            _used_shared_renderer = False
-                    else:
-                        _used_shared_renderer = False
-                    # === [/PATCH] ===
-            
-                    if ae_map:
-                        # --- Ara-C 제형 선택(IV/SC/HDAC) ---
-                        try:
-                            from ae_resolve import resolve_key, get_ae, get_checks
-                            from drug_db import display_label
-                            if ("Cytarabine" in ae_map) or ("Ara-C" in ae_map):
-                                st.markdown("**Ara-C 제형 선택**")
-                                picked_key = render_arac_wrapper("Ara-C 제형 선택", default="Cytarabine")
-                                st.write(f"- **{display_label(picked_key)}**")
-                                st.caption(get_ae(picked_key))
-                                for _ln in get_checks(picked_key):
-                                    st.checkbox(_ln, key=wkey(f"chk_{picked_key}_{_ln}"))
-                                st.divider()
-                        except Exception:
-                            pass
-            
-                        for k, arr in ae_map.items():
-                            if resolve_key(k) in ("Cytarabine", "Ara-C"):
-                                continue
-                            st.write(f"- **{label_map.get(k, str(k))}**")
-                            if isinstance(arr, (list, tuple)):
-                                for ln in arr:
-                                    st.write(f"  - {ln}")
-                            elif isinstance(arr, str) and arr.strip():
-                                st.write(f"  - {arr}")
-                            else:
-                                st.write("  - (부작용 정보 없음)")
-                    else:
-                        st.write("- (DB에 상세 부작용 없음)")
-            
+
+        ae_map = _aggregate_all_aes(picked_keys, DRUG_DB)
+        st.markdown("### 항암제 부작용(전체)")
+        # === [PATCH 2025-10-22 KST] Use shared renderer if available ===
+        try:
+            from ui_results_final import render_adverse_effects as _render_aes_shared
+        except Exception:
+            try:
+                from ui_results import render_adverse_effects as _render_aes_shared
+            except Exception:
+                _render_aes_shared = None
+        if _render_aes_shared is not None:
+            try:
+                _render_aes_shared(st, picked_keys, DRUG_DB)
+                _used_shared_renderer = True
+            except Exception:
+                _used_shared_renderer = False
+        else:
+            _used_shared_renderer = False
+        # === [/PATCH] ===
+
+        if ae_map:
+            # --- Ara-C 제형 선택(IV/SC/HDAC) ---
+            try:
+                from ae_resolve import resolve_key, get_ae, get_checks
+                from drug_db import display_label
+                if ("Cytarabine" in ae_map) or ("Ara-C" in ae_map):
+                    st.markdown("**Ara-C 제형 선택**")
+                    picked_key = render_arac_wrapper("Ara-C 제형 선택", default="Cytarabine")
+                    st.write(f"- **{display_label(picked_key)}**")
+                    st.caption(get_ae(picked_key))
+                    for _ln in get_checks(picked_key):
+                        st.checkbox(_ln, key=wkey(f"chk_{picked_key}_{_ln}"))
+                    st.divider()
+            except Exception:
+                pass
+
+            for k, arr in ae_map.items():
+                if resolve_key(k) in ("Cytarabine", "Ara-C"):
+                    continue
+                st.write(f"- **{label_map.get(k, str(k))}**")
+                if isinstance(arr, (list, tuple)):
+                    for ln in arr:
+                        st.write(f"  - {ln}")
+                elif isinstance(arr, str) and arr.strip():
+                    st.write(f"  - {arr}")
+                else:
+                    st.write("  - (부작용 정보 없음)")
+        else:
+            st.write("- (DB에 상세 부작용 없음)")
+
 _block_spurious_home()
 
 # PEDS
