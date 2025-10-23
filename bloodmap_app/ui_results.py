@@ -239,3 +239,84 @@ def render_ae_detail(drug_list, formulation_map=None):
         return build_ae_summary_md(drug_list, formulation_map=formulation_map)
 # === [PATCH:P1_UI_AE_RENDER] END ===
 
+
+# === [PATCH:AE_GLOSSARY_KO] BEGIN ===
+_AE_GLOSSARY_KO = {
+    "QT 연장": "QT 간격이 연장되면 심장 리듬 이상이 발생할 수 있어요. 실신이나 돌연사 위험이 있으니 ECG(심전도) 추적 검사가 권장돼요.",
+    "RA 증후군": "베사노이드(트레티노인) 사용 시 고열·호흡곤란·체중 증가가 동반되면 RA 증후군일 수 있어요. 스테로이드 치료가 필요할 수 있으니 즉시 병원에 알려야 해요.",
+    "고삼투증후군": "탈수나 전해질 이상으로 의식 저하·구토가 나타날 수 있어요. 충분한 수분 섭취가 필요하며 증상 시 즉시 내원하세요.",
+    "신경독성": "손발 저림, 시야 흔들림, 보행 불안정 등이 나타나면 신경계 이상일 수 있어요. 심해지기 전 주치의에게 알려야 해요.",
+    "손발증후군": "손바닥·발바닥이 붉어지고 벗겨질 수 있어요. 미지근한 물로 씻고, 보습제를 자주 바르며 마찰을 줄이세요.",
+    "골수억제": "백혈구·혈소판이 감소해 감염/출혈 위험이 증가해요. 발열(≥38.5℃)·쉽게 멍/코피가 나면 바로 연락하세요.",
+    "간독성": "AST/ALT 상승, 황달·암색 소변이 생기면 간 이상 신호예요. 약 중단·검사 조정이 필요할 수 있어요.",
+    "신장독성": "부종·소변 줄어듦·거품뇨가 있으면 신장 이상 신호예요. 수분 관리와 혈액/소변검사가 필요해요.",
+    "광과민": "햇빛에 노출되면 쉽게 빨개지거나 발진이 생길 수 있어요. SPF, 긴옷, 자외선 차단이 중요해요.",
+    "구내염": "입안 통증/궤양으로 식사가 어려울 수 있어요. 부드러운 음식, 자극 피하기, 얼음조각·가글이 도움돼요.",
+    "설사": "수양성 설사·탈수 위험이 있어요. 보충수분(ORS)와 필요 시 지사제, 심하면 병원에 연락하세요.",
+    "변비": "수분·식이섬유·가벼운 운동이 도움돼요. 3일 이상 변이 없거나 복통·구토 동반 시 의사와 상의하세요.",
+    "오심/구토": "소량씩 자주 섭취하고, 처방된 항구토제를 규칙적으로 드세요. 탈수/구토 지속 시 연락하세요.",
+    "탈수": "입 마름, 소변량 감소, 어지러움은 탈수 신호예요. 수분 보충이 필요하고 심하면 병원으로.",
+    "저나트륨혈증": "두통·구역·혼동이 생길 수 있어요. 급격한 체중 증가(부종) 시 즉시 연락하세요.",
+    "고칼륨혈증": "심장 두근거림·근력 저하가 나타날 수 있어요. ECG·혈액검사가 필요해요.",
+    "출혈": "잇몸/코피·멍이 쉽게 생기면 혈소판 저하 가능성이 있어요. 넘어짐·상처를 주의하고 바로 연락하세요.",
+    "혈전": "한쪽 다리 붓고 통증·호흡곤란·흉통은 혈전 신호예요. 즉시 응급평가가 필요해요.",
+    "단백뇨": "거품뇨·부종이 있으면 신장 손상 신호예요. 소변검사 추적이 필요해요.",
+    "고혈압": "두통·어지러움이 있으면 혈압을 확인하세요. 목표치를 넘어가면 약 조절이 필요할 수 있어요.",
+    "상처치유 지연": "수술/상처가 잘 낫지 않을 수 있어요. 치료 전후 일정 조정이 필요하니 의료진과 상의하세요.",
+    "폐독성": "기침·호흡곤란 악화는 폐 이상 신호예요. 흉부 영상·호흡기 평가가 필요해요.",
+    "간질성 폐질환": "호흡곤란/건성 기침·발열이 동반되면 의심돼요. 약 중단과 스테로이드가 필요할 수 있어요.",
+}
+
+def _ae_explain(term: str):
+    if not term:
+        return None
+    return _AE_GLOSSARY_KO.get(term.strip())
+
+def _augment_terms_with_explain(terms):
+    out = []
+    for t in terms or []:
+        exp = _ae_explain(t)
+        out.append(f"{t} — {exp}" if exp else t)
+    return out
+# === [PATCH:AE_GLOSSARY_KO] END ===
+
+# === [PATCH:AE_GLOSSARY_OVERRIDE_BUILD] BEGIN ===
+def build_ae_summary_md(drug_list, formulation_map=None):
+    try:
+        ae = _bm_get_ae_detail_map()
+    except Exception:
+        ae = {}
+    lines = ["## 항암제 요약 (영/한 + 부작용)"]
+    if not drug_list:
+        lines.append("- (선택된 항암제가 없습니다)")
+        return "\n".join(lines)
+    for d in drug_list:
+        info = (ae or {}).get(d)
+        if not info:
+            lines.append(f"### {d}")
+            lines.append("- 상세 정보 준비 중")
+            lines.append("")
+            continue
+        title = info.get("title", d)
+        lines.append(f"### {title}")
+        forms = info.get("formulations") or {}
+        sel_form = (formulation_map or {}).get(d) if formulation_map else None
+        if forms:
+            if sel_form and sel_form in forms:
+                lines.append(f"- **제형({sel_form})**: " + " · ".join(_augment_terms_with_explain(forms[sel_form])))
+            else:
+                for fk, fv in forms.items():
+                    lines.append(f"- **제형({fk})**: " + " · ".join(_augment_terms_with_explain(fv)))
+        common  = info.get("common") or []
+        serious = info.get("serious") or []
+        call    = info.get("call") or []
+        if common:
+            lines.append("- **일반**: " + " · ".join(_augment_terms_with_explain(common)))
+        if serious:
+            lines.append("- **중증**: " + " · ".join(_augment_terms_with_explain(serious)))
+        if call:
+            lines.append("- **연락 필요**: " + " · ".join(_augment_terms_with_explain(call)))
+        lines.append("")
+    return "\n".join(lines)
+# === [PATCH:AE_GLOSSARY_OVERRIDE_BUILD] END ===
+
