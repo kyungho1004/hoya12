@@ -91,3 +91,23 @@ def export_md_to_pdf(md_text: str) -> bytes:
     doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=18*mm, rightMargin=18*mm, topMargin=18*mm, bottomMargin=18*mm)
     doc.build(story)
     return buf.getvalue()
+
+
+
+# === [PATCH:P1_PDF_ONCO_AE_SECTION] BEGIN ===
+def append_onco_ae_section(md_text: str, drug_list, formulation_map=None):
+    """
+    Appends an '항암제 요약' section to existing markdown text.
+    This function is additive and safe; if ui_results isn't present, it degrades gracefully.
+    """
+    try:
+        from ui_results import build_ae_summary_md
+    except Exception:
+        def build_ae_summary_md(drug_list, formulation_map=None):
+            return "## 항암제 요약\n- (세부 정보를 불러오지 못했습니다)"
+    section = build_ae_summary_md(drug_list, formulation_map=formulation_map)
+    if not md_text: md_text = ""
+    joiner = "\n\n" if not md_text.endswith("\n") else "\n"
+    return md_text + joiner + section + "\n"
+# === [PATCH:P1_PDF_ONCO_AE_SECTION] END ===
+

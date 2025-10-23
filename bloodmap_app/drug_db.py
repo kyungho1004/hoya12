@@ -1224,3 +1224,81 @@ def ensure_onco_drug_db(db):
             pass
     _ensure_arac_formulations(db)
 # === [/PATCH] ===
+
+
+
+# === [PATCH:P1_ONCO_AE_DB_6DRUGS] BEGIN ===
+def _bm_safe_add_ae(db, canonical: str, display: str, category: str, details_md: str):
+    """
+    Backward-compatible upsert for AE details.
+    Falls back to _upsert if richer API isn't present.
+    """
+    try:
+        # Prefer richer structure if supported
+        _upsert(db, canonical, display, category, details_md)
+    except Exception:
+        # Fallback: store as simple text
+        try:
+            db[canonical] = {"name": display, "category": category, "ae": details_md}
+        except Exception:
+            pass
+
+def ensure_onco_drug_db_p1_patch(db):
+    """
+    Adds/updates AE details for 6 common agents.
+    Safe to call multiple times, no overwrite of unrelated entries.
+    """
+    _bm_safe_add_ae(db, "5-FU", "5‑Fluorouracil (5‑FU) / 5‑플루오로우라실", "항암/표적치료(자동등록)",
+        (
+        "### 5‑FU 주요 부작용\n"
+        "- **일반**: 골수억제(백혈구/혈소판 감소), 오심·구토, **설사**, **구내염**, 손발증후군\n"
+        "- **중증**: 심근허혈/관상동맥경련, 중증 설사·탈수, 심한 골수억제, 드문 **뇌병증**\n"
+        "- **연락 필요**: 38.5℃ 이상 발열, 하루 4회 이상 수양성 설사, 출혈 경향, 심한 구내염/섭취불가\n"
+        )
+    )
+    _bm_safe_add_ae(db, "Alectinib", "Alectinib (알렉티닙)", "항암/표적치료(자동등록)",
+        (
+        "### Alectinib 주요 부작용\n"
+        "- **일반**: **근육통/CK 상승**, 변비, 피로, 광과민, 부종\n"
+        "- **간**: AST/ALT 상승(정기적 모니터)\n"
+        "- **중증**: 간독성, **근병증**, 서맥, 간질성 폐질환(드묾)\n"
+        "- **연락 필요**: 암색 소변/황달, 심한 근육통/무력감, 호흡곤란/기침 악화\n"
+        )
+    )
+    _bm_safe_add_ae(db, "Ara-C", "Cytarabine (Ara‑C) / 시타라빈", "항암/표적치료(자동등록)",
+        (
+        "### Ara‑C(시타라빈) — 제형별 주의\n"
+        "- **공통**: 골수억제, 발열·오한, 오심/구토, **간효소 상승**, 발진\n\n"
+        "**[IV 정맥]**: 점적 후 **발열 반응** 가능, 점안제 병용 고려(고용량 시 각막염 예방)\n"
+        "**[SC 피하]**: **주사부위 반응**, 국소 통증/홍반\n"
+        "**[HDAC 고용량]**: **각막염**, **신경독성(소뇌 실조/언어장애)**, 고열; 고위험군 보호자 관찰 필수\n\n"
+        "- **연락 필요**: 38.5℃ 이상 발열, 시야 흐림/눈 통증, 보행 실조/말어눌, 비정상 출혈\n"
+        )
+    )
+    _bm_safe_add_ae(db, "Bendamustine", "Bendamustine", "항암/표적치료(자동등록)",
+        (
+        "### Bendamustine 주요 부작용\n"
+        "- **일반**: 골수억제, 피로, 오심, 발진/가려움\n"
+        "- **감염 위험**: 중성구 감소 → 발열 시 즉시 평가\n"
+        "- **피부**: 드물게 심각한 피부반응(SJS/TEN 보고)\n"
+        "- **연락 필요**: 고열, 점상출혈/멍, 광범위 피부발진, 호흡곤란\n"
+        )
+    )
+    _bm_safe_add_ae(db, "Bevacizumab", "Bevacizumab (베바시주맙)", "항암/표적치료(자동등록)",
+        (
+        "### Bevacizumab 주요 부작용\n"
+        "- **혈관/신장**: **고혈압**, **단백뇨**(정기 소변검사), 정맥·동맥 **혈전/출혈** 위험↑\n"
+        "- **상처치유 지연**, 누공, 드물게 **GI 천공**\n"
+        "- **연락 필요**: 심한 두통/시야 변화, 혈뇨·거품뇨, 복부 극심한 통증, 갑작스런 신경학적 증상\n"
+        )
+    )
+    _bm_safe_add_ae(db, "Bleomycin", "Bleomycin", "항암/표적치료(자동등록)",
+        (
+        "### Bleomycin 주요 부작용\n"
+        "- **폐**: **폐독성**(기침, 호흡곤란, 간질성 변화) — 누적용량/연령/산소치료 병력에 영향\n"
+        "- **피부**: 색소침착, 경화, 손발톱 변화; 발열/오한\n"
+        "- **연락 필요**: 진행성 호흡곤란/운동 시 숨참, 고열, 흉통\n"
+        )
+    )
+# === [PATCH:P1_ONCO_AE_DB_6DRUGS] END ===
+
