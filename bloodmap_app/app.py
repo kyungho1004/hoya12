@@ -87,31 +87,16 @@ try:
 except Exception:
     pass
 # ---- End initial route bootstrap ----
+# Mobile default
+try:
+    st.session_state.setdefault("mobile_mode", True)
+except Exception:
+    pass
 
-
-# ---- Pre-route from DX selection (run before tabs) ----
-def _preroute_from_dx():
-    try:
-        import streamlit as st
-        ss = st.session_state
-        cur_dx = ss.get("onco_disease_sel")
-        if cur_dx != ss.get("_dx_prev"):
-            ss["_dx_prev"] = cur_dx
-            # Any DX selection/change means user is working in 'dx'
-            ss["_home_intent"] = False
-            if ss.get("_route") != "dx":
-                ss["_route"] = "dx"
-                ss["_route_last"] = "dx"
-            try:
-                if st.query_params.get("route") != "dx":
-                    st.query_params.update(route="dx")
-            except Exception:
-                st.experimental_set_query_params(route="dx")
-    except Exception:
-        pass
-# ---- End pre-route from DX selection ----
-
-
+try:
+    _block_spurious_home()
+except Exception:
+    pass
 
 
 # app.py
@@ -815,8 +800,6 @@ def build_peds_notes(
 
 # ---------- Tabs ----------
 tab_labels = ["🏠 홈", "👶 소아 증상", "🧬 암 선택", "💊 항암제(진단 기반)", "🧪 피수치 입력", "🔬 특수검사", "📄 보고서", "📊 기록/그래프"]
-
-_preroute_from_dx()
 t_home, t_peds, t_dx, t_chemo, t_labs, t_special, t_report, t_graph = st.tabs(tab_labels)
 
 # HOME
@@ -1443,7 +1426,6 @@ with t_dx:
     def _dx_fmt(x):
         try:
             s = str(x)
-            # If already has Hangul, show as is
             if any("\uac00" <= ch <= "\ud7a3" for ch in s):
                 return s
             try:
@@ -1478,7 +1460,50 @@ with t_dx:
     groups = sorted(ONCO.keys()) if ONCO else ["혈액암", "고형암"]
     group = st.selectbox("암 그룹", options=groups, index=0, key=wkey("onco_group_sel"))
     diseases = sorted(ONCO.get(group, {}).keys()) if ONCO else ["ALL", "AML", "Lymphoma", "Breast", "Colon", "Lung"]
-    disease = disease = st.selectbox("의심/진단명", options=diseases, index=0, key=wkey("onco_disease_sel"), format_func=_dx_fmt)
+    
+    # ---- Mobile-friendly deferred apply ----
+    _is_mobile = st.session_state.get("mobile_mode", True)
+    if _is_mobile:
+        c1, c2 = st.columns([3,1])
+        with c1:
+            disease_candidate = st.selectbox(
+                "의심/진단명",
+                options=diseases,
+                index=0,
+                key=wkey("onco_disease_sel_candidate"),
+                format_func=_dx_fmt,
+            )
+        with c2:
+            if st.button("적용", key=wkey("onco_disease_apply")):
+                try:
+                    st.session_state[wkey("onco_disease_sel")] = disease_candidate
+                except Exception:
+                    st.session_state["onco_disease_sel"] = disease_candidate
+                # Pin route to dx + sync URL
+                try:
+                    ss = st.session_state
+                    ss["_home_intent"] = False
+                    if ss.get("_route") != "dx":
+                        ss["_route"] = "dx"
+                        ss["_route_last"] = "dx"
+                    try:
+                        if st.query_params.get("route") != "dx":
+                            st.query_params.update(route="dx")
+                    except Exception:
+                        st.experimental_set_query_params(route="dx")
+                except Exception:
+                    pass
+                st.rerun()
+    else:
+        disease = st.selectbox(
+            "의심/진단명",
+            options=diseases,
+            index=0,
+            key=wkey("onco_disease_sel"),
+            format_func=_dx_fmt,
+        )
+    # ---- End deferred apply ----
+
 
     disp = dx_display(group, disease)
     st.session_state["onco_group"] = group
