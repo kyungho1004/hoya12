@@ -1,15 +1,95 @@
 
-# (patch) usage badge
-try:
-    render_usage_badge()
-except Exception:
-    pass
 
-# (patch) usage counter
+# ---- HomeBlocker v1 ----
+def _block_spurious_home():
+    ss = st.session_state
+    cur = ss.get("_route") or "home"
+    last = ss.get("_route_last")
+    intent_home = ss.get("_home_intent", False)
+    # If we have a known last non-home route and no explicit intent to go home,
+    # prevent accidental drop to 'home' (e.g., first click anomalies).
+    if (cur == "home") and (last and last != "home") and (not intent_home):
+        ss["_route"] = last
+        try:
+            if st.query_params.get("route") != last:
+                st.query_params.update(route=last)
+        except Exception:
+            st.experimental_set_query_params(route=last)
+        # do not rerun here; early/anti guards will sync on next pass
+    # Remember last non-home route if current is valid
+    try:
+        if ss.get("_route") and ss["_route"] != "home":
+            ss["_route_last"] = ss["_route"]
+    except Exception:
+        pass
+
+# ---- End HomeBlocker v1 ----
+
+
+# ---- Hard redirect guard v2 (pre-render; URL-only hydrate, safer) ----
 try:
-    increment_usage_once_per_session()
+    import streamlit as st  # ultra-early
+    def __hr_qp(name: str) -> str:
+        try:
+            v = st.query_params.get(name)
+            return v[0] if isinstance(v, list) else (v or "")
+        except Exception:
+            v = st.experimental_get_query_params().get(name, [""])
+            return v[0]
+
+    url_route = __hr_qp("route")
+    ss = st.session_state
+    cur = ss.get("_route")
+    last = ss.get("_route_last")
+
+    # Run once per session to hydrate from URL only.
+    if not ss.get("_hrg_v2_done", False):
+        ss["_hrg_v2_done"] = True
+        if url_route:
+            want = url_route
+            if cur != want:
+                ss["_route"] = want
+                ss["_route_last"] = want
+                try:
+                    if st.query_params.get("route") != want:
+                        st.query_params.update(route=want)
+                except Exception:
+                    st.experimental_set_query_params(route=want)
+                st.rerun()
 except Exception:
     pass
+# ---- End hard redirect guard v2 ----
+
+
+# ---- Initial route bootstrap (anti first-click→home) ----
+try:
+    import streamlit as st
+    ss = st.session_state
+    if not ss.get("_route"):
+        try:
+            url_r = st.query_params.get("route")
+            url_r = url_r[0] if isinstance(url_r, list) else url_r
+        except Exception:
+            url_r = (st.experimental_get_query_params().get("route") or [""])[0]
+        if not url_r:
+            last = ss.get("_route_last")
+            if last and last != "home":
+                ss["_route"] = last
+            else:
+                ss["_route"] = "chemo"
+                ss["_route_last"] = "chemo"
+            try:
+                if st.query_params.get("route") != ss["_route"]:
+                    st.query_params.update(route=ss["_route"])
+            except Exception:
+                st.experimental_set_query_params(route=ss["_route"])
+            st.rerun()
+except Exception:
+    pass
+# ---- End initial route bootstrap ----
+
+
+
 # app.py
 
 # ===== Robust import guard (auto-injected) =====
@@ -55,6 +135,51 @@ if "wkey" not in globals():
             return str(x)
 
 # ===== End import guard =====
+# ---- Onco import shim (robust) ----
+import sys
+from pathlib import Path
+try:
+    # 1) Standard import if available
+    from onco_map import ensure_onco_map, ONCO_REGIMENS, build_onco_map, auto_recs_by_dx  # type: ignore
+except Exception:
+    # 2) Dynamic load from multiple candidate paths
+    def _load_local_module(mod_name: str, file_path: str):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(mod_name, file_path)
+        m = importlib.util.module_from_spec(spec)
+        sys.modules[mod_name] = m
+        spec.loader.exec_module(m)
+        return m
+
+    _onco = None
+    _candidates = [
+        Path(__file__).parent / "onco_map.py",
+        Path(__file__).parent / "modules" / "onco_map.py",
+        Path("/mount/src/hoya12/bloodmap_app/onco_map.py"),
+        Path("/mount/src/hoya12/bloodmap_app/modules/onco_map.py"),
+        Path("/mnt/data/onco_map.py"),
+    ]
+    for _p in _candidates:
+        try:
+            if _p.is_file():
+                _onco = _load_local_module("onco_map", str(_p))
+                break
+        except Exception:
+            pass
+
+    if _onco is None:
+        # 3) Safe fallbacks to keep app running
+        def ensure_onco_map(m): return m
+        ONCO_REGIMENS = {}
+        def build_onco_map(): return {}
+        def auto_recs_by_dx(*args, **kwargs): return {"chemo": [], "targeted": [], "abx": []}
+    else:
+        ensure_onco_map = getattr(_onco, "ensure_onco_map", lambda m: m)
+        ONCO_REGIMENS  = getattr(_onco, "ONCO_REGIMENS", {})
+        build_onco_map = getattr(_onco, "build_onco_map", lambda: {})
+        auto_recs_by_dx = getattr(_onco, "auto_recs_by_dx",
+                                  lambda *a, **k: {"chemo": [], "targeted": [], "abx": []})
+# ---- End Onco import shim ----
 import datetime as _dt
 from zoneinfo import ZoneInfo as _ZoneInfo
 KST = _ZoneInfo("Asia/Seoul")
@@ -119,38 +244,6 @@ def render_peds_nav_md():
 
 def _scroll_now(target: str):
     from streamlit.components.v1 import html as _html
-
-# === Sticky Navigation Guard (patch: prevent unwanted return to home) ===
-import streamlit as _st_patch  # safe alias to avoid name shadowing
-
-if "active_page" not in _st_patch.session_state:
-    # Initialize only once
-    _st_patch.session_state["active_page"] = "home"
-# Backward-compat: if legacy 'page' was used earlier, inherit once
-if "page" in _st_patch.session_state and "active_page" not in _st_patch.session_state:
-    _st_patch.session_state["active_page"] = _st_patch.session_state.get("page", "home")
-
-# Sticky logic: if something resets to home without our intent, restore last page
-if "_last_page" not in _st_patch.session_state:
-    _st_patch.session_state["_last_page"] = _st_patch.session_state.get("active_page", "home")
-if "_nav_intent" not in _st_patch.session_state:
-    _st_patch.session_state["_nav_intent"] = False
-
-if (_st_patch.session_state.get("active_page") == "home"
-    and _st_patch.session_state.get("_last_page") not in (None, "home")
-    and not _st_patch.session_state.get("_nav_intent", False)):
-    _st_patch.session_state["active_page"] = _st_patch.session_state["_last_page"]
-
-def navigate(page: str):
-    """Set target page; no explicit rerun to avoid state loss."""
-    _st_patch.session_state["active_page"] = page
-    _st_patch.session_state["_nav_intent"] = True
-
-# After routing later in the file, remember to set:
-# _st_patch.session_state["_last_page"] = _st_patch.session_state.get("active_page", "home")
-# _st_patch.session_state["_nav_intent"] = False
-# === End Sticky Navigation Guard ===
-
     if not target:
         return
     _html(f"""
@@ -1319,13 +1412,32 @@ with t_labs:
 
 # DX
 with t_dx:
+
+    # ---- DX label fallbacks (avoid NameError) ----
+    try:
+        DX_KO  # type: ignore
+    except NameError:
+        try:
+            from onco_map import DX_KO as _DXK  # if module available
+            DX_KO = _DXK
+        except Exception:
+            DX_KO = {}
+    try:
+        _dx_norm  # type: ignore
+    except NameError:
+        try:
+            from onco_map import _norm as _dx_norm  # if module exposes it
+        except Exception:
+            _dx_norm = lambda s: s
+    # ---- End fallbacks ----
     st.subheader("암 선택")
     if not ONCO:
         st.warning("onco_map 이 로드되지 않아 기본 목록이 비어있습니다. onco_map.py를 같은 폴더나 modules/ 에 두세요.")
     groups = sorted(ONCO.keys()) if ONCO else ["혈액암", "고형암"]
     group = st.selectbox("암 그룹", options=groups, index=0, key=wkey("onco_group_sel"))
     diseases = sorted(ONCO.get(group, {}).keys()) if ONCO else ["ALL", "AML", "Lymphoma", "Breast", "Colon", "Lung"]
-    disease = st.selectbox("의심/진단명", options=diseases, index=0, key=wkey("onco_disease_sel"))
+    disease = st.selectbox("의심/진단명", options=diseases, index=0, key=wkey("onco_disease_sel"), format_func=lambda x: (f"{x} (" + (DX_KO.get(_dx_norm(x)) or DX_KO.get(x) or x) + ")") if not any("\uac00" <= ch <= "\ud7a3" for ch in str(x)) else str(x))
+
     disp = dx_display(group, disease)
     st.session_state["onco_group"] = group
     st.session_state["onco_disease"] = disease
@@ -1465,7 +1577,6 @@ def _aggregate_all_aes(meds, db):
         if uniq:
             result[k] = uniq
     return result
-
 # CHEMO
 with t_chemo:
     st.subheader("항암제(진단 기반)")
@@ -1515,10 +1626,15 @@ with t_chemo:
     pool_labels = [label_map.get(k, str(k)) for k in pool_keys]
     unique_pairs = sorted(set(zip(pool_labels, pool_keys)), key=lambda x: x[0].lower())
     pool_labels_sorted = [p[0] for p in unique_pairs]
-    picked_labels = st.multiselect("투여/계획 약물 선택", options=pool_labels_sorted, key=wkey("drug_pick"))
+    picked_labels = st.multiselect("투여/계획 약물 선택", options=pool_labels_sorted, default=pool_labels_sorted, key=wkey("drug_pick"))
     label_to_key = {lbl: key for lbl, key in unique_pairs}
     picked_keys = [label_to_key.get(lbl) for lbl in picked_labels if lbl in label_to_key]
     st.session_state["chemo_keys"] = picked_keys
+    # 자동 복구: 사용자가 전부 해제해도 빈 화면 방지
+    if not picked_keys:
+        st.caption("선택된 항암제가 없어 기본값으로 복구했어요.")
+        picked_keys = [label_to_key.get(lbl) for lbl in pool_labels_sorted]
+        st.session_state["chemo_keys"] = picked_keys
 
     if picked_keys:
         # 선택한 약물 DB 비어있으면 경고
@@ -1542,13 +1658,55 @@ with t_chemo:
 
         ae_map = _aggregate_all_aes(picked_keys, DRUG_DB)
         st.markdown("### 항암제 부작용(전체)")
+        # === [PATCH 2025-10-22 KST] Use shared renderer if available ===
+        try:
+            from ui_results_final import render_adverse_effects as _render_aes_shared
+        except Exception:
+            try:
+                from ui_results import render_adverse_effects as _render_aes_shared
+            except Exception:
+                _render_aes_shared = None
+        if _render_aes_shared is not None:
+            try:
+                _render_aes_shared(st, picked_keys, DRUG_DB)
+                _used_shared_renderer = True
+            except Exception:
+                _used_shared_renderer = False
+        else:
+            _used_shared_renderer = False
+        # === [/PATCH] ===
+
         if ae_map:
+            # --- Ara-C 제형 선택(IV/SC/HDAC) ---
+            try:
+                from ae_resolve import resolve_key, get_ae, get_checks
+                from drug_db import display_label
+                if ("Cytarabine" in ae_map) or ("Ara-C" in ae_map):
+                    st.markdown("**Ara-C 제형 선택**")
+                    picked_key = render_arac_wrapper("Ara-C 제형 선택", default="Cytarabine")
+                    st.write(f"- **{display_label(picked_key)}**")
+                    st.caption(get_ae(picked_key))
+                    for _ln in get_checks(picked_key):
+                        st.checkbox(_ln, key=wkey(f"chk_{picked_key}_{_ln}"))
+                    st.divider()
+            except Exception:
+                pass
+
             for k, arr in ae_map.items():
+                if resolve_key(k) in ("Cytarabine", "Ara-C"):
+                    continue
                 st.write(f"- **{label_map.get(k, str(k))}**")
-                for ln in arr:
-                    st.write(f"  - {ln}")
+                if isinstance(arr, (list, tuple)):
+                    for ln in arr:
+                        st.write(f"  - {ln}")
+                elif isinstance(arr, str) and arr.strip():
+                    st.write(f"  - {arr}")
+                else:
+                    st.write("  - (부작용 정보 없음)")
         else:
             st.write("- (DB에 상세 부작용 없음)")
+
+_block_spurious_home()
 
 # PEDS
 with t_peds:
@@ -2732,94 +2890,39 @@ _ss_setdefault(wkey('home_fb_log_cache'), [])
 
 
 # ===== [/INLINE FEEDBACK] =====
-
-
-# === Feedback (New UI, patch) ===
-import os as _os_fb, json as _json_fb
-from datetime import datetime as _dt_fb, timedelta as _td_fb, timezone as _tz_fb
-import streamlit as _st_fb
-
-def _fb_kst_now_iso():
-    KST = _tz_fb(_td_fb(hours=9))
-    return _dt_fb.now(KST).isoformat(timespec="seconds")
-
-def _fb_save(payload: dict):
-    root = "/mnt/data/feedback"
-    _os_fb.makedirs(root, exist_ok=True)
-    day = _fb_kst_now_iso()[:10].replace("-", "")
-    path = _os_fb.path.join(root, f"feedback_{day}.jsonl")
-    with open(path, "a", encoding="utf-8") as f:
-        f.write(_json_fb.dumps(payload, ensure_ascii=False) + "\n")
-
-def render_feedback_new(section_title: str = "🗳️ 도움이 되었나요? (한 번만 클릭해도 OK!)"):
-    _st_fb.markdown("#### " + section_title)
-    score = _st_fb.radio(
-        "", ["👍 도움이 되었어요", "😐 그냥 그래요", "👎 도움이 안 됐어요"],
-        horizontal=True, label_visibility="collapsed", key="fb_score_new"
-    )
-
-    # one-shot per session guard
-    if "fb_submitted_new" not in _st_fb.session_state:
-        _st_fb.session_state["fb_submitted_new"] = False
-
-    if score and not _st_fb.session_state["fb_submitted_new"]:
-        _st_fb.success("의견 감사합니다! 아래 선택은 선택사항이에요 💬")
-        tags = _st_fb.multiselect("어떤 점이 좋았나요 / 아쉬웠나요?", [
-            "설명이 쉬웠어요", "결과가 빠르게 나왔어요", "UI가 직관적이에요",
-            "기능이 부족해요", "모바일에서 불편했어요", "기대와 달랐어요"
-        ], key="fb_tags_new")
-        text = _st_fb.text_area(
-            "추가로 남기고 싶은 말이 있다면 자유롭게 적어주세요!",
-            placeholder="예: 수치 해석이 구체적이라서 좋았어요",
-            key="fb_text_new"
-        )
-
-        if _st_fb.button("제출하기", key="fb_submit_new"):
-            # normalize score
-            score_raw = _st_fb.session_state.get("fb_score_new")
-            score_map = {
-                "👍 도움이 되었어요": "up",
-                "😐 그냥 그래요": "meh",
-                "👎 도움이 안 됐어요": "down",
-            }
-            norm = score_map.get(score_raw, "unknown")
-            payload = {
-                "ts_kst": _fb_kst_now_iso(),
-                "active_page": _st_fb.session_state.get("active_page", None),
-                "nickname": _st_fb.session_state.get("profile", {}).get("nickname") if isinstance(_st_fb.session_state.get("profile"), dict) else None,
-                "score_raw": score_raw,
-                "score": norm,
-                "tags": _st_fb.session_state.get("fb_tags_new", []),
-                "text": _st_fb.session_state.get("fb_text_new", "").strip(),
-                "app_ver": _st_fb.session_state.get("app_version", None),
-            }
-            try:
-                _fb_save(payload)
-                _st_fb.success("피드백이 전송되었습니다! 💌 감사합니다.")
-                _st_fb.session_state["fb_submitted_new"] = True
-            except Exception as e:
-                _st_fb.error(f"저장 중 문제가 발생했어요: {e}")
-    elif _st_fb.session_state.get("fb_submitted_new", False):
-        _st_fb.info("이미 피드백을 제출하셨어요. 고맙습니다! 🙏")
-# === End Feedback (New UI, patch) ===
-
-
-# === Sticky Navigation Footer (patch) ===
-try:
-    import streamlit as _st_patch2
-    _st_patch2.session_state["_last_page"] = _st_patch2.session_state.get("active_page", "home")
-    _st_patch2.session_state["_nav_intent"] = False
-except Exception:
-    pass
-# === End Sticky Navigation Footer ===
-
-
-# (patch) override usage badge with credits
-
-def render_usage_badge():
+# ---- Tab auto-select (route sync hack) ----
+def _select_tab_by_label(label: str):
     try:
-        today_count, total_count = get_usage_counts()
+        import streamlit as st
+        st.markdown("""
+        <script>
+        (function(){
+          const trySelect = () => {
+            const tabs = window.parent.document.querySelectorAll('button[role="tab"]');
+            for (const t of tabs) {
+              if ((t.innerText || '').trim().startsWith(label)) { t.click(); return true; }
+            }
+            return false;
+          };
+          if (!trySelect()) { setTimeout(trySelect, 80); setTimeout(trySelect, 200); }
+        })();
+        </script>
+        """, unsafe_allow_html=True)
     except Exception:
-        today_count, total_count = 0, 0
-    import streamlit as _st_uc
-    _st_uc.caption(f"**오늘 방문자: {today_count} · 누적: {total_count}** · 제작: Hoya/GPT · 자문: Hoya/GPT")
+        pass
+
+_label_by_route = {
+    "home": "🏠 홈",
+    "peds": "👶 소아 증상",
+    "dx": "🧬 암 선택",
+    "chemo": "💊 항암제(진단 기반)",
+    "labs": "🧪 피수치 입력",
+    "special": "🔬 특수검사",
+    "report": "📄 보고서",
+    "graph": "📊 기록/그래프",
+}
+_cur_route = st.session_state.get("_route")
+if _cur_route and _cur_route in _label_by_route and _cur_route != "home":
+    _select_tab_by_label(_label_by_route[_cur_route])
+# ---- End Tab auto-select ----
+
