@@ -1438,7 +1438,61 @@ with t_dx:
     diseases = sorted(ONCO.get(group, {}).keys()) if ONCO else ["ALL", "AML", "Lymphoma", "Breast", "Colon", "Lung"]
     disease = st.selectbox("의심/진단명", options=diseases, index=0, key=wkey("onco_disease_sel"), format_func=lambda x: (f"{x} (" + (DX_KO.get(_dx_norm(x)) or DX_KO.get(x) or x) + ")") if not any("\uac00" <= ch <= "\ud7a3" for ch in str(x)) else str(x))
 
-    disp = dx_display(group, disease)
+    # ========= [PATCH A / t_dx] DX 라우트 고정 & last 보존 (idempotent) =========
+    try:
+        import streamlit as st
+        ss = st.session_state
+        ss["_home_intent"] = False  # 이 상호작용은 '홈' 의도가 아님
+        _need_pin = (ss.get("_route") != "dx")
+        if _need_pin:
+            ss["_route"] = "dx"
+        if not ss.get("_route_last") or ss.get("_route_last") == "home":
+            ss["_route_last"] = "dx"
+        if _need_pin:
+            _qp_dx_synced = False
+            try:
+                if st.query_params.get("route") != "dx":
+                    st.query_params.update(route="dx")
+                _qp_dx_synced = True
+            except Exception:
+                try:
+                    if (st.experimental_get_query_params().get("route") or [""])[0] != "dx":
+                        st.experimental_set_query_params(route="dx")
+                    _qp_dx_synced = True
+                except Exception:
+                    pass
+            if _qp_dx_synced and not ss.get("_dx_pin_done", False):
+                ss["_dx_pin_done"] = True
+                st.rerun()
+    except Exception:
+        pass
+    # ========= [END PATCH A] =========
+
+    # ========= [PATCH B / t_dx] dx_display 안정화 (예외 방지) =========
+    try:
+        disease  # noqa: F821
+    except NameError:
+        try:
+            disease = st.session_state[wkey("onco_disease_sel")]
+        except Exception:
+            disease = (st.session_state.get("onco_disease_sel")
+                       or st.session_state.get("onco_disease_sel_candidate"))
+    disp = None
+    try:
+        disp = dx_display(group, disease)
+    except Exception as _e:
+        try:
+            ss = st.session_state
+            ss["_home_intent"] = False
+            if ss.get("_route") != "dx":
+                ss["_route"] = "dx"
+            if not ss.get("_route_last") or ss.get("_route_last") == "home":
+                ss["_route_last"] = "dx"
+        except Exception:
+            pass
+        st.warning("⚠️ 진단 정보 표시 중 문제가 발생했어요. 진단/그룹 선택을 다시 확인해 주세요.")
+    # ========= [END PATCH B] =========
+
     st.session_state["onco_group"] = group
     st.session_state["onco_disease"] = disease
     st.session_state["dx_disp"] = disp
