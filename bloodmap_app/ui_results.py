@@ -136,492 +136,127 @@ def _render_cardio_guard(st, rec: Dict[str, Any]):
     html = "<ul>" + "".join(f"<li>{b}</li>" for b in bullets) + "</ul>"
     st.markdown("<div class='cardio-guard'><div class='title'>❤️ Cardio-Guard</div>"+html+"</div>", unsafe_allow_html=True)
 
-# === [PATCH:AE_GLOSSARY_KO+NORMALIZE] BEGIN ===
-import re as _re_gls
+# --- [PATCH 2025-10-23 KST] Contextual keyword explainers (patch-only, no removals) ---
+# 목적: 부작용/설명 문자열 안에 특정 키워드가 '실제로 등장할 때만' 짧은 설명 배지를 자동 표기.
+# 사용 예:
+#   render_keyword_explainers(st, source_text)
+#   -> source_text 안에 'QT', 'torsades', 'QT 연장' 등이 있으면 심전도/QT 가이드만 출력.
+#
+# 기존 기능은 삭제하지 않고, 이 함수는 선택적으로 호출할 수 있도록 별도 공개 API로 추가한다.
+_KEYWORD_RULES: List[Dict[str, Any]] = [
+    {
+        "name": "QT",
+        "patterns": [r"\bqt\b", r"qt\s*연장", r"torsades", r"롱\s*qt", r"long\s*qt"],
+        "html": (
+            "<div class='explain-chip'>"
+            "<b>QT 연장</b> — ECG 추적, K≥4.0 / Mg≥2.0 유지, "
+            "실신·심계항진·어지럼 시 즉시 연락"
+            "</div>"
+        ),
+    },
+    {
+        "name": "Anthracycline",
+        "patterns": [r"anthracycline", r"안트라사이클린", r"도?옥?소루비신", r"다우노루비신", r"이다루비신"],
+        "html": (
+            "<div class='explain-chip'>"
+            "<b>안트라사이클린 심독성</b> — 누적용량 추적, 주기적 <i>Echo/LVEF</i> 권고"
+            "</div>"
+        ),
+    },
+    {
+        "name": "VEGF",
+        "patterns": [r"vegf", r"bevacizumab", r"ramucirumab", r"lenvatinib", r"sorafenib", r"단백뇨", r"고혈압"],
+        "html": (
+            "<div class='explain-chip'>"
+            "<b>Anti‑VEGF 계열</b> — 혈압·소변단백 정기 체크, 수술 전후 주의"
+            "</div>"
+        ),
+    },
+]
 
-_AE_GLOSSARY_KO = {
-    "QT 연장": "QT 간격이 연장되면 심장 리듬 이상이 발생할 수 있어요. 실신이나 돌연사 위험이 있으니 ECG(심전도) 추적 검사가 권장돼요.",
-    "RA 증후군": "베사노이드(트레티노인) 사용 시 고열·호흡곤란·체중 증가가 동반되면 RA 증후군일 수 있어요. 스테로이드 치료가 필요할 수 있으니 즉시 병원에 알려야 해요.",
-    "고삼투증후군": "탈수나 전해질 이상으로 의식 저하·구토가 나타날 수 있어요. 충분한 수분 섭취가 필요하며 증상 시 즉시 내원하세요.",
-    "신경독성": "손발 저림, 시야 흔들림, 보행 불안정 등이 나타나면 신경계 이상일 수 있어요. 심해지기 전 주치의에게 알려야 해요.",
-    "손발증후군": "손바닥·발바닥이 붉어지고 벗겨질 수 있어요. 미지근한 물로 씻고, 보습제를 자주 바르며 마찰을 줄이세요.",
-    "골수억제": "백혈구·혈소판이 감소해 감염/출혈 위험이 증가해요. 발열(≥38.5℃)·쉽게 멍/코피가 나면 바로 연락하세요.",
-    "간독성": "AST/ALT 상승, 황달·암색 소변이 생기면 간 이상 신호예요. 약 중단·검사 조정이 필요할 수 있어요.",
-    "신장독성": "부종·소변 줄어듦·거품뇨가 있으면 신장 이상 신호예요. 수분 관리와 혈액/소변검사가 필요해요.",
-    "광과민": "햇빛에 노출되면 쉽게 빨개지거나 발진이 생길 수 있어요. SPF, 긴옷, 자외선 차단이 중요해요.",
-    "구내염": "입안 통증/궤양으로 식사가 어려울 수 있어요. 부드러운 음식, 자극 피하기, 얼음조각·가글이 도움돼요.",
-    "설사": "수양성 설사·탈수 위험이 있어요. 보충수분(ORS)와 필요 시 지사제, 심하면 병원에 연락하세요.",
-    "변비": "수분·식이섬유·가벼운 운동이 도움돼요. 3일 이상 변이 없거나 복통·구토 동반 시 의사와 상의하세요.",
-    "오심/구토": "소량씩 자주 섭취하고, 처방된 항구토제를 규칙적으로 드세요. 탈수/구토 지속 시 연락하세요.",
-    "탈수": "입 마름, 소변량 감소, 어지러움은 탈수 신호예요. 수분 보충이 필요하고 심하면 병원으로.",
-    "저나트륨혈증": "두통·구역·혼동이 생길 수 있어요. 급격한 체중 증가(부종) 시 즉시 연락하세요.",
-    "고칼륨혈증": "심장 두근거림·근력 저하가 나타날 수 있어요. ECG·혈액검사가 필요해요.",
-    "출혈": "잇몸/코피·멍이 쉽게 생기면 혈소판 저하 가능성이 있어요. 넘어짐·상처를 주의하고 바로 연락하세요.",
-    "혈전": "한쪽 다리 붓고 통증·호흡곤란·흉통은 혈전 신호예요. 즉시 응급평가가 필요해요.",
-    "단백뇨": "거품뇨·부종이 있으면 신장 손상 신호예요. 소변검사 추적이 필요해요.",
-    "고혈압": "두통·어지러움이 있으면 혈압을 확인하세요. 목표치를 넘어가면 약 조절이 필요할 수 있어요.",
-    "상처치유 지연": "수술/상처가 잘 낫지 않을 수 있어요. 치료 전후 일정 조정이 필요하니 의료진과 상의하세요.",
-    "폐독성": "기침·호흡곤란 악화는 폐 이상 신호예요. 흉부 영상·호흡기 평가가 필요해요.",
-    "간질성 폐질환": "호흡곤란/건성 기침·발열이 동반되면 의심돼요. 약 중단과 스테로이드가 필요할 수 있어요.",
-}
-
-_AE_SYNONYMS = {
-    "qt prolongation": "QT 연장",
-    "qt interval prolongation": "QT 연장",
-    "torsades": "QT 연장",
-    "ra syndrome": "RA 증후군",
-    "retinoic acid syndrome": "RA 증후군",
-    "hand-foot syndrome": "손발증후군",
-    "palmar-plantar erythrodysesthesia": "손발증후군",
-    "neurotoxicity": "신경독성",
-    "peripheral neuropathy": "신경독성",
-    "stomatitis": "구내염",
-    "mucositis": "구내염",
-    "hepatic toxicity": "간독성",
-    "renal toxicity": "신장독성",
-    "photosensitivity": "광과민",
-}
-
-def _norm_ae_term(s: str) -> str:
-    if not s:
-        return ""
-    x = s.strip()
-    x = _re_gls.sub(r"\(.*?\)|\[.*?\]", "", x)
-    x = _re_gls.sub(r"[·,:;/]+", " ", x)
-    x = _re_gls.sub(r"\s+", " ", x).strip()
-    return x
-
-def _to_glossary_key(term: str):
-    if not term:
-        return None
-    t = _norm_ae_term(term)
-    if t in _AE_GLOSSARY_KO:
-        return t
-    low = t.lower()
-    if low in _AE_SYNONYMS:
-        k = _AE_SYNONYMS[low]
-        if k in _AE_GLOSSARY_KO:
-            return k
-    for k in _AE_GLOSSARY_KO.keys():
-        if k in t:
-            return k
-    return None
-
-def _ae_explain(term: str):
-    key = _to_glossary_key(term)
-    return _AE_GLOSSARY_KO.get(key) if key else None
-
-def _augment_terms_with_explain(terms):
-    out = []
-    for t in terms or []:
-        exp = _ae_explain(t)
-        label = _norm_ae_term(t)
-        out.append(f"{label} — {exp}" if exp else label)
-    return out
-# === [PATCH:AE_GLOSSARY_KO+NORMALIZE] END ===
-
-# === [PATCH:AE_GLOSSARY_OVERRIDE_BUILD] BEGIN ===
-def build_ae_summary_md(drug_list, formulation_map=None):
-    try:
-        ae = _bm_get_ae_detail_map()
-    except Exception:
-        ae = {}
-    lines = ["## 항암제 요약 (영/한 + 부작용)"]
-    if not drug_list:
-        lines.append("- (선택된 항암제가 없습니다)")
-        return "\n".join(lines)
-    for d in drug_list:
-        info = (ae or {}).get(d)
-        if not info:
-            lines.append(f"### {d}")
-            lines.append("- 상세 정보 준비 중")
-            lines.append("")
+def render_keyword_explainers(st, text: str|None):
+    """주어진 텍스트(text)에 포함된 키워드에만 반응해서 짧은 설명 배지를 출력.
+    - 삭제/치환 없이, 매칭된 항목만 누적 출력.
+    - 동일 규칙은 1회만 표시.
+    - HTML 안전출력(unsafe_allow_html=True).
+    """
+    s = (text or "").lower()
+    if not s.strip():
+        return
+    matched_html: List[str] = []
+    for rule in _KEYWORD_RULES:
+        try:
+            pats = rule.get("patterns", [])
+            if any(re.search(p, s) for p in pats):
+                matched_html.append(rule.get("html", ""))
+        except re.error:
+            # 정규식 오류가 있더라도 다른 규칙은 계속
             continue
-        title = info.get("title", d)
-        lines.append(f"### {title}")
-        forms = info.get("formulations") or {}
-        sel_form = (formulation_map or {}).get(d) if formulation_map else None
-        if forms:
-            if sel_form and sel_form in forms:
-                lines.append(f"- **제형({sel_form})**: " + " · ".join(_augment_terms_with_explain(forms[sel_form])))
-            else:
-                for fk, fv in forms.items():
-                    lines.append(f"- **제형({fk})**: " + " · ".join(_augment_terms_with_explain(fv)))
-        common  = info.get("common") or []
-        serious = info.get("serious") or []
-        call    = info.get("call") or []
-        if common:
-            lines.append("- **일반**: " + " · ".join(_augment_terms_with_explain(common)))
-        if serious:
-            lines.append("- **중증**: " + " · ".join(_augment_terms_with_explain(serious)))
-        if call:
-            lines.append("- **연락 필요**: " + " · ".join(_augment_terms_with_explain(call)))
-        lines.append("")
-    return "\n".join(lines)
-# === [PATCH:AE_GLOSSARY_OVERRIDE_BUILD] END ===
+    if not matched_html:
+        return
+    container = (
+        "<div class='keyword-explainers'>"
+        + "".join(matched_html)
+        + "</div>"
+    )
+    st.markdown(container, unsafe_allow_html=True)
 
-
-# === [INTEGRATED: AE GLOSSARY + NORMALIZER + TKIs + BUILD/RENDER] BEGIN ===
-# 1) Glossary (Korean) + synonyms + normalizer
-import re as _re_gls
-
-_AE_GLOSSARY_KO = {
-    "QT 연장": "QT 간격이 연장되면 심장 리듬 이상이 발생할 수 있어요. 실신이나 돌연사 위험이 있으니 ECG(심전도) 추적 검사가 권장돼요.",
-    "RA 증후군": "베사노이드(트레티노인) 사용 시 고열·호흡곤란·체중 증가가 동반되면 RA 증후군일 수 있어요. 스테로이드 치료가 필요할 수 있으니 즉시 병원에 알려야 해요.",
-    "고삼투증후군": "탈수나 전해질 이상으로 의식 저하·구토가 나타날 수 있어요. 충분한 수분 섭취가 필요하며 증상 시 즉시 내원하세요.",
-    "신경독성": "손발 저림, 시야 흔들림, 보행 불안정 등이 나타나면 신경계 이상일 수 있어요. 심해지기 전 주치의에게 알려야 해요.",
-    "손발증후군": "손바닥·발바닥이 붉어지고 벗겨질 수 있어요. 미지근한 물로 씻고, 보습제를 자주 바르며 마찰을 줄이세요.",
-    "골수억제": "백혈구·혈소판이 감소해 감염/출혈 위험이 증가해요. 발열(≥38.5℃)·쉽게 멍/코피가 나면 바로 연락하세요.",
-    "간독성": "AST/ALT 상승, 황달·암색 소변이 생기면 간 이상 신호예요. 약 중단·검사 조정이 필요할 수 있어요.",
-    "신장독성": "부종·소변 줄어듦·거품뇨가 있으면 신장 이상 신호예요. 수분 관리와 혈액/소변검사가 필요해요.",
-    "광과민": "햇빛에 노출되면 쉽게 빨개지거나 발진이 생길 수 있어요. SPF, 긴옷, 자외선 차단이 중요해요.",
-    "구내염": "입안 통증/궤양으로 식사가 어려울 수 있어요. 부드러운 음식, 자극 피하기, 얼음조각·가글이 도움돼요.",
-    "설사": "수양성 설사·탈수 위험이 있어요. 보충수분(ORS)와 필요 시 지사제, 심하면 병원에 연락하세요.",
-    "변비": "수분·식이섬유·가벼운 운동이 도움돼요. 3일 이상 변이 없거나 복통·구토 동반 시 의사와 상의하세요.",
-    "오심/구토": "소량씩 자주 섭취하고, 처방된 항구토제를 규칙적으로 드세요. 탈수/구토 지속 시 연락하세요.",
-    "탈수": "입 마름, 소변량 감소, 어지러움은 탈수 신호예요. 수분 보충이 필요하고 심하면 병원으로.",
-    "저나트륨혈증": "두통·구역·혼동이 생길 수 있어요. 급격한 체중 증가(부종) 시 즉시 연락하세요.",
-    "고칼륨혈증": "심장 두근거림·근력 저하가 나타날 수 있어요. ECG·혈액검사가 필요해요.",
-    "출혈": "잇몸/코피·멍이 쉽게 생기면 혈소판 저하 가능성이 있어요. 넘어짐·상처를 주의하고 바로 연락하세요.",
-    "혈전": "한쪽 다리 붓고 통증·호흡곤란·흉통은 혈전 신호예요. 즉시 응급평가가 필요해요.",
-    "단백뇨": "거품뇨·부종이 있으면 신장 손상 신호예요. 소변검사 추적이 필요해요.",
-    "고혈압": "두통·어지러움이 있으면 혈압을 확인하세요. 목표치를 넘어가면 약 조절이 필요할 수 있어요.",
-    "상처치유 지연": "수술/상처가 잘 낫지 않을 수 있어요. 치료 전후 일정 조정이 필요하니 의료진과 상의하세요.",
-    "폐독성": "기침·호흡곤란 악화는 폐 이상 신호예요. 흉부 영상·호흡기 평가가 필요해요.",
-    "간질성 폐질환": "호흡곤란/건성 기침·발열이 동반되면 의심돼요. 약 중단과 스테로이드가 필요할 수 있어요.",
+# 스타일(간단 배지) — 기존 style.css를 침범하지 않도록 클래스만 추가
+_EXPLAINER_STYLE = """
+<style>
+.keyword-explainers{display:flex;flex-wrap:wrap;gap:.5rem;margin:.5rem 0;}
+.keyword-explainers .explain-chip{
+  padding:.35rem .6rem;border-radius:1rem;background:#f6f7fb;border:1px solid #e7e9f3;
+  font-size:.85rem;line-height:1.2;
 }
+.keyword-explainers .explain-chip b{margin-right:.25rem}
+</style>
+"""
 
-_AE_SYNONYMS = {
-    "qt prolongation": "QT 연장",
-    "qt interval prolongation": "QT 연장",
-    "torsades": "QT 연장",
-    "ra syndrome": "RA 증후군",
-    "retinoic acid syndrome": "RA 증후군",
-    "hand-foot syndrome": "손발증후군",
-    "palmar-plantar erythrodysesthesia": "손발증후군",
-    "neurotoxicity": "신경독성",
-    "peripheral neuropathy": "신경독성",
-    "stomatitis": "구내염",
-    "mucositis": "구내염",
-    "hepatic toxicity": "간독성",
-    "renal toxicity": "신장독성",
-    "photosensitivity": "광과민",
-}
-
-def _norm_ae_term(s: str) -> str:
-    if not s:
-        return ""
-    x = s.strip()
-    x = _re_gls.sub(r"\(.*?\)|\[.*?\]", "", x)
-    x = _re_gls.sub(r"[·,:;/]+", " ", x)
-    x = _re_gls.sub(r"\s+", " ", x).strip()
-    return x
-
-def _to_glossary_key(term: str):
-    if not term:
-        return None
-    t = _norm_ae_term(term)
-    if t in _AE_GLOSSARY_KO:
-        return t
-    low = t.lower()
-    if low in _AE_SYNONYMS:
-        k = _AE_SYNONYMS[low]
-        if k in _AE_GLOSSARY_KO:
-            return k
-    for k in _AE_GLOSSARY_KO.keys():
-        if k in t:
-            return k
-    return None
-
-def _ae_explain(term: str):
-    key = _to_glossary_key(term)
-    return _AE_GLOSSARY_KO.get(key) if key else None
-
-def _augment_terms_with_explain(terms):
-    out = []
-    for t in terms or []:
-        exp = _ae_explain(t)
-        label = _norm_ae_term(t)
-        out.append(f"{label} — {exp}" if exp else label)
-    return out
-
-# 2) Extend AE map for GIST TKIs
-def _bm_extend_gist_tkis(ae_map: dict):
-    ae_map.update({
-        "Imatinib": {
-            "title": "Imatinib (이매티닙)",
-            "common": ["부종", "오심/구토", "설사", "구내염", "근육경련/통증", "발진", "골수억제"],
-            "serious": ["간독성", "심부전(드묾)", "심한 체액저류(흉수/복수)"],
-            "call": ["갑작스런 체중 증가/호흡곤란", "황달/암색 소변", "38.5℃ 이상 발열 또는 출혈"]
-        },
-        "Sunitinib": {
-            "title": "Sunitinib (수니티닙)",
-            "common": ["피로", "설사", "구내염", "손발증후군", "고혈압", "갑상선 기능저하"],
-            "serious": ["심기능 저하", "QT 연장", "간독성", "출혈"],
-            "call": ["흉통/실신/심한 어지러움", "검은 변/토혈", "황달/암색 소변", "심한 손발증후군"]
-        },
-        "Regorafenib": {
-            "title": "Regorafenib (레고라페닙)",
-            "common": ["손발증후군", "고혈압", "피로", "설사", "구내염"],
-            "serious": ["간독성(중요)", "출혈", "위장관 천공", "QT 연장(가능)"],
-            "call": ["황달/암색 소변", "심한 복통/발열", "지속적 비출혈·혈변", "흉통/실신"]
-        },
-        "Ripretinib": {
-            "title": "Ripretinib (리프레티닙)",
-            "common": ["탈모", "손발증후군", "근육통", "피로", "고혈압"],
-            "serious": ["심기능 이상", "피부암(드묾)", "QT 연장(가능)"],
-            "call": ["흉통/호흡곤란/실신", "심한 손발증후군", "새로운 피부 병변/출혈성 병변"]
-        },
-    })
-    return ae_map
-
-def _bm_get_ae_detail_map_safe():
+def ensure_keyword_explainer_style(st):
+    """한 번만 삽입되더라도 안전. 호출부가 여러 곳이어도 중복 삽입 무해."""
     try:
-        base = _bm_get_ae_detail_map()
-    except Exception:
-        base = {}
-    try:
-        base = dict(base)
-    except Exception:
-        base = {}
-    return _bm_extend_gist_tkis(base)
-
-# 3) Build MD using augmented map and explanations
-def build_ae_summary_md(drug_list, formulation_map=None):
-    ae = _bm_get_ae_detail_map_safe()
-    lines = ["## 항암제 요약 (영/한 + 부작용)"]
-    if not drug_list:
-        lines.append("- (선택된 항암제가 없습니다)")
-        return "\\n".join(lines)
-    for d in drug_list:
-        info = ae.get(d)
-        if not info:
-            lines.append(f"### {d}")
-            lines.append("- 상세 정보 준비 중")
-            lines.append("")
-            continue
-        title = info.get("title", d)
-        lines.append(f"### {title}")
-        forms = info.get("formulations") or {}
-        sel_form = (formulation_map or {}).get(d) if formulation_map else None
-        if forms:
-            if sel_form and sel_form in forms:
-                lines.append(f"- **제형({sel_form})**: " + " · ".join(_augment_terms_with_explain(forms[sel_form])))
-            else:
-                for fk, fv in forms.items():
-                    lines.append(f"- **제형({fk})**: " + " · ".join(_augment_terms_with_explain(fv)))
-        common  = info.get("common") or []
-        serious = info.get("serious") or []
-        call    = info.get("call") or []
-        if common:
-            lines.append("- **일반**: " + " · ".join(_augment_terms_with_explain(common)))
-        if serious:
-            lines.append("- **중증**: " + " · ".join(_augment_terms_with_explain(serious)))
-        if call:
-            lines.append("- **연락 필요**: " + " · ".join(_augment_terms_with_explain(call)))
-        lines.append("")
-    return "\\n".join(lines)
-
-# 4) Post-process: append glossary notes by scanning the final md once
-def append_glossary_notes(md_text: str) -> str:
-    try:
-        glossary = _AE_GLOSSARY_KO
-    except Exception:
-        return md_text
-    if not md_text or not glossary:
-        return md_text
-    found = []
-    body = md_text
-    for k, v in glossary.items():
-        if k and (k in body):
-            found.append((k, v))
-    if not found:
-        return md_text
-    uniq, seen = [], set()
-    for k, v in found:
-        if k not in seen:
-            uniq.append((k, v)); seen.add(k)
-    lines = ["", "### 용어 풀이"]
-    for k, v in uniq:
-        lines.append(f"- **{k}**: {v}")
-    joiner = "\\n\\n" if not md_text.endswith("\\n") else "\\n"
-    return md_text + joiner + "\\n".join(lines) + "\\n"
-
-# 5) Safe renderer (used by app import alias)
-def render_ae_detail(drug_list, formulation_map=None):
-    md = build_ae_summary_md(drug_list, formulation_map=formulation_map)
-    try:
-        import streamlit as st
-        st.markdown(md)
-    except Exception:
-        # headless usage
-        return md
-    return md
-# === [INTEGRATED: AE GLOSSARY + NORMALIZER + TKIs + BUILD/RENDER] END ===
-
-
-# === [PATCH:AE_GLOSSARY_CONCISE_MODE] BEGIN ===
-# 환자 친화 설명을 '짧게' 출력하기 위한 모드/사전/헬퍼
-_AE_EXPLAIN_MODE = "short"  # "short" | "full"
-
-# 자주 쓰는 항목은 초간결 버전 제공
-_AE_GLOSSARY_KO_SHORT = {
-    "QT 연장": "실신·돌연사 위험 ↑ → ECG 추적.",
-    "RA 증후군": "고열·호흡곤란·체중↑ → 즉시 병원, 스테로이드 필요 가능.",
-    "고삼투증후군": "탈수·전해질 이상 → 수분 보충, 의식 저하/구토 시 내원.",
-    "신경독성": "저림·시야흔들림·보행불안정 → 증상 악화 전 연락.",
-    "손발증후군": "손발 붉어짐·벗겨짐 → 보습·마찰 줄이기.",
-    "골수억제": "감염·출혈 위험 ↑ → 38.5℃↑·출혈 시 즉시 연락.",
-    "간독성": "황달·암색 소변 → 약 조정 필요, 즉시 연락.",
-    "신장독성": "부종·소변감소·거품뇨 → 검사/수분관리, 악화 시 내원.",
-    "광과민": "햇빛 민감 ↑ → 자외선 차단·긴 옷.",
-    "구내염": "입통증/궤양 → 자극 피하고 가글.",
-    "설사": "탈수 위험 → ORS, 지속 시 연락.",
-    "변비": "수분·섬유·운동, 3일↑/복통·구토 동반 시 연락.",
-    "오심/구토": "소량씩 자주, 항구토제 규칙 복용.",
-    "탈수": "입마름·어지럼 → 수분 보충, 심하면 내원.",
-    "저나트륨혈증": "두통·혼동·부종 → 즉시 평가.",
-    "고칼륨혈증": "두근거림·근력저하 → ECG/혈액검사.",
-    "출혈": "잇몸/코피·멍↑ → 외상 주의·즉시 연락.",
-    "혈전": "편측 다리 부종·흉통/호흡곤란 → 응급평가.",
-    "단백뇨": "거품뇨·부종 → 소변추적.",
-    "고혈압": "두통·어지럼 → 혈압 체크·약 조절.",
-    "상처치유 지연": "수술/상처 회복 지연 → 일정 상의.",
-    "폐독성": "기침·호흡곤란 악화 → 흉부 평가.",
-    "간질성 폐질환": "호흡곤란/기침·발열 → 약 중단·스테로이드 고려.",
-}
-
-def _brief_text(txt: str, max_chars: int = 80) -> str:
-    if not txt:
-        return ""
-    s = txt.strip()
-    # 첫 문장만 추출(., !, ? 기준) 후 길이 제한
-    cut_pos = len(s)
-    for p in [". ", ".\n", "!", "?", "！", "？"]:
-        i = s.find(p)
-        if i != -1:
-            cut_pos = min(cut_pos, i + len(p.strip()))
-    s = s[:cut_pos].strip()
-    if len(s) > max_chars:
-        s = s[:max_chars-1].rstrip() + "…"
-    return s
-
-def _get_explain(term: str, mode: str = None) -> str | None:
-    """용어 설명을 모드에 맞게 반환."""
-    if term is None:
-        return None
-    mode = (mode or _AE_EXPLAIN_MODE).lower()
-    # 표준 키 얻기
-    key = _to_glossary_key(term)
-    if not key:
-        return None
-    full = _AE_GLOSSARY_KO.get(key)
-    if mode == "full":
-        return full
-    # short 모드
-    short = _AE_GLOSSARY_KO_SHORT.get(key)
-    if short:
-        return short
-    return _brief_text(full)
-
-# 기존 헬퍼를 '짧게' 출력하도록 교체
-def _augment_terms_with_explain(terms):
-    out = []
-    for t in (terms or []):
-        exp = _get_explain(t, "short")
-        label = _norm_ae_term(t)
-        out.append(f"{label} — {exp}" if exp else label)
-    return out
-
-# 용어풀이 섹션도 짧게
-def append_glossary_notes(md_text: str) -> str:
-    try:
-        glossary = _AE_GLOSSARY_KO
-    except Exception:
-        return md_text
-    if not md_text or not glossary:
-        return md_text
-    found = []
-    body = md_text
-    for k in glossary.keys():
-        if k and (k in body):
-            exp = _get_explain(k, "short")
-            if exp:
-                found.append((k, exp))
-    if not found:
-        return md_text
-    uniq, seen = [], set()
-    for k, v in found:
-        if k not in seen:
-            uniq.append((k, v)); seen.add(k)
-    lines = ["", "### 용어 풀이(요약)"]
-    for k, v in uniq:
-        lines.append(f"- **{k}**: {v}")
-    joiner = "\\n\\n" if not md_text.endswith("\\n") else "\\n"
-    return md_text + joiner + "\\n".join(lines) + "\\n"
-# === [PATCH:AE_GLOSSARY_CONCISE_MODE] END ===
-
-
-# === [PATCH:AE_GLOSSARY_TRIGGERED] BEGIN ===
-# 설명은 '등장했을 때만' 붙이는 모드
-_AE_GLOSSARY_TRIGGER_MODE = "presence_only"  # "presence_only" | "always"
-
-# 키워드 트리거(간단 별칭 포함) — 필요시 확장
-_AE_TRIGGER_ALIASES = {
-    "QT 연장": ["QT", "QTc", "QT prolong", "torsade"],
-    "손발증후군": ["hand-foot", "PPE"],
-    "RA 증후군": ["RA syndrome", "retinoic acid"],
-}
-
-def _term_present_in_text(term: str, text: str) -> bool:
-    if not term:
-        return False
-    t = (term or "").strip().lower()
-    body = (text or "").lower()
-    if not body:
-        return False
-    # 1) 정규화된 키
-    k = _to_glossary_key(term)
-    if k and k.lower() in body:
-        return True
-    # 2) 별칭
-    aliases = _AE_TRIGGER_ALIASES.get(k or term, [])
-    for a in aliases:
-        if a.lower() in body:
-            return True
-    # 3) 원문 term 자체
-    if t and t in body:
-        return True
-    return False
-
-# build/렌더 과정에서 마지막 MD를 저장해 augment가 context를 참고하도록 함
-_AE_LAST_CONTEXT_MD = ""
-
-def _set_ae_context_md(md_text: str):
-    global _AE_LAST_CONTEXT_MD
-    _AE_LAST_CONTEXT_MD = md_text or ""
-
-# 기존 헬퍼를 '등장 시에만 설명'으로 교체
-def _augment_terms_with_explain(terms):
-    out = []
-    mode = (_AE_GLOSSARY_TRIGGER_MODE or "presence_only").lower()
-    ctx = _AE_LAST_CONTEXT_MD
-    for t in (terms or []):
-        label = _norm_ae_term(t)
-        exp = _get_explain(t, "short") if mode == "always" else ( _get_explain(t, "short") if _term_present_in_text(t, ctx or label) else None )
-        out.append(f"{label} — {exp}" if exp else label)
-    return out
-
-# render/build에서 context 세팅: build_ae_summary_md 끝에서 세팅하고 반환
-__ORIG_build_ae_summary_md = build_ae_summary_md
-def build_ae_summary_md(*args, **kwargs):
-    md = __ORIG_build_ae_summary_md(*args, **kwargs)
-    try:
-        _set_ae_context_md(md)
+        st.markdown(_EXPLAINER_STYLE, unsafe_allow_html=True)
     except Exception:
         pass
-    return md
+# --- [/PATCH] ---
 
-# append_glossary_notes는 presence_only일 때 이미 본문에 등장한 용어만 추가(기본 동작 유지)
-# === [PATCH:AE_GLOSSARY_TRIGGERED] END ===
 
+
+# =============================
+# Chemo summary example (영/한 + 부작용) — patch-safe helper
+# =============================
+def render_chemo_summary_example(st):
+    """
+    Render a compact example block under the 항암제 섹션:
+    - Title: '## 항암제 요약 (영/한 + 부작용)'
+    - Example: Sunitinib (수니티닙) with common/severe/call-warning cues
+    This does not depend on app state and can be called anywhere.
+    """
+    st.markdown("## 항암제 요약 (영/한 + 부작용)")
+    st.markdown(
+        """
+### Sunitinib (수니티닙)
+- **일반**: 피로 — 자주 쉬어 주세요 · 설사 — 탈수 위험 → ORS · 구내염 — 입통증/궤양 → 자극 피하고 가글 · 손발증후군 — 손발 붉어짐·벗겨짐 → 보습 · 고혈압 — 혈압 체크·약 조절
+- **중증**: QT 연장 — 실신·돌연사 위험 ↑ → ECG 추적 · 출혈 — 잇몸/코피·멍↑ → 외상 주의
+- **연락 필요**: 흉통/실신/심한 어지러움
+
+### 용어 풀이(요약)
+- **QT 연장**: 실신·돌연사 위험 ↑ → ECG 추적.
+- **손발증후군**: 손발 붉어짐·벗겨짐 → 보습·마찰 줄이기.
+        """.strip()
+    )
+
+def render_terms_glossary_min(st, *, show_qt=True, show_hfs=True):
+    """
+    Very small glossary chips. Optional; can be used if you want separate chips
+    right below the '항암제' block rather than a full example.
+    """
+    chips = []
+    if show_qt:
+        chips.append("**QT 연장**: 실신·돌연사 위험 ↑ → ECG 추적")
+    if show_hfs:
+        chips.append("**손발증후군**: 손발 붉어짐·벗겨짐 → 보습·마찰 줄이기")
+    if chips:
+        st.markdown("### 용어 풀이(요약)")
+        st.write(" · ".join(chips))
