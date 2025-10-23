@@ -1724,6 +1724,39 @@ with t_chemo:
             try:
                 _render_aes_shared(st, picked_keys, DRUG_DB)
                 _used_shared_renderer = True
+
+                # === [PATCH] Keyword explainers (on-success) ===
+                try:
+                    from ui_results import ensure_keyword_explainer_style as _bm_kw_style
+                    from ui_results import render_keyword_explainers as _bm_kw_explain
+                    from ui_results import render_chemo_summary_example as _bm_chemo_example
+                except Exception:
+                    _bm_kw_style = None
+                    _bm_kw_explain = None
+                    _bm_chemo_example = None
+                try:
+                    if _bm_kw_style:
+                        _bm_kw_style(st)
+                except Exception:
+                    pass
+                try:
+                    _ae_text_concat = []
+                    _fields_try = ("ae","adverse_effects","aes","desc","notes","summary")
+                    for _k in (picked_keys or []):
+                        _v = DRUG_DB.get(_k, {})
+                        for _f in _fields_try:
+                            _t = _v.get(_f)
+                            if isinstance(_t, str) and _t.strip():
+                                _ae_text_concat.append(_t)
+                    _ae_source_text = " ".join(_ae_text_concat)
+                    if _bm_kw_explain:
+                        _bm_kw_explain(st, _ae_source_text)
+                    if _bm_chemo_example:
+                        _bm_chemo_example(st)
+                except Exception:
+                    pass
+                # === [/PATCH] ===
+
             except Exception:
                 _used_shared_renderer = False
                 # === [PATCH] Keyword explainers + chemo example (safe, idempotent) ===
