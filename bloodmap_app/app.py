@@ -87,16 +87,7 @@ try:
 except Exception:
     pass
 # ---- End initial route bootstrap ----
-# Mobile default
-try:
-    st.session_state.setdefault("mobile_mode", True)
-except Exception:
-    pass
 
-try:
-    _block_spurious_home()
-except Exception:
-    pass
 
 
 # app.py
@@ -1422,21 +1413,6 @@ with t_labs:
 # DX
 with t_dx:
 
-    # ---- Safe DX display formatter: EN — KO (always returns str) ----
-    def _dx_fmt(x):
-        try:
-            s = str(x)
-            if any("\uac00" <= ch <= "\ud7a3" for ch in s):
-                return s
-            try:
-                ko = DX_KO.get(_dx_norm(s)) or DX_KO.get(s) or s
-            except Exception:
-                ko = s
-            return f"{s} — {ko}"
-        except Exception:
-            return str(x)
-    # ---- End formatter ----
-
     # ---- DX label fallbacks (avoid NameError) ----
     try:
         DX_KO  # type: ignore
@@ -1460,62 +1436,9 @@ with t_dx:
     groups = sorted(ONCO.keys()) if ONCO else ["혈액암", "고형암"]
     group = st.selectbox("암 그룹", options=groups, index=0, key=wkey("onco_group_sel"))
     diseases = sorted(ONCO.get(group, {}).keys()) if ONCO else ["ALL", "AML", "Lymphoma", "Breast", "Colon", "Lung"]
-    
-    # ---- Mobile-friendly deferred apply ----
-    _is_mobile = st.session_state.get("mobile_mode", True)
-    if _is_mobile:
-        c1, c2 = st.columns([3,1])
-        with c1:
-            disease_candidate = st.selectbox(
-                "의심/진단명",
-                options=diseases,
-                index=0,
-                key=wkey("onco_disease_sel_candidate"),
-                format_func=_dx_fmt,
-            )
-        with c2:
-            if st.button("적용", key=wkey("onco_disease_apply")):
-                try:
-                    st.session_state[wkey("onco_disease_sel")] = disease_candidate
-                except Exception:
-                    st.session_state["onco_disease_sel"] = disease_candidate
-                # Pin route to dx + sync URL
-                try:
-                    ss = st.session_state
-                    ss["_home_intent"] = False
-                    if ss.get("_route") != "dx":
-                        ss["_route"] = "dx"
-                        ss["_route_last"] = "dx"
-                    try:
-                        if st.query_params.get("route") != "dx":
-                            st.query_params.update(route="dx")
-                    except Exception:
-                        st.experimental_set_query_params(route="dx")
-                except Exception:
-                    pass
-                st.rerun()
-    else:
-        disease = st.selectbox(
-            "의심/진단명",
-            options=diseases,
-            index=0,
-            key=wkey("onco_disease_sel"),
-            format_func=_dx_fmt,
-        )
-    # ---- End deferred apply ----
-
+    disease = st.selectbox("의심/진단명", options=diseases, index=0, key=wkey("onco_disease_sel"), format_func=lambda x: (f"{x} (" + (DX_KO.get(_dx_norm(x)) or DX_KO.get(x) or x) + ")") if not any("\uac00" <= ch <= "\ud7a3" for ch in str(x)) else str(x))
 
     disp = dx_display(group, disease)
-            try:
-    disease  # noqa: F821
-    except NameError:
-    try:
-        disease = st.session_state[wkey("onco_disease_sel")]
-    except Exception:
-        disease = st.session_state.get(
-            "onco_disease_sel",
-            st.session_state.get("onco_disease_sel_candidate"),
-        )
     st.session_state["onco_group"] = group
     st.session_state["onco_disease"] = disease
     st.session_state["dx_disp"] = disp
