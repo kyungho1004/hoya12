@@ -2825,6 +2825,22 @@ import os, tempfile
 from datetime import datetime
 import pandas as pd
 import streamlit as st
+
+# === [HOTFIX:P1_IMPORT_SAFE_DEFAULTS] BEGIN ===
+try:
+    from ui_results import render_ae_detail as _bm_render_ae_detail
+except Exception:
+    _bm_render_ae_detail = None
+try:
+    from pdf_export import append_onco_ae_section as _bm_append_onco_ae_section
+except Exception:
+    _bm_append_onco_ae_section = None
+
+_bm_render_ae_detail = globals().get("_bm_render_ae_detail", None)
+_bm_append_onco_ae_section = globals().get("_bm_append_onco_ae_section", None)
+# === [HOTFIX:P1_IMPORT_SAFE_DEFAULTS] END ===
+
+
 try:
     from zoneinfo import ZoneInfo
     _KST = ZoneInfo("Asia/Seoul")
