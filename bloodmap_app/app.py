@@ -1710,6 +1710,27 @@ with t_chemo:
             for n in notes:
                 st.info(n)
 
+
+        # --- [PATCH:P1_AE_SUMMARY_FALLBACK] BEGIN ---
+        try:
+            _renderer = globals().get("_bm_render_ae_detail")
+            _form_map = {"Ara-C": _ara_c_form} if _ara_c_form else None
+            _ok = False
+            if _renderer:
+                try:
+                    _renderer(picked_keys, formulation_map=_form_map)
+                    _ok = True
+                except Exception:
+                    _ok = False
+            if not _ok:
+                import importlib, ui_results as _uir
+                _uir = importlib.reload(_uir)
+                _md = _uir.build_ae_summary_md(picked_keys, formulation_map=_form_map)
+                import streamlit as st
+                st.markdown(_md)
+        except Exception:
+            pass
+        # --- [PATCH:P1_AE_SUMMARY_FALLBACK] END ---
         ae_map = _aggregate_all_aes(picked_keys, DRUG_DB)
         st.markdown("### 항암제 부작용(전체)")
         # === [PATCH 2025-10-22 KST] Use shared renderer if available ===
@@ -2684,6 +2705,29 @@ with t_report:
         lines.append("")
 
         md = "\n".join(lines)
+
+        # --- [PATCH:P1_AE_MD_APPEND_FALLBACK] BEGIN ---
+        try:
+            _appender = globals().get("_bm_append_onco_ae_section")
+            _form_map = {}
+            sel_form = st.session_state.get(wkey("ara_c_form"))
+            if sel_form:
+                _form_map["Ara-C"] = sel_form
+            _done = False
+            if _appender:
+                try:
+                    md = _appender(md, meds, formulation_map=_form_map if _form_map else None)
+                    _done = True
+                except Exception:
+                    _done = False
+            if not _done:
+                import importlib, ui_results as _uir
+                _uir = importlib.reload(_uir)
+                _md_extra = _uir.build_ae_summary_md(meds, formulation_map=_form_map if _form_map else None)
+                md = md + ("\n\n" if not md.endswith("\n") else "\n") + _md_extra
+        except Exception:
+            pass
+        # --- [PATCH:P1_AE_MD_APPEND_FALLBACK] END ---
         st.code(md, language="markdown")
         st.download_button("💾 보고서 .md 다운로드", data=md.encode("utf-8"), file_name="bloodmap_report.md", mime="text/markdown")
         txt_data = md.replace("**", "")
@@ -2825,6 +2869,26 @@ import os, tempfile
 from datetime import datetime
 import pandas as pd
 import streamlit as st
+
+
+# --- [PATCH:DEV_CACHE_CLEAR] BEGIN ---
+try:
+    import streamlit as st as _st_cache_mod  # type: ignore
+except Exception:
+    _st_cache_mod = None
+if _st_cache_mod is not None:
+    try:
+        if _st_cache_mod.sidebar.button("🔄 캐시 비우기", help="데이터/임포트 캐시 갱신"):
+            try:
+                _st_cache_mod.cache_data.clear()
+                _st_cache_mod.cache_resource.clear()
+                _st_cache_mod.success("캐시 비웠어요. 다시 시도해 주세요.")
+            except Exception:
+                _st_cache_mod.info("캐시 초기화 시도 완료")
+    except Exception:
+        pass
+# --- [PATCH:DEV_CACHE_CLEAR] END ---
+
 
 # === [HOTFIX:P1_IMPORT_SAFE_DEFAULTS] BEGIN ===
 try:
