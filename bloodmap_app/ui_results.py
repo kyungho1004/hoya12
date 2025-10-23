@@ -145,6 +145,44 @@ def _render_cardio_guard(st, rec: Dict[str, Any]):
 # 기존 기능은 삭제하지 않고, 이 함수는 선택적으로 호출할 수 있도록 별도 공개 API로 추가한다.
 _KEYWORD_RULES: List[Dict[str, Any]] = [
     {
+        "name": "CARDIOTOX",
+        "patterns": [
+            "(?i)cardiotoxi(c|city)",
+            "(?i)lv\\s*dysfunction",
+            "(?i)lvef\\s*(drop|decrease|reduction)",
+            "심근\\s*독성",
+            "심장\\s*독성",
+            "좌심실\\s*기능저하",
+            "lvef\\s*감소",
+            "심부전",
+            "hf\\b"
+        ],
+        "html": (
+            "<div class='explain-chip'>"
+            "<b>심근/심장 독성</b> — 숨참·부종·운동시호흡곤란 시 연락, "
+            "LVEF/에코 추적·염증/전해질 확인"
+            "</div>"
+        ),
+    },
+    {
+        "name": "MYELOSUPP",
+        "patterns": [
+            "(?i)myelosuppression",
+            "(?i)bone\\s*marrow\\s*suppression",
+            "골수\\s*억제",
+            "호중구\\s*감소",
+            "백혈구\\s*감소",
+            "혈소판\\s*감소",
+            "빈혈"
+        ],
+        "html": (
+            "<div class='explain-chip'>"
+            "<b>골수억제</b> — 감염/출혈·피로 위험 ↑: 발열 시 즉시 연락, "
+            "ANC/PLT/Hb 추적"
+            "</div>"
+        ),
+    },
+    {
         "name": "QTc500",
         "patterns": [
             "(?-i)QTc\\s*(>=|≥|>|≧)\\s*500\\s*ms?",
