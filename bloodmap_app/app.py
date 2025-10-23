@@ -15,6 +15,7 @@ def _block_spurious_home():
                 st.query_params.update(route=last)
         except Exception:
             st.experimental_set_query_params(route=last)
+            st.experimental_set_query_params(route=last)
         # do not rerun here; early/anti guards will sync on next pass
     # Remember last non-home route if current is valid
     try:
@@ -789,6 +790,155 @@ def build_peds_notes(
         lines.append("(특이 소견 없음)")
     return "\\n".join(lines)
 
+
+# === [PATCH 2+4 HELPERS] BEGIN ===
+import math, json as _json, os as _os, datetime as _dt
+
+_KST_TZ = _dt.timezone(_dt.timedelta(hours=9))
+
+def _ckd_epi_2009(creat_mg_dl: float, age_years: int, sex: str) -> float | None:
+    try:
+        cr = float(creat_mg_dl); age = int(age_years); s = (sex or 'M').upper()
+    except Exception:
+        return None
+    if cr <= 0 or age <= 0 or s not in ('M','F'):
+        return None
+    if s == 'F':
+        k, a, const = 0.7, (-0.329 if cr <= 0.7 else -1.209), 144.0
+    else:
+        k, a, const = 0.9, (-0.411 if cr <= 0.9 else -1.209), 141.0
+    e = const * ((cr/k)**a) * (0.993**age)
+    try:
+        e = float(e)
+    except Exception:
+        return None
+    if not math.isfinite(e):
+        return None
+    return round(max(1.0, min(200.0, e)), 1)
+
+def _render_antipyretic_guard(weight_kg: float):
+    import streamlit as st
+    def _now(): return _dt.datetime.now(_KST_TZ)
+    def _recent(drug:str):
+        key=f"_antipy_{drug}_doses"; arr = st.session_state.get(key, [])
+        cutoff = _now() - _dt.timedelta(hours=24)
+        keep=[]
+        for d in arr:
+            try:
+                ts = _dt.datetime.fromisoformat(d.get("ts"))
+            except Exception:
+                continue
+            if ts >= cutoff: keep.append(d)
+        st.session_state[key]=keep
+        return keep
+    def _sum24(drug:str): return sum(float(d.get("mg",0)) for d in _recent(drug))
+    def _rec(drug:str, mg:float, ml:float):
+        doses = _recent(drug)
+        doses.append({"ts": _now().isoformat(), "mg": float(mg), "ml": float(ml)})
+        st.session_state[f"_antipy_{drug}_doses"] = doses
+        # jsonl append
+        try:
+            base="/mnt/data/care_log"
+            _os.makedirs(base, exist_ok=True)
+            path = _os.path.join(base, _now().strftime("%Y%m%d") + ".jsonl")
+            with open(path,"a",encoding="utf-8") as fp:
+                fp.write(_json.dumps({"ts_kst":_now().isoformat(),"type":"antipyretic","drug":drug,"amount_ml":ml,"dose_mg":mg}, ensure_ascii=False)+"\n")
+        except Exception:
+            pass
+    def _next_ok(drug:str):
+        cd = _dt.timedelta(hours=4 if drug.lower()=="apap" else 6)
+        doses = _recent(drug)
+        if doses:
+            try: last = _dt.datetime.fromisoformat(doses[-1]["ts"]).astimezone(_KST_TZ)
+            except Exception: last=None
+            if last: return last+cd
+        return _now()
+    st.markdown("#### 해열제 가드레일")
+    c1,c2 = st.columns(2)
+    with c1:
+        apap_ml = st.number_input("APAP 시럽 (mL)", min_value=0.0, step=0.5, key=wkey("apap_ml_guard"))
+        if st.button("APAP 기록 + 다음시간(.ics)", key=wkey("apap_btn_guard")):
+            mg = apap_ml * 32.0
+            nxt = _next_ok("apap")
+            if _now() < nxt:
+                st.error(f"쿨다운 미충족(≥4h). 다음 가능 {nxt.strftime('%H:%M')} KST")
+            else:
+                limit = 75.0 * float(weight_kg or 0)
+                total = _sum24("apap") + mg
+                if limit>0 and total>limit:
+                    st.error(f"24h 한도 초과: 누적 {round(total)} mg / 최대 {round(limit)} mg")
+                else:
+                    _rec("apap", mg, apap_ml)
+                    ics = f"""BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+DTSTART;TZID=Asia/Seoul:{(_now()+_dt.timedelta(hours=4)).strftime('%Y%m%dT%H%M%S')}
+DTEND;TZID=Asia/Seoul:{(_now()+_dt.timedelta(hours=4,minutes=5)).strftime('%Y%m%dT%H%M%S')}
+SUMMARY:다음 APAP 시간
+END:VEVENT
+END:VCALENDAR
+""".encode("utf-8")
+                    st.download_button("다음 APAP 시간(.ics)", data=ics, file_name="next_apap.ics", mime="text/calendar")
+                    st.success("APAP 기록 완료")
+    with c2:
+        ibu_ml = st.number_input("IBU 시럽 (mL)", min_value=0.0, step=0.5, key=wkey("ibu_ml_guard"))
+        if st.button("IBU 기록 + 다음시간(.ics)", key=wkey("ibu_btn_guard")):
+            mg = ibu_ml * 20.0
+            nxt = _next_ok("ibu")
+            if _now() < nxt:
+                st.error(f"쿨다운 미충족(≥6h). 다음 가능 {nxt.strftime('%H:%M')} KST")
+            else:
+                limit = 40.0 * float(weight_kg or 0)
+                total = _sum24("ibu") + mg
+                if limit>0 and total>limit:
+                    st.error(f"24h 한도 초과: 누적 {round(total)} mg / 최대 {round(limit)} mg")
+                else:
+                    _rec("ibu", mg, ibu_ml)
+                    ics = f"""BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+DTSTART;TZID=Asia/Seoul:{(_now()+_dt.timedelta(hours=6)).strftime('%Y%m%dT%H%M%S')}
+DTEND;TZID=Asia/Seoul:{(_now()+_dt.timedelta(hours=6,minutes=5)).strftime('%Y%m%dT%H%M%S')}
+SUMMARY:다음 IBU 시간
+END:VEVENT
+END:VCALENDAR
+""".encode("utf-8")
+                    st.download_button("다음 IBU 시간(.ics)", data=ics, file_name="next_ibu.ics", mime="text/calendar")
+                    st.success("IBU 기록 완료")
+
+def _sync_graph_files_from_hist(hist: list):
+    try:
+        import pandas as pd
+    except Exception:
+        return False
+    base="/mnt/data/bloodmap_graph"
+    try: _os.makedirs(base, exist_ok=True)
+    except Exception: pass
+    rows=[]
+    for h in hist or []:
+        row = {"ts": h.get("ts",""), "temp": h.get("temp",""), "hr": h.get("hr","")}
+        labs = h.get("labs") or {}
+        for k,v in labs.items(): row[k]=v
+        rows.append(row)
+    if not rows: return False
+    df = pd.DataFrame(rows)
+    nick = st.session_state.get("nickname") or st.session_state.get("nick") or "anon"
+    pin  = st.session_state.get("pin") or st.session_state.get("PIN") or "0000"
+    uid = f"{nick}#{pin}"
+    try:
+        df.to_csv(_os.path.join(base, f"{uid}.labs.csv"), index=False)
+        with open(_os.path.join(base, f"{uid}.labs.json"), "w", encoding="utf-8") as fp:
+            fp.write(df.to_json(orient="records", force_ascii=False))
+        return True
+    except Exception:
+        return False
+
+def _set_peds_resp_score(sputum_level:str, wheeze_level:str):
+    m={"없음":0,"조금":1,"보통":2,"많음":3,"심함":3}
+    s = m.get((sputum_level or ""),0) + m.get((wheeze_level or ""),0)
+    st.session_state["_peds_resp_score"] = s
+    return s
+# === [PATCH 2+4 HELPERS] END ===
 # ---------- Tabs ----------
 tab_labels = ["🏠 홈", "👶 소아 증상", "🧬 암 선택", "💊 항암제(진단 기반)", "🧪 피수치 입력", "🔬 특수검사", "📄 보고서", "📊 기록/그래프"]
 t_home, t_peds, t_dx, t_chemo, t_labs, t_special, t_report, t_graph = st.tabs(tab_labels)
@@ -796,6 +946,30 @@ t_home, t_peds, t_dx, t_chemo, t_labs, t_special, t_report, t_graph = st.tabs(ta
 # HOME
 with t_home:
     st.subheader("응급도 요약")
+
+    try:
+        # 최근 30분 내 위험 기록이 care_log에 있으면 배너
+        base="/mnt/data/care_log"
+        import os as _os, json as _json, datetime as __dt
+        f = _os.path.join(base, __dt.datetime.now(__dt.timezone(__dt.timedelta(hours=9))).strftime("%Y%m%d") + ".jsonl")
+        if _os.path.exists(f):
+            cutoff = __dt.datetime.now(__dt.timezone(__dt.timedelta(hours=9))) - __dt.timedelta(minutes=30)
+            danger=False
+            with open(f,"r",encoding="utf-8") as fp:
+                for line in fp:
+                    try:
+                        o=_json.loads(line.strip())
+                        ts=o.get("ts_kst"); 
+                        if ts:
+                            t=__dt.datetime.fromisoformat(ts)
+                            if t>=cutoff and o.get("alert") in ("fever","fn","electrolyte"):
+                                danger=True; break
+                    except Exception:
+                        pass
+            if danger:
+                st.markdown("### 🚨 최근 30분 내 위험 기록이 있습니다. 케어로그에서 세부 내용을 확인하세요.")
+    except Exception:
+        pass
     labs = st.session_state.get("labs_dict", {})
     level_tmp, reasons_tmp, contrib_tmp = emergency_level(
         labs, st.session_state.get(wkey("cur_temp")), st.session_state.get(wkey("cur_hr")), {}
@@ -1410,6 +1584,18 @@ with t_labs:
     st.session_state["labs_dict"] = labs_dict
     st.markdown(f"**참조범위 기준:** {'소아' if use_peds else '성인'} / **ANC 분류:** {anc_band(values.get('ANC'))}")
 
+    # --- eGFR (CKD-EPI 2009) ---
+    with st.expander("🧮 eGFR 계산(CKD-EPI 2009)", expanded=False):
+        cr_val = values.get("Cr") or labs_dict.get("Cr")
+        age_in = st.number_input("나이(년)", value=int(st.session_state.get("age_years") or 40), min_value=1, step=1, key=wkey("egfr_age"))
+        sex_in = st.selectbox("성별", ["남","여"], index=1 if str(st.session_state.get("sex") or "").startswith("F") else 0, key=wkey("egfr_sex"))
+        sx = 'F' if sex_in == '여' else 'M'
+        cr_in = st.number_input("크레아티닌 Cr (mg/dL)", value=float(cr_val) if cr_val not in (None,"") else 0.7, step=0.1, key=wkey("egfr_cr"))
+        egfr = _ckd_epi_2009(cr_in, age_in, sx)
+        if egfr is not None:
+            st.metric("eGFR (CKD-EPI 2009)", f"{egfr} mL/min/1.73㎡")
+            st.session_state["_egfr_value"] = egfr
+
 # DX
 with t_dx:
 
@@ -1825,6 +2011,12 @@ with t_peds:
         sputum = st.selectbox("가래", ["없음", "조금", "보통", "많음"], key=wkey("p_sputum"))
     with g2:
         wheeze = st.selectbox("쌕쌕거림(천명)", ["없음", "조금", "보통", "심함"], key=wkey("p_wheeze"))
+
+    # 점수 합산하여 세션에 저장(응급도 연동용)
+    try:
+        _ = _set_peds_resp_score(st.session_state.get(wkey("p_sputum")), st.session_state.get(wkey("p_wheeze")))
+    except Exception:
+        pass
     d1, d2, d3 = st.columns(3)
     with d1:
         oliguria = st.checkbox("소변량 급감", key=wkey("p_oliguria"))
@@ -2049,6 +2241,16 @@ with t_peds:
         else:
             st.info("표시할 일정이 없습니다. 시작시간/표시시간을 조정해 보세요.")
     except Exception:
+        pass
+    # 해열제 가드레일 + 기록(JSONL) + 다음시간(.ics)
+    try:
+        render_weight = st.session_state.get("wt_peds") or st.session_state.get("weight_kg") or 20.0
+    except Exception:
+        render_weight = 20.0
+    try:
+        _render_antipyretic_guard(render_weight)
+    except Exception:
+        st.info("해열제 가드레일 모듈을 불러오지 못했습니다.")
         st.info("시간 형식을 확인하세요.")
     st.markdown("---")
     st.subheader("보호자 체크리스트")
@@ -2407,6 +2609,11 @@ with t_report:
                         except Exception:
                             pass
                     hist.append(snap)
+
+                    try:
+                        _ = _sync_graph_files_from_hist(hist)
+                    except Exception:
+                        pass
                     st.success("현재 값이 기록에 추가되었습니다.")
                     if weird:
                         st.warning("비정상적으로 보이는 값 감지: " + ", ".join(weird) + " — 단위/오타를 확인하세요.")
@@ -2979,4 +3186,3 @@ _cur_route = st.session_state.get("_route")
 if _cur_route and _cur_route in _label_by_route and _cur_route != "home":
     _select_tab_by_label(_label_by_route[_cur_route])
 # ---- End Tab auto-select ----
-
