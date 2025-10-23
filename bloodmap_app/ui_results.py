@@ -146,7 +146,7 @@ def _render_cardio_guard(st, rec: Dict[str, Any]):
 _KEYWORD_RULES: List[Dict[str, Any]] = [
     {
         "name": "QT",
-        "patterns": [r"\bqt\b", r"qt\s*연장", r"torsades", r"롱\s*qt", r"long\s*qt"],
+        "patterns": ["(?-i)(?<![A-Za-z0-9])QT(?![A-Za-z0-9])", "(?-i)QT\s*연장", "(?i)torsades", "(?i)long\s*qt", "(?i)롱\s*qt"],
         "html": (
             "<div class='explain-chip'>"
             "<b>QT 연장</b> — ECG 추적, K≥4.0 / Mg≥2.0 유지, "
@@ -165,7 +165,7 @@ _KEYWORD_RULES: List[Dict[str, Any]] = [
     },
     {
         "name": "VEGF",
-        "patterns": [r"vegf", r"bevacizumab", r"ramucirumab", r"lenvatinib", r"sorafenib", r"단백뇨", r"고혈압"],
+        "patterns": [r"vegf", r"bevacizumab", r"ramucirumab", r"lenvatinib", r"sorafenib", r"단백뇨", r"고혈압", r"sunitinib",r"수니티닙", ],
         "html": (
             "<div class='explain-chip'>"
             "<b>Anti‑VEGF 계열</b> — 혈압·소변단백 정기 체크, 수술 전후 주의"
@@ -179,18 +179,36 @@ def render_keyword_explainers(st, text: str|None):
     - 삭제/치환 없이, 매칭된 항목만 누적 출력.
     - 동일 규칙은 1회만 표시.
     - HTML 안전출력(unsafe_allow_html=True).
+    - 과다 트리거 방지: URL/코드 블록 제거, 대소문자 민감도 패턴별 제어, 최대 4칩.
     """
-    s = (text or "").lower()
-    if not s.strip():
+    raw = (text or "")
+    if not raw.strip():
         return
+
+    # --- pre-clean: URL, 코드블록/인라인 코드 제거
+    s = re.sub(r"`{3}.*?`{3}", " ", raw, flags=re.DOTALL)       # ``` code ```
+    s = re.sub(r"`[^`]*`", " ", s)                              # `inline`
+    s = re.sub(r"https?://\S+|www\.\S+", " ", s)                # URLs
+    s = re.sub(r"\s+", " ", s).strip()
+
     matched_html: List[str] = []
     for rule in _KEYWORD_RULES:
         try:
             pats = rule.get("patterns", [])
-            if any(re.search(p, s) for p in pats):
+            hit = False
+            for ptn in pats:
+                # inline flags support: (?i) case-insensitive, (?-i) sensitive
+                flags = 0
+                if isinstance(ptn, str) and ptn.startswith("(?i)"):
+                    flags = re.IGNORECASE
+                if re.search(ptn, s, flags=flags):
+                    hit = True
+                    break
+            if hit:
                 matched_html.append(rule.get("html", ""))
+            if len(matched_html) >= 4:  # chip cap
+                break
         except re.error:
-            # 정규식 오류가 있더라도 다른 규칙은 계속
             continue
     if not matched_html:
         return
@@ -260,3 +278,18 @@ def render_terms_glossary_min(st, *, show_qt=True, show_hfs=True):
     if chips:
         st.markdown("### 용어 풀이(요약)")
         st.write(" · ".join(chips))
+
+
+
+def get_chemo_summary_example_md() -> str:
+    """Return the chemo summary example as Markdown string (for .md report / PDF export)."""
+    return (
+        "## 항암제 요약 (영/한 + 부작용)\n\n"
+        "### Sunitinib (수니티닙)\n"
+        "- **일반**: 피로 — 자주 쉬어 주세요 · 설사 — 탈수 위험 → ORS · 구내염 — 입통증/궤양 → 자극 피하고 가글 · 손발증후군 — 손발 붉어짐·벗겨짐 → 보습 · 고혈압 — 혈압 체크·약 조절\n"
+        "- **중증**: QT 연장 — 실신·돌연사 위험 ↑ → ECG 추적 · 출혈 — 잇몸/코피·멍↑ → 외상 주의\n"
+        "- **연락 필요**: 흉통/실신/심한 어지러움\n\n"
+        "### 용어 풀이(요약)\n"
+        "- **QT 연장**: 실신·돌연사 위험 ↑ → ECG 추적.\n"
+        "- **손발증후군**: 손발 붉어짐·벗겨짐 → 보습·마찰 줄이기.\n"
+    )
