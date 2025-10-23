@@ -1710,42 +1710,6 @@ with t_chemo:
             for n in notes:
                 st.info(n)
 
-
-        # --- [PATCH:P1_AE_SUMMARY_FALLBACK] BEGIN ---
-        try:
-            _renderer = globals().get("_bm_render_ae_detail")
-            _form_map = {"Ara-C": _ara_c_form} if _ara_c_form else None
-            _ok = False
-            if _renderer:
-                try:
-                    _renderer(picked_keys, formulation_map=_form_map)
-                    _ok = True
-                except Exception:
-                    _ok = False
-            if not _ok:
-                import importlib, ui_results as _uir
-                _uir = importlib.reload(_uir)
-                _md = _uir.build_ae_summary_md(picked_keys, formulation_map=_form_map)
-                import streamlit as st
-                st.markdown(_md)
-        except Exception:
-            pass
-        # --- [PATCH:P1_AE_SUMMARY_FALLBACK] END ---
-
-        # --- [PATCH:P1_AE_INLINE_GLOSSARY] BEGIN ---
-        try:
-            import importlib, ui_results as _uir3, streamlit as st, re as _re
-            _uir3 = importlib.reload(_uir3)
-            _form_map = {"Ara-C": _ara_c_form} if "_ara_c_form" in locals() and _ara_c_form else None
-            _md_tmp = _uir3.build_ae_summary_md(picked_keys, formulation_map=_form_map)
-            _md_gloss = _uir3.append_glossary_notes(_md_tmp)
-            m = _re.search(r"(?:^|\n)###\s+용어 풀이(?:\(요약\))?\s*\n([\s\S]+)$", _md_gloss)
-            if m:
-                st.markdown("#### 용어 풀이(요약)")
-                st.markdown(m.group(1))
-        except Exception:
-            pass
-        # --- [PATCH:P1_AE_INLINE_GLOSSARY] END ---
         ae_map = _aggregate_all_aes(picked_keys, DRUG_DB)
         st.markdown("### 항암제 부작용(전체)")
         # === [PATCH 2025-10-22 KST] Use shared renderer if available ===
@@ -1762,6 +1726,42 @@ with t_chemo:
                 _used_shared_renderer = True
             except Exception:
                 _used_shared_renderer = False
+                # === [PATCH] Keyword explainers + chemo example (safe, idempotent) ===
+                try:
+                    from ui_results import ensure_keyword_explainer_style as _bm_kw_style
+                    from ui_results import render_keyword_explainers as _bm_kw_explain
+                    from ui_results import render_chemo_summary_example as _bm_chemo_example
+                except Exception:
+                    _bm_kw_style = None
+                    _bm_kw_explain = None
+                    _bm_chemo_example = None
+                # inject CSS once (harmless if called multiple times)
+                try:
+                    if _bm_kw_style:
+                        _bm_kw_style(st)
+                except Exception:
+                    pass
+                # Build a source text by concatenating AE texts of selected drugs, if available
+                try:
+                    _ae_text_concat = []
+                    for _k in (picked_keys or []):
+                        _v = DRUG_DB.get(_k, {})
+                        _t = _v.get("ae") or _v.get("desc") or ""
+                        if isinstance(_t, str):
+                            _ae_text_concat.append(_t)
+                    _ae_source_text = " ".join(_ae_text_concat)
+                    if _bm_kw_explain:
+                        _bm_kw_explain(st, _ae_source_text)
+                except Exception:
+                    pass
+                # Lightweight example block under 항암제 섹션
+                try:
+                    if _bm_chemo_example:
+                        _bm_chemo_example(st)
+                except Exception:
+                    pass
+                # === [/PATCH] ===
+
         else:
             _used_shared_renderer = False
         # === [/PATCH] ===
@@ -2720,29 +2720,6 @@ with t_report:
         lines.append("")
 
         md = "\n".join(lines)
-
-        # --- [PATCH:P1_AE_MD_APPEND_FALLBACK] BEGIN ---
-        try:
-            _appender = globals().get("_bm_append_onco_ae_section")
-            _form_map = {}
-            sel_form = st.session_state.get(wkey("ara_c_form"))
-            if sel_form:
-                _form_map["Ara-C"] = sel_form
-            _done = False
-            if _appender:
-                try:
-                    md = _appender(md, meds, formulation_map=_form_map if _form_map else None)
-                    _done = True
-                except Exception:
-                    _done = False
-            if not _done:
-                import importlib, ui_results as _uir
-                _uir = importlib.reload(_uir)
-                _md_extra = _uir.build_ae_summary_md(meds, formulation_map=_form_map if _form_map else None)
-                md = md + ("\n\n" if not md.endswith("\n") else "\n") + _md_extra
-        except Exception:
-            pass
-        # --- [PATCH:P1_AE_MD_APPEND_FALLBACK] END ---
         st.code(md, language="markdown")
         st.download_button("💾 보고서 .md 다운로드", data=md.encode("utf-8"), file_name="bloodmap_report.md", mime="text/markdown")
         txt_data = md.replace("**", "")
@@ -2884,42 +2861,6 @@ import os, tempfile
 from datetime import datetime
 import pandas as pd
 import streamlit as st
-
-
-# --- [PATCH:DEV_CACHE_CLEAR] BEGIN ---
-try:
-    import streamlit as _st_cache_mod  # type: ignore
-except Exception:
-    _st_cache_mod = None
-if _st_cache_mod is not None:
-    try:
-        if _st_cache_mod.sidebar.button("🔄 캐시 비우기", help="데이터/임포트 캐시 갱신"):
-            try:
-                _st_cache_mod.cache_data.clear()
-                _st_cache_mod.cache_resource.clear()
-                _st_cache_mod.success("캐시 비웠어요. 다시 시도해 주세요.")
-            except Exception:
-                _st_cache_mod.info("캐시 초기화 시도 완료")
-    except Exception:
-        pass
-# --- [PATCH:DEV_CACHE_CLEAR] END ---
-
-
-# === [HOTFIX:P1_IMPORT_SAFE_DEFAULTS] BEGIN ===
-try:
-    from ui_results import render_ae_detail as _bm_render_ae_detail
-except Exception:
-    _bm_render_ae_detail = None
-try:
-    from pdf_export import append_onco_ae_section as _bm_append_onco_ae_section
-except Exception:
-    _bm_append_onco_ae_section = None
-
-_bm_render_ae_detail = globals().get("_bm_render_ae_detail", None)
-_bm_append_onco_ae_section = globals().get("_bm_append_onco_ae_section", None)
-# === [HOTFIX:P1_IMPORT_SAFE_DEFAULTS] END ===
-
-
 try:
     from zoneinfo import ZoneInfo
     _KST = ZoneInfo("Asia/Seoul")
