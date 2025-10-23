@@ -145,6 +145,248 @@ def _render_cardio_guard(st, rec: Dict[str, Any]):
 # 기존 기능은 삭제하지 않고, 이 함수는 선택적으로 호출할 수 있도록 별도 공개 API로 추가한다.
 _KEYWORD_RULES: List[Dict[str, Any]] = [
     {
+        "name": "QTc500",
+        "patterns": [
+            "(?-i)QTc\\s*(>=|≥|>|≧)\\s*500\\s*ms?",
+            "(?-i)QTc\\s*500\\s*ms",
+            "(?-i)QTc\\s*≥\\s*500",
+            "(?-i)QTc\\s*>\\s*500"
+        ],
+        "html": (
+            "<div class='explain-chip'>"
+            "<b>QTc ≥ 500ms</b> — 위험수준: ECG/전해질(K≥4, Mg≥2) 확인, "
+            "어지럼/실신 시 즉시 연락"
+            "</div>"
+        ),
+    },
+    {
+        "name": "ILD_G2PLUS",
+        "patterns": [
+            "(?i)(grade|g)\\s*[2-4]\\s*(ild|pneumonitis)",
+            "(?i)g[2-4]\\s*(ild|pneumonitis)",
+            "등급\\s*[2-4]\\s*(폐렴|간질성\\s*폐질환)"
+        ],
+        "html": (
+            "<div class='explain-chip'>"
+            "<b>ILD G2+</b> — 휴약/스테로이드 고려, 흉부영상·산소포화도 추적 필요"
+            "</div>"
+        ),
+    },
+    {
+        "name": "ILD_DIFF",
+        "patterns": [
+            "(?i)ild\\s*vs\\s*infection",
+            "(?i)differential\\s*(pneumonitis|ild)",
+            "폐렴\\s*감별",
+            "감염\\s*감별"
+        ],
+        "html": (
+            "<div class='explain-chip'>"
+            "<b>ILD vs 감염 감별</b> — 발열/백혈구/CRP, HRCT/균배양 등 고려하여 "
+            "감염·약물성 감별"
+            "</div>"
+        ),
+    },
+    {
+        "name": "TE",
+        "patterns": [
+            "(?i)thromboembolism|vte",
+            "(?i)deep\\s*vein\\s*thrombosis|dvt",
+            "(?i)pulmonary\\s*embolism|pe",
+            "혈전",
+            "색전",
+            "혈전색전증",
+            "폐색전"
+        ],
+        "html": (
+            "<div class='explain-chip'>"
+            "<b>혈전/색전</b> — 종아리 부종·통증/호흡곤란·흉통 시 즉시 평가, "
+            "활동·수분, 위험요인 있으면 추가 주의"
+            "</div>"
+        ),
+    },
+    {
+        "name": "NEPHROTOX",
+        "patterns": [
+            "(?i)nephrotoxi(c|city)",
+            "(?i)aki\\b|acute\\s*kidney\\s*injury",
+            "크레아티닌\\s*상승",
+            "Cr\\s*상승",
+            "eGFR\\s*저하",
+            "사구체여과\\s*감소"
+        ],
+        "html": (
+            "<div class='explain-chip'>"
+            "<b>신독성/AKI</b> — Cr/eGFR 추적, 수분 유지, NSAID/조영제 등 신독성 약물 주의"
+            "</div>"
+        ),
+    },
+    {
+        "name": "DIARRHEA_DEHYD",
+        "patterns": [
+            "(?i)severe\\s*diarrhea",
+            "(?i)grade\\s*[3-4]\\s*diarrhea",
+            "물설사",
+            ">=\\s*4\\s*회",
+            "4\\s*회/일\\s*이상",
+            "탈수"
+        ],
+        "html": (
+            "<div class='explain-chip'>"
+            "<b>설사/탈수</b> — ≥4회/일·혈변/고열 시 연락, ORS로 수분·전해질 보충, "
+            "수액 필요 여부 평가"
+            "</div>"
+        ),
+    },
+    {
+        "name": "ILD",
+        "patterns": [
+            "(?i)interstitial\\s+lung\\s+disease",
+            "(?i)pneumonitis",
+            "간질성\\s*폐질환",
+            "약물성\\s*폐렴",
+            "폐렴\\s*의심"
+        ],
+        "html": (
+            "<div class='explain-chip'>"
+            "<b>ILD/약물성 폐렴</b> — 기침·호흡곤란·산소포화도 저하 시 <i>즉시 연락</i>, "
+            "휴약/스테로이드 필요할 수 있음"
+            "</div>"
+        ),
+    },
+    {
+        "name": "TLS",
+        "patterns": [
+            "(?i)tumou?r\\s+lysis\\s+syndrome",
+            "종양\\s*용해\\s*증후군",
+            "요산\\s*상승",
+            "칼륨\\s*상승",
+            "인\\s*상승",
+            "칼슘\\s*저하"
+        ],
+        "html": (
+            "<div class='explain-chip'>"
+            "<b>TLS(종양용해)</b> — 수분·소변량 체크, 오심·부정맥·경련 시 <i>즉시 연락</i>, "
+            "요산·K·P·Ca 추적"
+            "</div>"
+        ),
+    },
+    {
+        "name": "HSR",
+        "patterns": [
+            "(?i)hypersensitivity",
+            "(?i)infusion\\s*reaction",
+            "과민반응",
+            "주입\\s*반응",
+            "아나필락시스"
+        ],
+        "html": (
+            "<div class='explain-chip'>"
+            "<b>주입/과민반응</b> — 발진·숨참·쌕쌕/저혈압 시 <i>즉시 중단·의료진 연락</i>"
+            "</div>"
+        ),
+    },
+    {
+        "name": "FN",
+        "patterns": [
+            "(?i)febrile\\s*neutropenia",
+            "호중구감소성\\s*발열",
+            "호중구\\s*감소\\s*발열",
+            "발열\\s*\\(anc\\s*<\\s*500\\)"
+        ],
+        "html": (
+            "<div class='explain-chip'>"
+            "<b>호중구감소성 발열(FN)</b> — 38.0–38.5℃ 해열제/경과, ≥38.5℃ <i>즉시 연락</i>, "
+            "혈액배양·항생제 평가"
+            "</div>"
+        ),
+    },
+    {
+        "name": "HEPATOX",
+        "patterns": [
+            "(?i)hepatotoxi(c|city)",
+            "(?i)transaminitis",
+            "간효소\\s*상승",
+            "ast\\s*상승",
+            "alt\\s*상승"
+        ],
+        "html": (
+            "<div class='explain-chip'>"
+            "<b>간효소 상승</b> — AST/ALT 추적, 황달·가려움·오심 시 연락, "
+            "알코올·간독성 약물 피하기"
+            "</div>"
+        ),
+    },
+    {
+        "name": "PROTEINURIA",
+        "patterns": [
+            "(?i)proteinuria",
+            "단백뇨",
+            "미세알부민",
+            "요단백"
+        ],
+        "html": (
+            "<div class='explain-chip'>"
+            "<b>단백뇨</b> — 소변 단백 정기 추적, 부종/혈압 상승 시 연락, "
+            "Anti‑VEGF 계열은 추가 주의"
+            "</div>"
+        ),
+    },
+    {
+        "name": "MUCOSITIS",
+        "patterns": [
+            "(?i)mucositis",
+            "(?i)stomatitis",
+            "구내염",
+            "구강\\s*궤양",
+            "입통증"
+        ],
+        "html": (
+            "<div class='explain-chip'>"
+            "<b>구내염</b> — 처방 가글/통증조절, 산·매운 음식·자극 피하기, "
+            "수분 유지·구강위생"
+            "</div>"
+        ),
+    },
+    {
+        "name": "HFS",
+        "patterns": [
+            "(?i)hand[- ]?foot\\s*syndrome",
+            "(?i)palmar[- ]?plantar\\s*erythrodysesthesia",
+            "(?i)ppe",
+            "손발증후군",
+            "손발\\s*피부반응",
+            "손발\\s*홍반",
+            "손발\\s*통증",
+            "손바닥\\s*발바닥\\s*통증"
+        ],
+        "html": (
+            "<div class='explain-chip'>"
+            "<b>손발증후군(HFS)</b> — 손·발 붉어짐/통증/벗겨짐 → 마찰·열 피하고, 보습·냉각. "
+            "파임/수포·보행 어려우면 의사 상담"
+            "</div>"
+        ),
+    },
+    {
+        "name": "RA_syndrome",
+        "patterns": [
+            "(?i)atra\\s*syndrome",
+            "(?i)retinoic\\s*acid\\s*syndrome",
+            "(?i)differentiation\\s*syndrome",
+            "(?i)ras\\b",
+            "RA\\s*증후군",
+            "레티노산\\s*증후군",
+            "레티노이드\\s*증후군",
+            "분화\\s*증후군"
+        ],
+        "html": (
+            "<div class='explain-chip'>"
+            "<b>RA(ATRA) 증후군</b> — 숨참/부종/저혈압/발열 가능 → "
+            "증상 시 즉시 연락, 의료진 지시 따라 스테로이드 가능"
+            "</div>"
+        ),
+    },
+    {
         "name": "QT",
         "patterns": ["(?-i)(?<![A-Za-z0-9])QT(?![A-Za-z0-9])", "(?-i)QT\s*연장", "(?i)torsades", "(?i)long\s*qt", "(?i)롱\s*qt"],
         "html": (
