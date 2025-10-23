@@ -459,3 +459,169 @@ def render_ae_detail(drug_list, formulation_map=None):
     return md
 # === [INTEGRATED: AE GLOSSARY + NORMALIZER + TKIs + BUILD/RENDER] END ===
 
+
+# === [PATCH:AE_GLOSSARY_CONCISE_MODE] BEGIN ===
+# 환자 친화 설명을 '짧게' 출력하기 위한 모드/사전/헬퍼
+_AE_EXPLAIN_MODE = "short"  # "short" | "full"
+
+# 자주 쓰는 항목은 초간결 버전 제공
+_AE_GLOSSARY_KO_SHORT = {
+    "QT 연장": "실신·돌연사 위험 ↑ → ECG 추적.",
+    "RA 증후군": "고열·호흡곤란·체중↑ → 즉시 병원, 스테로이드 필요 가능.",
+    "고삼투증후군": "탈수·전해질 이상 → 수분 보충, 의식 저하/구토 시 내원.",
+    "신경독성": "저림·시야흔들림·보행불안정 → 증상 악화 전 연락.",
+    "손발증후군": "손발 붉어짐·벗겨짐 → 보습·마찰 줄이기.",
+    "골수억제": "감염·출혈 위험 ↑ → 38.5℃↑·출혈 시 즉시 연락.",
+    "간독성": "황달·암색 소변 → 약 조정 필요, 즉시 연락.",
+    "신장독성": "부종·소변감소·거품뇨 → 검사/수분관리, 악화 시 내원.",
+    "광과민": "햇빛 민감 ↑ → 자외선 차단·긴 옷.",
+    "구내염": "입통증/궤양 → 자극 피하고 가글.",
+    "설사": "탈수 위험 → ORS, 지속 시 연락.",
+    "변비": "수분·섬유·운동, 3일↑/복통·구토 동반 시 연락.",
+    "오심/구토": "소량씩 자주, 항구토제 규칙 복용.",
+    "탈수": "입마름·어지럼 → 수분 보충, 심하면 내원.",
+    "저나트륨혈증": "두통·혼동·부종 → 즉시 평가.",
+    "고칼륨혈증": "두근거림·근력저하 → ECG/혈액검사.",
+    "출혈": "잇몸/코피·멍↑ → 외상 주의·즉시 연락.",
+    "혈전": "편측 다리 부종·흉통/호흡곤란 → 응급평가.",
+    "단백뇨": "거품뇨·부종 → 소변추적.",
+    "고혈압": "두통·어지럼 → 혈압 체크·약 조절.",
+    "상처치유 지연": "수술/상처 회복 지연 → 일정 상의.",
+    "폐독성": "기침·호흡곤란 악화 → 흉부 평가.",
+    "간질성 폐질환": "호흡곤란/기침·발열 → 약 중단·스테로이드 고려.",
+}
+
+def _brief_text(txt: str, max_chars: int = 80) -> str:
+    if not txt:
+        return ""
+    s = txt.strip()
+    # 첫 문장만 추출(., !, ? 기준) 후 길이 제한
+    cut_pos = len(s)
+    for p in [". ", ".\n", "!", "?", "！", "？"]:
+        i = s.find(p)
+        if i != -1:
+            cut_pos = min(cut_pos, i + len(p.strip()))
+    s = s[:cut_pos].strip()
+    if len(s) > max_chars:
+        s = s[:max_chars-1].rstrip() + "…"
+    return s
+
+def _get_explain(term: str, mode: str = None) -> str | None:
+    """용어 설명을 모드에 맞게 반환."""
+    if term is None:
+        return None
+    mode = (mode or _AE_EXPLAIN_MODE).lower()
+    # 표준 키 얻기
+    key = _to_glossary_key(term)
+    if not key:
+        return None
+    full = _AE_GLOSSARY_KO.get(key)
+    if mode == "full":
+        return full
+    # short 모드
+    short = _AE_GLOSSARY_KO_SHORT.get(key)
+    if short:
+        return short
+    return _brief_text(full)
+
+# 기존 헬퍼를 '짧게' 출력하도록 교체
+def _augment_terms_with_explain(terms):
+    out = []
+    for t in (terms or []):
+        exp = _get_explain(t, "short")
+        label = _norm_ae_term(t)
+        out.append(f"{label} — {exp}" if exp else label)
+    return out
+
+# 용어풀이 섹션도 짧게
+def append_glossary_notes(md_text: str) -> str:
+    try:
+        glossary = _AE_GLOSSARY_KO
+    except Exception:
+        return md_text
+    if not md_text or not glossary:
+        return md_text
+    found = []
+    body = md_text
+    for k in glossary.keys():
+        if k and (k in body):
+            exp = _get_explain(k, "short")
+            if exp:
+                found.append((k, exp))
+    if not found:
+        return md_text
+    uniq, seen = [], set()
+    for k, v in found:
+        if k not in seen:
+            uniq.append((k, v)); seen.add(k)
+    lines = ["", "### 용어 풀이(요약)"]
+    for k, v in uniq:
+        lines.append(f"- **{k}**: {v}")
+    joiner = "\\n\\n" if not md_text.endswith("\\n") else "\\n"
+    return md_text + joiner + "\\n".join(lines) + "\\n"
+# === [PATCH:AE_GLOSSARY_CONCISE_MODE] END ===
+
+
+# === [PATCH:AE_GLOSSARY_TRIGGERED] BEGIN ===
+# 설명은 '등장했을 때만' 붙이는 모드
+_AE_GLOSSARY_TRIGGER_MODE = "presence_only"  # "presence_only" | "always"
+
+# 키워드 트리거(간단 별칭 포함) — 필요시 확장
+_AE_TRIGGER_ALIASES = {
+    "QT 연장": ["QT", "QTc", "QT prolong", "torsade"],
+    "손발증후군": ["hand-foot", "PPE"],
+    "RA 증후군": ["RA syndrome", "retinoic acid"],
+}
+
+def _term_present_in_text(term: str, text: str) -> bool:
+    if not term:
+        return False
+    t = (term or "").strip().lower()
+    body = (text or "").lower()
+    if not body:
+        return False
+    # 1) 정규화된 키
+    k = _to_glossary_key(term)
+    if k and k.lower() in body:
+        return True
+    # 2) 별칭
+    aliases = _AE_TRIGGER_ALIASES.get(k or term, [])
+    for a in aliases:
+        if a.lower() in body:
+            return True
+    # 3) 원문 term 자체
+    if t and t in body:
+        return True
+    return False
+
+# build/렌더 과정에서 마지막 MD를 저장해 augment가 context를 참고하도록 함
+_AE_LAST_CONTEXT_MD = ""
+
+def _set_ae_context_md(md_text: str):
+    global _AE_LAST_CONTEXT_MD
+    _AE_LAST_CONTEXT_MD = md_text or ""
+
+# 기존 헬퍼를 '등장 시에만 설명'으로 교체
+def _augment_terms_with_explain(terms):
+    out = []
+    mode = (_AE_GLOSSARY_TRIGGER_MODE or "presence_only").lower()
+    ctx = _AE_LAST_CONTEXT_MD
+    for t in (terms or []):
+        label = _norm_ae_term(t)
+        exp = _get_explain(t, "short") if mode == "always" else ( _get_explain(t, "short") if _term_present_in_text(t, ctx or label) else None )
+        out.append(f"{label} — {exp}" if exp else label)
+    return out
+
+# render/build에서 context 세팅: build_ae_summary_md 끝에서 세팅하고 반환
+__ORIG_build_ae_summary_md = build_ae_summary_md
+def build_ae_summary_md(*args, **kwargs):
+    md = __ORIG_build_ae_summary_md(*args, **kwargs)
+    try:
+        _set_ae_context_md(md)
+    except Exception:
+        pass
+    return md
+
+# append_glossary_notes는 presence_only일 때 이미 본문에 등장한 용어만 추가(기본 동작 유지)
+# === [PATCH:AE_GLOSSARY_TRIGGERED] END ===
+

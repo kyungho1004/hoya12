@@ -1731,6 +1731,21 @@ with t_chemo:
         except Exception:
             pass
         # --- [PATCH:P1_AE_SUMMARY_FALLBACK] END ---
+
+        # --- [PATCH:P1_AE_INLINE_GLOSSARY] BEGIN ---
+        try:
+            import importlib, ui_results as _uir3, streamlit as st, re as _re
+            _uir3 = importlib.reload(_uir3)
+            _form_map = {"Ara-C": _ara_c_form} if "_ara_c_form" in locals() and _ara_c_form else None
+            _md_tmp = _uir3.build_ae_summary_md(picked_keys, formulation_map=_form_map)
+            _md_gloss = _uir3.append_glossary_notes(_md_tmp)
+            m = _re.search(r"(?:^|\n)###\s+용어 풀이(?:\(요약\))?\s*\n([\s\S]+)$", _md_gloss)
+            if m:
+                st.markdown("#### 용어 풀이(요약)")
+                st.markdown(m.group(1))
+        except Exception:
+            pass
+        # --- [PATCH:P1_AE_INLINE_GLOSSARY] END ---
         ae_map = _aggregate_all_aes(picked_keys, DRUG_DB)
         st.markdown("### 항암제 부작용(전체)")
         # === [PATCH 2025-10-22 KST] Use shared renderer if available ===
