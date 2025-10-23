@@ -1506,6 +1506,16 @@ with t_dx:
 
 
     disp = dx_display(group, disease)
+            try:
+    disease  # noqa: F821
+    except NameError:
+    try:
+        disease = st.session_state[wkey("onco_disease_sel")]
+    except Exception:
+        disease = st.session_state.get(
+            "onco_disease_sel",
+            st.session_state.get("onco_disease_sel_candidate"),
+        )
     st.session_state["onco_group"] = group
     st.session_state["onco_disease"] = disease
     st.session_state["dx_disp"] = disp
