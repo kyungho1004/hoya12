@@ -136,111 +136,9 @@ def _render_cardio_guard(st, rec: Dict[str, Any]):
     html = "<ul>" + "".join(f"<li>{b}</li>" for b in bullets) + "</ul>"
     st.markdown("<div class='cardio-guard'><div class='title'>❤️ Cardio-Guard</div>"+html+"</div>", unsafe_allow_html=True)
 
+# === [PATCH:AE_GLOSSARY_KO+NORMALIZE] BEGIN ===
+import re as _re_gls
 
-
-# === [PATCH:P1_UI_AE_RENDER] BEGIN ===
-def _bm_get_ae_detail_map():
-    """
-    Returns a dict of AE details keyed by canonical drug name.
-    Non-destructive: only used if app chooses to render detailed AE.
-    """
-    return {
-        "5-FU": {
-            "title": "5‑Fluorouracil (5‑FU) / 5‑플루오로우라실",
-            "common": ["골수억제", "오심/구토", "설사", "구내염", "손발증후군"],
-            "serious": ["심근허혈/경련", "중증 설사·탈수", "중증 골수억제", "드문 뇌병증"],
-            "call": ["38.5℃ 이상 발열", "수양성 설사 ≥4회/일", "출혈 경향", "섭취 불가 수준의 구내염"]
-        },
-        "Alectinib": {
-            "title": "Alectinib (알렉티닙)",
-            "common": ["근육통/CK 상승", "변비", "피로", "광과민", "부종"],
-            "serious": ["간독성", "근병증", "서맥", "간질성 폐질환(희귀)"],
-            "call": ["황달/암색 소변", "심한 근육통/무력감", "호흡곤란/기침 악화"]
-        },
-        "Ara-C": {
-            "title": "Cytarabine (Ara‑C) / 시타라빈",
-            "formulations": {
-                "IV": ["발열 반응", "고용량 시 각막염 예방 위해 점안제 병용 고려"],
-                "SC": ["주사부위 반응", "국소 통증/홍반"],
-                "HDAC": ["각막염", "신경독성(소뇌 실조/언어장애)", "고열"]
-            },
-            "common": ["골수억제", "발열·오한", "오심/구토", "간효소 상승", "발진"],
-            "serious": ["각막염(HDAC)", "소뇌 증상(HDAC)", "중증 감염"],
-            "call": ["38.5℃ 이상 발열", "시야 흐림/안통", "보행 실조/말어눌", "비정상 출혈"]
-        },
-        "Bendamustine": {
-            "title": "Bendamustine",
-            "common": ["골수억제", "피로", "오심", "발진/가려움"],
-            "serious": ["중증 감염", "심각한 피부반응(SJS/TEN)"],
-            "call": ["고열", "점상출혈/멍", "광범위 발진", "호흡곤란"]
-        },
-        "Bevacizumab": {
-            "title": "Bevacizumab (베바시주맙)",
-            "common": ["고혈압", "단백뇨", "출혈 경향"],
-            "serious": ["혈전증", "상처치유 지연", "GI 천공(희귀)"],
-            "call": ["심한 두통/시야 변화", "혈뇨/거품뇨", "복부 극심한 통증", "급성 신경학 증상"]
-        },
-        "Bleomycin": {
-            "title": "Bleomycin",
-            "common": ["발열/오한", "피부 색소침착/경화", "손발톱 변화"],
-            "serious": ["폐독성(간질성)", "호흡부전"],
-            "call": ["진행성 호흡곤란", "고열", "흉통"]
-        }
-    }
-
-def build_ae_summary_md(drug_list, formulation_map=None):
-    """
-    drug_list: iterable of canonical names (e.g., ["5-FU","Alectinib","Ara-C"])
-    formulation_map: optional dict like {"Ara-C":"HDAC"} to fine-tune per-formulation notes.
-    Returns markdown string for inclusion in .md/.pdf reports.
-    """
-    ae = _bm_get_ae_detail_map()
-    lines = ["## 항암제 요약 (영/한 + 부작용)"]
-    if not drug_list:
-        lines.append("- (선택된 항암제가 없습니다)")
-        return "\n".join(lines)
-    for d in drug_list:
-        info = ae.get(d)
-        if not info:
-            lines.append(f"- **{d}**: 상세 정보 준비 중")
-            continue
-        title = info.get("title", d)
-        lines.append(f"### {title}")
-        forms = info.get("formulations") or {}
-        sel_form = None
-        if formulation_map and d in formulation_map:
-            sel_form = formulation_map.get(d)
-        if forms:
-            if sel_form and sel_form in forms:
-                lines.append(f"- **제형({sel_form})**: " + " · ".join(forms[sel_form]))
-            else:
-                for fk, fv in forms.items():
-                    lines.append(f"- **제형({fk})**: " + " · ".join(fv))
-        common = info.get("common") or []
-        serious = info.get("serious") or []
-        call = info.get("call") or []
-        if common:  lines.append("- **일반**: " + " · ".join(common))
-        if serious: lines.append("- **중증**: " + " · ".join(serious))
-        if call:    lines.append("- **연락 필요**: " + " · ".join(call))
-        lines.append("")
-    return "\n".own_join(lines) if hasattr(str, "own_join") else "\n".join(lines)
-
-def render_ae_detail(drug_list, formulation_map=None):
-    """
-    Streamlit-safe renderer for AE summary in UI.
-    If streamlit isn't available, returns markdown string.
-    """
-    try:
-        import streamlit as st
-        md = build_ae_summary_md(drug_list, formulation_map=formulation_map)
-        st.markdown(md)
-        return md
-    except Exception:
-        return build_ae_summary_md(drug_list, formulation_map=formulation_map)
-# === [PATCH:P1_UI_AE_RENDER] END ===
-
-
-# === [PATCH:AE_GLOSSARY_KO] BEGIN ===
 _AE_GLOSSARY_KO = {
     "QT 연장": "QT 간격이 연장되면 심장 리듬 이상이 발생할 수 있어요. 실신이나 돌연사 위험이 있으니 ECG(심전도) 추적 검사가 권장돼요.",
     "RA 증후군": "베사노이드(트레티노인) 사용 시 고열·호흡곤란·체중 증가가 동반되면 RA 증후군일 수 있어요. 스테로이드 치료가 필요할 수 있으니 즉시 병원에 알려야 해요.",
@@ -267,18 +165,60 @@ _AE_GLOSSARY_KO = {
     "간질성 폐질환": "호흡곤란/건성 기침·발열이 동반되면 의심돼요. 약 중단과 스테로이드가 필요할 수 있어요.",
 }
 
-def _ae_explain(term: str):
+_AE_SYNONYMS = {
+    "qt prolongation": "QT 연장",
+    "qt interval prolongation": "QT 연장",
+    "torsades": "QT 연장",
+    "ra syndrome": "RA 증후군",
+    "retinoic acid syndrome": "RA 증후군",
+    "hand-foot syndrome": "손발증후군",
+    "palmar-plantar erythrodysesthesia": "손발증후군",
+    "neurotoxicity": "신경독성",
+    "peripheral neuropathy": "신경독성",
+    "stomatitis": "구내염",
+    "mucositis": "구내염",
+    "hepatic toxicity": "간독성",
+    "renal toxicity": "신장독성",
+    "photosensitivity": "광과민",
+}
+
+def _norm_ae_term(s: str) -> str:
+    if not s:
+        return ""
+    x = s.strip()
+    x = _re_gls.sub(r"\(.*?\)|\[.*?\]", "", x)
+    x = _re_gls.sub(r"[·,:;/]+", " ", x)
+    x = _re_gls.sub(r"\s+", " ", x).strip()
+    return x
+
+def _to_glossary_key(term: str):
     if not term:
         return None
-    return _AE_GLOSSARY_KO.get(term.strip())
+    t = _norm_ae_term(term)
+    if t in _AE_GLOSSARY_KO:
+        return t
+    low = t.lower()
+    if low in _AE_SYNONYMS:
+        k = _AE_SYNONYMS[low]
+        if k in _AE_GLOSSARY_KO:
+            return k
+    for k in _AE_GLOSSARY_KO.keys():
+        if k in t:
+            return k
+    return None
+
+def _ae_explain(term: str):
+    key = _to_glossary_key(term)
+    return _AE_GLOSSARY_KO.get(key) if key else None
 
 def _augment_terms_with_explain(terms):
     out = []
     for t in terms or []:
         exp = _ae_explain(t)
-        out.append(f"{t} — {exp}" if exp else t)
+        label = _norm_ae_term(t)
+        out.append(f"{label} — {exp}" if exp else label)
     return out
-# === [PATCH:AE_GLOSSARY_KO] END ===
+# === [PATCH:AE_GLOSSARY_KO+NORMALIZE] END ===
 
 # === [PATCH:AE_GLOSSARY_OVERRIDE_BUILD] BEGIN ===
 def build_ae_summary_md(drug_list, formulation_map=None):
@@ -319,4 +259,3 @@ def build_ae_summary_md(drug_list, formulation_map=None):
         lines.append("")
     return "\n".join(lines)
 # === [PATCH:AE_GLOSSARY_OVERRIDE_BUILD] END ===
-
