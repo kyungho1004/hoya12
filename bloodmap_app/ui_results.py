@@ -84,7 +84,11 @@ def _render_ae_detail(st, rec: Dict[str, Any]):
     with st.expander("🔎 자세히 보기 (쉽게 설명)", expanded=False):
         def bullet(title, items):
             if not items: return ""
-            lis = "".join([f"<li>{x}</li>" for x in items])
+            try:
+                aug = _augment_terms_with_explain(items)
+            except Exception:
+                aug = items
+            lis = "".join([f"<li>{x}</li>" for x in aug])
             return f"<p><b>{title}</b></p><ul>{lis}</ul>"
         html = ""
         html += bullet("자주 나타나는 증상", det.get("common"))
