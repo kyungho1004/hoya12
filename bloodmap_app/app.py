@@ -1,13 +1,4 @@
-# === [PATCH:P1_IMPORTS] BEGIN ===
-try:
-    from ui_results import render_ae_detail as _bm_render_ae_detail
-except Exception:
-    _bm_render_ae_detail = None
-try:
-    from pdf_export import append_onco_ae_section as _bm_append_onco_ae_section
-except Exception:
-    _bm_append_onco_ae_section = None
-# === [PATCH:P1_IMPORTS] END ===\n\n
+
 
 # ---- HomeBlocker v1 ----
 def _block_spurious_home():
@@ -1719,19 +1710,7 @@ with t_chemo:
             for n in notes:
                 st.info(n)
 
-        \n        # --- [PATCH:P1_ARAC_FORM+AE_SUMMARY] BEGIN ---
-        _has_arac = any(x in picked_keys for x in ["Ara-C", "Cytarabine"])
-        if _has_arac:
-            _ara_c_form = st.radio("Ara-C 제형 선택", ["IV","SC","HDAC"], key=wkey("ara_c_form"))
-        else:
-            _ara_c_form = None
-        if _bm_render_ae_detail is not None:
-            _form_map = {"Ara-C": _ara_c_form} if _ara_c_form else None
-            try:
-                _bm_render_ae_detail(picked_keys, formulation_map=_form_map)
-            except Exception:
-                pass
-        # --- [PATCH:P1_ARAC_FORM+AE_SUMMARY] END ---\nae_map = _aggregate_all_aes(picked_keys, DRUG_DB)
+        ae_map = _aggregate_all_aes(picked_keys, DRUG_DB)
         st.markdown("### 항암제 부작용(전체)")
         # === [PATCH 2025-10-22 KST] Use shared renderer if available ===
         try:
