@@ -1710,20 +1710,6 @@ with t_chemo:
             for n in notes:
                 st.info(n)
 
-
-        # --- [PATCH:P1_ARAC_FORM+AE_SUMMARY] BEGIN ---
-        _has_arac = any(x in picked_keys for x in ["Ara-C", "Cytarabine"])
-        if _has_arac:
-            _ara_c_form = st.radio("Ara-C 제형 선택", ["IV","SC","HDAC"], key=wkey("ara_c_form"))
-        else:
-            _ara_c_form = None
-        if _bm_render_ae_detail is not None:
-            _form_map = {"Ara-C": _ara_c_form} if _ara_c_form else None
-            try:
-                _bm_render_ae_detail(picked_keys, formulation_map=_form_map)
-            except Exception:
-                pass
-        # --- [PATCH:P1_ARAC_FORM+AE_SUMMARY] END ---
         ae_map = _aggregate_all_aes(picked_keys, DRUG_DB)
         st.markdown("### 항암제 부작용(전체)")
         # === [PATCH 2025-10-22 KST] Use shared renderer if available ===
@@ -2698,17 +2684,6 @@ with t_report:
         lines.append("")
 
         md = "\n".join(lines)
-        # --- [PATCH:P1_APPEND_ONCO_AE_TO_MD_SAFE] BEGIN ---
-        if _bm_append_onco_ae_section is not None:
-            try:
-                _form_map = {}
-                sel_form = st.session_state.get(wkey("ara_c_form"))
-                if sel_form:
-                    _form_map["Ara-C"] = sel_form
-                md = _bm_append_onco_ae_section(md, meds, formulation_map=_form_map if _form_map else None)
-            except Exception:
-                pass
-        # --- [PATCH:P1_APPEND_ONCO_AE_TO_MD_SAFE] END ---
         st.code(md, language="markdown")
         st.download_button("💾 보고서 .md 다운로드", data=md.encode("utf-8"), file_name="bloodmap_report.md", mime="text/markdown")
         txt_data = md.replace("**", "")
@@ -2850,19 +2825,6 @@ import os, tempfile
 from datetime import datetime
 import pandas as pd
 import streamlit as st
-
-# === [PATCH:P1_IMPORTS] BEGIN ===
-try:
-    from ui_results import render_ae_detail as _bm_render_ae_detail
-except Exception:
-    _bm_render_ae_detail = None
-try:
-    from pdf_export import append_onco_ae_section as _bm_append_onco_ae_section
-except Exception:
-    _bm_append_onco_ae_section = None
-# === [PATCH:P1_IMPORTS] END ===
-
-
 try:
     from zoneinfo import ZoneInfo
     _KST = ZoneInfo("Asia/Seoul")
