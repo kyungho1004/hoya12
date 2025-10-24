@@ -1721,19 +1721,6 @@ with t_chemo:
             except Exception:
                 _render_aes_shared = None
         if _render_aes_shared is not None:
-            # === [PATCH] Phase-1 split delegation to features.adverse_effects ===
-            try:
-                from features.adverse_effects import render_adverse_effects as _ae_render
-            except Exception:
-                _ae_render = None
-            try:
-                if _ae_render is not None:
-                    _ae_render(st, picked_keys, DRUG_DB)
-                    _used_shared_renderer = True
-            except Exception:
-                pass
-            # === [/PATCH] ===
-
             try:
                 _render_aes_shared(st, picked_keys, DRUG_DB)
                 _used_shared_renderer = True
@@ -1741,52 +1728,13 @@ with t_chemo:
                 _used_shared_renderer = False
         else:
             _used_shared_renderer = False
-
-        # === [PATCH] pediatric tools (Phase 4, safe & local import) ===
+        # === [PATCH] debug panel (Phase 6; local import, non-intrusive) ===
         try:
-            from features.peds.wireups import render_peds_tools as _peds_tools
-            _peds_tools(st)
+            from utils.db_access import concat_ae_text as _ae_concat
+            from features.debug_tools import render_debug_panel as _dbg
+            _dbg(st, _ae_concat(DRUG_DB, picked_keys), picked_keys)
         except Exception:
             pass
-        # === [/PATCH] ===
-
-
-        # === [PATCH] carelog UI (Phase 3-B, safe & local import) ===
-        try:
-            from features.carelog import render_carelog_ui as _carelog_ui
-            _carelog_ui(st)
-        except Exception:
-            pass
-        # === [/PATCH] ===
-
-
-        # === [PATCH] eGFR tool (Phase 3-A, safe & local import) ===
-        try:
-            from features.egfr import render_egfr_tool as _egfr_ui
-            _egfr_ui(st)
-        except Exception:
-            pass
-        # === [/PATCH] ===
-
-
-        # === [PATCH] keyword chips (factorized) ===
-
-
-        try:
-
-
-            from features.wireups import apply_keyword_chips as _apply_kw
-
-
-            _apply_kw(st, DRUG_DB, picked_keys)
-
-
-        except Exception:
-
-
-            pass
-
-
         # === [/PATCH] ===
 
         # === [/PATCH] ===
