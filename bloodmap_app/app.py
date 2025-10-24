@@ -1721,6 +1721,19 @@ with t_chemo:
             except Exception:
                 _render_aes_shared = None
         if _render_aes_shared is not None:
+            # === [PATCH] Phase-1 split delegation to features.adverse_effects ===
+            try:
+                from features.adverse_effects import render_adverse_effects as _ae_render
+            except Exception:
+                _ae_render = None
+            try:
+                if _ae_render is not None:
+                    _ae_render(st, picked_keys, DRUG_DB)
+                    _used_shared_renderer = True
+            except Exception:
+                pass
+            # === [/PATCH] ===
+
             try:
                 _render_aes_shared(st, picked_keys, DRUG_DB)
                 _used_shared_renderer = True

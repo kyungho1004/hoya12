@@ -1,27 +1,28 @@
-# Light Split Pack (Safe, Patch-First)
+# App Split Pack (Phase 1, Safe Patch)
 
-이 패키지는 **app.py를 얇게 유지**하면서, 기존 구현은 그대로 두고
-새 모듈을 **래퍼(re-export)** 형태로 추가하는 가장 안전한 분리 세트입니다.
-기존 기능을 삭제하지 않으며, 언제든 import만 원복하면 롤백 가능합니다.
+- 이 ZIP은 현재 **패치 완료된 app.py**와 분리된 모듈(features/utils)을 포함합니다.
+- 기존 코드는 삭제하지 않고, 항암제 부작용 렌더 진입 직전에 **안전 위임 블록**을 삽입했습니다.
+- 상단 임포트 추가 없이 **로컬 임포트**로 동작합니다.
+- `/mnt/data/...` 경로 유지.
 
 ## 포함 파일
-- features/explainers.py : ui_results의 키워드 칩/스타일/예시를 재노출
-- features/chemo_examples.py : 항암제 요약 예시 + MD 버전 재노출
-- utils/db_access.py : DRUG_DB에서 부작용 텍스트를 합쳐주는 헬퍼
-- (패키지 초기화) features/__init__.py, utils/__init__.py
+- app.py (현재 패치 적용본)
+- features/
+  - __init__.py
+  - explainers.py (키워드 칩/스타일/예시 — ui_results 재노출)
+  - chemo_examples.py (예시 블록/MD — 재노출)
+  - wireups.py (한 줄 연결: apply_keyword_chips)
+  - adverse_effects.py (부작용 렌더 본체 이관 대상, 스켈레톤)
+- utils/
+  - __init__.py
+  - db_access.py (DRUG_DB AE 텍스트 합치기)
+  - session.py (세션 가드/키)
 
-## app.py에 추가할 것 (두 군데)
-1) 상단 import 근처
-```python
-from features.explainers import ensure_keyword_explainer_style, render_keyword_explainers
-from features.chemo_examples import render_chemo_summary_example
-from utils.db_access import concat_ae_text
-```
+## 동작 요약
+- 항암제 부작용 렌더 시:
+  1) features.adverse_effects.render_adverse_effects(...) 시도 (실패/비어있으면 통과)
+  2) 기존 구현 흐름 유지
+  3) 공통 경로에서 설명칩/예시 렌더는 wireups/실행 블록으로 동작
 
-2) 항암제 부작용 렌더 **직후**
-```python
-ensure_keyword_explainer_style(st)                  # CSS 1회 주입(중복 호출 안전)
-_ae_source_text = concat_ae_text(DRUG_DB, picked_keys)
-render_keyword_explainers(st, _ae_source_text)      # “특정 단어 있을 때만” 칩 노출
-render_chemo_summary_example(st)                    # 시연용 예시 블록
-```
+## 롤백
+- app.py의 PATCH 블록을 제거하면 원상복구됩니다.
