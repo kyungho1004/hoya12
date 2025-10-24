@@ -1,22 +1,22 @@
-# App Split Full Pack — Phase 3-B (eGFR + Carelog, Safe Patch)
+# App Split Full Pack — Phase 4 (Peds Fallbacks Included, Safe Patch)
 
 포함 내용
 - app.py (안전 위임 패치 적용본)
 - features/
-  - explainers.py · chemo_examples.py · wireups.py
-  - adverse_effects.py (부작용 렌더 위임)
-  - egfr.py (CKD-EPI/Schwartz + eGFR 미니 UI)
-  - carelog.py (케어로그: CSV, 최근50 보기, CSV/PDF 내보내기)
+  - explainers.py · chemo_examples.py · wireups.py · adverse_effects.py
+  - egfr.py (CKD-EPI/Schwartz + mini UI)
+  - carelog.py (CSV/PDF, 최근50 보기)
+  - peds/
+    - wireups.py (우선 기존 peds_dose/peds_guide UI 호출, 없으면 폴백 미니 UI 제공)
+    - __init__.py
   - __init__.py
 - utils/
   - db_access.py · session.py · plotting.py · pdf_utils.py
   - __init__.py
 
 적용 포인트
-- 항암제 부작용 렌더 공통 경로에서:
-  - keyword 칩/예시(한 줄 호출, wireups)
-  - eGFR UI (local import)
-  - carelog UI (local import)
+- 공통 경로에서: 키워드 칩/예시, eGFR UI, 케어로그 UI, 소아 도구(우선 기존 UI → 폴백)
+- 상단 import 추가 없음, /mnt/data 경로 유지
 
 롤백
-- app.py의 해당 PATCH 블록만 제거하면 원상복구됩니다.
+- app.py의 PATCH 블록 제거로 원상복구 가능

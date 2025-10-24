@@ -1742,6 +1742,15 @@ with t_chemo:
         else:
             _used_shared_renderer = False
 
+        # === [PATCH] pediatric tools (Phase 4, safe & local import) ===
+        try:
+            from features.peds.wireups import render_peds_tools as _peds_tools
+            _peds_tools(st)
+        except Exception:
+            pass
+        # === [/PATCH] ===
+
+
         # === [PATCH] carelog UI (Phase 3-B, safe & local import) ===
         try:
             from features.carelog import render_carelog_ui as _carelog_ui
