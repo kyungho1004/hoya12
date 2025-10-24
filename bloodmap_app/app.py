@@ -1742,6 +1742,15 @@ with t_chemo:
         else:
             _used_shared_renderer = False
 
+        # === [PATCH] carelog UI (Phase 3-B, safe & local import) ===
+        try:
+            from features.carelog import render_carelog_ui as _carelog_ui
+            _carelog_ui(st)
+        except Exception:
+            pass
+        # === [/PATCH] ===
+
+
         # === [PATCH] eGFR tool (Phase 3-A, safe & local import) ===
         try:
             from features.egfr import render_egfr_tool as _egfr_ui
