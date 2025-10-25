@@ -18,7 +18,7 @@ def build(template: str, ctx: dict | None = None) -> list[tuple]:
     els = []
     if t == "er_onepage":
         title = ctx.get("title") or "ER 원페이지 요약"
-        els.append(("h1", title))
+        els.append(("h1", title)); els += separator("기본 정보")
         # vitals / key fields
         info = {
             "이름(별명)": ctx.get("nickname","-"),
@@ -31,10 +31,10 @@ def build(template: str, ctx: dict | None = None) -> list[tuple]:
         # lab snapshot
         labs = ctx.get("labs") or {}
         if labs:
-            els.append(("h2", "주요 검사"))
+            els += separator("주요 검사")
             els += _labs_block(labs)
         # guardlines
-        els.append(("h2", "연락/내원 기준"))
+        els += separator("연락/내원 기준")
         els.append(("ul", [
             "38.5°C 이상 지속 또는 39.0°C 이상 시 즉시 연락/내원",
             "실신/심한 어지러움/호흡곤란/의식저하 발생 시 즉시 내원",
@@ -42,7 +42,7 @@ def build(template: str, ctx: dict | None = None) -> list[tuple]:
         ]))
         # meds
         if ctx.get("drugs"):
-            els.append(("h2", "현재 항암/약물"))
+            els += separator("현재 항암/약물")
             els.append(("ul", list(map(str, ctx.get("drugs")))))
         els.append(("hr", ""))
         els.append(("p", FOOTER))
@@ -88,3 +88,12 @@ def _labs_block(labs: dict) -> list[tuple]:
     for k, v in labs.items():
         els.append(("p", _lab_flag(k, v)))
     return els
+
+# ---- Phase 21: simple badges & separators ----
+def badge(text: str) -> tuple:
+    return ("p", f"▣ {text}")
+def separator(title: str = "") -> list[tuple]:
+    items = [("hr","")]
+    if title:
+        items.append(("h2", title))
+    return items

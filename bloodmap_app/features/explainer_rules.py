@@ -181,3 +181,24 @@ def get_rules():
         if r.get("name") not in seen:
             base.append(r); seen.add(r.get("name"))
     return base
+EXTRA_RULES += [
+    {
+        "name": "면역관문억제제(ICI) 관련 이상반응",
+        "patterns": [
+            _rx(r"면역관문억제|ICI|pembrolizumab|nivolumab|atezolizumab|durvalumab|ipilimumab|cemiplimab"),
+            _rx(r"pneumonitis|colitis|hepatitis|hypophysitis|thyroiditis|adrenalitis"),
+        ],
+        "html": "<span class='explain-chip'>ICI irAE: 폐렴·대장염·간염·내분비 이상 → 즉시 연락·면역억제 고려</span>",
+    },
+]
+EXTRA_RULES += [
+    {
+        "name": "항생제 관련 설사 / C. difficile",
+        "patterns": [
+            _rx(r"antibiotic[- ]associated\s+diarrhea|AAD"),
+            _rx(r"C\.?\s*diff|Clostridioides|Clostridium\s+difficile"),
+            _rx(r"toxins?\s*A|B|GDH"),
+        ],
+        "html": "<span class='explain-chip'>항생제 관련 설사/C. diff: 수분·격리·검사 상담</span>",
+    },
+]

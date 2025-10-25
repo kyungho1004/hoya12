@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import List
 
 def render_special_tests_panel(st):
+    if st.session_state.get("_stests_rendered"):
+        return
     try:
         import special_tests as _st  # legacy UI
     except Exception:
