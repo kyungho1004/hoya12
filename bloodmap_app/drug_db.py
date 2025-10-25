@@ -1663,3 +1663,85 @@ def ensure_onco_drug_db(db):
             pass
     _reinforce_avapritinib_20251025(db)
 # === [/PATCH] ===
+
+
+
+# === [PATCH 2025-10-25 KST] Dactinomycin (Actinomycin D) addition + emoji fallback ===
+def _reinforce_dactinomycin_20251025(db: Dict[str, Dict[str, Any]]) -> None:
+    key = "Dactinomycin"
+    alias = "닥티노마이신(액티노마이신 D)"
+    rec = {
+        "alias": alias,
+        "moa": "항암 항생물질(Intercalator) — 소아종양에서 빈용(윌름스종·횡문근육종 등)",
+        "ae": "😷 골수억제 · 🤮 오심/구토 · 🪥 점막염(구내염) · 🧪 간효소↑/빌리루빈↑ · ☀️ 광과민성 · 💉 혈관외유출 시 조직손상",
+        "monitor": [
+            "CBC(호중구/혈소판)",
+            "LFT/빌리루빈",
+            "체중·복부통증·간비대(간정맥폐쇄/소아 VOD 의심)",
+            "주사부위 통증/홍반(혈관외유출)"
+        ],
+        "ae_plain": "피와 면역세포가 줄어 감염 위험이 높고, 입안염·메스꺼움·간수치 상승이 있을 수 있어요. 햇빛에 피부가 예민해질 수 있어요.",
+        "plain": "피와 면역세포가 줄어 감염 위험이 높고, 입안염·메스꺼움·간수치 상승이 있을 수 있어요. 햇빛에 피부가 예민해질 수 있어요.",
+        "plain_emergency": [
+            "🚨 38℃ 이상 열나면 즉시 연락(발열성 호중구감소증 가능)",
+            "🚨 심한 구내염/음식·물도 못 넘길 정도의 탈수 증상",
+            "🚨 눈·피부 노래짐/우상복부 통증·급격한 체중증가(간 문제/VOD 의심)",
+            "🚨 주사부위 심한 통증·붓기·수포(혈관외유출 의심)"
+        ],
+        "care_tips": [
+            "🪥 구강관리(부드러운 칫솔/가글)",
+            "💧 수분 충분히",
+            "☀️ 자외선차단/긴소매",
+            "😷 손위생·군중 회피",
+        ],
+    }
+    try:
+        _upsert(db, key, rec["alias"], rec["moa"], rec["ae"])
+        _upsert(db, key.lower(), rec["alias"], rec["moa"], rec["ae"])
+        _upsert(db, f"{key} ({alias})", rec["alias"], rec["moa"], rec["ae"])
+        _upsert(db, f"{alias} ({key})", rec["alias"], rec["moa"], rec["ae"])
+    except Exception:
+        pass
+    for cand in (key, key.lower(), f"{key} ({alias})", f"{alias} ({key})"):
+        r = db.setdefault(cand, {})
+        if isinstance(r, dict):
+            for k,v in rec.items():
+                if not r.get(k):
+                    r[k] = v
+
+def _emoji_for_class(moa: str) -> str:
+    m = (moa or "").lower()
+    if "egfr" in m: return "🧴"  # skin
+    if "vegf" in m or "vegfr" in m: return "🩺"  # bp/proteinuria
+    if "bcl" in m: return "💧"  # hydration/tls
+    if "flt3" in m or "qt" in m: return "📈"  # ecg
+    if "idh" in m: return "💧"
+    if "adc" in m: return "😷"
+    if "proteasome" in m: return "🩺"
+    if "immunomod" in m or "imid" in m: return "🚶"
+    if "cdk4" in m or "cdk6" in m: return "🧪"
+    if "parp" in m: return "💧"
+    if "alk" in m: return "🧪"
+    if "ntrk" in m or "ret" in m or "met" in m or "ros1" in m or "kras" in m: return "🧪"
+    return "💡"  # generic
+
+def _global_emoji_fallback_20251025(db: Dict[str, Dict[str, Any]]) -> None:
+    for _, rec in db.items():
+        if not isinstance(rec, dict): 
+            continue
+        ae = rec.get("ae") or ""
+        moa = rec.get("moa") or ""
+        # if AE exists but has no emoji at all, prefix with class-based emoji
+        if ae and not any(ch in ae for ch in "🚨🧴☀️👟💧🩺🧪🧼😷🌡️📈🩸🦶🪥🍚👁️🚫🤮💉🧠"):
+            rec["ae"] = f"{_emoji_for_class(moa)} " + ae
+
+_prev_dactino_20251025 = globals().get("ensure_onco_drug_db")
+def ensure_onco_drug_db(db):
+    if callable(_prev_dactino_20251025):
+        try:
+            _prev_dactino_20251025(db)
+        except Exception:
+            pass
+    _reinforce_dactinomycin_20251025(db)
+    _global_emoji_fallback_20251025(db)
+# === [/PATCH] ===
