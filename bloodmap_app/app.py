@@ -1728,6 +1728,30 @@ with t_chemo:
                 _used_shared_renderer = False
         else:
             _used_shared_renderer = False
+        # === [PATCH] Peds Jumpbar (Phase 17) ===
+        try:
+            from features.peds.jumpbar import render_peds_jumpbar as _peds_jb
+            _peds_jb(st)
+        except Exception:
+            pass
+        # === [/PATCH] ===
+
+        # === [PATCH] Peds Symptom Guides (Phase 17) ===
+        try:
+            from features.peds.symptom_guides import render_peds_symptom_guides as _peds_sym
+            _peds_sym(st)
+        except Exception:
+            pass
+        # === [/PATCH] ===
+
+        # === [PATCH] Peds Export Panel (Phase 17) ===
+        try:
+            from features.peds.export_panel import render_peds_export as _peds_exp
+            _peds_exp(st)
+        except Exception:
+            pass
+        # === [/PATCH] ===
+
         # === [PATCH] Peds Fever (Phase 16) ===
         try:
             from features.peds.fever import render_peds_fever as _peds_fever
