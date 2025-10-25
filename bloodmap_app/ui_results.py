@@ -271,3 +271,98 @@ try:
 except Exception:
     pass
 # === [/PATCH] ===
+
+
+
+# === [PATCH 2025-10-25 KST] Universal Friendly Sections (easy/emergency/tips/monitor) ===
+def _render_chip_row(st, tips):
+    try:
+        if not tips: 
+            return
+        chips = " ".join([f"<span style='display:inline-block;padding:4px 8px;margin:2px;border-radius:999px;border:1px solid rgba(0,0,0,0.1);font-size:0.9em'>{st.escape_html(str(t)) if hasattr(st,'escape_html') else str(t)}</span>" for t in tips])
+        st.markdown(f"<div style='margin-top:4px'>{chips}</div>", unsafe_allow_html=True)
+    except Exception:
+        try:
+            st.write(", ".join(map(str,tips)))
+        except Exception:
+            pass
+
+def _render_friendly_sections(st, rec: dict):
+    if not isinstance(rec, dict):
+        return
+    # easy summary
+    easy = rec.get("plain") or rec.get("ae_plain") or ""
+    emerg = rec.get("plain_emergency") or []
+    tips  = rec.get("care_tips") or []
+    monitor = rec.get("monitor") or []
+    # render only if at least one content exists
+    if not (easy or emerg or tips or monitor):
+        return
+    try:
+        with st.expander("알기 쉽게 보기", expanded=bool(easy)):
+            if easy:
+                st.markdown(easy)
+            else:
+                st.caption("요약 정보가 준비 중입니다.")
+    except Exception:
+        if easy:
+            st.markdown("**알기 쉽게 보기**")
+            st.write(easy)
+    # Emergency (force visible if exists)
+    if emerg:
+        try:
+            with st.expander("🚨 응급 연락 기준", expanded=True):
+                for line in emerg:
+                    st.markdown(f"- {line}")
+        except Exception:
+            st.markdown("**🚨 응급 연락 기준**")
+            for line in emerg:
+                st.write(f"- {line}")
+    # Care tips
+    if tips:
+        try:
+            with st.expander("자가관리 팁", expanded=False):
+                _render_chip_row(st, tips)
+        except Exception:
+            st.markdown("**자가관리 팁**")
+            _render_chip_row(st, tips)
+    # Monitor
+    if monitor:
+        try:
+            with st.expander("🩺 모니터", expanded=False):
+                for m in monitor:
+                    st.markdown(f"- {m}")
+        except Exception:
+            st.markdown("**🩺 모니터**")
+            for m in monitor:
+                st.write(f"- {m}")
+
+def _wrap_append_friendly(fn):
+    def inner(*args, **kwargs):
+        # call original first
+        res = fn(*args, **kwargs)
+        # infer rec dict from args/kwargs
+        rec = kwargs.get("rec")
+        if rec is None and len(args) >= 2 and isinstance(args[1], dict):
+            rec = args[1]
+        try:
+            import streamlit as st
+            _render_friendly_sections(st, rec or {})
+        except Exception:
+            pass
+        return res
+    inner._friendly_appended = True
+    return inner
+
+def _install_friendly_hooks():
+    targets = ["render_drug_card", "render_drug_detail", "render_chemo_card"]
+    for name in targets:
+        fn = globals().get(name)
+        if callable(fn) and not getattr(fn, "_friendly_appended", False):
+            globals()[name] = _wrap_append_friendly(fn)
+
+try:
+    _install_friendly_hooks()
+except Exception:
+    pass
+# === [/PATCH] ===
