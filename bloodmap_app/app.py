@@ -1728,6 +1728,30 @@ with t_chemo:
                 _used_shared_renderer = False
         else:
             _used_shared_renderer = False
+        # === [PATCH] Peds Fever (Phase 16) ===
+        try:
+            from features.peds.fever import render_peds_fever as _peds_fever
+            _peds_fever(st)
+        except Exception:
+            pass
+        # === [/PATCH] ===
+
+        # === [PATCH] Peds ORS (Phase 16) ===
+        try:
+            from features.peds.ors import render_peds_ors as _peds_ors
+            _peds_ors(st)
+        except Exception:
+            pass
+        # === [/PATCH] ===
+
+        # === [PATCH] Peds Respiratory (Phase 16) ===
+        try:
+            from features.peds.resp import render_peds_resp as _peds_resp
+            _peds_resp(st)
+        except Exception:
+            pass
+        # === [/PATCH] ===
+
         # === [PATCH] Nav guards (Phase 15) — unify & complement ===
         try:
             from features.nav import apply_all_nav_guards as _navguards
