@@ -1472,3 +1472,122 @@ def ensure_onco_drug_db(db):
             pass
     _ensure_mm_nonempty_20251025(db)
 # === [/PATCH] ===
+
+
+
+# === [PATCH 2025-10-25 KST] GLOBAL AUGMENT: fill emojis/tips/emergency/plain for ALL drugs ===
+def _norm_txt(x):
+    return (x or "").strip()
+
+def _has_emoji(s: str) -> bool:
+    if not s: return False
+    # basic check for any common emoji characters used in our cards
+    return any(ch in s for ch in "🚨🧴☀️👟💧🩺🧪🧼😷🌡️📈🩸🦶🪥🍚👁️🚫")
+
+# class-based defaults
+_CLASS_DEFAULTS = [
+    # tuples: (keyword in moa lower, emergency list, care tip emojis, plain suffix)
+    ("btk", ["🚨 심한 어지럼/실신·가슴두근거림(부정맥) 시 즉시 연락",
+             "🚨 코피/멍 등 출혈 지속 시 연락"],
+     ["🩺 혈압체크"], "출혈·부정맥 주의가 필요해요."),
+    ("pi3k", ["🚨 심한 설사/복통·혈변 시 즉시 연락", "🚨 발열·기침 등 감염 증상 시 바로 연락"],
+     ["💧 수분보충", "🧴 보습"], "간수치/장염/감염에 주의가 필요해요."),
+    ("bcl-2", ["🚨 구역·구토/근육경련·소변감소 등 TLS 의심 시 즉시 연락"],
+     ["💧 수분보충"], "초기 용량증량 동안 TLS 예방이 중요해요."),
+    ("flt3", ["🚨 심한 어지럼/실신(심전도 이상 의심) 시 즉시 연락"],
+     ["📈 심전도 일정", "🧪 K/Mg 유지"], "심전도(QT)와 간수치 모니터가 필요해요."),
+    ("idh", ["🚨 갑작스런 발열·호흡곤란 등 분화증후군 의심 시 즉시 연락"],
+     ["💧 수분보충"], "분화증후군 가능성에 주의가 필요해요."),
+    ("vegf", ["🚨 심한 두통·시야이상·고혈압 위기 시 즉시 연락"],
+     ["🩺 혈압체크", "🧪 소변단백 체크", "🧴 보습"], "혈압·단백뇨·피부/손발 관리가 중요해요."),
+    ("egfr", ["🚨 마른기침/숨참 악화(ILD 의심) 시 즉시 연락"],
+     ["🧴 보습", "☀️ 자외선차단"], "피부/설사 관리와 드묾게 폐렴증(ILD)에 주의해요."),
+    ("alk", ["🚨 혼동·말 어눌함·시야이상 등 신경학적 증상 시 즉시 연락"],
+     ["🧴 보습"], "지질/간수치·신경계 증상 모니터가 필요해요."),
+    ("parp", ["🚨 현기증·실신 수준의 빈혈 증상 시 연락"],
+     ["💧 수분보충"], "빈혈·피로에 주의가 필요해요."),
+    ("adc", ["🚨 첫 투여 시 오한·고열·호흡곤란(주입반응/CRS) 시 즉시 연락"],
+     ["😷 군중 회피", "🧼 손위생"], "주입반응·감염 관리가 중요해요."),
+    ("proteasome", ["🚨 흉통·심한 숨참/부종 시 즉시 연락"],
+     ["🩺 혈압체크", "🦶 다리 올려 휴식"], "심혈관계·피로 증상에 주의가 필요해요."),
+    ("immunomod", ["🚨 다리 통증·부종/갑작스런 흉통·호흡곤란(혈전) 시 즉시 연락"],
+     ["🚶 가벼운 운동", "🧦 압박스타킹(지시 시)"], "혈전 예방과 감염 관리가 중요해요."),
+]
+
+def _class_defaults(moa: str):
+    moa_l = (moa or "").lower()
+    for key, em, tips, p in _CLASS_DEFAULTS:
+        if key in moa_l:
+            return em, tips, p
+    return [], [], ""
+
+def _squeeze_sentences(ae: str, limit=2):
+    # extract 1~2 short sentences as plain if missing
+    t = (ae or "").replace("\n"," ").replace("—"," ").replace("..",".").strip()
+    parts = [s.strip(" ·-") for s in re.split(r"[.]", t) if s.strip()]
+    return " ".join(parts[:limit]) if parts else ""
+
+def _augment_all_drugs_20251025(db: Dict[str, Dict[str, Any]]) -> None:
+    for k, rec in list(db.items()):
+        if not isinstance(rec, dict): 
+            continue
+        alias = rec.get("alias") or ""
+        moa   = rec.get("moa") or ""
+        ae    = rec.get("ae") or ""
+        # ensure AE exists minimally
+        if not ae:
+            # minimal AE by class
+            _, _, p = _class_defaults(moa)
+            rec["ae"] = p or "피로/오심 등 일반적 증상이 있을 수 있어요. 이상 시 의료진과 상의하세요."
+            ae = rec["ae"]
+        # plain summary
+        if not rec.get("ae_plain") and not rec.get("plain"):
+            em, tips, p = _class_defaults(moa)
+            base = _squeeze_sentences(ae) or p
+            if base:
+                rec["ae_plain"] = base
+                rec["plain"] = base
+        # emergency bullets
+        if not rec.get("plain_emergency"):
+            # reuse earlier heuristic if defined
+            try:
+                em_list = _derive_emergency_from_text(ae)  # may exist from previous patch
+            except Exception:
+                em_list = []
+            if not em_list:
+                em_list, _, _p = _class_defaults(moa)
+            if em_list:
+                rec["plain_emergency"] = em_list
+        # care tips
+        if not rec.get("care_tips"):
+            try:
+                tips = _derive_care_tips_from_text(ae)
+            except Exception:
+                tips = []
+            if not tips:
+                _, tips, _p = _class_defaults(moa)
+            if tips:
+                rec["care_tips"] = tips
+        # add emojis into AE if none present to make it visually scannable
+        if not _has_emoji(rec.get("ae")):
+            # lightweight emoji prefix by class
+            if "설사" in ae or "diarr" in ae.lower():
+                rec["ae"] = "💧 " + rec["ae"]
+            elif "발진" in ae or "피부" in ae:
+                rec["ae"] = "🧴 " + rec["ae"]
+            elif "감염" in ae or "호중구" in ae:
+                rec["ae"] = "😷 " + rec["ae"]
+            elif "고혈압" in ae or "혈압" in ae:
+                rec["ae"] = "🩺 " + rec["ae"]
+            elif "심장" in ae or "부정맥" in ae or "qt" in ae.lower():
+                rec["ae"] = "📈 " + rec["ae"]
+
+_prev_global_augment_20251025 = globals().get("ensure_onco_drug_db")
+def ensure_onco_drug_db(db):
+    if callable(_prev_global_augment_20251025):
+        try:
+            _prev_global_augment_20251025(db)
+        except Exception:
+            pass
+    _augment_all_drugs_20251025(db)
+# === [/PATCH] ===
