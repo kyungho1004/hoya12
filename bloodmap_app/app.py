@@ -3124,3 +3124,184 @@ try:
 except Exception:
     pass
 # === [/PATCH] ===
+
+
+
+# === [PATCH 2025-10-25] BETA ON/OFF MODE ===
+def _beta_enabled() -> bool:
+    try:
+        import streamlit as st
+        return bool(st.session_state.get("_beta_enabled", False))
+    except Exception:
+        return False
+
+def _set_beta(val: bool) -> None:
+    try:
+        import streamlit as st
+        st.session_state["_beta_enabled"] = bool(val)
+    except Exception:
+        pass
+
+# Monkeypatch expander: if beta OFF and title contains beta markers, SKIP body.
+try:
+    import streamlit as _st_beta
+except Exception:
+    _st_beta = None
+
+if _st_beta is not None and not getattr(_st_beta, "_beta_gate_installed", False):
+    try:
+        _orig_expander = getattr(_st_beta, "expander", None)
+
+        class _SkipCtx:
+            def __enter__(self):
+                raise RuntimeError("_beta_blocked")
+            def __exit__(self, exc_type, exc, tb):
+                return True  # suppress
+
+        def _expander_beta_guard(label, *args, **kwargs):
+            try:
+                text = str(label or "")
+            except Exception:
+                text = ""
+            if (not _beta_enabled()) and any(tok in text for tok in ("(β", "β)", "베타", "beta", "Beta")):
+                return _SkipCtx()
+            return _orig_expander(label, *args, **kwargs)
+
+        if callable(_orig_expander):
+            _st_beta.expander = _expander_beta_guard
+            _st_beta._beta_gate_installed = True
+    except Exception:
+        pass
+
+# Sidebar toggle (always visible)
+try:
+    import streamlit as st
+    with st.sidebar:
+        st.toggle("베타 패널 표시", value=bool(st.session_state.get("_beta_enabled", False)), key="_beta_enabled")
+        st.caption("이 스위치를 끄면 제목에 'β/베타/beta'가 포함된 패널은 숨겨집니다.")
+except Exception:
+    pass
+# === [/PATCH] ===
+
+
+
+# === [PATCH 2025-10-25] BETA PASSWORD GUARD ===
+def _beta_pass_file() -> str:
+    return "/mnt/data/.beta_password"
+
+def _beta_hash(s: str) -> str:
+    try:
+        import hashlib
+        return hashlib.sha256((s or "").encode("utf-8")).hexdigest()
+    except Exception:
+        return ""
+
+def _beta_password_is_set() -> bool:
+    try:
+        import os
+        if os.environ.get("BETA_PASSWORD"):
+            return True
+        return bool(os.path.exists(_beta_pass_file()))
+    except Exception:
+        return False
+
+def _beta_password_ok() -> bool:
+    try:
+        import os, streamlit as st
+        if not bool(st.session_state.get("_beta_enabled", False)):
+            return False
+        # Once validated for session, reuse
+        if bool(st.session_state.get("_beta_pwd_ok", False)):
+            return True
+        # Check env password first
+        env_pw = os.environ.get("BETA_PASSWORD")
+        if env_pw:
+            want = _beta_hash(env_pw)
+        else:
+            # read from file
+            try:
+                with open(_beta_pass_file(), "r", encoding="utf-8") as f:
+                    want = f.read().strip()
+            except Exception:
+                want = ""
+        typed = st.session_state.get("_beta_pwd_input") or ""
+        if want and _beta_hash(typed) == want:
+            st.session_state["_beta_pwd_ok"] = True
+            return True
+        return False
+    except Exception:
+        return False
+
+def _beta_password_sidebar():
+    # Renders password UI when beta toggle is ON. Allows first-time setup if not configured.
+    try:
+        import os, streamlit as st
+        with st.sidebar:
+            if not bool(st.session_state.get("_beta_enabled", False)):
+                return
+            st.markdown("**🔒 베타 패널 잠금**")
+            if _beta_password_is_set():
+                st.text_input("비밀번호 입력", type="password", key="_beta_pwd_input")
+                if _beta_password_ok():
+                    st.caption("✅ 인증됨 — 베타 패널이 표시됩니다.")
+                else:
+                    st.caption("❗ 비밀번호가 맞아야 베타 패널이 열립니다.")
+            else:
+                st.caption("처음 사용 — 비밀번호를 설정해주세요.")
+                st.text_input("새 비밀번호", type="password", key="_beta_pwd_new1")
+                st.text_input("새 비밀번호 확인", type="password", key="_beta_pwd_new2")
+                if st.button("비밀번호 설정", use_container_width=True):
+                    p1 = st.session_state.get("_beta_pwd_new1") or ""
+                    p2 = st.session_state.get("_beta_pwd_new2") or ""
+                    if p1 and (p1 == p2):
+                        try:
+                            with open(_beta_pass_file(), "w", encoding="utf-8") as f:
+                                f.write(_beta_hash(p1))
+                            st.success("설정 완료! 이제 비밀번호로 열 수 있습니다.")
+                        except Exception as e:
+                            st.error("저장 실패: 파일 쓰기 권한을 확인해주세요.")
+                    else:
+                        st.error("두 비밀번호가 일치하지 않습니다.")
+    except Exception:
+        pass
+
+# Strengthen expander guard to require BOTH toggle and password
+try:
+    import streamlit as _st_beta2
+except Exception:
+    _st_beta2 = None
+
+if _st_beta2 is not None and getattr(_st_beta2, "_beta_gate_installed", False):
+    try:
+        _orig_expander2 = getattr(_st_beta2, "expander", None)
+
+        class _SkipCtx2:
+            def __enter__(self):
+                raise RuntimeError("_beta_blocked")
+            def __exit__(self, exc_type, exc, tb):
+                return True
+
+        def _expander_beta_guard2(label, *args, **kwargs):
+            try:
+                text = str(label or "")
+            except Exception:
+                text = ""
+            markers = ("(β", "β)", "베타", "beta", "Beta")
+            needs_beta = any(tok in text for tok in markers)
+            # if it's a beta-marked expander, require both toggle and password
+            if needs_beta and not (_st_beta2.session_state.get("_beta_enabled") and _beta_password_ok()):
+                return _SkipCtx2()
+            return _orig_expander2(label, *args, **kwargs)
+
+        if callable(_orig_expander2):
+            _st_beta2.expander = _expander_beta_guard2
+            _st_beta2._beta_gate_installed = True
+    except Exception:
+        pass
+
+# Render password UI (append-only)
+try:
+    _beta_password_sidebar()
+except Exception:
+    pass
+# === [/PATCH] ===
