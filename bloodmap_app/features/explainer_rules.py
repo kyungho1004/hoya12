@@ -58,3 +58,82 @@ RULES.extend([
         "html": "<span class='explain-chip'>고혈압 위기: 응급 • 즉시 연락</span>",
     },
 ])
+
+# ---- Phase 14: Base explainer rules (oncology terms) ----
+from __future__ import annotations
+import re
+
+def _rx(s: str) -> str:
+    return s
+
+BASE_RULES = [
+    {
+        "name": "QT 연장",
+        "patterns": [
+            _rx(r"\bQTc?\b"),
+            _rx(r"torsades?\s+de\s+pointes?"),
+            _rx(r"QT\s*연장"),
+        ],
+        "html": "<span class='explain-chip'>QT 연장: 실신·돌연사 위험 ↑ → ECG 추적</span>",
+    },
+    {
+        "name": "손발증후군",
+        "patterns": [
+            _rx(r"손발\s*증후군"),
+            _rx(r"손발증후군"),
+            _rx(r"hand[- ]?foot\s*(?:syndrome|reaction)"),
+            _rx(r"HFS"),
+        ],
+        "html": "<span class='explain-chip'>손발증후군: 붉어짐·통증 → 보습·마찰 줄이기</span>",
+    },
+    {
+        "name": "RA/분화 증후군",
+        "patterns": [
+            _rx(r"RA\s*증후군"),
+            _rx(r"분화\s*증후군"),
+            _rx(r"differentiation\s+syndrome"),
+            _rx(r"ATRA"),
+        ],
+        "html": "<span class='explain-chip'>RA/분화 증후군: 발열·호흡곤란·부종 → 즉시 연락</span>",
+    },
+    {
+        "name": "심근독성",
+        "patterns": [
+            _rx(r"심근\s*독성"),
+            _rx(r"cardiomyopath"),
+            _rx(r"LVEF\s*감소|좌심실\s*구혈률"),
+        ],
+        "html": "<span class='explain-chip'>심근독성: 호흡곤란/부종/흉통 → 심초음파·심장평가</span>",
+    },
+    {
+        "name": "골수억제",
+        "patterns": [
+            _rx(r"골수\s*억제"),
+            _rx(r"myelosuppression"),
+            _rx(r"호중구\s*감소|neutropen"),
+        ],
+        "html": "<span class='explain-chip'>골수억제: 감염 위험 ↑ → 발열 시 즉시 연락</span>",
+    },
+]
+
+try:
+    RULES  # may exist from previous phases
+except NameError:
+    RULES = []
+
+# Deduplicate by name while appending BASE_RULES first
+def get_rules():
+    seen = {r.get("name") for r in BASE_RULES}
+    out = list(BASE_RULES)
+    for r in RULES:
+        if r.get("name") not in seen:
+            out.append(r)
+            seen.add(r.get("name"))
+    return out
+
+def compile_rules():
+    compiled = []
+    for r in get_rules():
+        pats = [re.compile(p, re.I) for p in r.get("patterns", []) if p]
+        compiled.append((r.get("name",""), pats, r.get("html","")))
+    return compiled

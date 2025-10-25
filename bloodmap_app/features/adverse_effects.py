@@ -144,3 +144,33 @@ def render_ae_cards(st, picked_keys: Sequence[str]|None, DRUG_DB: Mapping[str, d
                 st.write(_tw.dedent(snippet))
     except Exception:
         pass
+
+# ---- Phase 14: AE main renderer wrapper (legacy-compatible) ----
+def render_ae_main(st, picked_keys: Sequence[str] | None, DRUG_DB: Mapping[str, dict] | None) -> None:
+    """
+    Preferred entry point for AE rendering.
+    - Delegates to ui_results.render_adverse_effects if present.
+    - Sets a guard in session_state to avoid duplicate rendering by upstream blocks.
+    - Never breaks outer UI.
+    """
+    try:
+        ss = st.session_state
+        try:
+            from ui_results import render_adverse_effects as _legacy_main
+        except Exception:
+            _legacy_main = None
+        if _legacy_main:
+            _legacy_main(st, picked_keys, DRUG_DB)
+            ss["_ae_main_rendered"] = True
+            return
+        # Fallback: minimal bullet summary (uses same concat util as other helpers)
+        from utils.db_access import concat_ae_text as _concat
+        text = _concat(DRUG_DB or {}, list(picked_keys or []))
+        if text.strip():
+            with st.expander("항암제 부작용(기본 렌더, β)", expanded=True):
+                for line in _bullets_from_text(text, max_items=16):
+                    st.markdown(line)
+                st.caption("※ 자동 요약입니다. 실제 라벨/가이드를 우선하세요.")
+            ss["_ae_main_rendered"] = True
+    except Exception:
+        pass
