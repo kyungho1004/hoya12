@@ -7,7 +7,6 @@ from __future__ import annotations
 from typing import Sequence, Mapping, Any
 
 def _harvest_text_for_key(drug_db: Mapping[str, Any], key: str) -> str:
-    """Return concatenated AE text for a single drug key, tolerant to schema differences."""
     try:
         from utils.db_access import concat_ae_text as _concat
         return _concat({key: drug_db.get(key, {})}, [key])
@@ -20,28 +19,19 @@ def _fallback_render(st, picked_keys: Sequence[str]|None, drug_db: Mapping[str, 
         if not keys:
             return
         st.markdown("### 항암제 부작용 요약 (fallback)")
-        # Simple table: Drug | Summary(앞 180자)
         import pandas as pd
         rows = []
         for k in keys:
             txt = _harvest_text_for_key(drug_db or {}, k)
-            if txt:
-                snippet = (txt[:180] + "…") if len(txt) > 180 else txt
-            else:
-                snippet = ""
+            snippet = (txt[:180] + "…") if txt and len(txt) > 180 else (txt or "")
             rows.append({"Drug": str(k), "Summary": snippet})
         if rows:
             df = pd.DataFrame(rows)
             st.dataframe(df, use_container_width=True)
     except Exception:
-        # never break the parent UI
         pass
 
 def render_adverse_effects(st, picked_keys: Sequence[str]|None, DRUG_DB: Mapping[str, dict]|None) -> None:
-    """
-    Try upstream renderer first; if it fails or is absent, use a compact fallback.
-    """
-    # 1) Prefer upstream implementation
     try:
         try:
             from ui_results import render_adverse_effects as _legacy_render
@@ -51,8 +41,49 @@ def render_adverse_effects(st, picked_keys: Sequence[str]|None, DRUG_DB: Mapping
             _legacy_render(st, picked_keys, DRUG_DB)
             return
     except Exception:
-        # fall through to fallback
         pass
-
-    # 2) Fallback rendering (non-intrusive)
     _fallback_render(st, picked_keys, DRUG_DB)
+
+# ---- Phase 8: Structured AE table renderer (safe, schema-agnostic) ----
+def _rows_from_text(text: str):
+    import re
+    if not text or not text.strip():
+        return []
+    s = re.sub(r"\s+", " ", text).strip()
+    parts = re.split(r"[.;\n\r\t]+\s*", s)
+    rows = []
+    for p in parts:
+        t = p.strip()
+        if not t:
+            continue
+        sev = ""
+        if re.search(r"중증|경고|위험|severe|grade\s*[34]|응급|출혈|실신|호흡곤란|혈전", t, re.I):
+            sev = "⚠︎"
+        event = t[:20] + ("…" if len(t) > 20 else "")
+        typical = "" if sev else "○"
+        note = t[:80] + ("…" if len(t) > 80 else "")
+        rows.append([event, typical, sev, note])
+        if len(rows) >= 60:
+            break
+    return rows
+
+def render_ae_table(st, picked_keys: Sequence[str]|None, DRUG_DB: Mapping[str, dict]|None) -> None:
+    try:
+        keys = list(picked_keys or [])
+        if not keys:
+            return
+        from utils.db_access import concat_ae_text as _concat
+        text = _concat(DRUG_DB or {}, keys)
+        if not text.strip():
+            return
+        with st.expander("항암제 부작용 표 (β)", expanded=False):
+            import pandas as pd
+            rows = _rows_from_text(text)
+            if not rows:
+                st.info("표로 변환할 내용이 충분하지 않습니다.")
+                return
+            df = pd.DataFrame(rows, columns=["이벤트", "일반", "중증", "메모(요약)"])
+            st.dataframe(df, use_container_width=True)
+            st.caption("※ 자동 변환 표입니다. 실제 진료 지침/라벨을 우선하세요.")
+    except Exception:
+        pass
