@@ -3305,3 +3305,61 @@ try:
 except Exception:
     pass
 # === [/PATCH] ===
+
+
+
+# === [PATCH 2025-10-25] BETA DENYLIST EXTENSION ===
+# Labels to always treat as beta content when beta is OFF
+_BETA_LABEL_DENYLIST = {
+    "ER 원페이지 PDF (소아)",
+    "내보내기(소아 요약)",
+}
+
+try:
+    import streamlit as _st_beta3
+except Exception:
+    _st_beta3 = None
+
+if _st_beta3 is not None and hasattr(_st_beta3, "expander"):
+    try:
+        _orig_expander3 = _st_beta3.expander
+
+        class _SkipCtx3:
+            def __enter__(self):
+                raise RuntimeError("_beta_blocked")
+            def __exit__(self, exc_type, exc, tb):
+                return True
+
+        def _expander_beta_guard3(label, *args, **kwargs):
+            try:
+                text = str(label or "")
+            except Exception:
+                text = ""
+            markers = ("(β", "β)", "베타", "beta", "Beta")
+            is_marked = any(tok in text for tok in markers)
+            in_deny = text in _BETA_LABEL_DENYLIST
+            # Require both toggle and password if marked or denylisted
+            try:
+                import streamlit as st
+                need_protect = is_marked or in_deny
+                if need_protect:
+                    enabled = bool(st.session_state.get("_beta_enabled", False))
+                    # _beta_password_ok may not exist; guard call
+                    ok = False
+                    try:
+                        ok = globals().get("_beta_password_ok", lambda: False)()
+                    except Exception:
+                        ok = False
+                    if not (enabled and ok):
+                        return _SkipCtx3()
+            except Exception:
+                pass
+            return _orig_expander3(label, *args, **kwargs)
+
+        # Install only once
+        if not getattr(_st_beta3, "_beta_gate_denylist_installed", False):
+            _st_beta3.expander = _expander_beta_guard3
+            _st_beta3._beta_gate_denylist_installed = True
+    except Exception:
+        pass
+# === [/PATCH] ===

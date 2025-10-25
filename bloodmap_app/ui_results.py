@@ -179,3 +179,31 @@ def _render_dx_notes_if_any(st, group: str, dx: str):
     except Exception:
         pass
 # === [/PATCH] ===
+
+
+
+# === [PATCH 2025-10-25] NO-TRUNCATE AE CSS ===
+def _inject_no_truncate_css():
+    try:
+        import streamlit as st
+        st.markdown("""
+<style>
+/* Try a few common classnames to avoid truncation */
+.ae, .ae-text, .drug-ae, .adverse, .adverse-effects, [class*="ae"], [class*="adverse"] {
+  max-height: none !important;
+  overflow: visible !important;
+  display: block !important;
+  -webkit-line-clamp: unset !important;
+  white-space: normal !important;
+}
+</style>
+""", unsafe_allow_html=True)
+    except Exception:
+        pass
+
+# attempt to run on import (safe if Streamlit not ready)
+try:
+    _inject_no_truncate_css()
+except Exception:
+    pass
+# === [/PATCH] ===
