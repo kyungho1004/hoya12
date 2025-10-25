@@ -1728,6 +1728,14 @@ with t_chemo:
                 _used_shared_renderer = False
         else:
             _used_shared_renderer = False
+        # === [PATCH] Nav guards (Phase 15) — unify & complement ===
+        try:
+            from features.nav import apply_all_nav_guards as _navguards
+            _navguards(st)
+        except Exception:
+            pass
+        # === [/PATCH] ===
+
         # === [PATCH] AE main (Phase 14) — wrapper & duplicate guard ===
         try:
             if not st.session_state.get("_ae_main_rendered"):
