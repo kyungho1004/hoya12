@@ -1728,6 +1728,31 @@ with t_chemo:
                 _used_shared_renderer = False
         else:
             _used_shared_renderer = False
+        # === [PATCH] AE summary section (Phase 18) ===
+        try:
+            from features.adverse_effects import render_ae_main2 as _ae2
+            _ae2(st, picked_keys, DRUG_DB)
+        except Exception:
+            pass
+        # === [/PATCH] ===
+
+        # === [PATCH] Unified report pipeline (Phase 18) ===
+        try:
+            from features.exporters_pipeline import render_report_pipeline as _rp
+            _payload = {"title": "보고서", "drugs": list(picked_keys or []), "summary": "", "notes": {}}
+            _rp(st, _payload)
+        except Exception:
+            pass
+        # === [/PATCH] ===
+
+        # === [PATCH] Persist dirs status (Phase 18) ===
+        try:
+            from features.core.persist import render_persist_status as _persist
+            _persist(st)
+        except Exception:
+            pass
+        # === [/PATCH] ===
+
         # === [PATCH] Peds Jumpbar (Phase 17) ===
         try:
             from features.peds.jumpbar import render_peds_jumpbar as _peds_jb
