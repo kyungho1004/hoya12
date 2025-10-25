@@ -1607,3 +1607,59 @@ def _squeeze_sentences(ae: str, limit=2):
         parts = [s.strip(" ·-") for s in t.split(".") if s.strip()]
     return " ".join(parts[:limit]) if parts else ""
 # === [/HOTFIX] ===
+
+
+
+# === [PATCH 2025-10-25 KST] Avapritinib reinforced ===
+def _reinforce_avapritinib_20251025(db: Dict[str, Dict[str, Any]]) -> None:
+    key = "Avapritinib"
+    alias = "아바프리티닙"
+    rec = {
+        "alias": alias,
+        "moa": "PDGFRA D842V 포함 GIST 표적 TKI",
+        "ae": "🧠 인지변화/혼동 · 어지럼 · 두통 · 부종 · 오심/구토 · 설사 · 빈혈 · 멍/출혈",
+        "monitor": [
+            "Neurocognitive status(기억·집중·혼동)",
+            "CBC(빈혈/혈소판)",
+            "LFT(간수치)",
+            "Bleeding signs/두통·시야이상(뇌출혈 의심)"
+        ],
+        "ae_plain": "인지 변화(혼동/기억저하)와 붓기·피로·위장 증상이 있을 수 있어요. 드물게 출혈 위험이 있어 이상 증상 시 바로 알려주세요.",
+        "plain": "인지 변화(혼동/기억저하)와 붓기·피로·위장 증상이 있을 수 있어요. 드물게 출혈 위험이 있어 이상 증상 시 바로 알려주세요.",
+        "plain_emergency": [
+            "🚨 갑작스러운 심한 두통·시야이상·말 어눌함·편측 힘빠짐 등 신경학적 증상 시 즉시 연락(뇌출혈/중추신경계 이상 가능)",
+            "🚨 검은 변/토혈·지속되는 코피 등 출혈 징후 시 즉시 연락",
+            "🚨 혼동/멍해짐이 급격히 심해지면 즉시 연락"
+        ],
+        "care_tips": [
+            "💧 수분보충",
+            "📝 인지변화 메모/동반자 관찰",
+            "🪑 낙상 예방(천천히 일어나기)",
+            "🩸 항응고제/항혈소판제 복용 여부 의료진과 상의"
+        ],
+    }
+    try:
+        _upsert(db, key, rec["alias"], rec["moa"], rec["ae"])
+        _upsert(db, key.lower(), rec["alias"], rec["moa"], rec["ae"])
+        _upsert(db, f"{key} ({alias})", rec["alias"], rec["moa"], rec["ae"])
+        _upsert(db, f"{alias} ({key})", rec["alias"], rec["moa"], rec["ae"])
+    except Exception:
+        pass
+    # merge dictionaries for all key variants
+    for cand in (key, key.lower(), f"{key} ({alias})", f"{alias} ({key})"):
+        r = db.setdefault(cand, {})
+        if isinstance(r, dict):
+            # prefer richer values
+            for k,v in rec.items():
+                if not r.get(k):
+                    r[k] = v
+
+_prev_avap_boost_20251025 = globals().get("ensure_onco_drug_db")
+def ensure_onco_drug_db(db):
+    if callable(_prev_avap_boost_20251025):
+        try:
+            _prev_avap_boost_20251025(db)
+        except Exception:
+            pass
+    _reinforce_avapritinib_20251025(db)
+# === [/PATCH] ===
