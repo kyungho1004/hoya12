@@ -137,3 +137,47 @@ def compile_rules():
         pats = [re.compile(p, re.I) for p in r.get("patterns", []) if p]
         compiled.append((r.get("name",""), pats, r.get("html","")))
     return compiled
+# ---- Phase 20: Expand oncology/AE explainer rules ----
+EXTRA_RULES = [
+    {
+        "name": "전자간증/중증 고혈압",
+        "patterns": [
+            _rx(r"전자간증|eclampsia|preeclampsia"),
+            _rx(r"SBP\s*(?:>=|≥)\s*160|DBP\s*(?:>=|≥)\s*110"),
+        ],
+        "html": "<span class='explain-chip'>전자간증/중증 고혈압: 응급 • 즉시 연락</span>",
+    },
+    {
+        "name": "갑상선기능저하(TKI 연관)",
+        "patterns": [
+            _rx(r"갑상선\s*기능저하|hypothyroid"),
+            _rx(r"TKI|sunitinib|sorafenib|pazopanib|lenvatinib"),
+        ],
+        "html": "<span class='explain-chip'>갑상선저하: 피로/부종 → TSH/FT4 확인·보충 고려</span>",
+    },
+    {
+        "name": "메토트렉세이트-구내염/간독성",
+        "patterns": [
+            _rx(r"메토트렉세이트|methotrexate|MTX"),
+            _rx(r"구내염|stomatitis|mucositis|간독성|hepatotox|AST|ALT"),
+        ],
+        "html": "<span class='explain-chip'>MTX: 구내염·간효소상승 → 용량/중단·모니터링</span>",
+    },
+]
+
+# Merge without duplicates (by name)
+try:
+    BASE_RULES  # from previous phase
+except NameError:
+    BASE_RULES = []
+
+def get_rules():
+    base = list(BASE_RULES)
+    seen = {r.get("name") for r in base}
+    for r in RULES:
+        if r.get("name") not in seen:
+            base.append(r); seen.add(r.get("name"))
+    for r in EXTRA_RULES:
+        if r.get("name") not in seen:
+            base.append(r); seen.add(r.get("name"))
+    return base

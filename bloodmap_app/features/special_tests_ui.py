@@ -1,35 +1,40 @@
 """
-Wrapper for special_tests.special_tests_ui() to integrate as a non-intrusive panel.
-- Calls upstream UI, then shows a compact summary of emitted lines (if any).
-- Never breaks the app (full try/except).
+Wrapper for special_tests.special_tests_ui() with safe key namespace and summary.
 """
 from __future__ import annotations
 from typing import List
 
 def render_special_tests_panel(st):
     try:
-        import special_tests as _st  # existing module in project root
+        import special_tests as _st  # legacy UI
     except Exception:
         _st = None
+    try:
+        from features.special_tests_keys import set_call_namespace as _setns
+        from features.special_tests_core import normalize_lines as _norm
+    except Exception:
+        _setns = None
+        _norm = lambda x: []
 
     try:
         with st.expander("🧪 특수검사 (분리 모듈, β)", expanded=False):
+            if _setns:
+                _setns()  # guarantee unique keys per render
             lines: List[str] = []
             if _st and hasattr(_st, "special_tests_ui"):
                 try:
                     lines = _st.special_tests_ui() or []
                 except Exception:
                     lines = []
-            # Compact summary (if upstream emitted lines)
-            if lines:
+            pairs = _norm(lines)
+            if pairs:
                 st.markdown("**요약**")
-                for kind, msg in [l.split("|", 1) if "|" in l else ("info", l) for l in lines]:
-                    bullet = f"- {msg.strip()}"
-                    if "risk" in kind:
-                        st.markdown("🚨 " + bullet)
-                    elif "warn" in kind:
-                        st.markdown("⚠️ " + bullet)
+                for level, msg in pairs:
+                    if level == "risk":
+                        st.markdown("🚨 - " + msg)
+                    elif level == "warn":
+                        st.markdown("⚠️ - " + msg)
                     else:
-                        st.markdown(bullet)
+                        st.markdown("- " + msg)
     except Exception:
         pass
