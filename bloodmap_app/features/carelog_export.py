@@ -23,7 +23,7 @@ def _collect_rows(limit: int = 500):
             with open(p, newline="", encoding="utf-8") as f:
                 r = csv.DictReader(f)
                 for row in r:
-                    rows.append(row)
+                    rows.append(normalize_row(row))
                     if len(rows) >= limit:
                         return rows
     except Exception:
