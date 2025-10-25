@@ -366,3 +366,43 @@ try:
 except Exception:
     pass
 # === [/PATCH] ===
+
+
+
+# === [PATCH 2025-10-25 KST] Friendly sections for render_adverse_effects ===
+def _resolve_redirect_chain(rec: Dict[str, Any], db: Dict[str, Dict[str, Any]]):
+    seen = 0
+    cur = rec
+    while isinstance(cur, dict) and cur.get("redirect_to") and seen < 5:
+        cur = db.get(cur.get("redirect_to"), cur)
+        seen += 1
+    return cur
+
+def _wrap_adverse_append_friendly(fn):
+    def inner(st, drug_keys: List[str], db: Dict[str, Dict[str, Any]], *args, **kwargs):
+        res = fn(st, drug_keys, db, *args, **kwargs)
+        try:
+            for k in (drug_keys or []):
+                rec = db.get(k) or {}
+                rec = _resolve_redirect_chain(rec, db)
+                try:
+                    _render_friendly_sections(st, rec)
+                except Exception:
+                    # fallback minimal
+                    easy = rec.get("plain") or rec.get("ae_plain")
+                    if easy:
+                        st.markdown("**알기 쉽게 보기**")
+                        st.write(easy)
+        except Exception:
+            pass
+        return res
+    inner._friendly_appended = True
+    return inner
+
+# install specialized hook
+try:
+    if callable(globals().get("render_adverse_effects")) and not getattr(globals().get("render_adverse_effects"), "_friendly_appended", False):
+        render_adverse_effects = _wrap_adverse_append_friendly(render_adverse_effects)
+except Exception:
+    pass
+# === [/PATCH] ===
