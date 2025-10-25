@@ -1728,6 +1728,23 @@ with t_chemo:
                 _used_shared_renderer = False
         else:
             _used_shared_renderer = False
+        # === [PATCH] AE main (Phase 14) — wrapper & duplicate guard ===
+        try:
+            if not st.session_state.get("_ae_main_rendered"):
+                from features.adverse_effects import render_ae_main as _ae_main
+                _ae_main(st, picked_keys, DRUG_DB)
+        except Exception:
+            pass
+        # === [/PATCH] ===
+
+        # === [PATCH] Explainer chips (Phase 14) — keyword-triggered ===
+        try:
+            from features.explainer import render_explainer_chips as _chips
+            _chips(st, picked_keys, DRUG_DB, max_chips=4)
+        except Exception:
+            pass
+        # === [/PATCH] ===
+
         # === [PATCH] Exporters panel (Phase 12, safe & local import) ===
         try:
             from features.exporters import render_exporters_panel as _exporters
