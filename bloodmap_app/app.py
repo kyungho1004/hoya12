@@ -1728,6 +1728,22 @@ with t_chemo:
                 _used_shared_renderer = False
         else:
             _used_shared_renderer = False
+        # === [PATCH] PDF summary button (Phase 8 Step 2, safe & local import) ===
+        try:
+            from utils.db_access import concat_ae_text as _ae_concat
+            from utils.pdf_utils import save_patient_summary as _save_summary
+            cols_pdf = st.columns([1,1,2])
+            with cols_pdf[0]:
+                if st.button("요약 PDF 저장"):
+                    _txt = _ae_concat(DRUG_DB, picked_keys)
+                    _out = _save_summary(list(picked_keys or []), _txt[:1000])
+                    if _out:
+                        st.success(f"저장됨: {_out}")
+                        st.write(f"[다운로드]({_out})")
+        except Exception:
+            pass
+        # === [/PATCH] ===
+
         # === [PATCH] AE table render (Phase 8, safe & local import) ===
         try:
             from features.adverse_effects import render_ae_table as _ae_table
