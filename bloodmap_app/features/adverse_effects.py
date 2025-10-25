@@ -87,3 +87,60 @@ def render_ae_table(st, picked_keys: Sequence[str]|None, DRUG_DB: Mapping[str, d
             st.caption("※ 자동 변환 표입니다. 실제 진료 지침/라벨을 우선하세요.")
     except Exception:
         pass
+
+# ---- Phase 8: AE summary renderer (bullet-style, beta) ----
+def _bullets_from_text(text: str, max_items: int = 12):
+    import re
+    if not text or not text.strip():
+        return []
+    s = re.sub(r"\s+", " ", text).strip()
+    parts = re.split(r"[.;\n\r\t]+\s*", s)
+    out = []
+    for p in parts:
+        t = p.strip(" -•·")
+        if not t:
+            continue
+        # Keep concise bullet: first clause up to ~80 chars
+        if len(t) > 80:
+            t = t[:80] + "…"
+        out.append("• " + t)
+        if len(out) >= max_items:
+            break
+    return out
+
+def render_ae_summary(st, picked_keys: Sequence[str]|None, DRUG_DB: Mapping[str, dict]|None) -> None:
+    try:
+        keys = list(picked_keys or [])
+        if not keys:
+            return
+        from utils.db_access import concat_ae_text as _concat
+        text = _concat(DRUG_DB or {}, keys)
+        if not text.strip():
+            return
+        with st.expander("항암제 부작용 요약 (β)", expanded=False):
+            bullets = _bullets_from_text(text)
+            if bullets:
+                st.markdown("\n".join(bullets))
+                st.caption("※ 자동 요약입니다. 실제 라벨/가이드를 우선하세요.")
+    except Exception:
+        pass
+
+# ---- Phase 8: AE cards renderer (drug-wise, beta) ----
+def render_ae_cards(st, picked_keys: Sequence[str]|None, DRUG_DB: Mapping[str, dict]|None) -> None:
+    try:
+        keys = list(picked_keys or [])
+        if not keys:
+            return
+        from utils.db_access import concat_ae_text as _concat
+        import textwrap as _tw
+        with st.expander("항암제 카드(요약) (β)", expanded=False):
+            for k in keys:
+                txt = _concat({k: (DRUG_DB or {}).get(k, {})}, [k])
+                if not txt.strip():
+                    continue
+                # Keep concise capsule
+                snippet = txt[:220] + ("…" if len(txt) > 220 else "")
+                st.markdown(f"#### {k}")
+                st.write(_tw.dedent(snippet))
+    except Exception:
+        pass
