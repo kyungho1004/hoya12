@@ -1,96 +1,60 @@
-"""
-Keyword explainer rules (structured). This module is optional.
-If ui_results already renders keyword chips, that behavior remains the default.
-These rules allow local rendering when desired.
-"""
-from __future__ import annotations
-from typing import List, Dict, Any
+RULES = []
 
-# Minimal, high-yield examples (expand as needed)
-# Each rule has patterns (regex) and an HTML chip (pre-styled via ensure_keyword_explainer_style).
-RULES: List[Dict[str, Any]] = [
-    # QT prolongation (exact QT / QTc; avoid matching arbitrary 'Qt' code)
+# ---- Phase 8 Step 3: Electrolyte & BP numeric-like triggers ----
+# NOTE: Regex 기반이라 "숫자 비교"는 엄격 연산이 아닌 패턴 매칭임.
+#       흔히 쓰는 표기(예: K<3.0, Na 122, SBP≥180 등)와 용어를 다수 포함.
+RULES.extend([
     {
-        "name": "QT 연장",
-        "patterns": [r"\bQTc?\b", r"QTc\s*(?:≥|>=|>\s*)?\s*500"],
-        "html": "<span class='explain-chip'>QT 연장: 실신·돌연사 위험 ↑ → ECG 추적</span>",
+        "name": "전해질-저칼륨(K<3.0)",
+        "patterns": [
+            r"K\s*(?:<=|<)\s*3(?:\.0)?",              # K<3 or K<3.0
+            r"hypokalem",                                  # hypokalemia
+            r"칼륨\s*낮|저칼륨",                          # 한글 표현
+        ],
+        "html": "<span class='explain-chip'>저칼륨: 부정맥 위험 → K 교정·ECG 고려</span>",
     },
-    # Hand-foot syndrome (띄어쓰기/연결어 변형 포함)
     {
-        "name": "손발증후군",
-        "patterns": [r"손\s*발\s*증\s*후\s*군", r"hand[- ]?foot"],
-        "html": "<span class='explain-chip'>손발증후군: 손발 붉어짐·벗겨짐 → 보습·마찰 줄이기</span>",
+        "name": "전해질-고칼륨(K>5.5)",
+        "patterns": [
+            r"K\s*(?:>=|>)\s*5\.5",                     # K>5.5
+            r"hyperkalem",                                  # hyperkalemia
+            r"고칼륨",                                      # 한글
+        ],
+        "html": "<span class='explain-chip'>고칼륨: 심전도 변화·부정맥 → 즉시 연락</span>",
     },
-    # RA syndrome / differentiation syndrome (for APL context, generic wording)
     {
-        "name": "RA 증후군",
-        "patterns": [r"RA\s*증\s*후\s*군", r"differentiation\s+syndrome"],
-        "html": "<span class='explain-chip'>RA 증후군: 호흡곤란·부종 → 스테로이드 고려, 즉시 연락</span>",
+        "name": "전해질-저나트륨(Na<125)",
+        "patterns": [
+            r"Na\s*(?:<=|<)\s*125",                      # Na<125
+            r"hyponatrem",                                  # hyponatremia
+            r"저나트륨|나트륨\s*낮",                      # 한글
+        ],
+        "html": "<span class='explain-chip'>저나트륨: 의식저하·경련 위험 → 즉시 연락</span>",
     },
-    # ILD / pneumonitis
     {
-        "name": "ILD",
-        "patterns": [r"\bILD\b", r"폐[ ]?렴\b", r"pneumonitis"],
-        "html": "<span class='explain-chip'>ILD: 호흡곤란/기침·저산소 → CT·스테로이드 고려</span>",
+        "name": "전해질-고나트륨(Na>155)",
+        "patterns": [
+            r"Na\s*(?:>=|>)\s*155",                      # Na>155
+            r"hypernatrem",                                 # hypernatremia
+            r"고나트륨",                                    # 한글
+        ],
+        "html": "<span class='explain-chip'>고나트륨: 탈수·신경증상 → 수분 교정</span>",
     },
-    # TLS
     {
-        "name": "TLS",
-        "patterns": [r"\bTLS\b", r"tumor\s+lysis"],
-        "html": "<span class='explain-chip'>TLS: 수분·전해질·요산관리 → 즉시 연락</span>",
+        "name": "전해질-저마그네슘(Mg<1.2)",
+        "patterns": [
+            r"Mg\s*(?:<=|<)\s*1(?:\.2)?",               # Mg<1 or <1.2
+            r"hypomagnes",                                  # hypomagnesemia
+            r"저마그네슘",                                  # 한글
+        ],
+        "html": "<span class='explain-chip'>저Mg: QT 연장·부정맥 위험 → Mg 보충</span>",
     },
-    # FN
     {
-        "name": "호중구감소성 발열",
-        "patterns": [r"발열\s*·?\s*호중구\s*감소|\bFN\b|febrile\s+neutropenia"],
-        "html": "<span class='explain-chip'>호중구감소성 발열: 응급 · 즉시 연락</span>",
+        "name": "고혈압 위기(SBP≥180/DBP≥120)",
+        "patterns": [
+            r"SBP\s*(?:>=|≥)\s*180|DBP\s*(?:>=|≥)\s*120",
+            r"180/120\+|고혈압\s*위기|hypertensive\s+crisis",
+        ],
+        "html": "<span class='explain-chip'>고혈압 위기: 응급 • 즉시 연락</span>",
     },
-    # LFT elevation
-    {
-        "name": "간효소 상승",
-        "patterns": [r"AST|ALT|간[ ]?효소\s*상승|transaminase\s+elev"],
-        "html": "<span class='explain-chip'>간효소 상승: 약중단/감량·추적 검사</span>",
-    },
-    # Proteinuria
-    {
-        "name": "단백뇨",
-        "patterns": [r"단백뇨|proteinuria"],
-        "html": "<span class='explain-chip'>단백뇨: 소변·신기능 추적, 용량조절 고려</span>",
-    },
-    # Stomatitis
-    {
-        "name": "구내염",
-        "patterns": [r"구내염|stomatitis|mucositis"],
-        "html": "<span class='explain-chip'>구내염: 자극 피하고 가글·통증조절</span>",
-    },
-    # Thrombosis/embolism
-    {
-        "name": "혈전·색전",
-        "patterns": [r"혈전|색전|thrombo|embol"],
-        "html": "<span class='explain-chip'>혈전·색전: 흉통/호흡곤란 즉시 연락</span>",
-    },
-    # Nephrotoxicity
-    {
-        "name": "신독성",
-        "patterns": [r"신독성|nephrotox"],
-        "html": "<span class='explain-chip'>신독성: 수분·Cr 추적, 용량조절</span>",
-    },
-    # Diarrhea / dehydration
-    {
-        "name": "설사·탈수",
-        "patterns": [r"설사|diarrhea|탈수|dehydrat"],
-        "html": "<span class='explain-chip'>설사·탈수: ORS/수분, 중증 시 연락</span>",
-    },
-    # Cardiotoxicity
-    {
-        "name": "심근독성",
-        "patterns": [r"심근[ ]?독성|cardiotox|EF\s*↓|LVEF"],
-        "html": "<span class='explain-chip'>심근독성: 흉통/호흡곤란·심계항진 → 즉시 연락</span>",
-    },
-    # Myelosuppression
-    {
-        "name": "골수억제",
-        "patterns": [r"골수\s*억제|myelosupp"],
-        "html": "<span class='explain-chip'>골수억제: CBC 추적·감염 주의</span>",
-    },
-]
+])
