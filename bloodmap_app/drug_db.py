@@ -1399,3 +1399,56 @@ def ensure_onco_drug_db(db):
             pass
     _extend_solid_20251025(db)
 # === [/PATCH] ===
+
+
+
+# === [PATCH 2025-10-25 KST] User-request additions: heme/solid targeted/ADC ===
+def _extend_user_20251025(db: Dict[str, Dict[str, Any]]) -> None:
+    items = {
+        # Heme (MDS/AML/CLL/FL/MM)
+        "Azacitidine": ("아자시티딘", "DNA demethylation(저메틸화제)", "🩸 골수억제 · 피로 · 오심/구토"),
+        "Decitabine": ("데시타빈", "DNA demethylation", "🩸 골수억제 · 감염 위험 · 피로"),
+        "Idelalisib": ("이델랄리십", "PI3Kδ 억제제", "간독성 · 설사/대장염 · 폐렴/간질성폐질환 · 감염"),
+        # (이미 추가됨) "Gilteritinib": FLT3 TKI
+        # (이미 추가됨) "Venetoclax": BCL-2 inhibitor
+        # (이미 추가됨) "Zanubrutinib": BTK inhibitor
+        # (이미 추가됨) "Lenalidomide": IMiD
+        # (이미 추가됨) "Carfilzomib": proteasome inhibitor
+        # (이미 추가됨) "Daratumumab": anti-CD38
+
+        # Solid ADC / TKIs
+        "Enfortumab vedotin": ("엔포투주맙 베도틴", "Nectin-4 ADC(요로상피암)", "피부발진 · 말초신경병증 · 고혈당 · 피로"),
+        "Sacituzumab govitecan": ("사시투주맙 고비테칸", "Trop-2 ADC(삼중음성 유방암 등)", "호중구감소 · 설사 · 피로"),
+        # (이미 추가됨) "Mobocertinib": EGFR Exon20ins TKI
+        # (이미 추가됨) "Tepotinib": MET exon14 skipping TKI
+        "Avapritinib": ("아바프리티닙", "PDGFRA D842V/GIST TKI", "부종 · 인지저하/혼동 · 오심"),
+        "Talazoparib": ("탈라조파립", "PARP 억제제", "빈혈/혈소판↓ · 피로"),
+        "Alpelisib": ("알펠리십", "PI3Kα 억제제(PIK3CA 변이)", "고혈당 · 발진 · 설사/구내염"),
+        "Trilaciclib": ("트릴라시클립", "CDK4/6 억제제(골수보호 목적)", "피로 · 저칼슘/저칼륨 가능"),
+    }
+    for key, (alias, moa, ae) in items.items():
+        _upsert(db, key, alias, moa, ae)
+        _upsert(db, key.lower(), alias, moa, ae)
+        _upsert(db, f"{key} ({alias})", alias, moa, ae)
+        _upsert(db, f"{alias} ({key})", alias, moa, ae)
+
+    # MM ADC/Ab (non-cell therapy)
+    extra = {
+        "Belantamab mafodotin": ("벨란타맙 마포도틴", "BCMA ADC", "👁️ 각막병증/시력저하 · 혈구감소 · 피로"),
+        "Elotuzumab": ("엘로투주맙", "SLAMF7 항체", "주입반응 · 감염 · 피로"),
+    }
+    for key, (alias, moa, ae) in extra.items():
+        _upsert(db, key, alias, moa, ae)
+        _upsert(db, key.lower(), alias, moa, ae)
+        _upsert(db, f"{key} ({alias})", alias, moa, ae)
+        _upsert(db, f"{alias} ({key})", alias, moa, ae)
+
+_prev_user_20251025 = globals().get("ensure_onco_drug_db")
+def ensure_onco_drug_db(db):
+    if callable(_prev_user_20251025):
+        try:
+            _prev_user_20251025(db)
+        except Exception:
+            pass
+    _extend_user_20251025(db)
+# === [/PATCH] ===

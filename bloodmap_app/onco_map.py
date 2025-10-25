@@ -424,3 +424,76 @@ try:
 except Exception:
     pass
 # === [/PATCH] ===
+
+
+
+# === [PATCH 2025-10-25 KST] Map user-listed agents to diagnoses + notes ===
+def _extend_onco_map_user_20251025(m: Dict[str, Dict[str, Dict[str, list]]]) -> Dict[str, Dict[str, Dict[str, list]]]:
+    def add(group, dx, kind, items):
+        if group not in m: m[group] = {}
+        if dx not in m[group]: m[group][dx] = {"chemo": [], "targeted": [], "abx": []}
+        cur = m[group][dx].setdefault(kind, [])
+        for it in items:
+            if it not in cur: cur.append(it)
+        return m
+
+    # Heme
+    add("혈액암","MDS", "targeted", ["Azacitidine","Decitabine"])
+    add("혈액암","AML", "targeted", ["Azacitidine","Decitabine","Gilteritinib","Venetoclax"])
+    add("혈액암","CLL", "targeted", ["Venetoclax","Idelalisib","Zanubrutinib"])
+    add("림프종","FL",  "targeted", ["Idelalisib","Lenalidomide"])
+    add("혈액암","다발골수종", "targeted", ["Carfilzomib","Daratumumab","Belantamab mafodotin","Elotuzumab"])
+
+    # Solid
+    add("고형암","요로상피암", "targeted", ["Enfortumab vedotin"])
+    add("고형암","삼중음성 유방암", "targeted", ["Sacituzumab govitecan"])
+    add("고형암","GIST(PDGFRA D842V)", "targeted", ["Avapritinib"])
+    add("고형암","유방암(HR+, PIK3CA)", "targeted", ["Alpelisib"])
+    add("고형암","유방암(PARP)", "targeted", ["Talazoparib"])
+    add("고형암","소세포폐암(골수보호)", "targeted", ["Trilaciclib"])
+
+    return m
+
+def _get_dx_notes_user_20251025() -> Dict[str, str]:
+    return {
+        "MDS": "저메틸화제(AZA/DEC) 표준 치료축. 골수억제·감염 모니터.",
+        "AML": "재발/불응 FLT3 변이는 Gilteritinib 고려. VEN 병용 시 TLS 예방 필수.",
+        "CLL": "BTKi vs BCL-2 vs PI3Kδ(출혈/AF vs TLS vs 간독성/대장염) 프로파일 고려.",
+        "FL": "Idelalisib는 간독성/대장염/폐렴 등에 주의, Lenalidomide 병용 옵션.",
+        "다발골수종": "anti-CD38/IMiD/PI/ADC 다양—감염·혈전·각막(벨란타맙) 모니터.",
+        "요로상피암": "Enfortumab vedotin: 피부/신경병증·고혈당 모니터.",
+        "삼중음성 유방암": "Sacituzumab govitecan: 호중구감소·설사 관리 중요.",
+        "GIST(PDGFRA D842V)": "Avapritinib 특이 적합. 인지 변화 시 보고.",
+        "유방암(HR+, PIK3CA)": "Alpelisib: **고혈당** 흔함—혈당 관리·피부발진 주의.",
+        "유방암(PARP)": "Talazoparib: 빈혈·혈소판↓—CBC 모니터.",
+        "소세포폐암(골수보호)": "Trilaciclib: 화학요법 전 투여하여 호중구감소 감소 목적.",
+    }
+
+# Wire up
+try:
+    _prev_build3 = build_onco_map
+    def build_onco_map():
+        m = _prev_build3() or {}
+        return _extend_onco_map_user_20251025(m)
+except Exception:
+    pass
+
+# Merge notes
+try:
+    _prev_get_notes = get_dx_notes  # may exist from prior patch
+except Exception:
+    _prev_get_notes = None
+
+def get_dx_notes() -> Dict[str, str]:
+    notes = {}
+    if callable(_prev_get_notes):
+        try:
+            notes.update(_prev_get_notes())
+        except Exception:
+            pass
+    try:
+        notes.update(_get_dx_notes_user_20251025())
+    except Exception:
+        pass
+    return notes
+# === [/PATCH] ===
