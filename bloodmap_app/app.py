@@ -1728,6 +1728,31 @@ with t_chemo:
                 _used_shared_renderer = False
         else:
             _used_shared_renderer = False
+        # === [PATCH] Exporters panel (Phase 12, safe & local import) ===
+        try:
+            from features.exporters import render_exporters_panel as _exporters
+            _payload = {"title": "내보내기 요약", "drugs": list(picked_keys or []), "summary": "", "note": ""}
+            _exporters(st, _payload)
+        except Exception:
+            pass
+        # === [/PATCH] ===
+
+        # === [PATCH] Diagnosis route guard (Phase 12, safe) ===
+        try:
+            from features.diagnosis import enforce_route_guard as _guard
+            _guard(st)
+        except Exception:
+            pass
+        # === [/PATCH] ===
+
+        # === [PATCH] Carelog export panel (Phase 12, safe & local import) ===
+        try:
+            from features.carelog_export import render_carelog_export as _careexp
+            _careexp(st)
+        except Exception:
+            pass
+        # === [/PATCH] ===
+
         # === [PATCH] Special Tests panel (Phase 11, safe & local import) ===
         try:
             from features.special_tests_ui import render_special_tests_panel as _st_panel
