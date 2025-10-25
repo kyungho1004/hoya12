@@ -2020,3 +2020,49 @@ def ensure_onco_drug_db(db):
     _ensure_heme_agents_20251025(db)
     _apply_heme_canon_20251025(db)
 # === [/PATCH] ===
+
+
+
+# === [PATCH 2025-10-25 KST] Monitor abbreviation expansion at DB layer ===
+_MONITOR_HINTS_20251025 = {
+    "glucose": "혈당",
+    "lipids": "지질(콜레스테롤/중성지방)",
+    "lft": "간기능 검사(AST/ALT/빌리루빈)",
+    "ild": "간질성 폐질환",
+    # Optional common labs (guarded)
+    "ecg": "심전도",
+    "cbc": "전혈구검사",
+}
+
+def _expand_monitor_items_20251025(items):
+    out = []
+    for m in items or []:
+        try:
+            t = str(m).strip()
+            key = t.casefold()
+            hint = _MONITOR_HINTS_20251025.get(key)
+            if hint and "(" not in t and " " not in t:
+                out.append(f"{t} ({hint})")
+            else:
+                out.append(m)
+        except Exception:
+            out.append(m)
+    return out
+
+def _db_expand_monitors_20251025(db: Dict[str, Dict[str, Any]]) -> None:
+    for _, rec in (db or {}).items():
+        if not isinstance(rec, dict):
+            continue
+        mons = rec.get("monitor")
+        if isinstance(mons, list) and mons:
+            rec["monitor"] = _expand_monitor_items_20251025(mons)
+
+_prev_mon_hint_20251025 = globals().get("ensure_onco_drug_db")
+def ensure_onco_drug_db(db):
+    if callable(_prev_mon_hint_20251025):
+        try:
+            _prev_mon_hint_20251025(db)
+        except Exception:
+            pass
+    _db_expand_monitors_20251025(db)
+# === [/PATCH] ===
