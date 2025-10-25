@@ -174,3 +174,84 @@ def render_ae_main(st, picked_keys: Sequence[str] | None, DRUG_DB: Mapping[str, 
             ss["_ae_main_rendered"] = True
     except Exception:
         pass
+
+from typing import Sequence, Mapping
+
+def _get(db: Mapping, k: str, d=None):
+    try:
+        return db.get(k, d) if hasattr(db, "get") else d
+    except Exception:
+        return d
+
+def _str(v):
+    try:
+        return str(v) if v is not None else ""
+    except Exception:
+        return ""
+
+def _drug_display_name(rec: Mapping, key: str) -> str:
+    # Try common fields: "name", "kor", "ko", "label"
+    for f in ("name","kor","ko","label","display"):
+        val = rec.get(f) if isinstance(rec, dict) else None
+        if val:
+            return f"{key} ({val})"
+    return key
+
+def _infer_ae_text(rec: Mapping) -> str:
+    # Try common fields to find AE text
+    if not isinstance(rec, dict):
+        return _str(rec)
+    for f in ("ae","AEs","adverse","effects","부작용","desc","text"):
+        if rec.get(f):
+            return _str(rec.get(f))
+    # join lists if any
+    for f in ("list","lines","bullets"):
+        v = rec.get(f)
+        if isinstance(v, (list,tuple)):
+            return "; ".join(map(_str, v))
+    return ""
+
+def _contains_any(text: str, needles):
+    t = (text or "").lower()
+    return any(n.lower() in t for n in needles)
+
+def _summarize_flags(text: str):
+    flags = []
+    if _contains_any(text, ["qt", "torsades"]):
+        flags.append("QT 연장 — ECG 추적")
+    if _contains_any(text, ["hand-foot", "hfs", "손발"]):
+        flags.append("손발증후군 — 보습·마찰 줄이기")
+    if _contains_any(text, ["differentiation", "atra", "분화", "ra 증후군", "ra증후군"]):
+        flags.append("RA/분화 증후군 — 발열/호흡곤란 시 즉시 연락")
+    if _contains_any(text, ["myelosup", "neutropen", "골수", "호중구"]):
+        flags.append("골수억제 — 발열 시 즉시 연락")
+    if _contains_any(text, ["cardio", "lvef", "심근", "구혈률"]):
+        flags.append("심근독성 — 호흡곤란/부종/흉통 시 평가")
+    return flags
+
+def render_ae_main2(st, picked_keys: Sequence[str] | None, DRUG_DB: Mapping[str, dict] | None):
+    """
+    Enhanced AE section: if legacy renderer is present, it runs first (Phase 14),
+    this adds a compact '항암제 요약 (영/한 + 부작용)' section beneath.
+    """
+    try:
+        keys = list(picked_keys or [])
+        if not keys:
+            return
+        with st.expander("## 항암제 요약 (영/한 + 부작용)", expanded=False):
+            for k in keys:
+                rec = _get(DRUG_DB or {}, k, {}) or {}
+                name = _drug_display_name(rec, k)
+                text = _infer_ae_text(rec)
+                st.markdown(f"### {name}")
+                if text:
+                    st.markdown(f"- **요약**: {_str(text)[:300]}{'…' if len(_str(text))>300 else ''}")
+                flags = _summarize_flags(text)
+                if flags:
+                    st.markdown("**핵심 주의**")
+                    for f in flags:
+                        st.markdown(f"- {f}")
+                else:
+                    st.caption("추가 주의 키워드가 감지되지 않았습니다.")
+    except Exception:
+        pass
