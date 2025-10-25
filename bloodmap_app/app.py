@@ -1728,11 +1728,10 @@ with t_chemo:
                 _used_shared_renderer = False
         else:
             _used_shared_renderer = False
-        # === [PATCH] debug panel (Phase 6; local import, non-intrusive) ===
+        # === [PATCH] AE table render (Phase 8, safe & local import) ===
         try:
-            from utils.db_access import concat_ae_text as _ae_concat
-            from features.debug_tools import render_debug_panel as _dbg
-            _dbg(st, _ae_concat(DRUG_DB, picked_keys), picked_keys)
+            from features.adverse_effects import render_ae_table as _ae_table
+            _ae_table(st, picked_keys, DRUG_DB)
         except Exception:
             pass
         # === [/PATCH] ===
