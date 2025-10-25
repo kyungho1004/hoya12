@@ -1728,6 +1728,31 @@ with t_chemo:
                 _used_shared_renderer = False
         else:
             _used_shared_renderer = False
+        # === [PATCH] AE full section (Phase 19) ===
+        try:
+            from features.adverse_effects import render_ae_full as _ae_full
+            _ae_full(st, picked_keys, DRUG_DB)
+        except Exception:
+            pass
+        # === [/PATCH] ===
+
+        # === [PATCH] PDF templates/pipeline attach (Phase 19) ===
+        try:
+            from features.exporters_pipeline import render_report_pipeline as _rp2
+            _payload3 = {"title": "보고서", "drugs": list(picked_keys or []), "summary": ""}
+            _rp2(st, _payload3)
+        except Exception:
+            pass
+        # === [/PATCH] ===
+
+        # === [PATCH] Peds ER one-page (Phase 19) ===
+        try:
+            from features.peds.er_onepage import render_peds_er_onepage as _er
+            _er(st)
+        except Exception:
+            pass
+        # === [/PATCH] ===
+
         # === [PATCH] AE summary section (Phase 18) ===
         try:
             from features.adverse_effects import render_ae_main2 as _ae2
