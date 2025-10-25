@@ -125,6 +125,8 @@ peds_dose = _safe_import("peds_dose")
 core_utils = _safe_import("core_utils")
 ui_results = _safe_import("ui_results")
 
+
+pages_peds = _safe_import("pages_peds")
 # Utility: wkey (avoid duplicate definitions)
 if "wkey" not in globals():
     def wkey(x): 
@@ -1728,49 +1730,6 @@ with t_chemo:
                 _used_shared_renderer = False
         else:
             _used_shared_renderer = False
-        # === [PATCH] Diagnostics panel (Phase 28 ALT) ===
-        try:
-            from features_dev.diag_panel import render_diag_panel as _diag
-            _diag(st)
-        except Exception:
-            pass
-        # === [/PATCH] ===
-
-        # === [PATCH] Diagnostics panel (Phase 28) ===
-        try:
-            from features.dev.diag_panel import render_diag_panel as _diag
-            _diag(st)
-        except Exception:
-            pass
-        # === [/PATCH] ===
-
-        # === [PATCH] Lean legacy stubs attach (Phase 25) ===
-        try:
-            from features.app_legacy_stubs import initialize as _lgstub
-            _lgstub(st)
-        except Exception:
-            pass
-        # === [/PATCH] ===
-
-        # === [PATCH] App shell & lean-mode (Phase 24) ===
-        try:
-            from features.app_shell import render_sidebar as _shell
-            _shell(st)
-        except Exception:
-            pass
-        try:
-            from features.app_deprecator import apply_lean_mode as _lean
-            _lean(st)
-        except Exception:
-            pass
-        try:
-            if st.session_state.get("_lean_mode", True):
-                from features.app_router import render_modular_sections as _mod
-                _mod(st, picked_keys, DRUG_DB)
-        except Exception:
-            pass
-        # === [/PATCH] ===
-
         # === [/PATCH] ===
 
         if ae_map:
@@ -1808,6 +1767,14 @@ _block_spurious_home()
 # PEDS
 with t_peds:
     st.subheader("소아 증상 기반 점수 + 보호자 설명 + 해열제 계산")
+
+# [PHASE 1] 외부 소아 탭 모듈이 있으면 먼저 퀵 섹션을 그립니다(없으면 무시).
+if pages_peds is not None and hasattr(pages_peds, "render_peds_page"):
+    try:
+        pages_peds.render_peds_page()
+    except Exception:
+        pass
+
     render_peds_nav_md()
     c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
