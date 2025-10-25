@@ -19,3 +19,19 @@ def render_sidebar(st):
             st.write("- 소아")
     except Exception:
         pass
+# --- Phase 27: 섹션 표시 토글 + 탭 선택 ---
+try:
+    st.markdown("### 섹션 표시")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.checkbox("AE", key="_show_ae", value=st.session_state.get("_show_ae", True))
+        st.checkbox("특수검사", key="_show_special", value=st.session_state.get("_show_special", True))
+    with col2:
+        st.checkbox("내보내기", key="_show_exports", value=st.session_state.get("_show_exports", True))
+        st.checkbox("소아", key="_show_peds", value=st.session_state.get("_show_peds", True))
+    st.markdown("---")
+    st.markdown("### 탭")
+    tab = st.radio("보여줄 탭", ["전체", "AE", "특수검사", "내보내기", "소아"], key="_router_tab", horizontal=True)
+    st.session_state["_router_tab"] = tab
+except Exception:
+    pass
