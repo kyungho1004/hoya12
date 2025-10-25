@@ -1872,3 +1872,151 @@ def ensure_onco_drug_db(db):
     _reinforce_cytarabine_20251025(db)
     _apply_canonical_redirects_20251025(db)
 # === [/PATCH] ===
+
+
+
+# === [PATCH 2025-10-25 KST] HEME SET reinforce (VEN/GILT/MIDO/IVO/ENA/GLAS/AZA/DEC) ===
+def _merge_if_empty(target: dict, add: dict):
+    if not isinstance(target, dict) or not isinstance(add, dict):
+        return
+    for k, v in add.items():
+        if target.get(k) in (None, "", [], {}):
+            target[k] = v
+
+def _ensure_heme_agents_20251025(db: Dict[str, Dict[str, Any]]) -> None:
+    entries = {
+        "Venetoclax": {
+            "alias": "베네토클락스",
+            "moa": "BCL-2 억제제",
+            "ae": "💧 TLS 위험 · 오심/구토 · 설사 · 피로 · 감염/호중구감소",
+            "monitor": ["TLS labs(K, Phos, Ca, UA, Cr)", "CBC", "감염 징후"],
+            "ae_plain": "초기 용량증량 동안 종양융해(TLS) 예방이 중요해요. 피로·위장증상과 감염 위험이 있을 수 있어요.",
+            "plain": "초기 용량증량 동안 종양융해(TLS) 예방이 중요해요. 피로·위장증상과 감염 위험이 있을 수 있어요.",
+            "plain_emergency": ["🚨 심한 구역/구토·근육경련·소변감소(전해질 이상/TLS 의심)"],
+            "care_tips": ["💧 수분보충", "🌡️ 체온기록", "😷 손위생"],
+        },
+        "Gilteritinib": {
+            "alias": "길테리티닙",
+            "moa": "FLT3 억제제",
+            "ae": "📈 QT 연장 · 간효소↑ · 설사/변비 · 피로",
+            "monitor": ["ECG(QTc)", "K/Mg", "LFT"],
+            "ae_plain": "심전도(QT)와 전해질 확인이 필요해요. 위장증상과 피로가 있을 수 있어요.",
+            "plain": "심전도(QT)와 전해질 확인이 필요해요. 위장증상과 피로가 있을 수 있어요.",
+            "plain_emergency": ["🚨 심한 어지럼/실신·가슴두근거림(부정맥 의심)"],
+            "care_tips": ["📈 심전도 일정", "🧪 K/Mg 유지"],
+        },
+        "Midostaurin": {
+            "alias": "미도스타우린",
+            "moa": "다중 타깃 TKI (FLT3 포함)",
+            "ae": "📈 QT 연장 · 오심/구토 · 설사 · 발진 · 간효소↑",
+            "monitor": ["ECG(QTc)", "K/Mg", "LFT"],
+            "ae_plain": "심전도(QT)와 간수치 체크가 필요해요. 위장증상과 발진이 있을 수 있어요.",
+            "plain": "심전도(QT)와 간수치 체크가 필요해요. 위장증상과 발진이 있을 수 있어요.",
+            "plain_emergency": ["🚨 심한 어지럼/실신(부정맥 의심)"],
+            "care_tips": ["📈 심전도 일정", "🧪 K/Mg 유지", "🧴 보습"],
+        },
+        "Ivosidenib": {
+            "alias": "이보시데닙",
+            "moa": "IDH1 억제제",
+            "ae": "💧 분화증후군(발열·호흡곤란·부종) · 오심/설사 · 백혈구↑ · QT 연장 드묾",
+            "monitor": ["분화증후군 징후", "ECG(QTc)", "CBC"],
+            "ae_plain": "분화증후군에 주의해야 해요(발열/호흡곤란/부종). 드물게 QT 연장이 있을 수 있어요.",
+            "plain": "분화증후군에 주의해야 해요(발열/호흡곤란/부종). 드물게 QT 연장이 있을 수 있어요.",
+            "plain_emergency": ["🚨 갑작스런 발열·호흡곤란·저혈압·부종(분화증후군 의심)"],
+            "care_tips": ["💧 수분", "🌡️ 증상 기록"],
+        },
+        "Enasidenib": {
+            "alias": "에나시데닙",
+            "moa": "IDH2 억제제",
+            "ae": "💧 분화증후군 · 빌리루빈↑ · 오심/설사 · 피로",
+            "monitor": ["분화증후군", "LFT/빌리루빈", "CBC"],
+            "ae_plain": "분화증후군과 간관련 수치 변화에 주의해요. 위장증상과 피로가 있을 수 있어요.",
+            "plain": "분화증후군과 간관련 수치 변화에 주의해요. 위장증상과 피로가 있을 수 있어요.",
+            "plain_emergency": ["🚨 발열·호흡곤란·저혈압·부종(분화증후군 의심)"],
+            "care_tips": ["💧 수분", "🌡️ 증상 기록"],
+        },
+        "Glasdegib": {
+            "alias": "글라스데깁",
+            "moa": "SMO 억제제(Hedgehog pathway)",
+            "ae": "📈 QT 연장 · 근육통/경련 · 미각 변화 · 오심/설사",
+            "monitor": ["ECG(QTc)", "K/Mg", "CK(근육통 심할 때)"],
+            "ae_plain": "QT 연장 가능성이 있어 심전도와 전해질을 확인해요. 근육통/미각변화가 있을 수 있어요.",
+            "plain": "QT 연장 가능성이 있어 심전도와 전해질을 확인해요. 근육통/미각변화가 있을 수 있어요.",
+            "plain_emergency": ["🚨 실신/심계항진 등 부정맥 의심 증상"],
+            "care_tips": ["📈 심전도 일정", "🧪 K/Mg 유지"],
+        },
+        "Azacitidine": {
+            "alias": "아자시티딘",
+            "moa": "DNA 탈메틸화제(HMA)",
+            "ae": "🩸 골수억제 · 오심/구토 · 설사/변비 · 주사부위 반응(SC) · 피로",
+            "monitor": ["CBC", "LFT/Cr"],
+            "ae_plain": "골수억제로 감염 위험이 있고, 위장증상과 주사부위 반응이 있을 수 있어요.",
+            "plain": "골수억제로 감염 위험이 있고, 위장증상과 주사부위 반응이 있을 수 있어요.",
+            "plain_emergency": ["🚨 38℃ 이상 발열(발열성 호중구감소증 의심)"],
+            "care_tips": ["😷 손위생", "🪥 구강관리", "💧 수분"],
+        },
+        "Decitabine": {
+            "alias": "데시타빈",
+            "moa": "DNA 탈메틸화제(HMA)",
+            "ae": "🩸 골수억제 · 오심/구토 · 설사/변비 · 피로",
+            "monitor": ["CBC", "LFT/Cr"],
+            "ae_plain": "골수억제로 감염 위험이 있어요. 피로와 위장증상이 동반될 수 있어요.",
+            "plain": "골수억제로 감염 위험이 있어요. 피로와 위장증상이 동반될 수 있어요.",
+            "plain_emergency": ["🚨 38℃ 이상 발열(발열성 호중구감소증 의심)"],
+            "care_tips": ["😷 손위생", "🪥 구강관리", "💧 수분"],
+        },
+    }
+    # Upsert if helper exists, then merge extras
+    for key, rec in entries.items():
+        try:
+            _upsert(db, key, rec["alias"], rec["moa"], rec["ae"])
+            _upsert(db, key.lower(), rec["alias"], rec["moa"], rec["ae"])
+            _upsert(db, f"{key} ({rec['alias']})", rec["alias"], rec["moa"], rec["ae"])
+            _upsert(db, f"{rec['alias']} ({key})", rec["alias"], rec["moa"], rec["ae"])
+        except Exception:
+            pass
+        # merge to canonical and common alias variants
+        for cand in (key, key.lower(), f"{key} ({rec['alias']})", f"{rec['alias']} ({key})"):
+            r = db.setdefault(cand, {})
+            _merge_if_empty(r, rec)
+
+def _heme_synonyms_map_20251025():
+    return {
+        "venetoclax": "Venetoclax",
+        "gilteritinib": "Gilteritinib",
+        "midostaurin": "Midostaurin",
+        "ivosidenib": "Ivosidenib",
+        "enasidenib": "Enasidenib",
+        "glasdegib": "Glasdegib",
+        "azacitidine": "Azacitidine",
+        "decitabine": "Decitabine",
+    }
+
+def _apply_heme_canon_20251025(db: Dict[str, Dict[str, Any]]) -> None:
+    cmap = _heme_synonyms_map_20251025()
+    for k in list(db.keys()):
+        if not isinstance(k, str): 
+            continue
+        key_l = k.strip()
+        canon = cmap.get(key_l) or cmap.get(key_l.lower())
+        if not canon:
+            continue
+        can = db.setdefault(canon, {})
+        src = db.get(k, {})
+        if isinstance(src, dict) and isinstance(can, dict):
+            for kk, vv in src.items():
+                if not can.get(kk):
+                    can[kk] = vv
+            if k != canon:
+                src.setdefault("redirect_to", canon)
+
+_prev_heme_20251025 = globals().get("ensure_onco_drug_db")
+def ensure_onco_drug_db(db):
+    if callable(_prev_heme_20251025):
+        try:
+            _prev_heme_20251025(db)
+        except Exception:
+            pass
+    _ensure_heme_agents_20251025(db)
+    _apply_heme_canon_20251025(db)
+# === [/PATCH] ===
