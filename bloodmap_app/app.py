@@ -1728,6 +1728,22 @@ with t_chemo:
                 _used_shared_renderer = False
         else:
             _used_shared_renderer = False
+        # === [PATCH] AE summary (Phase 8, safe & local import) ===
+        try:
+            from features.adverse_effects import render_ae_summary as _ae_summary
+            _ae_summary(st, picked_keys, DRUG_DB)
+        except Exception:
+            pass
+        # === [/PATCH] ===
+
+        # === [PATCH] AE cards (Phase 8, safe & local import) ===
+        try:
+            from features.adverse_effects import render_ae_cards as _ae_cards
+            _ae_cards(st, picked_keys, DRUG_DB)
+        except Exception:
+            pass
+        # === [/PATCH] ===
+
         # === [PATCH] PDF summary button (Phase 8 Step 2, safe & local import) ===
         try:
             from utils.db_access import concat_ae_text as _ae_concat
