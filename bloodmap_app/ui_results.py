@@ -406,3 +406,85 @@ try:
 except Exception:
     pass
 # === [/PATCH] ===
+
+
+
+# === [PATCH 2025-10-25 KST] Abbreviation labels for monitors ===
+_ABBREV_HINTS_20251025 = {
+    "glucose": "혈당",
+    "lipids": "지질(콜레스테롤/중성지방)",
+    "lft": "간기능 검사(AST/ALT/빌리루빈)",
+    "ild": "간질성 폐질환",
+}
+
+def _expand_abbrev_label_20251025(text: str) -> str:
+    try:
+        t = (text or "").strip()
+        key = t.casefold()
+        if key in _ABBREV_HINTS_20251025:
+            hint = _ABBREV_HINTS_20251025[key]
+            # only add if no Korean hint already present
+            if "(" not in t and " " not in t:
+                return f"{t} ({hint})"
+        return text
+    except Exception:
+        return text
+
+# Hook into existing friendly monitor renderer
+try:
+    _old__render_friendly_sections = _render_friendly_sections
+except NameError:
+    _old__render_friendly_sections = None
+
+def _render_friendly_sections(st, rec: dict):
+    if not isinstance(rec, dict):
+        return
+    easy = rec.get("plain") or rec.get("ae_plain") or ""
+    emerg = rec.get("plain_emergency") or []
+    tips  = rec.get("care_tips") or []
+    monitor = rec.get("monitor") or []
+
+    # NEW: expand selected abbreviations for readability
+    try:
+        monitor = [_expand_abbrev_label_20251025(m) for m in monitor]
+    except Exception:
+        pass
+
+    if not (easy or emerg or tips or monitor):
+        return
+    try:
+        with st.expander("알기 쉽게 보기", expanded=bool(easy)):
+            if easy:
+                st.markdown(easy)
+            else:
+                st.caption("요약 정보가 준비 중입니다.")
+    except Exception:
+        if easy:
+            st.markdown("**알기 쉽게 보기**")
+            st.write(easy)
+    if emerg:
+        try:
+            with st.expander("🚨 응급 연락 기준", expanded=True):
+                for line in emerg:
+                    st.markdown(f"- {line}")
+        except Exception:
+            st.markdown("**🚨 응급 연락 기준**")
+            for line in emerg:
+                st.write(f"- {line}")
+    if tips:
+        try:
+            with st.expander("자가관리 팁", expanded=False):
+                _render_chip_row(st, tips)
+        except Exception:
+            st.markdown("**자가관리 팁**")
+            _render_chip_row(st, tips)
+    if monitor:
+        try:
+            with st.expander("🩺 모니터", expanded=False):
+                for m in monitor:
+                    st.markdown(f"- {m}")
+        except Exception:
+            st.markdown("**🩺 모니터**")
+            for m in monitor:
+                st.write(f"- {m}")
+# === [/PATCH] ===
