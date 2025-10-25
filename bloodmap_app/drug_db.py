@@ -1227,78 +1227,175 @@ def ensure_onco_drug_db(db):
 
 
 
-# === [PATCH:P1_ONCO_AE_DB_6DRUGS] BEGIN ===
-def _bm_safe_add_ae(db, canonical: str, display: str, category: str, details_md: str):
-    """
-    Backward-compatible upsert for AE details.
-    Falls back to _upsert if richer API isn't present.
-    """
-    try:
-        # Prefer richer structure if supported
-        _upsert(db, canonical, display, category, details_md)
-    except Exception:
-        # Fallback: store as simple text
+# === [PATCH 2025-10-25 KST] New hematology/lymphoma/solid agents (Vyxeos, VEN, BTKi, FLT3, IDH, etc.) ===
+def _upsert_many(db, items):
+    for key, (alias, moa, ae) in items.items():
+        _upsert(db, key, alias, moa, ae)
+        # lowercase mirror
+        _upsert(db, key.lower(), alias, moa, ae)
+        # composite labels for robust lookup
+        comp1, comp2 = f"{key} ({alias})", f"{alias} ({key})"
+        _upsert(db, comp1, alias, moa, ae)
+        _upsert(db, comp2, alias, moa, ae)
+        _upsert(db, comp1.lower(), alias, moa, ae)
+        _upsert(db, comp2.lower(), alias, moa, ae)
+
+def _extend_heme_20251025(db: Dict[str, Dict[str, Any]]) -> None:
+    items = {
+        # AML
+        "Vyxeos": ("빅시오스(리포좀 다우노루비신/시타라빈)", "복합 항암제(리포좀 Daunorubicin+Cytarabine)", "🩸 강한 골수억제 · 발열성 호중구감소증 · 💊 점막염 · ❤️ 안트라사이클린 누적 심독성 주의 · 주입반응"),
+        "Venetoclax": ("베네토클락스", "BCL‑2 억제제", "⚡ 종양융해증후군(TLS) · 🩸 골수억제 · 오심/설사 · 피로"),
+        "Gilteritinib": ("길테리티닙", "FLT3 TKI", "QT 연장 · 간효소↑ · 설사/변비 · 피로"),
+        "Midostaurin": ("미도스타우린", "FLT3/multi‑kinase TKI", "오심/구토 · 발진 · 간효소↑ · 드묾: QT 연장"),
+        "Ivosidenib": ("이보시데닙", "IDH1 억제제", "분화증후군 · QT 연장 · 백혈구↑ · 오심"),
+        "Enasidenib": ("에나시데닙", "IDH2 억제제", "분화증후군 · 빌리루빈↑ · 오심/설사"),
+        "Glasdegib": ("글라스데깁", "Hedgehog 억제제", "미각변화 · 근육경련 · 피로 · QT 연장 가능"),
+        # CLL / MCL
+        "Acalabrutinib": ("아칼라브루티닙", "BTK 억제제", "출혈 · 두통 · 설사 · 드묾: 심방세동/고혈압"),
+        "Zanubrutinib": ("자누브루티닙", "BTK 억제제", "출혈 · 호중구감소 · 발진 · 드묾: 심방세동"),
+        "Venetoclax + Obinutuzumab": ("베네토클락스+오비누투주맙", "BCL‑2 억제제 + anti‑CD20", "⚡ TLS · 감염/발열 · 혈구감소"),
+        # DLBCL/follicular T/B
+        "Tafasitamab": ("타파시타맙", "anti‑CD19 mAb", "감염 · 혈구감소 · 주입반응"),
+        "Lenalidomide": ("레날리도마이드", "면역조절제(IMiD)", "혈전증 · 피로/무기력 · 발진/가려움 · 갑상선기능저하"),
+        "Epcoritamab": ("엡코리타맙", "CD20xCD3 이중특이 Ab", "발열 · 주입반응/CRS · 감염 · 혈구감소"),
+        "Glofitamab": ("글로피타맙", "CD20xCD3 이중특이 Ab", "발열 · 주입반응/CRS · 감염 · 혈구감소"),
+        "Mosunetuzumab": ("모수네투주맙", "CD20xCD3 이중특이 Ab", "발열 · CRS · 감염 · 혈구감소"),
+        # MM (참고: 세포치료 제외 방침)
+        "Teclistamab": ("테클리스타맙", "BCMAxCD3 이중특이 Ab", "발열 · CRS · 감염 · 혈구감소"),
+        "Selinexor": ("셀리넥소르", "XPO1 억제제", "오심/구토 · 식욕↓ · 피로 · 혈구감소 · 저나트륨혈증"),
+    }
+    _upsert_many(db, items)
+
+_prev_heme_20251025 = globals().get("ensure_onco_drug_db")
+def ensure_onco_drug_db(db):
+    if callable(_prev_heme_20251025):
         try:
-            db[canonical] = {"name": display, "category": category, "ae": details_md}
+            _prev_heme_20251025(db)
         except Exception:
             pass
+    _extend_heme_20251025(db)
 
-def ensure_onco_drug_db_p1_patch(db):
-    """
-    Adds/updates AE details for 6 common agents.
-    Safe to call multiple times, no overwrite of unrelated entries.
-    """
-    _bm_safe_add_ae(db, "5-FU", "5‑Fluorouracil (5‑FU) / 5‑플루오로우라실", "항암/표적치료(자동등록)",
-        (
-        "### 5‑FU 주요 부작용\n"
-        "- **일반**: 골수억제(백혈구/혈소판 감소), 오심·구토, **설사**, **구내염**, 손발증후군\n"
-        "- **중증**: 심근허혈/관상동맥경련, 중증 설사·탈수, 심한 골수억제, 드문 **뇌병증**\n"
-        "- **연락 필요**: 38.5℃ 이상 발열, 하루 4회 이상 수양성 설사, 출혈 경향, 심한 구내염/섭취불가\n"
-        )
-    )
-    _bm_safe_add_ae(db, "Alectinib", "Alectinib (알렉티닙)", "항암/표적치료(자동등록)",
-        (
-        "### Alectinib 주요 부작용\n"
-        "- **일반**: **근육통/CK 상승**, 변비, 피로, 광과민, 부종\n"
-        "- **간**: AST/ALT 상승(정기적 모니터)\n"
-        "- **중증**: 간독성, **근병증**, 서맥, 간질성 폐질환(드묾)\n"
-        "- **연락 필요**: 암색 소변/황달, 심한 근육통/무력감, 호흡곤란/기침 악화\n"
-        )
-    )
-    _bm_safe_add_ae(db, "Ara-C", "Cytarabine (Ara‑C) / 시타라빈", "항암/표적치료(자동등록)",
-        (
-        "### Ara‑C(시타라빈) — 제형별 주의\n"
-        "- **공통**: 골수억제, 발열·오한, 오심/구토, **간효소 상승**, 발진\n\n"
-        "**[IV 정맥]**: 점적 후 **발열 반응** 가능, 점안제 병용 고려(고용량 시 각막염 예방)\n"
-        "**[SC 피하]**: **주사부위 반응**, 국소 통증/홍반\n"
-        "**[HDAC 고용량]**: **각막염**, **신경독성(소뇌 실조/언어장애)**, 고열; 고위험군 보호자 관찰 필수\n\n"
-        "- **연락 필요**: 38.5℃ 이상 발열, 시야 흐림/눈 통증, 보행 실조/말어눌, 비정상 출혈\n"
-        )
-    )
-    _bm_safe_add_ae(db, "Bendamustine", "Bendamustine", "항암/표적치료(자동등록)",
-        (
-        "### Bendamustine 주요 부작용\n"
-        "- **일반**: 골수억제, 피로, 오심, 발진/가려움\n"
-        "- **감염 위험**: 중성구 감소 → 발열 시 즉시 평가\n"
-        "- **피부**: 드물게 심각한 피부반응(SJS/TEN 보고)\n"
-        "- **연락 필요**: 고열, 점상출혈/멍, 광범위 피부발진, 호흡곤란\n"
-        )
-    )
-    _bm_safe_add_ae(db, "Bevacizumab", "Bevacizumab (베바시주맙)", "항암/표적치료(자동등록)",
-        (
-        "### Bevacizumab 주요 부작용\n"
-        "- **혈관/신장**: **고혈압**, **단백뇨**(정기 소변검사), 정맥·동맥 **혈전/출혈** 위험↑\n"
-        "- **상처치유 지연**, 누공, 드물게 **GI 천공**\n"
-        "- **연락 필요**: 심한 두통/시야 변화, 혈뇨·거품뇨, 복부 극심한 통증, 갑작스런 신경학적 증상\n"
-        )
-    )
-    _bm_safe_add_ae(db, "Bleomycin", "Bleomycin", "항암/표적치료(자동등록)",
-        (
-        "### Bleomycin 주요 부작용\n"
-        "- **폐**: **폐독성**(기침, 호흡곤란, 간질성 변화) — 누적용량/연령/산소치료 병력에 영향\n"
-        "- **피부**: 색소침착, 경화, 손발톱 변화; 발열/오한\n"
-        "- **연락 필요**: 진행성 호흡곤란/운동 시 숨참, 고열, 흉통\n"
-        )
-    )
-# === [PATCH:P1_ONCO_AE_DB_6DRUGS] END ===
+# Extra monitoring metadata for new agents
+def _attach_monitoring_heme_20251025(db: Dict[str, Dict[str, Any]]) -> None:
+    def add_mon(keys, items):
+        for k in keys:
+            if k in db:
+                rec = db[k]
+                mons = list(rec.get("monitor", [])) if isinstance(rec.get("monitor"), (list, tuple)) else []
+                for it in items:
+                    if it not in mons:
+                        mons.append(it)
+                rec["monitor"] = mons
+            if k.lower() in db:
+                rec = db[k.lower()]
+                mons = list(rec.get("monitor", [])) if isinstance(rec.get("monitor"), (list, tuple)) else []
+                for it in items:
+                    if it not in mons:
+                        mons.append(it)
+                rec["monitor"] = mons
 
+    # TLS-focused monitoring
+    add_mon(["Venetoclax","Venetoclax + Obinutuzumab","Gilteritinib","Ivosidenib","Enasidenib"], 
+            ["TLS labs(Uric acid/K/Phos/Ca/Cr)","Hydration","Allopurinol±Rasburicase(프로토콜)","Frequent CBC","Vitals"])
+
+    # QT
+    add_mon(["Gilteritinib","Ivosidenib","Glasdegib","Midostaurin"], ["QT(ECG)","Electrolytes(K/Mg)"])
+
+    # BTKi
+    add_mon(["Acalabrutinib","Zanubrutinib"], ["Bleeding","AFib/Palpitation","BP","Infection"])
+
+    # Vyxeos (anthracycline-containing)
+    add_mon(["Vyxeos"], ["CBC","LFT","Renal(eGFR)","Mucositis","Fever/Sepsis","Echo/LVEF"])
+
+_prev_heme_mon_20251025 = globals().get("ensure_onco_drug_db")
+def ensure_onco_drug_db(db):
+    if callable(_prev_heme_mon_20251025):
+        try:
+            _prev_heme_mon_20251025(db)
+        except Exception:
+            pass
+    _attach_monitoring_heme_20251025(db)
+# === [/PATCH] ===
+
+
+
+# === [PATCH 2025-10-25 KST] Solid tumor agents expansion (NSCLC, Breast, CRC, GIST, etc.) ===
+def _extend_solid_20251025(db: Dict[str, Dict[str, Any]]) -> None:
+    items = {
+        # NSCLC
+        "Osimertinib": ("오시머티닙", "EGFR TKI(Ex19del/L858R; CNS good)", "설사/발진 · 간효소↑ · 드묾: QT 연장, ILD"),
+        "Amivantamab": ("아미반타맙", "EGFR Exon20/EGFR-MET bispecific Ab", "주입반응 · 발진 · 손발 피부 · ILD 가능"),
+        "Mobocertinib": ("모보서티닙", "EGFR Exon20 TKI", "설사 · 발진 · QT 연장"),
+        "Lorlatinib": ("로라티닙", "ALK TKI(후속)", "고지혈증 · 혼동/기분변화 · 말초부종 · 드묾: AV block"),
+        "Brigatinib": ("브리가티닙", "ALK TKI", "CK 상승 · 호흡곤란/ILD 가능 · 고혈압"),
+        "Crizotinib": ("크리조티닙", "ALK/MET/ROS1 TKI", "시야흐림 · 오심 · 부종"),
+        "Entrectinib": ("엔트렉티닙", "NTRK/ROS1 TKI", "체중↑ · 어지럼 · 변비/설사"),
+        "Capmatinib": ("캡마티닙", "MET TKI", "부종 · 간효소↑"),
+        "Tepotinib": ("테포티닙", "MET TKI", "부종 · 오심 · 크레아티닌↑(가성)"),
+        "Sotorasib": ("소토라십", "KRAS G12C 억제제", "설사/오심 · 간효소↑"),
+        "Adagrasib": ("아다가라십", "KRAS G12C 억제제", "설사 · 피로 · 간효소↑"),
+        # HER2 / Breast
+        "Trastuzumab deruxtecan": ("트라스투주맙 데룩스테칸(T-DXd)", "HER2 ADC", "오심 · 골수억제 · 드묾: ILD"),
+        "Trastuzumab emtansine": ("트라스투주맙 엠탄신(T-DM1)", "HER2 ADC", "혈소판↓ · AST/ALT↑ · 피로"),
+        "Pertuzumab": ("퍼투주맙", "HER2 mAb", "설사 · 발진 · 심기능 저하 가능"),
+        "Tucatinib": ("투카티닙", "HER2 TKI", "AST/ALT↑ · 설사"),
+        "Palbociclib": ("팔보시클립", "CDK4/6 억제제", "호중구감소 · 피로 · 구내염"),
+        "Ribociclib": ("리보시클립", "CDK4/6 억제제", "호중구감소 · QT 연장 · LFT↑"),
+        "Abemaciclib": ("아베마시클립", "CDK4/6 억제제", "설사 · 호중구감소 · 피로"),
+        # CRC / GI
+        "Cetuximab": ("세툭시맙", "EGFR mAb", "발진·설사 · 저마그네슘혈증"),
+        "Panitumumab": ("파니투무맙", "EGFR mAb", "발진·설사 · 저마그네슘혈증"),
+        "Encorafenib": ("엔코라페닙", "BRAF V600E 억제제", "피부 반응 · 관절통 · 피로"),
+        "Regorafenib": ("레고라페닙", "VEGFR/MAPK TKI", "손발증후군 · 피로 · 고혈압·LFT↑"),
+        "Trifluridine/Tipiracil": ("트리플루리딘/티피라실(TAS-102)", "경구 항암", "골수억제 · 피로 · 오심"),
+        # GIST
+        "Imatinib": ("이매티닙", "KIT/PDGFRA TKI", "부종 · 근육통 · 오심"),
+        "Sunitinib": ("수니티닙", "KIT/VEGFR TKI", "고혈압 · 손발증후군 · 피로"),
+        "Regorafenib-GIST": ("레고라페닙(GIST)", "KIT/VEGFR TKI", "손발증후군 · LFT↑"),
+        "Ripretinib": ("립레티닙", "KIT/PDGFRA TKI(후속)", "탈모 · 근육통 · 피로"),
+        # Biliary / Thyroid / Others
+        "Pemigatinib": ("페미가티닙", "FGFR2 억제제", "고인산혈증 · 손발저림 · 설사"),
+        "Futibatinib": ("후티바티닙", "FGFR2 억제제", "고인산혈증 · 손발저림 · 설사"),
+        "Ivosidenib-Solid": ("이보시데닙(담도)", "IDH1 억제제", "오심 · 설사 · 피로"),
+        "Selpercatinib": ("셀퍼카티닛", "RET 억제제", "고혈압 · 간효소↑ · 드묾: QT"),
+        "Pralsetinib": ("프랄세티닙", "RET 억제제", "기침/호흡곤란 · 간효소↑"),
+        "Larotrectinib": ("라로트렉티닙", "NTRK 억제제", "어지럼 · 피로 · 변비/설사"),
+        # RCC/HCC
+        "Lenvatinib": ("렌바티닙", "VEGFR/FGFR TKI", "고혈압 · 단백뇨 · 피로"),
+        "Cabozantinib": ("카보잔티닙", "MET/VEGFR TKI", "설사 · 손발증후군 · 피로"),
+        "Axitinib": ("악시티닙", "VEGFR TKI", "고혈압 · 설사 · 피로"),
+        "Sorafenib": ("소라페닙", "VEGFR/RAF TKI", "손발증후군 · 설사 · 피로"),
+        # Ovarian/Breast PARP
+        "Olaparib": ("올라파립", "PARP 억제제", "오심/피로 · 빈혈"),
+        "Niraparib": ("니라파립", "PARP 억제제", "혈소판↓ · 오심/피로"),
+        "Rucaparib": ("루카파립", "PARP 억제제", "AST/ALT↑ · 오심/피로"),
+        # Prostate
+        "Abiraterone": ("아비라테론", "CYP17 억제제(스테로이드 병용)", "저칼륨 · 부종 · 고혈압/간효소↑"),
+        "Enzalutamide": ("엔잘루타마이드", "AR 억제제", "피로 · 어지럼 · 드묾: 경련"),
+        "Apalutamide": ("아팔루타마이드", "AR 억제제", "피로 · 발진 · 갑상샘저하"),
+        # Lymphoma ADCs (non-cell therapy)
+        "Polatuzumab vedotin": ("폴라투주맙 베도틴", "anti‑CD79b ADC", "혈구감소 · 말초신경병증 · 주입반응"),
+        "Brentuximab vedotin": ("브렌툭시맙 베도틴", "anti‑CD30 ADC", "말초신경병증 · 발열 · 혈구감소"),
+        "Rituximab": ("리툭시맙", "anti‑CD20 mAb", "주입반응 · 감염 · 저감마글로불린혈증"),
+        "Obinutuzumab": ("오비누투주맙", "anti‑CD20 mAb", "주입반응 · 감염 · 혈구감소"),
+        # Myeloma (non‑cell therapy)
+        "Pomalidomide": ("포말리도마이드", "IMiD", "혈전증 · 피로 · 호중구감소"),
+        "Carfilzomib": ("카르필조밉", "PI", "심부전/혈압↑ · 호흡곤란"),
+        "Ixazomib": ("익사조밉", "PI(경구)", "설사/오심 · 발진"),
+        "Daratumumab": ("다라투무맙", "anti‑CD38 mAb", "주입반응 · 감염 · 피로"),
+    }
+    for key, (alias, moa, ae) in items.items():
+        _upsert(db, key, alias, moa, ae)
+        _upsert(db, key.lower(), alias, moa, ae)
+        _upsert(db, f"{key} ({alias})", alias, moa, ae)
+        _upsert(db, f"{alias} ({key})", alias, moa, ae)
+
+_prev_solid_20251025 = globals().get("ensure_onco_drug_db")
+def ensure_onco_drug_db(db):
+    if callable(_prev_solid_20251025):
+        try:
+            _prev_solid_20251025(db)
+        except Exception:
+            pass
+    _extend_solid_20251025(db)
+# === [/PATCH] ===

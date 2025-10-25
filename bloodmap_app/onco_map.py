@@ -286,3 +286,141 @@ def build_onco_map():
         pass
     return M
 
+
+
+
+# === [PATCH 2025-10-25 KST] Enrich heme/lymphoma maps with new agents ===
+def _extend_onco_map_20251025(m: Dict[str, Dict[str, Dict[str, list]]]) -> Dict[str, Dict[str, Dict[str, list]]]:
+    def add(group, dx, kind, items):
+        if group not in m:
+            m[group] = {}
+        if dx not in m[group]:
+            m[group][dx] = {"chemo": [], "targeted": [], "abx": []}
+        cur = m[group][dx].setdefault(kind, [])
+        for it in items:
+            if it not in cur:
+                cur.append(it)
+
+    # AML
+    add("혈액암", "AML", "chemo", ["Vyxeos"])
+    add("혈액암", "AML", "targeted", ["Venetoclax","Gilteritinib","Midostaurin","Ivosidenib","Enasidenib","Glasdegib"])
+
+    # APL already mapped via ATRA/ATO in drug_db
+
+    # CLL
+    add("혈액암", "CLL", "targeted", ["Acalabrutinib","Zanubrutinib","Venetoclax","Obinutuzumab"])
+
+    # MCL
+    add("림프종", "MCL", "targeted", ["Acalabrutinib","Zanubrutinib","Lenalidomide"])
+
+    # FL / DLBCL
+    add("림프종", "FL", "targeted", ["Mosunetuzumab"])
+    add("림프종", "DLBCL", "targeted", ["Tafasitamab","Epcoritamab","Glofitamab","Lenalidomide"])
+
+    # Optionally add Myeloma (다발골수종) minimal map (no cell therapy)
+    add("혈액암", "다발골수종", "chemo", ["Cyclophosphamide"])
+    add("혈액암", "다발골수종", "targeted", ["Lenalidomide","Teclistamab","Selinexor"])
+
+    return m
+
+try:
+    _prev_build = build_onco_map  # from existing module
+    def build_onco_map():
+        m = _prev_build() or {}
+        return _extend_onco_map_20251025(m)
+except Exception:
+    pass
+# === [/PATCH] ===
+
+
+
+# === [PATCH 2025-10-25 KST] Solid tumor mapping + simple guidance notes ===
+def _extend_onco_map_solid_20251025(m: Dict[str, Dict[str, Dict[str, list]]]) -> Dict[str, Dict[str, Dict[str, list]]]:
+    def add(group, dx, kind, items):
+        if group not in m: m[group] = {}
+        if dx not in m[group]: m[group][dx] = {"chemo": [], "targeted": [], "abx": []}
+        cur = m[group][dx].setdefault(kind, [])
+        for it in items:
+            if it not in cur: cur.append(it)
+        return m
+
+    # NSCLC
+    add("고형암","NSCLC(EGFR)", "targeted", ["Osimertinib","Amivantamab","Mobocertinib"])
+    add("고형암","NSCLC(ALK)",  "targeted", ["Alectinib","Brigatinib","Lorlatinib","Crizotinib"])
+    add("고형암","NSCLC(ROS1/NTRK)", "targeted", ["Entrectinib","Larotrectinib"])
+    add("고형암","NSCLC(MET)",  "targeted", ["Capmatinib","Tepotinib"])
+    add("고형암","NSCLC(KRAS G12C)", "targeted", ["Sotorasib","Adagrasib"])
+
+    # Breast
+    add("고형암","유방암(HR+)", "targeted", ["Palbociclib","Ribociclib","Abemaciclib"])
+    add("고형암","유방암(HER2+)", "targeted", ["Trastuzumab deruxtecan","Trastuzumab emtansine","Pertuzumab","Tucatinib"])
+    add("고형암","유방암(PARP 대상)", "targeted", ["Olaparib","Talazoparib" if "Talazoparib" in globals() else "Olaparib"])
+
+    # CRC
+    add("고형암","대장암(RAS WT)", "targeted", ["Cetuximab","Panitumumab"])
+    add("고형암","대장암(BRAF V600E)", "targeted", ["Encorafenib","Cetuximab"])
+    add("고형암","대장암(후속)", "targeted", ["Regorafenib","Trifluridine/Tipiracil"])
+
+    # GIST
+    add("고형암","GIST", "targeted", ["Imatinib","Sunitinib","Regorafenib-GIST","Ripretinib"])
+
+    # BTC(담도) / Thyroid / Fusion
+    add("고형암","담도암(FGFR2)", "targeted", ["Pemigatinib","Futibatinib"])
+    add("고형암","담도암(IDH1)", "targeted", ["Ivosidenib-Solid"])
+    add("고형암","갑상선암(RET)", "targeted", ["Selpercatinib","Pralsetinib"])
+    add("고형암","융합양성(NTRK)", "targeted", ["Larotrectinib","Entrectinib"])
+
+    # RCC / HCC
+    add("고형암","신장암", "targeted", ["Lenvatinib","Cabozantinib","Axitinib"])
+    add("고형암","간암",   "targeted", ["Sorafenib","Lenvatinib"])
+
+    # Lymphoma / Myeloma enrich (non-cell therapy)
+    add("림프종","DLBCL(추가)", "targeted", ["Polatuzumab vedotin","Brentuximab vedotin"])
+    add("혈액암","다발골수종(비세포)", "targeted", ["Pomalidomide","Carfilzomib","Ixazomib","Daratumumab"])
+
+    return m
+
+# Simple notes per diagnosis (non-breaking; UI safely ignores if not used)
+def _get_dx_notes_solid_20251025() -> Dict[str, str]:
+    return {
+        "AML": "Vyxeos(빅시오스)은 고위험/재발성 AML에서 사용. Venetoclax 병용 시 TLS 예방(수액+UA) 중요.",
+        "CLL": "BTK 억제제(출혈/AF 주의) vs BCL-2(VEN, TLS 예방) 치료축. 동반질환·선호도에 따라 선택.",
+        "MCL": "BTK 억제제(자누/아칼라) 중심. 감염/출혈 모니터.",
+        "DLBCL": "재발/불응에서 이중특이항체·ADC 옵션 존재. CRS/주입반응 안내 필요.",
+        "FL": "저증량요법/항CD20 기반. 이중특이 항체는 CRS 주의.",
+        "다발골수종": "IMiD/PI/anti‑CD38 조합. 감염 예방·혈전예방 고려.",
+        "NSCLC(EGFR)": "오시머티닙 1차 표준. ILD 증상(기침/호흡곤란) 시 즉시 평가.",
+        "NSCLC(ALK)": "Alectinib 1차 표준 축. 후속으로 브리가/로라.",
+        "NSCLC(MET)": "부종·간효소↑ 흔함. 신장기능·간기능 추적.",
+        "유방암(HR+)": "CDK4/6 억제제+내분비요법 표준. 호중구감소·LFT/QT(리보) 주의.",
+        "유방암(HER2+)": "T‑DXd는 ILD 드묾. 호흡증상 모니터.",
+        "대장암(RAS WT)": "anti‑EGFR 사용 시 **RAS/BRAF/좌측** 등 분자·해부학적 요소 고려.",
+        "GIST": "라인에 따라 IM→SU→REGO→RIPR 순. 손발증후군 관리 중요.",
+        "담도암(FGFR2)": "고인산혈증 흔함 → 인산 식이 조절/치료.",
+        "갑상선암(RET)": "혈압/간효소 모니터, 드묾한 QT.",
+        "신장암": "VEGFR TKI 고혈압·단백뇨·손발증후군 모니터.",
+        "간암": "VEGFR TKI 중심; 간기능 악화 시 용량조절.",
+    }
+
+# expose via safe getter
+def get_dx_notes() -> Dict[str, str]:
+    notes = {}
+    try:
+        if callable(_get_dx_notes_solid_20251025):
+            notes.update(_get_dx_notes_solid_20251025())
+    except Exception:
+        pass
+    try:
+        return notes
+    except Exception:
+        return {}
+
+# Hook build + notes
+try:
+    _prev_build2 = build_onco_map
+    def build_onco_map():
+        m = _prev_build2() or {}
+        return _extend_onco_map_solid_20251025(m)
+except Exception:
+    pass
+# === [/PATCH] ===
