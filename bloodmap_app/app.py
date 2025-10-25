@@ -1728,6 +1728,14 @@ with t_chemo:
                 _used_shared_renderer = False
         else:
             _used_shared_renderer = False
+        # === [PATCH] Peds GI quick-guides (Phase 9, safe & local import) ===
+        try:
+            from features.peds.gi import render_peds_gi_all as _peds_gi
+            _peds_gi(st)
+        except Exception:
+            pass
+        # === [/PATCH] ===
+
         # === [PATCH] AE summary (Phase 8, safe & local import) ===
         try:
             from features.adverse_effects import render_ae_summary as _ae_summary
