@@ -1398,3 +1398,77 @@ def ensure_onco_drug_db(db):
             pass
     _inject_emerg_and_tips_20251025(db)
 # === [/PATCH] ===
+
+
+
+# === [PATCH 2025-10-25 KST] Fill MM agent fields (non-empty) ===
+def _merge_nonempty(target: dict, src: dict):
+    if not isinstance(target, dict) or not isinstance(src, dict):
+        return
+    for k, v in src.items():
+        if k not in target or target.get(k) in (None, "", [], {}):
+            target[k] = v
+
+def _ensure_mm_nonempty_20251025(db: Dict[str, Dict[str, Any]]) -> None:
+    entries = {
+        "Carfilzomib": {
+            "alias": "카르필조밉",
+            "moa": "Proteasome inhibitor (PI)",
+            "ae": "호흡곤란 · 가슴불편/심부전 · 고혈압 · 피로 · 오심",
+            "monitor": ["BP", "Echo/LVEF(필요시)", "CBC", "Cr/eGFR"],
+            "plain": "숨참·다리 붓기·가슴 불편감이 있으면 심장/혈압 확인이 필요해요.",
+            "plain_emergency": ["🚨 가슴통증/심한 숨참/실신 시 즉시 연락"],
+            "care_tips": ["🩺 혈압체크", "🦶 다리 올려 휴식", "💧 수분보충"],
+        },
+        "Daratumumab": {
+            "alias": "다라투무맙",
+            "moa": "anti-CD38 단클론 항체",
+            "ae": "주입반응(열·기침·저혈압) · 감염 · 피로 · 빈혈",
+            "monitor": ["Infection", "CBC"],
+            "plain": "처음 투여 때 열/기침 등 주입반응이 있을 수 있어요. 감염 예방이 중요해요.",
+            "plain_emergency": ["🚨 오한·고열·숨참/저혈압 등 주입반응 의심 시 즉시 연락"],
+            "care_tips": ["😷 군중 회피", "🧼 손위생", "🌡️ 체온기록"],
+        },
+        "Ixazomib": {
+            "alias": "익사조밉",
+            "moa": "Proteasome inhibitor (경구)",
+            "ae": "설사/오심 · 발진 · 말초신경병증 · 혈소판 감소",
+            "monitor": ["CBC", "LFT", "Neuropathy sx"],
+            "plain": "메스꺼움/설사·피부발진이 있을 수 있어요. 멍이 잘 들면 알리세요.",
+            "plain_emergency": ["🚨 지속되는 심한 설사·혈변/탈수 시 즉시 연락"],
+            "care_tips": ["💧 수분보충", "🧴 보습", "🍚 소량·자주 섭취"],
+        },
+        "Pomalidomide": {
+            "alias": "포말리도마이드",
+            "moa": "IMiD (면역조절제)",
+            "ae": "혈전증 위험 · 호중구감소 · 피로 · 발진/가려움",
+            "monitor": ["CBC", "Thrombosis risk"],
+            "plain": "다리 붓고 아프거나 숨차면 혈전 의심—즉시 연락.",
+            "plain_emergency": ["🚨 다리 통증·부종/갑작스런 흉통·호흡곤란 시 즉시 연락"],
+            "care_tips": ["🚶 가벼운 운동", "🧦 압박스타킹(의사 지시 시)", "💧 수분"],
+        },
+    }
+    for key, rec in entries.items():
+        # ensure presence via _upsert if available
+        try:
+            _upsert(db, key, rec.get("alias",""), rec.get("moa",""), rec.get("ae",""))
+            _upsert(db, key.lower(), rec.get("alias",""), rec.get("moa",""), rec.get("ae",""))
+            _upsert(db, f"{key} ({rec.get('alias','')})", rec.get("alias",""), rec.get("moa",""), rec.get("ae",""))
+            _upsert(db, f"{rec.get('alias','')} ({key})", rec.get("alias",""), rec.get("moa",""), rec.get("ae",""))
+        except Exception:
+            # fallback: create dict
+            db.setdefault(key, {"alias": rec.get("alias",""), "moa": rec.get("moa",""), "ae": rec.get("ae","")})
+        # merge non-empty extras
+        for cand in (key, key.lower(), f"{key} ({rec.get('alias','')})", f"{rec.get('alias','')} ({key})"):
+            if cand in db and isinstance(db[cand], dict):
+                _merge_nonempty(db[cand], rec)
+
+_prev_mm_nonempty_20251025 = globals().get("ensure_onco_drug_db")
+def ensure_onco_drug_db(db):
+    if callable(_prev_mm_nonempty_20251025):
+        try:
+            _prev_mm_nonempty_20251025(db)
+        except Exception:
+            pass
+    _ensure_mm_nonempty_20251025(db)
+# === [/PATCH] ===
