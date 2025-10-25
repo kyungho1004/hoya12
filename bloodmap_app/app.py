@@ -1728,6 +1728,22 @@ with t_chemo:
                 _used_shared_renderer = False
         else:
             _used_shared_renderer = False
+        # === [PATCH] Diagnostics panel (Phase 28 ALT) ===
+        try:
+            from features_dev.diag_panel import render_diag_panel as _diag
+            _diag(st)
+        except Exception:
+            pass
+        # === [/PATCH] ===
+
+        # === [PATCH] Diagnostics panel (Phase 28) ===
+        try:
+            from features.dev.diag_panel import render_diag_panel as _diag
+            _diag(st)
+        except Exception:
+            pass
+        # === [/PATCH] ===
+
         # === [PATCH] Lean legacy stubs attach (Phase 25) ===
         try:
             from features.app_legacy_stubs import initialize as _lgstub
