@@ -1728,6 +1728,14 @@ with t_chemo:
                 _used_shared_renderer = False
         else:
             _used_shared_renderer = False
+        # === [PATCH] Special Tests panel (Phase 11, safe & local import) ===
+        try:
+            from features.special_tests_ui import render_special_tests_panel as _st_panel
+            _st_panel(st)
+        except Exception:
+            pass
+        # === [/PATCH] ===
+
         # === [PATCH] Feedback panel (Phase 10, safe & local import) ===
         try:
             from features.feedback import render_feedback_panel as _fb
