@@ -1728,6 +1728,14 @@ with t_chemo:
                 _used_shared_renderer = False
         else:
             _used_shared_renderer = False
+        # === [PATCH] Special Tests key bridge init (Phase 21) ===
+        try:
+            from features.special_tests_bridge import initialize_special_tests_keys as _st_bridge
+            _st_bridge()
+        except Exception:
+            pass
+        # === [/PATCH] ===
+
         # === [PATCH] AE full section (Phase 19) ===
         try:
             from features.adverse_effects import render_ae_full as _ae_full
