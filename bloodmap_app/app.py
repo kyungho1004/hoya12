@@ -1726,224 +1726,48 @@ with t_chemo:
                 _used_shared_renderer = True
             except Exception:
                 _used_shared_renderer = False
+                # === [PATCH] Keyword explainers + chemo example (safe, idempotent) ===
+                try:
+                    from ui_results import ensure_keyword_explainer_style as _bm_kw_style
+                    from ui_results import render_keyword_explainers as _bm_kw_explain
+                    from ui_results import render_chemo_summary_example as _bm_chemo_example
+                except Exception:
+                    _bm_kw_style = None
+                    _bm_kw_explain = None
+                    _bm_chemo_example = None
+                # inject CSS once (harmless if called multiple times)
+                try:
+                    if _bm_kw_style:
+                        _bm_kw_style(st)
+                except Exception:
+                    pass
+                # Build a source text by concatenating AE texts of selected drugs, if available
+                try:
+                    _ae_text_concat = []
+                    for _k in (picked_keys or []):
+                        _v = DRUG_DB.get(_k, {})
+                        _t = _v.get("ae") or _v.get("desc") or ""
+                        if isinstance(_t, str):
+                            _ae_text_concat.append(_t)
+                    _ae_source_text = " ".join(_ae_text_concat)
+                    if _bm_kw_explain:
+                        _bm_kw_explain(st, _ae_source_text)
+                except Exception:
+                    pass
+                # Lightweight example block under 항암제 섹션
+                try:
+                    if _bm_chemo_example:
+                        _bm_chemo_example(st)
+                except Exception:
+                    pass
+                # === [/PATCH] ===
+
         else:
             _used_shared_renderer = False
-        # === [PATCH] Special Tests key bridge init (Phase 21) ===
+        # === [PATCH] Modular router attach (Phase 23) ===
         try:
-            from features.special_tests_bridge import initialize_special_tests_keys as _st_bridge
-            _st_bridge()
-        except Exception:
-            pass
-        # === [/PATCH] ===
-
-        # === [PATCH] AE full section (Phase 19) ===
-        try:
-            from features.adverse_effects import render_ae_full as _ae_full
-            _ae_full(st, picked_keys, DRUG_DB)
-        except Exception:
-            pass
-        # === [/PATCH] ===
-
-        # === [PATCH] PDF templates/pipeline attach (Phase 19) ===
-        try:
-            from features.exporters_pipeline import render_report_pipeline as _rp2
-            _payload3 = {"title": "보고서", "drugs": list(picked_keys or []), "summary": ""}
-            _rp2(st, _payload3)
-        except Exception:
-            pass
-        # === [/PATCH] ===
-
-        # === [PATCH] Peds ER one-page (Phase 19) ===
-        try:
-            from features.peds.er_onepage import render_peds_er_onepage as _er
-            _er(st)
-        except Exception:
-            pass
-        # === [/PATCH] ===
-
-        # === [PATCH] AE summary section (Phase 18) ===
-        try:
-            from features.adverse_effects import render_ae_main2 as _ae2
-            _ae2(st, picked_keys, DRUG_DB)
-        except Exception:
-            pass
-        # === [/PATCH] ===
-
-        # === [PATCH] Unified report pipeline (Phase 18) ===
-        try:
-            from features.exporters_pipeline import render_report_pipeline as _rp
-            _payload = {"title": "보고서", "drugs": list(picked_keys or []), "summary": "", "notes": {}}
-            _rp(st, _payload)
-        except Exception:
-            pass
-        # === [/PATCH] ===
-
-        # === [PATCH] Persist dirs status (Phase 18) ===
-        try:
-            from features.core.persist import render_persist_status as _persist
-            _persist(st)
-        except Exception:
-            pass
-        # === [/PATCH] ===
-
-        # === [PATCH] Peds Jumpbar (Phase 17) ===
-        try:
-            from features.peds.jumpbar import render_peds_jumpbar as _peds_jb
-            _peds_jb(st)
-        except Exception:
-            pass
-        # === [/PATCH] ===
-
-        # === [PATCH] Peds Symptom Guides (Phase 17) ===
-        try:
-            from features.peds.symptom_guides import render_peds_symptom_guides as _peds_sym
-            _peds_sym(st)
-        except Exception:
-            pass
-        # === [/PATCH] ===
-
-        # === [PATCH] Peds Export Panel (Phase 17) ===
-        try:
-            from features.peds.export_panel import render_peds_export as _peds_exp
-            _peds_exp(st)
-        except Exception:
-            pass
-        # === [/PATCH] ===
-
-        # === [PATCH] Peds Fever (Phase 16) ===
-        try:
-            from features.peds.fever import render_peds_fever as _peds_fever
-            _peds_fever(st)
-        except Exception:
-            pass
-        # === [/PATCH] ===
-
-        # === [PATCH] Peds ORS (Phase 16) ===
-        try:
-            from features.peds.ors import render_peds_ors as _peds_ors
-            _peds_ors(st)
-        except Exception:
-            pass
-        # === [/PATCH] ===
-
-        # === [PATCH] Peds Respiratory (Phase 16) ===
-        try:
-            from features.peds.resp import render_peds_resp as _peds_resp
-            _peds_resp(st)
-        except Exception:
-            pass
-        # === [/PATCH] ===
-
-        # === [PATCH] Nav guards (Phase 15) — unify & complement ===
-        try:
-            from features.nav import apply_all_nav_guards as _navguards
-            _navguards(st)
-        except Exception:
-            pass
-        # === [/PATCH] ===
-
-        # === [PATCH] AE main (Phase 14) — wrapper & duplicate guard ===
-        try:
-            if not st.session_state.get("_ae_main_rendered"):
-                from features.adverse_effects import render_ae_main as _ae_main
-                _ae_main(st, picked_keys, DRUG_DB)
-        except Exception:
-            pass
-        # === [/PATCH] ===
-
-        # === [PATCH] Explainer chips (Phase 14) — keyword-triggered ===
-        try:
-            from features.explainer import render_explainer_chips as _chips
-            _chips(st, picked_keys, DRUG_DB, max_chips=4)
-        except Exception:
-            pass
-        # === [/PATCH] ===
-
-        # === [PATCH] Exporters panel (Phase 12, safe & local import) ===
-        try:
-            from features.exporters import render_exporters_panel as _exporters
-            _payload = {"title": "내보내기 요약", "drugs": list(picked_keys or []), "summary": "", "note": ""}
-            _exporters(st, _payload)
-        except Exception:
-            pass
-        # === [/PATCH] ===
-
-        # === [PATCH] Diagnosis route guard (Phase 12, safe) ===
-        try:
-            from features.diagnosis import enforce_route_guard as _guard
-            _guard(st)
-        except Exception:
-            pass
-        # === [/PATCH] ===
-
-        # === [PATCH] Carelog export panel (Phase 12, safe & local import) ===
-        try:
-            from features.carelog_export import render_carelog_export as _careexp
-            _careexp(st)
-        except Exception:
-            pass
-        # === [/PATCH] ===
-
-        # === [PATCH] Special Tests panel (Phase 11, safe & local import) ===
-        try:
-            from features.special_tests_ui import render_special_tests_panel as _st_panel
-            _st_panel(st)
-        except Exception:
-            pass
-        # === [/PATCH] ===
-
-        # === [PATCH] Feedback panel (Phase 10, safe & local import) ===
-        try:
-            from features.feedback import render_feedback_panel as _fb
-            _fb(st)
-        except Exception:
-            pass
-        # === [/PATCH] ===
-
-        # === [PATCH] Peds GI quick-guides (Phase 9, safe & local import) ===
-        try:
-            from features.peds.gi import render_peds_gi_all as _peds_gi
-            _peds_gi(st)
-        except Exception:
-            pass
-        # === [/PATCH] ===
-
-        # === [PATCH] AE summary (Phase 8, safe & local import) ===
-        try:
-            from features.adverse_effects import render_ae_summary as _ae_summary
-            _ae_summary(st, picked_keys, DRUG_DB)
-        except Exception:
-            pass
-        # === [/PATCH] ===
-
-        # === [PATCH] AE cards (Phase 8, safe & local import) ===
-        try:
-            from features.adverse_effects import render_ae_cards as _ae_cards
-            _ae_cards(st, picked_keys, DRUG_DB)
-        except Exception:
-            pass
-        # === [/PATCH] ===
-
-        # === [PATCH] PDF summary button (Phase 8 Step 2, safe & local import) ===
-        try:
-            from utils.db_access import concat_ae_text as _ae_concat
-            from utils.pdf_utils import save_patient_summary as _save_summary
-            cols_pdf = st.columns([1,1,2])
-            with cols_pdf[0]:
-                if st.button("요약 PDF 저장"):
-                    _txt = _ae_concat(DRUG_DB, picked_keys)
-                    _out = _save_summary(list(picked_keys or []), _txt[:1000])
-                    if _out:
-                        st.success(f"저장됨: {_out}")
-                        st.write(f"[다운로드]({_out})")
-        except Exception:
-            pass
-        # === [/PATCH] ===
-
-        # === [PATCH] AE table render (Phase 8, safe & local import) ===
-        try:
-            from features.adverse_effects import render_ae_table as _ae_table
-            _ae_table(st, picked_keys, DRUG_DB)
+            from features.app_router import render_modular_sections as _mod
+            _mod(st, picked_keys, DRUG_DB)
         except Exception:
             pass
         # === [/PATCH] ===
