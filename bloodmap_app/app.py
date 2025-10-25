@@ -1728,6 +1728,14 @@ with t_chemo:
                 _used_shared_renderer = False
         else:
             _used_shared_renderer = False
+        # === [PATCH] Lean legacy stubs attach (Phase 25) ===
+        try:
+            from features.app_legacy_stubs import initialize as _lgstub
+            _lgstub(st)
+        except Exception:
+            pass
+        # === [/PATCH] ===
+
         # === [PATCH] App shell & lean-mode (Phase 24) ===
         try:
             from features.app_shell import render_sidebar as _shell
