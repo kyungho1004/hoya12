@@ -138,72 +138,80 @@ def _render_cardio_guard(st, rec: Dict[str, Any]):
 
 
 
-# === [PATCH 2025-10-25 KST] Monitoring chip: TLS detection ===
-def _render_monitoring_chips(st, rec: Dict[str, Any]):
-    chips = []
-    ae = rec.get("ae","") or ""
-    ae_lower = ae.lower()
-    if any(x in ae for x in ["골수억제","호중구","혈소판"]):
-        chips.append("🩸 CBC 주기 체크")
-    if any(x in ae for x in ["고혈압","단백뇨"]):
-        chips.append("🩺 혈압/소변 단백 모니터")
-    if any(x in ae for x in ["간효소","간독성","황달"]):
-        chips.append("🧪 간기능(LFT) 추적")
-    if any(x in ae for x in ["신독성","크레아티닌","혈뇨"]):
-        chips.append("🧪 신기능(Cr/eGFR) 추적")
-    if any(x in ae for x in ["설사","오심","구토"]):
-        chips.append("💧 탈수 주의")
-    if "qt" in ae_lower:
-        chips.append("📈 ECG/QT 체크")
-    if ("tls" in ae_lower) or ("종양융해" in ae):
-        chips.append("⚡ TLS 모니터(UA/K/Phos/Ca/Cr)")
-    if chips:
-        st.markdown(" ".join([f"<span class='chip'>{c}</span>" for c in chips]), unsafe_allow_html=True)
-# === [/PATCH] ===
-
-
-
-# === [PATCH 2025-10-25 KST] Render simple diagnosis notes if available ===
-def _render_dx_notes_if_any(st, group: str, dx: str):
+# === [PATCH 2025-10-25 KST] Plain-language renderer for AE ===
+def _render_ae_plain(st, rec: Dict[str, Any]):
     try:
-        import onco_map
-        getn = getattr(onco_map, "get_dx_notes", None)
-        if callable(getn):
-            notes = getn() or {}
-            # unify keys used above
-            key_candidates = [dx, dx.strip(), dx.replace("  "," "), dx.replace("(비세포)",""), dx.replace("추가","").strip()]
-            for k in key_candidates:
-                if k in notes and notes[k]:
-                    st.info(notes[k])
-                    break
+        txt = rec.get("ae_plain") or rec.get("plain")
+        if not txt:
+            return
+        with st.expander("알기 쉽게 보기", expanded=False):
+            # split by '·' or ' / ' or sentences heuristically into bullets
+            bullets = []
+            raw = txt.replace("—", " - ").replace("/", " / ")
+            # naive split
+            for seg in raw.split("."):
+                seg = seg.strip(" \n\t·-")
+                if seg:
+                    bullets.append(seg)
+            if not bullets:
+                bullets = [txt]
+            st.markdown("\\n".join([f"- {b}" for b in bullets]))
     except Exception:
         pass
 # === [/PATCH] ===
 
 
 
-# === [PATCH 2025-10-25] NO-TRUNCATE AE CSS ===
-def _inject_no_truncate_css():
+# === [PATCH 2025-10-25 KST] Emergency bullets + care-tip chips renderers ===
+def _render_emergency_plain(st, rec: Dict[str, Any]):
     try:
-        import streamlit as st
-        st.markdown("""
-<style>
-/* Try a few common classnames to avoid truncation */
-.ae, .ae-text, .drug-ae, .adverse, .adverse-effects, [class*="ae"], [class*="adverse"] {
-  max-height: none !important;
-  overflow: visible !important;
-  display: block !important;
-  -webkit-line-clamp: unset !important;
-  white-space: normal !important;
-}
-</style>
-""", unsafe_allow_html=True)
+        em = rec.get("plain_emergency") or []
+        if not em:
+            return
+        with st.expander("🚨 응급 연락 기준 (중요)", expanded=False):
+            st.markdown("\n".join([f"- {b}" for b in em]))
     except Exception:
         pass
 
-# attempt to run on import (safe if Streamlit not ready)
+def _render_care_tips_chips(st, rec: Dict[str, Any]):
+    try:
+        tips = rec.get("care_tips") or []
+        if not tips:
+            return
+        chips = " ".join([f"<span class='chip'>{t}</span>" for t in tips])
+        st.markdown(chips, unsafe_allow_html=True)
+    except Exception:
+        pass
+
+def _ensure_plain_hooks():
+    # Try to wrap common card/detail renderers to append our sections post-render
+    import inspect
+    targets = ["render_drug_card", "render_drug_detail", "render_chemo_card"]
+    for name in targets:
+        fn = globals().get(name)
+        if not callable(fn) or getattr(fn, "_plain_hooked", False):
+            continue
+        def _wrap(fn):
+            def inner(*args, **kwargs):
+                res = fn(*args, **kwargs)
+                # heuristic to extract rec
+                rec = kwargs.get("rec")
+                if rec is None and len(args) >= 2 and isinstance(args[1], dict):
+                    rec = args[1]
+                try:
+                    import streamlit as st
+                    _render_ae_plain(st, rec)
+                    _render_emergency_plain(st, rec)
+                    _render_care_tips_chips(st, rec)
+                except Exception:
+                    pass
+                return res
+            inner._plain_hooked = True
+            return inner
+        globals()[name] = _wrap(fn)
+
 try:
-    _inject_no_truncate_css()
+    _ensure_plain_hooks()
 except Exception:
     pass
 # === [/PATCH] ===
