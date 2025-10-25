@@ -1745,3 +1745,130 @@ def ensure_onco_drug_db(db):
     _reinforce_dactinomycin_20251025(db)
     _global_emoji_fallback_20251025(db)
 # === [/PATCH] ===
+
+
+
+# === [PATCH 2025-10-25 KST] Cytarabine formulations + canonical synonyms ===
+def _reinforce_cytarabine_20251025(db: Dict[str, Dict[str, Any]]) -> None:
+    base_key = "Cytarabine (Ara-C)"
+    alias = "시타라빈(Ara-C)"
+    common = {
+        "alias": alias,
+        "moa": "피리미딘 유사체(항대사제)",
+        "plain": "골수억제와 점막염이 흔하고, 고용량에서는 눈 자극과 균형장애(소뇌)가 생길 수 있어요.",
+        "ae_plain": "골수억제와 점막염이 흔하고, 고용량에서는 눈 자극과 균형장애(소뇌)가 생길 수 있어요.",
+        "plain_emergency": [
+            "🚨 38℃ 이상 발열(발열성 호중구감소증 의심)",
+            "🚨 심한 시야·눈 통증/지속 결막충혈",
+            "🚨 걸음 비틀거림/말 더듬/어지럼 등 신경증상"
+        ],
+        "care_tips": ["👁️ 점안액 예방(HDAC)", "🪥 구강관리", "💧 수분보충", "🌡️ 체온기록"]
+    }
+    variants = {
+        "Ara-C HDAC": {
+            "ae": "🩸 골수억제 · 🤢 오심/구토 · 💊 점막염 · 👁️ 결막염(스테로이드 점안 예방) · 🧠 소뇌독성(고용량) · 발열/발진",
+            "monitor": ["CBC", "LFT/Cr", "신경학적 증상(소뇌)", "점안 순응도"],
+        },
+        "Ara-C IV": {
+            "ae": "🩸 골수억제 · 🤢 오심/구토 · 💊 점막염 · 주입 관련 오심/구토 관리 필요",
+            "monitor": ["CBC", "LFT/Cr"],
+        },
+        "Ara-C SC": {
+            "ae": "🩸 골수억제 · 🤢 오심/구토 · 💊 점막염 · 주사부위 통증/발적 가능",
+            "monitor": ["CBC", "LFT/Cr", "주사부위"],
+        },
+        base_key: {
+            "ae": "🩸 골수억제 · 🤢 오심/구토 · 💊 점막염 · 👁️ 결막염(HDAC) · 🧠 소뇌독성(HDAC)",
+            "monitor": ["CBC", "LFT/Cr", "신경학적 증상(고용량 시)"],
+        }
+    }
+    # upsert/merge
+    for k, add in variants.items():
+        rec = db.setdefault(k, {})
+        if isinstance(rec, dict):
+            for kk, vv in {**common, **add}.items():
+                if not rec.get(kk):
+                    rec[kk] = vv
+    # ensure lowercase aliases also mapped
+    for k in list(variants.keys()):
+        db.setdefault(k.lower(), db.get(k, {}))
+
+def _canonical_map_20251025():
+    # Map many alias patterns to a canonical key for de-dup in UI/extract.
+    return {
+        # 5-FU family
+        "5-fu": "5-Fluorouracil",
+        "5-fu (5-플루오로우라실)": "5-Fluorouracil",
+        "5-fu (5-플루오로우라실) (5-플루오로우라실)": "5-Fluorouracil",
+        "5-fu (5-플루오로우라실) (5-fu)": "5-Fluorouracil",
+        "5-fu (5-fu)": "5-Fluorouracil",
+        "5-fu (5-FU)": "5-Fluorouracil",
+        "5-fu (5-FU) (5-플루오로우라실)": "5-Fluorouracil",
+        "5-fu (5-플루오로우라실) (5-FU)": "5-Fluorouracil",
+        "5-FU": "5-Fluorouracil",
+        "5-FU (5-플루오로우라실)": "5-Fluorouracil",
+        "5-플루오로우라실": "5-Fluorouracil",
+        "5-플루오로우라실 (5-FU)": "5-Fluorouracil",
+        "5-플루오로우라실 (5-fu)": "5-Fluorouracil",
+        # 6-MP family
+        "6-mp": "Mercaptopurine",
+        "6-mp (6-머캅토퓨린(6-MP))": "Mercaptopurine",
+        "6-MP (6-머캅토퓨린(6-MP))": "Mercaptopurine",
+        "6-머캅토퓨린(6-MP)": "Mercaptopurine",
+        "mercaptopurine": "Mercaptopurine",
+        "Mercaptopurine": "Mercaptopurine",
+        # ATO
+        "ato": "Arsenic Trioxide",
+        "ATO": "Arsenic Trioxide",
+        "arsenic trioxide": "Arsenic Trioxide",
+        "Arsenic Trioxide": "Arsenic Trioxide",
+        # Avapritinib
+        "avapritinib": "Avapritinib",
+        # Alectinib
+        "alectinib": "Alectinib",
+        # Cytarabine
+        "ara-c": "Cytarabine (Ara-C)",
+        "cytarabine": "Cytarabine (Ara-C)",
+        "cytarabine iv": "Ara-C IV",
+        "cytarabine sc": "Ara-C SC",
+        "cytarabine hdac": "Ara-C HDAC",
+        "Ara-C HDAC": "Ara-C HDAC",
+        "Ara-C IV": "Ara-C IV",
+        "Ara-C SC": "Ara-C SC",
+        # Dactinomycin
+        "dactinomycin": "Dactinomycin",
+    }
+
+def _apply_canonical_redirects_20251025(db: Dict[str, Dict[str, Any]]) -> None:
+    cmap = _canonical_map_20251025()
+    # collect mapping keys (case-insensitive)
+    keys = list(db.keys())
+    for k in keys:
+        if not isinstance(k, str):
+            continue
+        key_l = k.strip()
+        canon = cmap.get(key_l) or cmap.get(key_l.lower())
+        if not canon:
+            continue
+        # create canonical entry if absent
+        can = db.setdefault(canon, {})
+        src = db.get(k, {})
+        if isinstance(src, dict) and isinstance(can, dict):
+            # shallow merge—preserve canonical values
+            for kk, vv in src.items():
+                if not can.get(kk):
+                    can[kk] = vv
+            # mark redirect on the source (non-canonical) to allow UI skip
+            if k != canon and isinstance(src, dict):
+                src.setdefault("redirect_to", canon)
+
+_prev_cytarabine_syn_20251025 = globals().get("ensure_onco_drug_db")
+def ensure_onco_drug_db(db):
+    if callable(_prev_cytarabine_syn_20251025):
+        try:
+            _prev_cytarabine_syn_20251025(db)
+        except Exception:
+            pass
+    _reinforce_cytarabine_20251025(db)
+    _apply_canonical_redirects_20251025(db)
+# === [/PATCH] ===

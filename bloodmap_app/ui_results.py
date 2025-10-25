@@ -215,3 +215,59 @@ try:
 except Exception:
     pass
 # === [/PATCH] ===
+
+
+
+# === [PATCH 2025-10-25 KST] Dedupe redirects + Ara-C formulation quick links ===
+def _is_redirect_record(rec: Dict[str, Any]) -> bool:
+    try:
+        return bool(rec.get("redirect_to"))
+    except Exception:
+        return False
+
+def _render_arac_quicklinks(st, title: str):
+    try:
+        t = (title or "").lower()
+        if "cytarabine" in t or "ara-c" in t:
+            st.markdown(
+                "[Ara-C HDAC](#) · [Ara-C IV](#) · [Ara-C SC](#)  \n"
+                "<span style='font-size:0.9em;opacity:0.8'>고용량(HDAC)은 **점안 스테로이드**와 **소뇌 증상** 모니터가 중요해요.</span>",
+                unsafe_allow_html=True
+            )
+    except Exception:
+        pass
+
+# Hook into card renderers to skip redirects and add Ara-C links
+def _wrap_with_redirect_and_links(fn):
+    def inner(*args, **kwargs):
+        # identify rec
+        rec = kwargs.get("rec")
+        if rec is None and len(args) >= 2 and isinstance(args[1], dict):
+            rec = args[1]
+        # title for quicklinks
+        title = kwargs.get("title") or (args[0] if args and isinstance(args[0], str) else "")
+        try:
+            import streamlit as st
+            if rec and _is_redirect_record(rec):
+                # Skip rendering duplicated alias
+                return
+            _render_arac_quicklinks(st, title or (rec.get("name") if isinstance(rec, dict) else ""))
+        except Exception:
+            pass
+        res = fn(*args, **kwargs)
+        return res
+    inner._redirect_link_wrapped = True
+    return inner
+
+def _install_redirect_link_hooks():
+    targets = ["render_drug_card", "render_drug_detail", "render_chemo_card"]
+    for name in targets:
+        fn = globals().get(name)
+        if callable(fn) and not getattr(fn, "_redirect_link_wrapped", False):
+            globals()[name] = _wrap_with_redirect_and_links(fn)
+
+try:
+    _install_redirect_link_hooks()
+except Exception:
+    pass
+# === [/PATCH] ===
