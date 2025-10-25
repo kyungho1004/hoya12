@@ -10,6 +10,33 @@ from __future__ import annotations
 from typing import List, Optional
 import streamlit as st
 
+# === [PATCH] Special Tests: unique key namespace (Phase SAFE-NS) ===
+import uuid as _st_uuid
+
+def _special_tests_ns() -> str:
+    try:
+        import streamlit as st
+        ss = st.session_state
+        if "_special_tests_ns" not in ss:
+            ss["_special_tests_ns"] = f"stests_{_st_uuid.uuid4().hex[:6]}"
+        return ss["_special_tests_ns"]
+    except Exception:
+        return "stests_default"
+
+def _set_call_namespace():
+    import streamlit as st
+    ss = st.session_state
+    ss["_special_tests_call_ns"] = f"{_special_tests_ns()}_{_st_uuid.uuid4().hex[:4]}"
+
+def _ns_prefix() -> str:
+    import streamlit as st
+    ss = st.session_state
+    return ss.get("_special_tests_call_ns") or _special_tests_ns()
+
+def _ns_key(kind: str, name: str) -> str:
+    return f"{_ns_prefix()}_{kind}_{name}"
+# === [/PATCH] ===
+
 def _num(x):
     try:
         if x is None: return None
@@ -27,8 +54,34 @@ def _emit(lines: List[str], kind: Optional[str], msg: str):
     tag = _flag(kind)
     lines.append(f"{tag} {msg}" if tag else msg)
 
-def _tog_key(name: str) -> str: return f"tog_{name}"
-def _fav_key(name: str) -> str: return f"fav_{name}"
+def _ns() -> str:
+    """Session-scoped namespace to avoid DuplicateElementKey across re-renders/sections."""
+    try:
+        ss = st.session_state
+        k = "_special_tests_ns"
+        if k not in ss or not isinstance(ss.get(k), str):
+            import uuid
+            ss[k] = f"spec_{uuid.uuid4().hex[:8]}"
+        return ss[k]
+    except Exception:
+        return "spec"
+
+def _set_call_namespace():
+    """Create a per-call sub-namespace to avoid DuplicateElementKey when this UI renders multiple times per run."""
+    try:
+        ss = st.session_state
+        import uuid
+        ss["_special_tests_call_ns"] = f"{_ns()}_{uuid.uuid4().hex[:4]}"
+    except Exception:
+        pass
+
+def _tog_key(name: str) -> str:
+    ns = st.session_state.get("_special_tests_call_ns") or _ns()
+    return f"{ns}_tog_{name}"
+def _fav_key(name: str) -> str:
+    ns = st.session_state.get("_special_tests_call_ns") or _ns()
+    return f"{ns}_fav_{name}"
+
 
 SECTIONS = [
     ("소변검사 (Urinalysis)", "urine"),
@@ -50,6 +103,7 @@ def _fav_list():
     return st.session_state["fav_tests"]
 
 def special_tests_ui() -> List[str]:
+    _set_call_namespace()
     lines: List[str] = []
     with st.expander("🧪 특수검사 (선택 입력)", expanded=False):
         st.caption("정성검사는 +/++/+++ , 정량검사는 숫자만 입력. ★로 즐겨찾기 고정.")
@@ -264,3 +318,11 @@ def special_tests_ui() -> List[str]:
                 lc = _num(st.text_input("Lactate (젖산, mmol/L)", placeholder="예: 1.5"))
                 if lc is not None and lc >= 2: _emit(lines, "warn", f"Lactate {lc} ≥ 2 → 조직저산소/패혈증 감시")
     return lines
+
+
+def _tog_key(name: str) -> str:
+    return _ns_key("tog", name)
+
+
+def _fav_key(name: str) -> str:
+    return _ns_key("fav", name)
