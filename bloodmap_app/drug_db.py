@@ -1591,3 +1591,19 @@ def ensure_onco_drug_db(db):
             pass
     _augment_all_drugs_20251025(db)
 # === [/PATCH] ===
+
+
+
+# === [HOTFIX 2025-10-25] Safe _squeeze_sentences override ===
+def _squeeze_sentences(ae: str, limit=2):
+    """Return a short plain-language snippet from AE text.
+    Self-contained: attempts to import regex locally and falls back safely.
+    """
+    t = (ae or "").replace("\n", " ").replace("—", " ").replace("..", ".").strip()
+    try:
+        import re as _re
+        parts = [s.strip(" ·-") for s in _re.split(r"[.?!]", t) if s.strip()]
+    except Exception:
+        parts = [s.strip(" ·-") for s in t.split(".") if s.strip()]
+    return " ".join(parts[:limit]) if parts else ""
+# === [/HOTFIX] ===
