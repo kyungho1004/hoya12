@@ -3023,3 +3023,104 @@ if _cur_route and _cur_route in _label_by_route and _cur_route != "home":
     _select_tab_by_label(_label_by_route[_cur_route])
 # ---- End Tab auto-select ----
 
+
+
+
+# === [PATCH 2025-10-25] DEV GUARD + STUB INJECTOR ===
+def _is_dev() -> bool:
+    """Developer mode gate.
+    Enabled if any of:
+      - env BLOODMAP_DEV == "1"
+      - URL query param dev in {"1","true","yes"}
+      - session_state['dev_beta'] True (shown only when dev qp/env is present)
+    """
+    import os
+    try:
+        import streamlit as st
+    except Exception:
+        return False
+    if os.environ.get("BLOODMAP_DEV", "") == "1":
+        return True
+    try:
+        q = st.query_params.get("dev")
+    except Exception:
+        try:
+            q = (st.experimental_get_query_params().get("dev") or [""])[0]
+        except Exception:
+            q = ""
+    if isinstance(q, list):
+        q = q[0] if q else ""
+    if str(q).lower() in ("1","true","yes","y"):
+        return True
+    return bool(st.session_state.get("dev_beta", False))
+
+def _dev_inject_stubs():
+    """When not in dev, inject empty placeholder modules so dev imports do nothing."""
+    if _is_dev():
+        return
+    import sys, types
+    names = [
+        "features", "features_dev",
+        "features.dev", "features_dev.diag_panel",
+        "features.dev.diag_panel",
+        "features.app_legacy_stubs",
+        "features.app_shell",
+        "features.app_deprecator",
+        "features.app_router",
+    ]
+    for nm in names:
+        if nm not in sys.modules:
+            sys.modules[nm] = types.ModuleType(nm)
+
+try:
+    _dev_inject_stubs()
+except Exception:
+    pass
+
+def _maybe_render_dev_panels(st):
+    if not _is_dev():
+        return
+    # Diagnostics/dev-only panels (safe; errors suppressed)
+    try:
+        from features_dev.diag_panel import render_diag_panel as _diag
+        _diag(st)
+    except Exception:
+        pass
+    try:
+        from features.dev.diag_panel import render_diag_panel as _diag
+        _diag(st)
+    except Exception:
+        pass
+    try:
+        from features.app_legacy_stubs import initialize as _lgstub
+        _lgstub(st)
+    except Exception:
+        pass
+    try:
+        from features.app_shell import render_sidebar as _shell
+        _shell(st)
+    except Exception:
+        pass
+    try:
+        from features.app_deprecator import apply_lean_mode as _lean
+        _lean(st)
+    except Exception:
+        pass
+    try:
+        if st.session_state.get("_lean_mode", True):
+            from features.app_router import render_modular_sections as _mod
+            _mod(st, st.session_state.get("chemo_keys", []), globals().get("DRUG_DB", {}))
+    except Exception:
+        pass
+
+# Developer toggle block (append-only; not inside existing 'with' blocks)
+try:
+    import streamlit as st
+    if _is_dev():
+        with st.sidebar:
+            with st.expander("🔧 Developer", expanded=False):
+                st.toggle("개발자 모드(베타 패널)", value=bool(st.session_state.get("dev_beta", True)), key="dev_beta")
+                st.caption("※ URL에 ?dev=1 또는 환경변수 BLOODMAP_DEV=1일 때만 보입니다.")
+except Exception:
+    pass
+# === [/PATCH] ===
