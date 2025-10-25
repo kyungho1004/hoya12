@@ -1726,48 +1726,23 @@ with t_chemo:
                 _used_shared_renderer = True
             except Exception:
                 _used_shared_renderer = False
-                # === [PATCH] Keyword explainers + chemo example (safe, idempotent) ===
-                try:
-                    from ui_results import ensure_keyword_explainer_style as _bm_kw_style
-                    from ui_results import render_keyword_explainers as _bm_kw_explain
-                    from ui_results import render_chemo_summary_example as _bm_chemo_example
-                except Exception:
-                    _bm_kw_style = None
-                    _bm_kw_explain = None
-                    _bm_chemo_example = None
-                # inject CSS once (harmless if called multiple times)
-                try:
-                    if _bm_kw_style:
-                        _bm_kw_style(st)
-                except Exception:
-                    pass
-                # Build a source text by concatenating AE texts of selected drugs, if available
-                try:
-                    _ae_text_concat = []
-                    for _k in (picked_keys or []):
-                        _v = DRUG_DB.get(_k, {})
-                        _t = _v.get("ae") or _v.get("desc") or ""
-                        if isinstance(_t, str):
-                            _ae_text_concat.append(_t)
-                    _ae_source_text = " ".join(_ae_text_concat)
-                    if _bm_kw_explain:
-                        _bm_kw_explain(st, _ae_source_text)
-                except Exception:
-                    pass
-                # Lightweight example block under 항암제 섹션
-                try:
-                    if _bm_chemo_example:
-                        _bm_chemo_example(st)
-                except Exception:
-                    pass
-                # === [/PATCH] ===
-
         else:
             _used_shared_renderer = False
-        # === [PATCH] Modular router attach (Phase 23) ===
+        # === [PATCH] App shell & lean-mode (Phase 24) ===
         try:
-            from features.app_router import render_modular_sections as _mod
-            _mod(st, picked_keys, DRUG_DB)
+            from features.app_shell import render_sidebar as _shell
+            _shell(st)
+        except Exception:
+            pass
+        try:
+            from features.app_deprecator import apply_lean_mode as _lean
+            _lean(st)
+        except Exception:
+            pass
+        try:
+            if st.session_state.get("_lean_mode", True):
+                from features.app_router import render_modular_sections as _mod
+                _mod(st, picked_keys, DRUG_DB)
         except Exception:
             pass
         # === [/PATCH] ===
