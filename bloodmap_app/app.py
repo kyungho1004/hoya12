@@ -1728,6 +1728,14 @@ with t_chemo:
                 _used_shared_renderer = False
         else:
             _used_shared_renderer = False
+        # === [PATCH] Feedback panel (Phase 10, safe & local import) ===
+        try:
+            from features.feedback import render_feedback_panel as _fb
+            _fb(st)
+        except Exception:
+            pass
+        # === [/PATCH] ===
+
         # === [PATCH] Peds GI quick-guides (Phase 9, safe & local import) ===
         try:
             from features.peds.gi import render_peds_gi_all as _peds_gi
