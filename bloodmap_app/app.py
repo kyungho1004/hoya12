@@ -125,8 +125,6 @@ peds_dose = _safe_import("peds_dose")
 core_utils = _safe_import("core_utils")
 ui_results = _safe_import("ui_results")
 
-
-pages_peds = _safe_import("pages_peds")
 # Utility: wkey (avoid duplicate definitions)
 if "wkey" not in globals():
     def wkey(x): 
@@ -1730,28 +1728,50 @@ with t_chemo:
                 _used_shared_renderer = False
         else:
             _used_shared_renderer = False
-        
-        # Fallback glossary: if shared renderer didn't render glossary, show simple glossary here
+        # === [PATCH] Diagnostics panel (Phase 28 ALT) ===
         try:
-            if not st.session_state.get("_glossary_rendered_once"):
-                from ui_results import _extract_glossary_terms, GLOSSARY_TERMS
-                st.markdown("**📚 어려운 용어 풀이**")
-                # Collect AE texts from picked drugs
-                bag = []
-                for _k in picked_keys:
-                    _rec = DRUG_DB.get(_k, {})
-                    bag.append(_rec.get("ae",""))
-                    mon = _rec.get("monitor", [])
-                    if isinstance(mon, (list, tuple)):
-                        bag.extend([str(x) for x in mon])
-                terms = _extract_glossary_terms(" ".join(bag))
-                for _t in terms:
-                    _desc = GLOSSARY_TERMS.get(_t)
-                    if _desc:
-                        st.markdown(f"- **{_t}** — {_desc}")
+            from features_dev.diag_panel import render_diag_panel as _diag
+            _diag(st)
         except Exception:
             pass
-# === [/PATCH] ===
+        # === [/PATCH] ===
+
+        # === [PATCH] Diagnostics panel (Phase 28) ===
+        try:
+            from features.dev.diag_panel import render_diag_panel as _diag
+            _diag(st)
+        except Exception:
+            pass
+        # === [/PATCH] ===
+
+        # === [PATCH] Lean legacy stubs attach (Phase 25) ===
+        try:
+            from features.app_legacy_stubs import initialize as _lgstub
+            _lgstub(st)
+        except Exception:
+            pass
+        # === [/PATCH] ===
+
+        # === [PATCH] App shell & lean-mode (Phase 24) ===
+        try:
+            from features.app_shell import render_sidebar as _shell
+            _shell(st)
+        except Exception:
+            pass
+        try:
+            from features.app_deprecator import apply_lean_mode as _lean
+            _lean(st)
+        except Exception:
+            pass
+        try:
+            if st.session_state.get("_lean_mode", True):
+                from features.app_router import render_modular_sections as _mod
+                _mod(st, picked_keys, DRUG_DB)
+        except Exception:
+            pass
+        # === [/PATCH] ===
+
+        # === [/PATCH] ===
 
         if ae_map:
             # --- Ara-C 제형 선택(IV/SC/HDAC) ---
@@ -1788,14 +1808,6 @@ _block_spurious_home()
 # PEDS
 with t_peds:
     st.subheader("소아 증상 기반 점수 + 보호자 설명 + 해열제 계산")
-
-# [PHASE 1] 외부 소아 탭 모듈이 있으면 먼저 퀵 섹션을 그립니다(없으면 무시).
-if pages_peds is not None and hasattr(pages_peds, "render_peds_page"):
-    try:
-        pages_peds.render_peds_page()
-    except Exception:
-        pass
-
     render_peds_nav_md()
     c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
@@ -3013,40 +3025,341 @@ if _cur_route and _cur_route in _label_by_route and _cur_route != "home":
 
 
 
-# === [PATCH 2025-10-26 KST] Chemo monitoring panel ===
-def _render_chemo_monitoring_section(selected: list[str], db):
+
+# === [PATCH 2025-10-25] DEV GUARD + STUB INJECTOR ===
+def _is_dev() -> bool:
+    """Developer mode gate.
+    Enabled if any of:
+      - env BLOODMAP_DEV == "1"
+      - URL query param dev in {"1","true","yes"}
+      - session_state['dev_beta'] True (shown only when dev qp/env is present)
+    """
+    import os
     try:
-        from drug_db import derive_monitoring, display_label
+        import streamlit as st
     except Exception:
-        st.info("모니터링 정보 엔진이 로드되지 않아 표시를 건너뜁니다.")
+        return False
+    if os.environ.get("BLOODMAP_DEV", "") == "1":
+        return True
+    try:
+        q = st.query_params.get("dev")
+    except Exception:
+        try:
+            q = (st.experimental_get_query_params().get("dev") or [""])[0]
+        except Exception:
+            q = ""
+    if isinstance(q, list):
+        q = q[0] if q else ""
+    if str(q).lower() in ("1","true","yes","y"):
+        return True
+    return bool(st.session_state.get("dev_beta", False))
+
+def _dev_inject_stubs():
+    """When not in dev, inject empty placeholder modules so dev imports do nothing."""
+    if _is_dev():
         return
-    if not selected:
+    import sys, types
+    names = [
+        "features", "features_dev",
+        "features.dev", "features_dev.diag_panel",
+        "features.dev.diag_panel",
+        "features.app_legacy_stubs",
+        "features.app_shell",
+        "features.app_deprecator",
+        "features.app_router",
+    ]
+    for nm in names:
+        if nm not in sys.modules:
+            sys.modules[nm] = types.ModuleType(nm)
+
+try:
+    _dev_inject_stubs()
+except Exception:
+    pass
+
+def _maybe_render_dev_panels(st):
+    if not _is_dev():
         return
-    mon = derive_monitoring(selected, db)
-    if not any(mon.values()):
-        return
-    st.markdown("### 📈 항암제 모니터링")
-    for k in selected:
-        label = display_label(k, db) if callable(globals().get("display_label", None)) else str(k)
-        st.markdown(f"**{label}**")
-        items = mon.get(k) or []
-        if items:
-            lines = [f"- [ ] {icon} {text}" for icon, text in items]
-            st.markdown("\n".join(lines))
-        st.markdown("---")
+    # Diagnostics/dev-only panels (safe; errors suppressed)
+    try:
+        from features_dev.diag_panel import render_diag_panel as _diag
+        _diag(st)
+    except Exception:
+        pass
+    try:
+        from features.dev.diag_panel import render_diag_panel as _diag
+        _diag(st)
+    except Exception:
+        pass
+    try:
+        from features.app_legacy_stubs import initialize as _lgstub
+        _lgstub(st)
+    except Exception:
+        pass
+    try:
+        from features.app_shell import render_sidebar as _shell
+        _shell(st)
+    except Exception:
+        pass
+    try:
+        from features.app_deprecator import apply_lean_mode as _lean
+        _lean(st)
+    except Exception:
+        pass
+    try:
+        if st.session_state.get("_lean_mode", True):
+            from features.app_router import render_modular_sections as _mod
+            _mod(st, st.session_state.get("chemo_keys", []), globals().get("DRUG_DB", {}))
+    except Exception:
+        pass
+
+# Developer toggle block (append-only; not inside existing 'with' blocks)
+try:
+    import streamlit as st
+    if _is_dev():
+        with st.sidebar:
+            with st.expander("🔧 Developer", expanded=False):
+                st.toggle("개발자 모드(베타 패널)", value=bool(st.session_state.get("dev_beta", True)), key="dev_beta")
+                st.caption("※ URL에 ?dev=1 또는 환경변수 BLOODMAP_DEV=1일 때만 보입니다.")
+except Exception:
+    pass
 # === [/PATCH] ===
 
 
-# === [PATCH 2025-10-26 KST] Hook: try to render chemo monitoring from current selection ===
+
+# === [PATCH 2025-10-25] BETA ON/OFF MODE ===
+def _beta_enabled() -> bool:
+    try:
+        import streamlit as st
+        return bool(st.session_state.get("_beta_enabled", False))
+    except Exception:
+        return False
+
+def _set_beta(val: bool) -> None:
+    try:
+        import streamlit as st
+        st.session_state["_beta_enabled"] = bool(val)
+    except Exception:
+        pass
+
+# Monkeypatch expander: if beta OFF and title contains beta markers, SKIP body.
 try:
-    _sel = []
-    _sess_sel = st.session_state.get("chemo_selected") or st.session_state.get("selected_chemo") or []
-    if isinstance(_sess_sel, (list, tuple)):
-        _sel = [str(x) for x in _sess_sel if str(x)]
-    if not _sel:
-        _r = st.session_state.get("recs_by_dx", {}) or {}
-        _sel = list(dict.fromkeys((_r.get("chemo") or []) + (_r.get("targeted") or [])))
-    _render_chemo_monitoring_section(_sel, DRUG_DB)
+    import streamlit as _st_beta
+except Exception:
+    _st_beta = None
+
+if _st_beta is not None and not getattr(_st_beta, "_beta_gate_installed", False):
+    try:
+        _orig_expander = getattr(_st_beta, "expander", None)
+
+        class _SkipCtx:
+            def __enter__(self):
+                raise RuntimeError("_beta_blocked")
+            def __exit__(self, exc_type, exc, tb):
+                return True  # suppress
+
+        def _expander_beta_guard(label, *args, **kwargs):
+            try:
+                text = str(label or "")
+            except Exception:
+                text = ""
+            if (not _beta_enabled()) and any(tok in text for tok in ("(β", "β)", "베타", "beta", "Beta")):
+                return _SkipCtx()
+            return _orig_expander(label, *args, **kwargs)
+
+        if callable(_orig_expander):
+            _st_beta.expander = _expander_beta_guard
+            _st_beta._beta_gate_installed = True
+    except Exception:
+        pass
+
+# Sidebar toggle (always visible)
+try:
+    import streamlit as st
+    with st.sidebar:
+        st.toggle("베타 패널 표시", value=bool(st.session_state.get("_beta_enabled", False)), key="_beta_enabled")
+        st.caption("이 스위치를 끄면 제목에 'β/베타/beta'가 포함된 패널은 숨겨집니다.")
 except Exception:
     pass
+# === [/PATCH] ===
+
+
+
+# === [PATCH 2025-10-25] BETA PASSWORD GUARD ===
+def _beta_pass_file() -> str:
+    return "/mnt/data/.beta_password"
+
+def _beta_hash(s: str) -> str:
+    try:
+        import hashlib
+        return hashlib.sha256((s or "").encode("utf-8")).hexdigest()
+    except Exception:
+        return ""
+
+def _beta_password_is_set() -> bool:
+    try:
+        import os
+        if os.environ.get("BETA_PASSWORD"):
+            return True
+        return bool(os.path.exists(_beta_pass_file()))
+    except Exception:
+        return False
+
+def _beta_password_ok() -> bool:
+    try:
+        import os, streamlit as st
+        if not bool(st.session_state.get("_beta_enabled", False)):
+            return False
+        # Once validated for session, reuse
+        if bool(st.session_state.get("_beta_pwd_ok", False)):
+            return True
+        # Check env password first
+        env_pw = os.environ.get("BETA_PASSWORD")
+        if env_pw:
+            want = _beta_hash(env_pw)
+        else:
+            # read from file
+            try:
+                with open(_beta_pass_file(), "r", encoding="utf-8") as f:
+                    want = f.read().strip()
+            except Exception:
+                want = ""
+        typed = st.session_state.get("_beta_pwd_input") or ""
+        if want and _beta_hash(typed) == want:
+            st.session_state["_beta_pwd_ok"] = True
+            return True
+        return False
+    except Exception:
+        return False
+
+def _beta_password_sidebar():
+    # Renders password UI when beta toggle is ON. Allows first-time setup if not configured.
+    try:
+        import os, streamlit as st
+        with st.sidebar:
+            if not bool(st.session_state.get("_beta_enabled", False)):
+                return
+            st.markdown("**🔒 베타 패널 잠금**")
+            if _beta_password_is_set():
+                st.text_input("비밀번호 입력", type="password", key="_beta_pwd_input")
+                if _beta_password_ok():
+                    st.caption("✅ 인증됨 — 베타 패널이 표시됩니다.")
+                else:
+                    st.caption("❗ 비밀번호가 맞아야 베타 패널이 열립니다.")
+            else:
+                st.caption("처음 사용 — 비밀번호를 설정해주세요.")
+                st.text_input("새 비밀번호", type="password", key="_beta_pwd_new1")
+                st.text_input("새 비밀번호 확인", type="password", key="_beta_pwd_new2")
+                if st.button("비밀번호 설정", use_container_width=True):
+                    p1 = st.session_state.get("_beta_pwd_new1") or ""
+                    p2 = st.session_state.get("_beta_pwd_new2") or ""
+                    if p1 and (p1 == p2):
+                        try:
+                            with open(_beta_pass_file(), "w", encoding="utf-8") as f:
+                                f.write(_beta_hash(p1))
+                            st.success("설정 완료! 이제 비밀번호로 열 수 있습니다.")
+                        except Exception as e:
+                            st.error("저장 실패: 파일 쓰기 권한을 확인해주세요.")
+                    else:
+                        st.error("두 비밀번호가 일치하지 않습니다.")
+    except Exception:
+        pass
+
+# Strengthen expander guard to require BOTH toggle and password
+try:
+    import streamlit as _st_beta2
+except Exception:
+    _st_beta2 = None
+
+if _st_beta2 is not None and getattr(_st_beta2, "_beta_gate_installed", False):
+    try:
+        _orig_expander2 = getattr(_st_beta2, "expander", None)
+
+        class _SkipCtx2:
+            def __enter__(self):
+                raise RuntimeError("_beta_blocked")
+            def __exit__(self, exc_type, exc, tb):
+                return True
+
+        def _expander_beta_guard2(label, *args, **kwargs):
+            try:
+                text = str(label or "")
+            except Exception:
+                text = ""
+            markers = ("(β", "β)", "베타", "beta", "Beta")
+            needs_beta = any(tok in text for tok in markers)
+            # if it's a beta-marked expander, require both toggle and password
+            if needs_beta and not (_st_beta2.session_state.get("_beta_enabled") and _beta_password_ok()):
+                return _SkipCtx2()
+            return _orig_expander2(label, *args, **kwargs)
+
+        if callable(_orig_expander2):
+            _st_beta2.expander = _expander_beta_guard2
+            _st_beta2._beta_gate_installed = True
+    except Exception:
+        pass
+
+# Render password UI (append-only)
+try:
+    _beta_password_sidebar()
+except Exception:
+    pass
+# === [/PATCH] ===
+
+
+
+# === [PATCH 2025-10-25] BETA DENYLIST EXTENSION ===
+# Labels to always treat as beta content when beta is OFF
+_BETA_LABEL_DENYLIST = {
+    "ER 원페이지 PDF (소아)",
+    "내보내기(소아 요약)",
+}
+
+try:
+    import streamlit as _st_beta3
+except Exception:
+    _st_beta3 = None
+
+if _st_beta3 is not None and hasattr(_st_beta3, "expander"):
+    try:
+        _orig_expander3 = _st_beta3.expander
+
+        class _SkipCtx3:
+            def __enter__(self):
+                raise RuntimeError("_beta_blocked")
+            def __exit__(self, exc_type, exc, tb):
+                return True
+
+        def _expander_beta_guard3(label, *args, **kwargs):
+            try:
+                text = str(label or "")
+            except Exception:
+                text = ""
+            markers = ("(β", "β)", "베타", "beta", "Beta")
+            is_marked = any(tok in text for tok in markers)
+            in_deny = text in _BETA_LABEL_DENYLIST
+            # Require both toggle and password if marked or denylisted
+            try:
+                import streamlit as st
+                need_protect = is_marked or in_deny
+                if need_protect:
+                    enabled = bool(st.session_state.get("_beta_enabled", False))
+                    # _beta_password_ok may not exist; guard call
+                    ok = False
+                    try:
+                        ok = globals().get("_beta_password_ok", lambda: False)()
+                    except Exception:
+                        ok = False
+                    if not (enabled and ok):
+                        return _SkipCtx3()
+            except Exception:
+                pass
+            return _orig_expander3(label, *args, **kwargs)
+
+        # Install only once
+        if not getattr(_st_beta3, "_beta_gate_denylist_installed", False):
+            _st_beta3.expander = _expander_beta_guard3
+            _st_beta3._beta_gate_denylist_installed = True
+    except Exception:
+        pass
 # === [/PATCH] ===
