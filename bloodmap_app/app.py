@@ -3387,3 +3387,120 @@ if _st_beta3 is not None and hasattr(_st_beta3, "expander"):
     except Exception:
         pass
 # === [/PATCH] ===
+
+
+# === [PATCH 2025-10-26] GLOBAL_FAILSAFE_AE_RENDERER (do not remove) ===
+try:
+    import streamlit as st  # ensure st is in scope at module end
+    # If AE section hasn't rendered (routing/conditional skipped), try to render once globally.
+    if not st.session_state.get("_aes_rendered_once"):
+        # Collect any selected chemo keys from common session fields
+        _cands = []
+        for _k in ("picked_keys", "chemo_selected", "selected_chemo", "last_picked_keys"):
+            try:
+                v = st.session_state.get(_k)
+                if isinstance(v, (list, tuple, set)):
+                    _cands.extend(list(v))
+                elif isinstance(v, str) and v:
+                    _cands.append(v)
+            except Exception:
+                pass
+        # De-dup & normalize
+        _keys = []
+        _seen = set()
+        for x in _cands:
+            s = str(x).strip()
+            if not s: 
+                continue
+            if s not in _seen:
+                _seen.add(s); _keys.append(s)
+
+        if _keys:
+            try:
+                from drug_db import ensure_onco_drug_db
+                from ui_results import render_adverse_effects as _render_aes_base
+                DRUG_DB_FS = {}
+                ensure_onco_drug_db(DRUG_DB_FS)
+                _render_aes_base(st, _keys, DRUG_DB_FS)
+            except Exception:
+                pass
+
+    # Manual override: let user force-show if still hidden
+    with st.expander("🔧 강제 표시 (안 보일 때 클릭)", expanded=False):
+        try:
+            from drug_db import ensure_onco_drug_db
+            from ui_results import render_adverse_effects as _render_aes_base
+            DRUG_DB_FS2 = {}
+            ensure_onco_drug_db(DRUG_DB_FS2)
+            # Prefer union of explicit inputs on this session
+            _manual = []
+            for _k in ("picked_keys", "chemo_selected", "selected_chemo", "last_picked_keys"):
+                v = st.session_state.get(_k)
+                if isinstance(v, (list, tuple, set)):
+                    _manual.extend(list(v))
+                elif isinstance(v, str) and v:
+                    _manual.append(v)
+            if _manual:
+                _render_aes_base(st, list(dict.fromkeys([str(x).strip() for x in _manual if str(x).strip()])), DRUG_DB_FS2)
+            else:
+                st.caption("선택된 항암제가 감지되지 않았습니다. 위에서 항암제를 먼저 선택해주세요.")
+        except Exception as _e:
+            st.caption("강제 표시 중 오류가 발생했습니다.")
+except Exception:
+    pass
+# === [/PATCH] ===
+
+
+# === [PATCH 2025-10-26] GLOBAL_FAILSAFE_AE_RENDERER (do not remove) ===
+try:
+    import streamlit as st  # ensure st is in scope at module end
+    if not st.session_state.get("_aes_rendered_once"):
+        _cands = []
+        for _k in ("picked_keys", "chemo_selected", "selected_chemo", "last_picked_keys"):
+            try:
+                v = st.session_state.get(_k)
+                if isinstance(v, (list, tuple, set)):
+                    _cands.extend(list(v))
+                elif isinstance(v, str) and v:
+                    _cands.append(v)
+            except Exception:
+                pass
+        _keys = []
+        _seen = set()
+        for x in _cands:
+            s = str(x).strip()
+            if s and s not in _seen:
+                _seen.add(s); _keys.append(s)
+
+        if _keys:
+            try:
+                from drug_db import ensure_onco_drug_db
+                from ui_results import render_adverse_effects as _render_aes_base
+                DRUG_DB_FS = {}
+                ensure_onco_drug_db(DRUG_DB_FS)
+                _render_aes_base(st, _keys, DRUG_DB_FS)
+            except Exception:
+                pass
+
+    with st.expander("🔧 강제 표시 (안 보일 때 클릭)", expanded=False):
+        try:
+            from drug_db import ensure_onco_drug_db
+            from ui_results import render_adverse_effects as _render_aes_base
+            DRUG_DB_FS2 = {}
+            ensure_onco_drug_db(DRUG_DB_FS2)
+            _manual = []
+            for _k in ("picked_keys", "chemo_selected", "selected_chemo", "last_picked_keys"):
+                v = st.session_state.get(_k)
+                if isinstance(v, (list, tuple, set)):
+                    _manual.extend(list(v))
+                elif isinstance(v, str) and v:
+                    _manual.append(v)
+            if _manual:
+                _render_aes_base(st, list(dict.fromkeys([str(x).strip() for x in _manual if str(x).strip()])), DRUG_DB_FS2)
+            else:
+                st.caption("선택된 항암제가 감지되지 않았습니다. 위에서 항암제를 먼저 선택해주세요.")
+        except Exception:
+            st.caption("강제 표시 중 오류가 발생했습니다.")
+except Exception:
+    pass
+# === [/PATCH] ===
