@@ -1,3 +1,72 @@
+# === PATCH-LOCK: classic hard lock + safety fallbacks ===
+from datetime import timedelta, timezone as _tz
+import os, sys, types
+
+# KST 보정
+try:
+    KST
+except NameError:
+    KST = _tz(timedelta(hours=9))
+
+# 클래식 고정(lean/router UI 무력화)
+os.environ["BLOODMAP_CLASSIC"] = "1"
+globals()["_CLASSIC_LOCK"] = True
+
+def _noop(*a, **k): return None
+for _mod in ("features.app_shell", "features.app_deprecator", "features.app_router"):
+    try:
+        m = __import__(_mod, fromlist=["*"])
+        for flag in ("SHOW_LEAN_TOGGLE","DEFAULT_LEAN","ENABLE_LEAN_UI","ROUTER_ENABLED"):
+            try: setattr(m, flag, False)
+            except Exception: pass
+        for fn in ("render_sidebar","render_lean_toggle","render_jumpbar","mount_router"):
+            try: setattr(m, fn, _noop)
+            except Exception: pass
+    except Exception:
+        mod = types.ModuleType(_mod)
+        for fn in ("render_sidebar","render_lean_toggle","render_jumpbar","mount_router"):
+            setattr(mod, fn, _noop)
+        sys.modules[_mod] = mod
+
+# AE 렌더 우선순위 + 폴백
+try:
+    from ui_results import render_adverse_effect as _ae
+except Exception:
+    try:
+        from ae_bridge import render_adverse_effect as _ae
+    except Exception:
+        try:
+            from ae_resolve import render_adverse_effect as _ae
+        except Exception:
+            def _ae(drug_key: str, rec: dict | None = None):
+                import streamlit as st
+                st.markdown(f"- **{drug_key}**: 부작용 정보 준비 중")
+
+# 소아 페이지 모듈 폴백
+try:
+    import pages_peds as _peds
+    _HAS_PEDS = True
+except Exception:
+    _HAS_PEDS = False
+
+# 안전 DB 핸들러
+def _get_db():
+    db = globals().get("DRUG_DB")
+    return db if isinstance(db, dict) else {}
+
+# 라벨/AE 맵 폴리필(없으면 만들어줌)
+if "_label_kor" not in globals():
+    def _label_kor(k, label_map=None): return str(k)
+if "ae_map" not in globals():
+    ae_map = {}
+# === /PATCH-LOCK ===
+# === PATCH-CSS: hide stray lean toggle ===
+import streamlit as _stcss
+try:
+    _stcss.markdown("<style>section[data-testid='stSidebar'] [aria-label='경량 모드']{display:none!important}</style>", unsafe_allow_html=True)
+except Exception:
+    pass
+# === /PATCH-CSS ===
 
 
 # ---- HomeBlocker v1 ----
@@ -1726,32 +1795,8 @@ with t_chemo:
                 _used_shared_renderer = True
             except Exception:
                 _used_shared_renderer = False
-            # Fallback: if shared renderer didn't run, call base renderer to ensure Ara-C picker & glossary
-            try:
-                if not st.session_state.get("_aes_rendered_once"):
-                    try:
-                        from ui_results import render_adverse_effects as _render_aes_base
-                    except Exception:
-                        _render_aes_base = None
-                    if callable(_render_aes_base):
-                        _render_aes_base(st, picked_keys, DRUG_DB)
-            except Exception:
-                pass
-
         else:
             _used_shared_renderer = False
-            # Fallback: if shared renderer didn't run, call base renderer to ensure Ara-C picker & glossary
-            try:
-                if not st.session_state.get("_aes_rendered_once"):
-                    try:
-                        from ui_results import render_adverse_effects as _render_aes_base
-                    except Exception:
-                        _render_aes_base = None
-                    if callable(_render_aes_base):
-                        _render_aes_base(st, picked_keys, DRUG_DB)
-            except Exception:
-                pass
-
         # === [PATCH] Diagnostics panel (Phase 28 ALT) ===
         try:
             from features_dev.diag_panel import render_diag_panel as _diag
@@ -3386,121 +3431,4 @@ if _st_beta3 is not None and hasattr(_st_beta3, "expander"):
             _st_beta3._beta_gate_denylist_installed = True
     except Exception:
         pass
-# === [/PATCH] ===
-
-
-# === [PATCH 2025-10-26] GLOBAL_FAILSAFE_AE_RENDERER (do not remove) ===
-try:
-    import streamlit as st  # ensure st is in scope at module end
-    # If AE section hasn't rendered (routing/conditional skipped), try to render once globally.
-    if not st.session_state.get("_aes_rendered_once"):
-        # Collect any selected chemo keys from common session fields
-        _cands = []
-        for _k in ("picked_keys", "chemo_selected", "selected_chemo", "last_picked_keys"):
-            try:
-                v = st.session_state.get(_k)
-                if isinstance(v, (list, tuple, set)):
-                    _cands.extend(list(v))
-                elif isinstance(v, str) and v:
-                    _cands.append(v)
-            except Exception:
-                pass
-        # De-dup & normalize
-        _keys = []
-        _seen = set()
-        for x in _cands:
-            s = str(x).strip()
-            if not s: 
-                continue
-            if s not in _seen:
-                _seen.add(s); _keys.append(s)
-
-        if _keys:
-            try:
-                from drug_db import ensure_onco_drug_db
-                from ui_results import render_adverse_effects as _render_aes_base
-                DRUG_DB_FS = {}
-                ensure_onco_drug_db(DRUG_DB_FS)
-                _render_aes_base(st, _keys, DRUG_DB_FS)
-            except Exception:
-                pass
-
-    # Manual override: let user force-show if still hidden
-    with st.expander("🔧 강제 표시 (안 보일 때 클릭)", expanded=False):
-        try:
-            from drug_db import ensure_onco_drug_db
-            from ui_results import render_adverse_effects as _render_aes_base
-            DRUG_DB_FS2 = {}
-            ensure_onco_drug_db(DRUG_DB_FS2)
-            # Prefer union of explicit inputs on this session
-            _manual = []
-            for _k in ("picked_keys", "chemo_selected", "selected_chemo", "last_picked_keys"):
-                v = st.session_state.get(_k)
-                if isinstance(v, (list, tuple, set)):
-                    _manual.extend(list(v))
-                elif isinstance(v, str) and v:
-                    _manual.append(v)
-            if _manual:
-                _render_aes_base(st, list(dict.fromkeys([str(x).strip() for x in _manual if str(x).strip()])), DRUG_DB_FS2)
-            else:
-                st.caption("선택된 항암제가 감지되지 않았습니다. 위에서 항암제를 먼저 선택해주세요.")
-        except Exception as _e:
-            st.caption("강제 표시 중 오류가 발생했습니다.")
-except Exception:
-    pass
-# === [/PATCH] ===
-
-
-# === [PATCH 2025-10-26] GLOBAL_FAILSAFE_AE_RENDERER (do not remove) ===
-try:
-    import streamlit as st  # ensure st is in scope at module end
-    if not st.session_state.get("_aes_rendered_once"):
-        _cands = []
-        for _k in ("picked_keys", "chemo_selected", "selected_chemo", "last_picked_keys"):
-            try:
-                v = st.session_state.get(_k)
-                if isinstance(v, (list, tuple, set)):
-                    _cands.extend(list(v))
-                elif isinstance(v, str) and v:
-                    _cands.append(v)
-            except Exception:
-                pass
-        _keys = []
-        _seen = set()
-        for x in _cands:
-            s = str(x).strip()
-            if s and s not in _seen:
-                _seen.add(s); _keys.append(s)
-
-        if _keys:
-            try:
-                from drug_db import ensure_onco_drug_db
-                from ui_results import render_adverse_effects as _render_aes_base
-                DRUG_DB_FS = {}
-                ensure_onco_drug_db(DRUG_DB_FS)
-                _render_aes_base(st, _keys, DRUG_DB_FS)
-            except Exception:
-                pass
-
-    with st.expander("🔧 강제 표시 (안 보일 때 클릭)", expanded=False):
-        try:
-            from drug_db import ensure_onco_drug_db
-            from ui_results import render_adverse_effects as _render_aes_base
-            DRUG_DB_FS2 = {}
-            ensure_onco_drug_db(DRUG_DB_FS2)
-            _manual = []
-            for _k in ("picked_keys", "chemo_selected", "selected_chemo", "last_picked_keys"):
-                v = st.session_state.get(_k)
-                if isinstance(v, (list, tuple, set)):
-                    _manual.extend(list(v))
-                elif isinstance(v, str) and v:
-                    _manual.append(v)
-            if _manual:
-                _render_aes_base(st, list(dict.fromkeys([str(x).strip() for x in _manual if str(x).strip()])), DRUG_DB_FS2)
-            else:
-                st.caption("선택된 항암제가 감지되지 않았습니다. 위에서 항암제를 먼저 선택해주세요.")
-        except Exception:
-            st.caption("강제 표시 중 오류가 발생했습니다.")
-except Exception:
-    pass
 # === [/PATCH] ===
