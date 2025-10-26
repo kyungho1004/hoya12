@@ -1711,37 +1711,6 @@ with t_chemo:
                 st.info(n)
 
         ae_map = _aggregate_all_aes(picked_keys, DRUG_DB)
-        # === [PATCH] EARLY Glossary Hook (covers routes that skip shared renderer) ===
-        try:
-            if not st.session_state.get("_glossary_rendered_once"):
-                try:
-                    from ui_results import _extract_glossary_terms, GLOSSARY_TERMS
-                except Exception:
-                    _extract_glossary_terms = None
-                    GLOSSARY_TERMS = {}
-                if callable(_extract_glossary_terms) and GLOSSARY_TERMS:
-                    _bag = []
-                    for _k in picked_keys:
-                        _rec = DRUG_DB.get(_k, {})
-                        _bag.append(str(_rec.get("ae","")))
-                        _mon = _rec.get("monitor", [])
-                        if isinstance(_mon, (list, tuple)):
-                            _bag.extend([str(x) for x in _mon])
-                    _terms = _extract_glossary_terms(" ".join(_bag))
-                    if _terms:
-                        st.markdown("**📚 어려운 용어 풀이**")
-                        for _t in _terms:
-                            _desc = GLOSSARY_TERMS.get(_t)
-                            if _desc:
-                                st.markdown(f"- **{_t}** — {_desc}")
-                        try:
-                            st.session_state["_glossary_rendered_once"] = True
-                        except Exception:
-                            pass
-        except Exception:
-            pass
-        # === [/PATCH] ===
-
         st.markdown("### 항암제 부작용(전체)")
         # === [PATCH 2025-10-22 KST] Use shared renderer if available ===
         try:
@@ -1757,6 +1726,18 @@ with t_chemo:
                 _used_shared_renderer = True
             except Exception:
                 _used_shared_renderer = False
+            # Fallback: if shared renderer didn't run, call base renderer to ensure Ara-C picker & glossary
+            try:
+                if not st.session_state.get("_aes_rendered_once"):
+                    try:
+                        from ui_results import render_adverse_effects as _render_aes_base
+                    except Exception:
+                        _render_aes_base = None
+                    if callable(_render_aes_base):
+                        _render_aes_base(st, picked_keys, DRUG_DB)
+            except Exception:
+                pass
+
         else:
             _used_shared_renderer = False
         # === [PATCH] Diagnostics panel (Phase 28 ALT) ===
@@ -1765,37 +1746,7 @@ with t_chemo:
             _diag(st)
         except Exception:
             pass
-        
-        # === [PATCH] Fallback Glossary (robust across routes) ===
-        try:
-            if not st.session_state.get("_glossary_rendered_once"):
-                try:
-                    from ui_results import _extract_glossary_terms, GLOSSARY_TERMS
-                except Exception:
-                    _extract_glossary_terms = None
-                    GLOSSARY_TERMS = {}
-                if callable(_extract_glossary_terms) and GLOSSARY_TERMS:
-                    st.markdown("**📚 어려운 용어 풀이**")
-                    _bag = []
-                    for _k in picked_keys:
-                        _rec = DRUG_DB.get(_k, {})
-                        _bag.append(str(_rec.get("ae","")))
-                        _mon = _rec.get("monitor", [])
-                        if isinstance(_mon, (list, tuple)):
-                            _bag.extend([str(x) for x in _mon])
-                    _terms = _extract_glossary_terms(" ".join(_bag))
-                    for _t in _terms:
-                        _desc = GLOSSARY_TERMS.get(_t)
-                        if _desc:
-                            st.markdown(f"- **{_t}** — {_desc}")
-                    try:
-                        st.session_state["_glossary_rendered_once"] = True
-                    except Exception:
-                        pass
-        except Exception:
-            pass
         # === [/PATCH] ===
-# === [/PATCH] ===
 
         # === [PATCH] Diagnostics panel (Phase 28) ===
         try:

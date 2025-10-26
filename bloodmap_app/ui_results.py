@@ -4,6 +4,11 @@ import re
 
 # Public API
 def render_adverse_effects(st, drug_keys: List[str], db: Dict[str, Dict[str, Any]]):
+    try:
+        st.session_state["_aes_rendered_once"] = True
+    except Exception:
+        pass
+
     if not drug_keys:
         st.caption("선택된 항암제가 없습니다.")
         return
