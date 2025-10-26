@@ -156,6 +156,13 @@ try:
 except Exception:
     pass
 # ---- End initial route bootstrap ----
+# ---- Early home-drop guard call (ensures we don't jump to 'home' unexpectedly) ----
+try:
+    _block_spurious_home()
+except Exception:
+    pass
+# ---- /Early home-drop guard call ----
+
 
 
 
@@ -275,7 +282,7 @@ html { scroll-behavior: smooth; }
 
 
 # --- HTML-only pediatric navigator (no rerun) ---
-def render_peds_nav_md():
+def render_peds_nav_html():
     from streamlit.components.v1 import html as _html
     _html("""
     <style>
@@ -3432,3 +3439,24 @@ if _st_beta3 is not None and hasattr(_st_beta3, "expander"):
     except Exception:
         pass
 # === [/PATCH] ===
+
+
+# === BM_ROUTE_WATCHDOG (EOF) ===
+try:
+    import streamlit as _st_guard
+    def __bm_guard_dx():
+        ss = _st_guard.session_state
+        # dx 컨텍스트 추정: 진단 관련 키가 살아있음
+        _dx_ctx = any(k in ss and ss.get(k) not in (None, "", []) for k in (
+            "group","disease","진단","암종","dx_group","dx_disease","selected_group","selected_disease"
+        ))
+        if _dx_ctx:
+            # 최근 라우트가 dx면 홈 강제 덮어쓰기를 즉시 되돌림
+            if ss.get("_route_last") == "dx" and ss.get("_route") == "home":
+                ss["_route"] = "dx"
+            # 최소한 last는 dx로 유지
+            ss["_route_last"] = "dx"
+    __bm_guard_dx()
+except Exception:
+    pass
+# === /BM_ROUTE_WATCHDOG ===
