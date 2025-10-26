@@ -1734,7 +1734,37 @@ with t_chemo:
             _diag(st)
         except Exception:
             pass
+        
+        # === [PATCH] Fallback Glossary (robust across routes) ===
+        try:
+            if not st.session_state.get("_glossary_rendered_once"):
+                try:
+                    from ui_results import _extract_glossary_terms, GLOSSARY_TERMS
+                except Exception:
+                    _extract_glossary_terms = None
+                    GLOSSARY_TERMS = {}
+                if callable(_extract_glossary_terms) and GLOSSARY_TERMS:
+                    st.markdown("**📚 어려운 용어 풀이**")
+                    _bag = []
+                    for _k in picked_keys:
+                        _rec = DRUG_DB.get(_k, {})
+                        _bag.append(str(_rec.get("ae","")))
+                        _mon = _rec.get("monitor", [])
+                        if isinstance(_mon, (list, tuple)):
+                            _bag.extend([str(x) for x in _mon])
+                    _terms = _extract_glossary_terms(" ".join(_bag))
+                    for _t in _terms:
+                        _desc = GLOSSARY_TERMS.get(_t)
+                        if _desc:
+                            st.markdown(f"- **{_t}** — {_desc}")
+                    try:
+                        st.session_state["_glossary_rendered_once"] = True
+                    except Exception:
+                        pass
+        except Exception:
+            pass
         # === [/PATCH] ===
+# === [/PATCH] ===
 
         # === [PATCH] Diagnostics panel (Phase 28) ===
         try:
