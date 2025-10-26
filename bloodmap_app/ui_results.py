@@ -29,6 +29,14 @@ def render_adverse_effects(st, drug_keys: List[str], db: Dict[str, Dict[str, Any
 
     # 3) 렌더 루프
     for k in drug_keys:
+        # 보강: DB에 없는 약물 키는 즉석 자리표시 등록(패치 방식)
+        if k not in db:
+            try:
+                from drug_db import ALIAS_FALLBACK
+            except Exception:
+                ALIAS_FALLBACK = {}
+            _alias = ALIAS_FALLBACK.get(k, k)
+            db[k] = {"alias": _alias, "moa": "", "ae": "부작용 정보 필요", "monitor": []}
         if _is_arac_like(k):
             pick = _arac_formulation_picker(st, db)
             if pick:
@@ -47,6 +55,7 @@ def render_adverse_effects(st, drug_keys: List[str], db: Dict[str, Dict[str, Any
 
         # 모니터링 칩
         _render_monitoring_chips(st, rec)
+        _render_monitoring_checklist(st, k, rec)
 
         # 쉬운말 상세
         _render_ae_detail(st, rec)
@@ -76,6 +85,96 @@ def _render_monitoring_chips(st, rec: Dict[str, Any]):
     if chips:
         st.markdown(" ".join([f"<span class='chip'>{c}</span>" for c in chips]), unsafe_allow_html=True)
 
+
+
+
+def _render_monitoring_checklist(st, drug_key: str, rec: Dict[str, Any]):
+    """
+    아이콘 + 체크리스트 UI
+    - rec["monitor"] 리스트를 기반으로 렌더
+    - 각 체크 상태는 세션 스코프 key로 유지(st.session_state)
+    - 진행률 바 표시
+    """
+    items = rec.get("monitor") if isinstance(rec, dict) else None
+    if not isinstance(items, (list, tuple)) or not items:
+        return
+
+    # 아이콘 매핑(가벼운 이모지, 접근성 고려하여 라벨 유지)
+    ICONS = {
+        "CBC": "🩸",
+        "CBC(Platelet)": "🩸",
+        "Platelet(T-DM1)": "🩸",
+        "LFT": "🧪",
+        "Renal(eGFR)": "🧪",
+        "Electrolytes": "🧂",
+        "Mg/K": "🧂",
+        "BP": "🩺",
+        "Proteinuria(UPCR)": "💧",
+        "Echo/LVEF": "❤️",
+        "BNP/NT-proBNP": "❤️",
+        "ECG": "📈",
+        "QT(ECG)": "📈",
+        "Rash/Diarrhea": "💢",
+        "ILD": "🫁",
+        "SpO2(if respiratory)": "🫁",
+        "Glucose": "🍬",
+        "Lipids": "🧴",
+        "TFT": "🦋",
+        "Cortisol±ACTH": "🧬",
+        "Allergy": "🤧",
+        "Hypersensitivity": "🤧",
+        "Edema(Doce)": "💧",
+        "Ototoxicity": "🎧",
+        "Neuropathy": "🔔",
+        "Cold-induced neuropathy": "🧊",
+        "Cerebellar exam": "🧠",
+        "Conjunctivitis(스테로이드 점안)": "👁️",
+        "iRAE screening": "🛡️",
+        "Wound healing/bleeding": "🩹",
+        "Rash/Nausea": "😖",
+        "Mucositis": "💊",
+        "N/V": "🤢",
+        "Diarrhea": "💩",
+        "Fever/Sepsis": "🔥",
+        "Edema": "💧",
+        "LFT/AST/ALT": "🧪",
+        "Platelet": "🩸",
+    }
+
+    # 중복/정렬 정리
+    norm = []
+    seen = set()
+    for it in items:
+        s = str(it).strip()
+        if not s: 
+            continue
+        if s not in seen:
+            norm.append(s)
+            seen.add(s)
+
+    # 체크 상태 키
+    base_key = f"monchk::{drug_key}::"
+    done = 0
+    total = len(norm)
+
+    st.markdown("<div class='checklist-row'>", unsafe_allow_html=True)
+    for s in norm:
+        ico = ICONS.get(s) or ICONS.get(s.split("(")[0]) or "✅"
+        key = base_key + s
+        # 세션 상태 기본 False 보장
+        if key not in st.session_state:
+            st.session_state[key] = False
+        checked = st.checkbox(f"{s}", value=bool(st.session_state[key]), key=key)
+        if checked:
+            done += 1
+        # 옆에 아이콘 라벨을 꾸며서 보여주자
+        st.markdown(f"<span class='checkitem'><span class='icon'>{ico}</span><span class='label'>{s}</span></span>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # 진행률
+    pct = int(round((done/total)*100)) if total else 0
+    st.markdown(f"<div class='checklist-progress'><div style='width:{pct}%;'></div></div>", unsafe_allow_html=True)
+    st.caption(f"모니터링 진행률: {done}/{total} ({pct}%) — 약: {rec.get('alias') or drug_key}")
 
 def _render_ae_detail(st, rec: Dict[str, Any]):
     det = rec.get("ae_detail") if isinstance(rec, dict) else None
@@ -135,47 +234,3 @@ def _render_cardio_guard(st, rec: Dict[str, Any]):
         ]
     html = "<ul>" + "".join(f"<li>{b}</li>" for b in bullets) + "</ul>"
     st.markdown("<div class='cardio-guard'><div class='title'>❤️ Cardio-Guard</div>"+html+"</div>", unsafe_allow_html=True)
-
-
-
-# === [PATCH 2025-10-25 KST] Inline override for render_adverse_effects ===
-try:
-    _orig_render_adverse_effects = render_adverse_effects
-except Exception:
-    _orig_render_adverse_effects = None
-
-def _resolve_redirect_chain(rec: Dict[str, Any], db: Dict[str, Dict[str, Any]]):
-    seen = 0
-    cur = rec
-    while isinstance(cur, dict) and cur.get("redirect_to") and seen < 5:
-        cur = db.get(cur.get("redirect_to"), cur)
-        seen += 1
-    return cur
-
-def render_adverse_effects(st, drug_keys: List[str], db: Dict[str, Dict[str, Any]], *args, **kwargs):
-    # call original first if present
-    if callable(_orig_render_adverse_effects):
-        try:
-            _orig_render_adverse_effects(st, drug_keys, db, *args, **kwargs)
-        except Exception:
-            pass
-    # append friendly sections for each resolved record
-    try:
-        for k in (drug_keys or []):
-            rec = db.get(k) or {}
-            rec = _resolve_redirect_chain(rec, db)
-            try:
-                _render_friendly_sections(st, rec or {})
-            except Exception:
-                easy = (rec or {}).get("plain") or (rec or {}).get("ae_plain")
-                if easy:
-                    st.markdown("**알기 쉽게 보기**")
-                    st.write(easy)
-                mons = (rec or {}).get("monitor") or []
-                if mons:
-                    st.markdown("**🩺 모니터**")
-                    for m in mons:
-                        st.write(f"- {m}")
-    except Exception:
-        pass
-# === [/PATCH] ===

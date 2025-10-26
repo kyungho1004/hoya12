@@ -4,18 +4,14 @@
 h1, h2, h3 { letter-spacing: 0.2px; }
 .badge { border-radius: 9999px; padding: 2px 8px; font-size: 12px; }
 
-/* === PATCH 2025-10-22 KST: monitoring chips === */
-.monitor-chips { margin-top: .25rem; }
-.chip {
-  display: inline-block;
-  padding: 2px 8px;
-  margin: 2px 4px 0 0;
-  border-radius: 9999px;
-  border: 1px solid rgba(0,0,0,0.1);
-  font-size: 0.85em;
-  background: rgba(0,0,0,0.04);
-}
-.subtle-note { opacity: .9; font-size: 0.9em; }
-/* === PATCH 2025-10-22 KST: Cardio-Guard box === */
-.cardio-guard { margin-top: .5rem; padding: .5rem .75rem; border-left: 4px solid #e11d48; background: rgba(225,29,72,.05); border-radius: .5rem; }
-.cardio-guard .title { font-weight: 700; margin-bottom: .25rem; }
+/* --- Monitoring checklist (non-breaking) --- */
+.checklist-row{display:flex;flex-wrap:wrap;gap:.4rem .8rem;margin:.4rem 0 .8rem}
+.checkitem{display:inline-flex;align-items:center;gap:.35rem;padding:.35rem .55rem;border:1px solid #e5e7eb;border-radius:999px;background:#fff;box-shadow:0 1px 1px rgba(0,0,0,.04)}
+.checkitem .icon{font-size:1rem;line-height:1}
+.checkitem .label{font-size:.92rem}
+.checklist-progress{height:.5rem;background:#f3f4f6;border-radius:999px;overflow:hidden;margin:.2rem 0 .6rem}
+.checklist-progress > div{height:100%;background:#10b981}
+/* chips / ae-detail already used elsewhere; define if absent */
+.chip{display:inline-block;padding:.25rem .5rem;border:1px solid #e5e7eb;border-radius:999px;background:#f9fafb;margin-right:.25rem;margin-bottom:.25rem;font-size:.85rem}
+.ae-detail ul{margin:.25rem 0 .5rem .9rem}
+.cardio-guard .title{font-weight:700;margin:.25rem 0}
