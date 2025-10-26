@@ -1,26 +1,46 @@
-# App Split Full Pack — Phase 6 (DB Harden + Debug + AE Fallback)
+# Oncology DB Patch (20251026_103506)
 
-포함 내용
-- app.py (안전 위임/로컬 임포트 패치 적용본)
-- features/
-  - explainers.py (기본: ui_results 위임, 폴백: explainer_rules로 로컬 렌더)
-  - explainer_rules.py (키워드 칩 규칙 집합)
-  - chemo_examples.py · wireups.py
-  - adverse_effects.py (**업그레이드**: 기본 ui_results 위임, 폴백 시 간단 요약 테이블 렌더)
-  - egfr.py (CKD-EPI/Schwartz + mini UI)
-  - carelog.py (CSV/PDF 내보내기 + 최근50 보기)
-  - debug_tools.py (디버그: 매칭 소스 텍스트/선택 키)
-  - peds/wireups.py (기존 UI 우선, 없으면 해열제/발열 **폴백 미니 UI**)
-  - __init__.py
-- utils/
-  - db_access.py (**업그레이드**: 필드 alias + 중첩 수집)
-  - session.py · plotting.py · pdf_utils.py
-  - __init__.py
+이 패치는 동일 스키마의 8개 약물을 서버에 바로 반영할 수 있도록 **3가지 배포 형식**을 제공합니다.
 
-동작 요약
-- AE 렌더: ui_results.render_adverse_effects 우선 호출 → 실패/부재 시 fallback 테이블 표시
-- 공통 경로: 키워드 칩/예시, eGFR, 케어로그, 소아 도구, 디버그 패널
-- 상단 import 추가 없음, /mnt/data 경로 유지, try/except 가드로 UI 안정성 보장
+## 포함 약물 (keys)
+venetoclax, gilteritinib, midostaurin, ivosidenib, enasidenib, glasdegib, azacitidine, decitabine
 
-롤백
-- app.py의 PATCH 블록 제거 or features/* 모듈 제거해도 기존 동작 유지(ui_results 기반).
+## 공통 스키마
+key, names[], class, indications[], common_AEs[], emergent_flags[], contra[], dose_notes, ddi[], tips[], monitor{baseline[], during[], extra[]}
+
+### 모니터 라벨 표준화
+- Glucose: 공복혈당/당화혈색소
+- Lipids: 지질프로필
+- LFT: 간기능(AST/ALT, bilirubin)
+- ILD: 간질성폐질환 관련 여부(필요 약물에 한해 명시)
+- Renal/Electrolytes 등 서브라벨 포함
+
+## 배포 옵션
+
+### 1) RFC6902 JSON Patch
+파일: `onc_patch_rfc6902.json`  
+엔드포인트가 JSON Patch를 지원하면 그대로 업로드하세요. 각 op는 `/drugs/<key>` 경로에 **add(upsert)**로 구성되어 있습니다.
+
+### 2) MongoDB (mongoimport)
+파일: `onc_patch_mongo.ndjson`  
+예시:
+```
+mongoimport --db yourdb --collection onc_drugs --mode upsert --upsertFields _id --file onc_patch_mongo.ndjson --jsonArray=false
+```
+
+### 3) PostgreSQL
+파일: `onc_patch_postgres.sql`  
+예시:
+```
+psql $DATABASE_URL -f onc_patch_postgres.sql
+```
+가정: `onc_drugs(key text primary key, data jsonb)` 구조.
+
+---
+
+## 검증 체크
+- 필수 필드 누락 없음
+- monitor 섹션의 라벨: Glucose, Lipids, LFT, (필요 시) ECG/Electrolytes/ILD 등 가독성 한글 병기
+- emergent_flags/분화증후군/TLS/QT 워크플로 키워드 포함
+
+문의 없이 바로 적용 가능하지만, 테이블/컬렉션명이 다르면 스크립트 상단 주석을 참고해 조정하세요.
