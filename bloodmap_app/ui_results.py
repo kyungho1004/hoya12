@@ -138,238 +138,12 @@ def _render_cardio_guard(st, rec: Dict[str, Any]):
 
 
 
-# === [PATCH 2025-10-25 KST] Plain-language renderer for AE ===
-def _render_ae_plain(st, rec: Dict[str, Any]):
-    try:
-        txt = rec.get("ae_plain") or rec.get("plain")
-        if not txt:
-            return
-        with st.expander("알기 쉽게 보기", expanded=False):
-            # split by '·' or ' / ' or sentences heuristically into bullets
-            bullets = []
-            raw = txt.replace("—", " - ").replace("/", " / ")
-            # naive split
-            for seg in raw.split("."):
-                seg = seg.strip(" \n\t·-")
-                if seg:
-                    bullets.append(seg)
-            if not bullets:
-                bullets = [txt]
-            st.markdown("\\n".join([f"- {b}" for b in bullets]))
-    except Exception:
-        pass
-# === [/PATCH] ===
-
-
-
-# === [PATCH 2025-10-25 KST] Emergency bullets + care-tip chips renderers ===
-def _render_emergency_plain(st, rec: Dict[str, Any]):
-    try:
-        em = rec.get("plain_emergency") or []
-        if not em:
-            return
-        with st.expander("🚨 응급 연락 기준 (중요)", expanded=False):
-            st.markdown("\n".join([f"- {b}" for b in em]))
-    except Exception:
-        pass
-
-def _render_care_tips_chips(st, rec: Dict[str, Any]):
-    try:
-        tips = rec.get("care_tips") or []
-        if not tips:
-            return
-        chips = " ".join([f"<span class='chip'>{t}</span>" for t in tips])
-        st.markdown(chips, unsafe_allow_html=True)
-    except Exception:
-        pass
-
-def _ensure_plain_hooks():
-    # Try to wrap common card/detail renderers to append our sections post-render
-    import inspect
-    targets = ["render_drug_card", "render_drug_detail", "render_chemo_card"]
-    for name in targets:
-        fn = globals().get(name)
-        if not callable(fn) or getattr(fn, "_plain_hooked", False):
-            continue
-        def _wrap(fn):
-            def inner(*args, **kwargs):
-                res = fn(*args, **kwargs)
-                # heuristic to extract rec
-                rec = kwargs.get("rec")
-                if rec is None and len(args) >= 2 and isinstance(args[1], dict):
-                    rec = args[1]
-                try:
-                    import streamlit as st
-                    _render_ae_plain(st, rec)
-                    _render_emergency_plain(st, rec)
-                    _render_care_tips_chips(st, rec)
-                except Exception:
-                    pass
-                return res
-            inner._plain_hooked = True
-            return inner
-        globals()[name] = _wrap(fn)
-
+# === [PATCH 2025-10-25 KST] Inline override for render_adverse_effects ===
 try:
-    _ensure_plain_hooks()
+    _orig_render_adverse_effects = render_adverse_effects
 except Exception:
-    pass
-# === [/PATCH] ===
+    _orig_render_adverse_effects = None
 
-
-
-# === [PATCH 2025-10-25 KST] Dedupe redirects + Ara-C formulation quick links ===
-def _is_redirect_record(rec: Dict[str, Any]) -> bool:
-    try:
-        return bool(rec.get("redirect_to"))
-    except Exception:
-        return False
-
-def _render_arac_quicklinks(st, title: str):
-    try:
-        t = (title or "").lower()
-        if "cytarabine" in t or "ara-c" in t:
-            st.markdown(
-                "[Ara-C HDAC](#) · [Ara-C IV](#) · [Ara-C SC](#)  \n"
-                "<span style='font-size:0.9em;opacity:0.8'>고용량(HDAC)은 **점안 스테로이드**와 **소뇌 증상** 모니터가 중요해요.</span>",
-                unsafe_allow_html=True
-            )
-    except Exception:
-        pass
-
-# Hook into card renderers to skip redirects and add Ara-C links
-def _wrap_with_redirect_and_links(fn):
-    def inner(*args, **kwargs):
-        # identify rec
-        rec = kwargs.get("rec")
-        if rec is None and len(args) >= 2 and isinstance(args[1], dict):
-            rec = args[1]
-        # title for quicklinks
-        title = kwargs.get("title") or (args[0] if args and isinstance(args[0], str) else "")
-        try:
-            import streamlit as st
-            if rec and _is_redirect_record(rec):
-                # Skip rendering duplicated alias
-                return
-            _render_arac_quicklinks(st, title or (rec.get("name") if isinstance(rec, dict) else ""))
-        except Exception:
-            pass
-        res = fn(*args, **kwargs)
-        return res
-    inner._redirect_link_wrapped = True
-    return inner
-
-def _install_redirect_link_hooks():
-    targets = ["render_drug_card", "render_drug_detail", "render_chemo_card"]
-    for name in targets:
-        fn = globals().get(name)
-        if callable(fn) and not getattr(fn, "_redirect_link_wrapped", False):
-            globals()[name] = _wrap_with_redirect_and_links(fn)
-
-try:
-    _install_redirect_link_hooks()
-except Exception:
-    pass
-# === [/PATCH] ===
-
-
-
-# === [PATCH 2025-10-25 KST] Universal Friendly Sections (easy/emergency/tips/monitor) ===
-def _render_chip_row(st, tips):
-    try:
-        if not tips: 
-            return
-        chips = " ".join([f"<span style='display:inline-block;padding:4px 8px;margin:2px;border-radius:999px;border:1px solid rgba(0,0,0,0.1);font-size:0.9em'>{st.escape_html(str(t)) if hasattr(st,'escape_html') else str(t)}</span>" for t in tips])
-        st.markdown(f"<div style='margin-top:4px'>{chips}</div>", unsafe_allow_html=True)
-    except Exception:
-        try:
-            st.write(", ".join(map(str,tips)))
-        except Exception:
-            pass
-
-def _render_friendly_sections(st, rec: dict):
-    if not isinstance(rec, dict):
-        return
-    # easy summary
-    easy = rec.get("plain") or rec.get("ae_plain") or ""
-    emerg = rec.get("plain_emergency") or []
-    tips  = rec.get("care_tips") or []
-    monitor = rec.get("monitor") or []
-    # render only if at least one content exists
-    if not (easy or emerg or tips or monitor):
-        return
-    try:
-        with st.expander("알기 쉽게 보기", expanded=bool(easy)):
-            if easy:
-                st.markdown(easy)
-            else:
-                st.caption("요약 정보가 준비 중입니다.")
-    except Exception:
-        if easy:
-            st.markdown("**알기 쉽게 보기**")
-            st.write(easy)
-    # Emergency (force visible if exists)
-    if emerg:
-        try:
-            with st.expander("🚨 응급 연락 기준", expanded=True):
-                for line in emerg:
-                    st.markdown(f"- {line}")
-        except Exception:
-            st.markdown("**🚨 응급 연락 기준**")
-            for line in emerg:
-                st.write(f"- {line}")
-    # Care tips
-    if tips:
-        try:
-            with st.expander("자가관리 팁", expanded=False):
-                _render_chip_row(st, tips)
-        except Exception:
-            st.markdown("**자가관리 팁**")
-            _render_chip_row(st, tips)
-    # Monitor
-    if monitor:
-        try:
-            with st.expander("🩺 모니터", expanded=False):
-                for m in monitor:
-                    st.markdown(f"- {m}")
-        except Exception:
-            st.markdown("**🩺 모니터**")
-            for m in monitor:
-                st.write(f"- {m}")
-
-def _wrap_append_friendly(fn):
-    def inner(*args, **kwargs):
-        # call original first
-        res = fn(*args, **kwargs)
-        # infer rec dict from args/kwargs
-        rec = kwargs.get("rec")
-        if rec is None and len(args) >= 2 and isinstance(args[1], dict):
-            rec = args[1]
-        try:
-            import streamlit as st
-            _render_friendly_sections(st, rec or {})
-        except Exception:
-            pass
-        return res
-    inner._friendly_appended = True
-    return inner
-
-def _install_friendly_hooks():
-    targets = ["render_drug_card", "render_drug_detail", "render_chemo_card"]
-    for name in targets:
-        fn = globals().get(name)
-        if callable(fn) and not getattr(fn, "_friendly_appended", False):
-            globals()[name] = _wrap_append_friendly(fn)
-
-try:
-    _install_friendly_hooks()
-except Exception:
-    pass
-# === [/PATCH] ===
-
-
-
-# === [PATCH 2025-10-25 KST] Friendly sections for render_adverse_effects ===
 def _resolve_redirect_chain(rec: Dict[str, Any], db: Dict[str, Dict[str, Any]]):
     seen = 0
     cur = rec
@@ -378,113 +152,30 @@ def _resolve_redirect_chain(rec: Dict[str, Any], db: Dict[str, Dict[str, Any]]):
         seen += 1
     return cur
 
-def _wrap_adverse_append_friendly(fn):
-    def inner(st, drug_keys: List[str], db: Dict[str, Dict[str, Any]], *args, **kwargs):
-        res = fn(st, drug_keys, db, *args, **kwargs)
+def render_adverse_effects(st, drug_keys: List[str], db: Dict[str, Dict[str, Any]], *args, **kwargs):
+    # call original first if present
+    if callable(_orig_render_adverse_effects):
         try:
-            for k in (drug_keys or []):
-                rec = db.get(k) or {}
-                rec = _resolve_redirect_chain(rec, db)
-                try:
-                    _render_friendly_sections(st, rec)
-                except Exception:
-                    # fallback minimal
-                    easy = rec.get("plain") or rec.get("ae_plain")
-                    if easy:
-                        st.markdown("**알기 쉽게 보기**")
-                        st.write(easy)
+            _orig_render_adverse_effects(st, drug_keys, db, *args, **kwargs)
         except Exception:
             pass
-        return res
-    inner._friendly_appended = True
-    return inner
-
-# install specialized hook
-try:
-    if callable(globals().get("render_adverse_effects")) and not getattr(globals().get("render_adverse_effects"), "_friendly_appended", False):
-        render_adverse_effects = _wrap_adverse_append_friendly(render_adverse_effects)
-except Exception:
-    pass
-# === [/PATCH] ===
-
-
-
-# === [PATCH 2025-10-25 KST] Abbreviation labels for monitors ===
-_ABBREV_HINTS_20251025 = {
-    "glucose": "혈당",
-    "lipids": "지질(콜레스테롤/중성지방)",
-    "lft": "간기능 검사(AST/ALT/빌리루빈)",
-    "ild": "간질성 폐질환",
-}
-
-def _expand_abbrev_label_20251025(text: str) -> str:
+    # append friendly sections for each resolved record
     try:
-        t = (text or "").strip()
-        key = t.casefold()
-        if key in _ABBREV_HINTS_20251025:
-            hint = _ABBREV_HINTS_20251025[key]
-            # only add if no Korean hint already present
-            if "(" not in t and " " not in t:
-                return f"{t} ({hint})"
-        return text
-    except Exception:
-        return text
-
-# Hook into existing friendly monitor renderer
-try:
-    _old__render_friendly_sections = _render_friendly_sections
-except NameError:
-    _old__render_friendly_sections = None
-
-def _render_friendly_sections(st, rec: dict):
-    if not isinstance(rec, dict):
-        return
-    easy = rec.get("plain") or rec.get("ae_plain") or ""
-    emerg = rec.get("plain_emergency") or []
-    tips  = rec.get("care_tips") or []
-    monitor = rec.get("monitor") or []
-
-    # NEW: expand selected abbreviations for readability
-    try:
-        monitor = [_expand_abbrev_label_20251025(m) for m in monitor]
+        for k in (drug_keys or []):
+            rec = db.get(k) or {}
+            rec = _resolve_redirect_chain(rec, db)
+            try:
+                _render_friendly_sections(st, rec or {})
+            except Exception:
+                easy = (rec or {}).get("plain") or (rec or {}).get("ae_plain")
+                if easy:
+                    st.markdown("**알기 쉽게 보기**")
+                    st.write(easy)
+                mons = (rec or {}).get("monitor") or []
+                if mons:
+                    st.markdown("**🩺 모니터**")
+                    for m in mons:
+                        st.write(f"- {m}")
     except Exception:
         pass
-
-    if not (easy or emerg or tips or monitor):
-        return
-    try:
-        with st.expander("알기 쉽게 보기", expanded=bool(easy)):
-            if easy:
-                st.markdown(easy)
-            else:
-                st.caption("요약 정보가 준비 중입니다.")
-    except Exception:
-        if easy:
-            st.markdown("**알기 쉽게 보기**")
-            st.write(easy)
-    if emerg:
-        try:
-            with st.expander("🚨 응급 연락 기준", expanded=True):
-                for line in emerg:
-                    st.markdown(f"- {line}")
-        except Exception:
-            st.markdown("**🚨 응급 연락 기준**")
-            for line in emerg:
-                st.write(f"- {line}")
-    if tips:
-        try:
-            with st.expander("자가관리 팁", expanded=False):
-                _render_chip_row(st, tips)
-        except Exception:
-            st.markdown("**자가관리 팁**")
-            _render_chip_row(st, tips)
-    if monitor:
-        try:
-            with st.expander("🩺 모니터", expanded=False):
-                for m in monitor:
-                    st.markdown(f"- {m}")
-        except Exception:
-            st.markdown("**🩺 모니터**")
-            for m in monitor:
-                st.write(f"- {m}")
 # === [/PATCH] ===
