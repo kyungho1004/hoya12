@@ -1740,6 +1740,18 @@ with t_chemo:
 
         else:
             _used_shared_renderer = False
+            # Fallback: if shared renderer didn't run, call base renderer to ensure Ara-C picker & glossary
+            try:
+                if not st.session_state.get("_aes_rendered_once"):
+                    try:
+                        from ui_results import render_adverse_effects as _render_aes_base
+                    except Exception:
+                        _render_aes_base = None
+                    if callable(_render_aes_base):
+                        _render_aes_base(st, picked_keys, DRUG_DB)
+            except Exception:
+                pass
+
         # === [PATCH] Diagnostics panel (Phase 28 ALT) ===
         try:
             from features_dev.diag_panel import render_diag_panel as _diag
