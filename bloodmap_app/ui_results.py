@@ -263,6 +263,14 @@ def _render_term_glossary(st, rec):
     if not terms:
         return
 
+    try:
+        if '_glossary_rendered_once' not in st.session_state:
+            st.session_state['_glossary_rendered_once'] = True
+        else:
+            st.session_state['_glossary_rendered_once'] = True
+    except Exception:
+        pass
+
     st.markdown("**📚 어려운 용어 풀이**")
     for t in terms:
         desc = GLOSSARY_TERMS.get(t)
