@@ -205,6 +205,7 @@ GLOSSARY_TERMS = {
 
 # 용어 키 매핑(다국어/축약 포함)
 GLOSSARY_ALIASES = {
+    "구역": "오심", "속쓰림": "속쓰림",
     "QT": "QT 연장", "QTc": "QT 연장", "QT prolongation": "QT 연장",
     "HFS": "손발증후군", "hand-foot": "손발증후군",
     "mucositis": "구내염", "stomatitis": "구내염",
@@ -216,6 +217,17 @@ GLOSSARY_ALIASES = {
     "differentiation syndrome": "분화증후군",
 }
 
+def _clean_text_for_glossary(s: str) -> str:
+    if not isinstance(s, str):
+        return ""
+    # remove common emoji ranges + variation selector + bullets
+    s = re.sub(r"[\u2600-\u27BF\u1F300-\u1F9FF\uFE0F]", " ", s)
+    # unify separators
+    s = s.replace("·", " ").replace("•", " ").replace("/", " ").replace("|", " ")
+    # collapse whitespace
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
+
 def _normalize_glossary_token(tok: str) -> str:
     s = tok.strip().lower()
     # normalize punctuation
@@ -226,14 +238,15 @@ def _normalize_glossary_token(tok: str) -> str:
 def _extract_glossary_terms(*texts) -> list:
     found = []
     bag = " ".join([t for t in texts if isinstance(t, str)]).strip()
+    bag_clean = _clean_text_for_glossary(bag)
     if not bag:
         return found
     # direct Korean terms
     for k in GLOSSARY_TERMS.keys():
-        if k in bag and k not in found:
+        if k in bag_clean and k not in found:
             found.append(k)
     # aliases (English/abbr)
-    low = bag.lower()
+    low = bag_clean.lower()
     for a, canon in GLOSSARY_ALIASES.items():
         if a.lower() in low and canon not in found:
             found.append(canon)
