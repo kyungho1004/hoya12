@@ -156,13 +156,6 @@ try:
 except Exception:
     pass
 # ---- End initial route bootstrap ----
-# ---- Early home-drop guard call (ensures we don't jump to 'home' unexpectedly) ----
-try:
-    _block_spurious_home()
-except Exception:
-    pass
-# ---- /Early home-drop guard call ----
-
 
 
 
@@ -282,7 +275,7 @@ html { scroll-behavior: smooth; }
 
 
 # --- HTML-only pediatric navigator (no rerun) ---
-def render_peds_nav_html():
+def render_peds_nav_md():
     from streamlit.components.v1 import html as _html
     _html("""
     <style>
@@ -1655,6 +1648,71 @@ def check_chemo_interactions(keys):
             notes.append(f"- {k} [경고]: {m['warning']}")
     return warns, notes
 
+
+# === Ara-C formulation selector (IV / SC / HDAC) ===
+def _find_arac_keys(db: dict):
+    def norm(s: str) -> str:
+        return re.sub(r"[^a-z0-9]+", "", str(s).lower())
+    keys = list(db.keys()) if isinstance(db, dict) else []
+    # Map by heuristic tokens
+    found = {"iv": None, "sc": None, "hdac": None, "generic": None}
+    for k in keys:
+        nk = norm(k)
+        if any(t in nk for t in ["cytarabine", "arac", "ara-c", "aracytidine"]):
+            if found["generic"] is None:
+                found["generic"] = k
+            if "hdac" in nk or "highdose" in nk or "hiDAC".lower() in nk:
+                found["hdac"] = k
+            if "iv" in nk or "intravenous" in nk:
+                found["iv"] = k
+            if "sc" in nk or "subcut" in nk or "subcutaneous" in nk:
+                found["sc"] = k
+    # Fallbacks: try to synthesize common variants if exact not present
+    base = found["generic"] or "Cytarabine"
+    for form, suffix in [("iv", " IV"), ("sc", " SC"), ("hdac", " HDAC")]:
+        if found[form] is None:
+            candidate = f"{base}{suffix}"
+            if isinstance(db, dict) and candidate in db:
+                found[form] = candidate
+    return found
+
+def render_arac_wrapper(title: str = "Ara-C 제형 선택", default: str = "Cytarabine"):
+    import streamlit as st
+    # DRUG_DB may be missing; guard
+    db = globals().get("DRUG_DB", {}) if isinstance(globals().get("DRUG_DB"), dict) else {}
+    found = _find_arac_keys(db)
+    # Build options only for available keys
+    opts = []
+    mapping = {}
+    if found.get("iv"):
+        opts.append("정맥(IV)")
+        mapping["정맥(IV)"] = found["iv"]
+    if found.get("sc"):
+        opts.append("피하(SC)")
+        mapping["피하(SC)"] = found["sc"]
+    if found.get("hdac"):
+        opts.append("고용량(HDAC)")
+        mapping["고용량(HDAC)"] = found["hdac"]
+    # Fallback to generic if none resolved
+    if not opts:
+        generic = found.get("generic") or default
+        opts = ["일반"]
+        mapping["일반"] = generic
+    # Persist selection per user
+    key_sel = wkey("arac_formulation")
+    prev_label = st.session_state.get(key_sel)
+    if prev_label not in opts:
+        # choose sensible default order preference
+        init = "정맥(IV)" if "정맥(IV)" in opts else (opts[0] if opts else None)
+        if init:
+            st.session_state[key_sel] = init
+    st.radio(title, opts, key=key_sel, horizontal=True)
+    label = st.session_state.get(key_sel, opts[0])
+    picked_key = mapping.get(label, mapping[opts[0]])
+    st.session_state["arac_picked_key"] = picked_key
+    return picked_key
+# === /Ara-C formulation selector ===
+
 def _aggregate_all_aes(meds, db):
     result = {}
     if not isinstance(meds, (list, tuple)) or not meds:
@@ -1710,6 +1768,37 @@ def _aggregate_all_aes(meds, db):
 # CHEMO
 with t_chemo:
     st.subheader("항암제(진단 기반)")
+    # === 🖥️ 모니터 (디버그/상태 표시 · 항상 표시) ===
+    with st.expander("🖥️ 모니터", expanded=True):
+        try:
+            qp = {}
+            try:
+                qp = dict(st.query_params)
+            except Exception:
+                qp = st.experimental_get_query_params()
+            st.write({
+                "route": st.session_state.get("_route"),
+                "route_last": st.session_state.get("_route_last"),
+                "group": st.session_state.get("onco_group"),
+                "disease": st.session_state.get("onco_disease"),
+                "picked_chemo": st.session_state.get("chemo_keys"),
+                "arac_selected": st.session_state.get("arac_picked_key"),
+                "query_params": qp,
+            })
+        except Exception as _e:
+            st.caption(f"(모니터 예외: {_e})")
+    # === /모니터 ===
+
+    # === ROUTE-STICKY (inside chemo tab) ===
+    try:
+        ss = st.session_state
+        if ss.get("_route") != "dx":
+            ss["_route"] = "dx"
+        if not ss.get("_route_last") or ss.get("_route_last") == "home":
+            ss["_route_last"] = "dx"
+    except Exception:
+        pass
+    # === /ROUTE-STICKY ===
     group = st.session_state.get("onco_group")
     disease = st.session_state.get("onco_disease")
     recs = st.session_state.get("recs_by_dx", {}) or {}
@@ -3439,24 +3528,3 @@ if _st_beta3 is not None and hasattr(_st_beta3, "expander"):
     except Exception:
         pass
 # === [/PATCH] ===
-
-
-# === BM_ROUTE_WATCHDOG (EOF) ===
-try:
-    import streamlit as _st_guard
-    def __bm_guard_dx():
-        ss = _st_guard.session_state
-        # dx 컨텍스트 추정: 진단 관련 키가 살아있음
-        _dx_ctx = any(k in ss and ss.get(k) not in (None, "", []) for k in (
-            "group","disease","진단","암종","dx_group","dx_disease","selected_group","selected_disease"
-        ))
-        if _dx_ctx:
-            # 최근 라우트가 dx면 홈 강제 덮어쓰기를 즉시 되돌림
-            if ss.get("_route_last") == "dx" and ss.get("_route") == "home":
-                ss["_route"] = "dx"
-            # 최소한 last는 dx로 유지
-            ss["_route_last"] = "dx"
-    __bm_guard_dx()
-except Exception:
-    pass
-# === /BM_ROUTE_WATCHDOG ===
