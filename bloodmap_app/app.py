@@ -1,4 +1,16 @@
 
+# [PATCH] safe import for router
+try:
+    import router
+except Exception:
+    router = None
+
+# [PATCH] safe import for care_log_ui
+try:
+    import care_log_ui
+except Exception:
+    care_log_ui = None
+
 # [PATCH] safe import for graph_io
 try:
     import graph_io
@@ -444,6 +456,14 @@ st.set_page_config(page_title=f"Bloodmap {APP_VERSION}", layout="wide")
 st.title(f"Bloodmap {APP_VERSION}")
 
 
+
+
+# [PATCH] 케어로그 UI 래퍼(추가 패널)
+try:
+    if care_log_ui:
+        care_log_ui.render(st, wkey=wkey if 'wkey' in globals() else (lambda x: x), profile=globals().get('profile'))
+except Exception:
+    pass
 # [PATCH] 🚨 위험배너(전역)
 try:
     if alerts:
@@ -1554,6 +1574,14 @@ with t_dx:
                        or st.session_state.get("onco_disease_sel_candidate"))
     disp = None
     try:
+        
+        # [PATCH] DX 라우팅 가드 (추가)
+        try:
+            if router:
+                router.lock_route("dx")
+                router.sync_query("dx")
+        except Exception:
+            pass
         disp = dx_display(group, disease)
     except Exception as _e:
         try:
