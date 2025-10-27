@@ -1,4 +1,5 @@
 # === PATCH-LOCK: classic hard lock + safety fallbacks ===
+import streamlit as st
 from datetime import timedelta, timezone as _tz
 import os, sys, types
 
