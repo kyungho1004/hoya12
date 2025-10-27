@@ -40,37 +40,6 @@ except Exception:
         except Exception:
             def _ae(drug_key: str, rec: dict | None = None):
                 import streamlit as st
-
-# === SAFETY GUARDS (auto-injected) ===
-try:
-    from peds_guide import render_section_constipation, render_section_diarrhea, render_section_vomit
-except Exception:
-    def render_section_constipation():
-        import streamlit as st
-        st.info("상세 변비 체크 모듈을 불러오지 못했습니다. 요약 가이드를 참고하세요.")
-    def render_section_diarrhea():
-        import streamlit as st
-        st.info("상세 설사 체크 모듈을 불러오지 못했습니다. 요약 가이드를 참고하세요.")
-    def render_section_vomit():
-        import streamlit as st
-        st.info("상세 구토 체크 모듈을 불러오지 못했습니다. 요약 가이드를 참고하세요.")
-
-# resolve_key가 없으면 안전 폴리필
-try:
-    resolve_key  # type: ignore
-except Exception:
-    def resolve_key(x): 
-        return str(x)
-
-# Ara-C 제형 래퍼가 없으면 간단 폴백
-try:
-    render_arac_wrapper  # type: ignore
-except Exception:
-    def render_arac_wrapper(title: str, default: str = "Cytarabine"):
-        # 간단 폴백: 선택 UI 없이 기본값 반환
-        return default
-# === /SAFETY GUARDS ===
-
                 st.markdown(f"- **{drug_key}**: 부작용 정보 준비 중")
 
 # 소아 페이지 모듈 폴백
@@ -1897,11 +1866,7 @@ with t_chemo:
                 pass
 
             for k, arr in ae_map.items():
-                try:
-                rk = resolve_key(k)
-            except Exception:
-                rk = str(k)
-            if rk in ("Cytarabine", "Ara-C"):
+                if resolve_key(k) in ("Cytarabine", "Ara-C"):
                     continue
                 st.write(f"- **{label_map.get(k, str(k))}**")
                 if isinstance(arr, (list, tuple)):
@@ -2260,3 +2225,1238 @@ with st.expander("🌡️ 해열제 가이드/계산", expanded=False):
 import datetime as _dt
 from zoneinfo import ZoneInfo as _ZoneInfo
 import tempfile as _tmp
+
+def _preferred_writable_base():
+    # Try known writable locations in order
+    for p in ["/mnt/data/care_log", "/mount/data/care_log", "/tmp/care_log"]:
+        try:
+            os.makedirs(p, exist_ok=True)
+            test_fp = os.path.join(p, ".touch")
+            with open(test_fp, "w", encoding="utf-8") as _f:
+                _f.write("ok")
+            try:
+                os.remove(test_fp)
+            except Exception:
+                pass
+            return p
+        except Exception:
+            continue
+    # Extreme fallback
+    return _tmp.gettempdir()
+
+def _make_ics(title:str, start: _dt.datetime, minutes:int=0, description:str="") -> str:
+    tzid = "Asia/Seoul"
+    dtstart = start.strftime("%Y%m%dT%H%M%S")
+    dtend = (start + _dt.timedelta(minutes=minutes)).strftime("%Y%m%dT%H%M%S") if minutes>0 else None
+    uid = f"{dtstart}-{title.replace(' ','_')}@bloodmap"
+    lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//BloodMap//Peds Antipyretic//KR",
+        "CALSCALE:GREGORIAN",
+        "METHOD:PUBLISH",
+        "BEGIN:VEVENT",
+        f"UID:{uid}",
+        f"DTSTAMP:{_dt.datetime.now(_ZoneInfo(tzid)).strftime('%Y%m%dT%H%M%S')}",
+        f"DTSTART;TZID={tzid}:{dtstart}",
+    ]
+    if dtend:
+        lines.append(f"DTEND;TZID={tzid}:{dtend}")
+    lines += [
+        f"SUMMARY:{title}",
+        f"DESCRIPTION:{description}".replace("\n","\\n"),
+        "END:VEVENT",
+        "END:VCALENDAR",
+        ""
+    ]
+    return "\n".join(lines)
+
+kst = _dt.datetime.now(_ZoneInfo("Asia/Seoul"))
+col1, col2 = st.columns(2)
+with col1:
+    ap_given = st.number_input("APAP 실제 투여량(mL)", min_value=0.0, step=0.5, value=float(f"{ap_ml_1:.1f}"), key=wkey("apap_given"))
+    if st.button("APAP 기록 + 다음 복용 .ics", key=wkey("apap_log_ics")):
+        next_time = kst + _dt.timedelta(hours=4)
+        ics_text = _make_ics("다음 해열제(APAP) 복용 가능", next_time, 0, "APAP 최소 간격 4시간 (KST).")
+        base = _preferred_writable_base()
+        fname = f"next_APAP_{kst.strftime('%Y%m%d_%H%M%S')}.ics"
+        ics_path = os.path.join(base, fname)
+        try:
+            with open(ics_path, "w", encoding="utf-8") as f:
+                f.write(ics_text)
+        except Exception as _e:
+            st.warning(f"쓰기 권한 문제로 임시 다운로드만 제공합니다. ({type(_e).__name__})")
+        st.success(f"다음 APAP 가능 시각: {next_time.strftime('%Y-%m-%d %H:%M')} (KST)")
+        st.download_button("📅 .ics 내보내기 (APAP)", data=ics_text, file_name=fname, mime="text/calendar", key=wkey("apap_ics_dl"))
+        st.session_state[wkey("apap_ml_24h")] = st.session_state.get(wkey("apap_ml_24h"), 0.0) + float(ap_given)
+with col2:
+    ib_given = st.number_input("IBU 실제 투여량(mL)", min_value=0.0, step=0.5, value=float(f"{ib_ml_1:.1f}"), key=wkey("ibu_given"))
+    if st.button("IBU 기록 + 다음 복용 .ics", key=wkey("ibu_log_ics")):
+        next_time = kst + _dt.timedelta(hours=6)
+        ics_text = _make_ics("다음 해열제(IBU) 복용 가능", next_time, 0, "IBU 최소 간격 6시간 (KST).")
+        base = _preferred_writable_base()
+        fname = f"next_IBU_{kst.strftime('%Y%m%d_%H%M%S')}.ics"
+        ics_path = os.path.join(base, fname)
+        try:
+            with open(ics_path, "w", encoding="utf-8") as f:
+                f.write(ics_text)
+        except Exception as _e:
+            st.warning(f"쓰기 권한 문제로 임시 다운로드만 제공합니다. ({type(_e).__name__})")
+        st.success(f"다음 IBU 가능 시각: {next_time.strftime('%Y-%m-%d %H:%M')} (KST)")
+        st.download_button("📅 .ics 내보내기 (IBU)", data=ics_text, file_name=fname, mime="text/calendar", key=wkey("ibu_ics_dl"))
+        st.session_state[wkey("ibu_ml_24h")] = st.session_state.get(wkey("ibu_ml_24h"), 0.0) + float(ib_given)
+
+# 24h 총량 소프트 배너(실제 하드 가드레일과 충돌 없이 알림만)
+ap24 = st.session_state.get(wkey("apap_ml_24h"), 0.0)
+ib24 = st.session_state.get(wkey("ibu_ml_24h"), 0.0)
+if ap24 > 0 or ib24 > 0:
+    st.caption(f"24시간 누적(세션 기준): APAP {ap24:.1f} mL / IBU {ib24:.1f} mL")
+# --- /P1-2 ---
+st.caption("※ 금기/주의 질환은 반드시 의료진 지시를 따르세요. 중복 복용 주의.")
+
+# --- ORS/탈수 ---
+with st.expander("🥤 ORS/탈수 가이드", expanded=False):
+    with st.expander("🏠 ORS 집에서 만드는 법(WHO 권장 비율)", expanded=False):
+        st.markdown("**재료 (1 L 기준)**")
+        st.write("- 끓였다 식힌 물 **1 L**")
+        st.write("- 설탕 **작은술 6스푼(평평하게)** ≈ 27 g")
+        st.write("- 소금 **작은술 1/2 스푼(평평하게)** ≈ 2.5 g")
+        st.markdown("**만드는 법/복용**")
+        st.write("- 깨끗한 용기에 모두 넣고 완전히 녹을 때까지 저어주세요.")
+        st.write("- **5~10분마다 소량씩** 마시고, **토하면 10~15분 쉬었다 재개**하세요.")
+        st.write("- 맛은 '살짝 짠 단물(눈물맛)' 정도가 정상입니다. 너무 짜거나 달면 **물을 더** 넣어 희석하세요.")
+        st.markdown("**주의**")
+        st.write("- 과일주스·탄산·순수한 물만 대량 섭취는 피하세요(전해질 불균형 위험).")
+        st.write("- **6개월 미만 영아/만성질환/신생아**는 반드시 의료진과 상의 후 사용하세요.")
+        st.write("- 설탕 대신 꿀을 쓰지 마세요(영아 보툴리누스 위험).")
+
+    st.write("- 5~10분마다 소량씩 자주, 토하면 10~15분 휴식 후 재개")
+    st.write("- 2시간 이상 소변 없음/입마름/눈물 감소/축 늘어짐 → 진료")
+    st.write("- 가능하면 스포츠음료 대신 **ORS** 용액 사용")
+
+# --- 가래/쌕쌕 ---
+with st.expander("🫁 가래/쌕쌕(천명) 가이드", expanded=False):
+    st.write("- 생리식염수 분무/흡인, 수면 시 머리 살짝 높이기")
+    st.write("- 쌕쌕/호흡곤란/청색증 → 즉시 응급평가")
+    show_ck = st.toggle("체크리스트 열기", value=False, key=wkey("peds_ck"))
+    if show_ck:
+        colL, colR = st.columns(2)
+        with colL:
+            st.markdown("**🟢 집에서 해볼 수 있는 것**")
+            st.write("- 충분한 수분 섭취(ORS/미온수)")
+            st.write("- 해열제 올바른 간격 준수")
+            st.write("- 생리식염수 비강 세척/흡인(콧물)")
+            st.write("- 가벼운 옷/시원한 환경")
+        with colR:
+            st.markdown("**🔴 즉시 진료가 필요한 신호**")
+            st.write("- 번개치는 두통, 시야 이상, 경련, 의식저하")
+            st.write("- 호흡곤란/청색증/입술부종")
+            st.write("- 소변량 급감·축 늘어짐(탈수)")
+            st.write("- 피 섞인 변/검은 변, 점상출혈 지속")
+
+# SPECIAL (notes + pitfalls)
+def _annotate_special_notes(lines):
+    if not lines:
+        return []
+    notes_map = {
+        r"procalcitonin|pct": "세균성 감염 지표 — 초기 6–24h, 신장기능/패혈증 단계 고려",
+        r"d[- ]?dimer": "혈전/색전 의심 시 상승 — 고령·수술 후·임신 등에서 비특이적 상승",
+        r"ferritin": "염증/HLH/철대사 이상 — 간질환·감염에서도 상승 가능",
+        r"troponin": "심근 손상 — 신장기능 저하/빈맥/수술·패혈증에서도 경도 상승 가능",
+        r"bnp|nt[- ]?pro[- ]?bnp": "심부전 가능성 — 연령·비만·신장기능·폐고혈압 영향",
+        r"crp": "염증 비특이 — 절대치보다 **추세**가 중요",
+        r"esr": "만성 염증성 지표 — 빈혈/임신/고령에서 상승",
+        r"ldh": "용혈/종양부하/조직손상 — 비특이 지표",
+        r"haptoglobin": "용혈 시 감소 — 간질환/급성기반응으로 변화",
+        r"fibrinogen": "급성기 반응성으로 상승 — DIC 말기에 감소",
+    }
+    pitfalls = "※ 해석은 임상 맥락·시간축(발현 경과)·신장/간기능 영향을 반드시 함께 보세요."
+    out = []
+    for ln in lines:
+        tagged = False
+        for pat, note in notes_map.items():
+            if re.search(pat, ln, flags=re.I):
+                out.append(f"{ln} — [참고] {note}")
+                tagged = True
+                break
+        if not tagged:
+            out.append(ln)
+    out.append(pitfalls)
+    return out
+# (migrated) 기존 소아 GI 섹션 호출은 t_peds 퀵 섹션으로 이동되었습니다.
+with t_special:
+    st.subheader("특수검사 해석")
+    if SPECIAL_PATH:
+        st.caption(f"special_tests 로드: {SPECIAL_PATH}")
+    lines = special_tests_ui()
+    lines = _annotate_special_notes(lines or [])
+    st.session_state["special_interpretations"] = lines
+    if lines:
+        for ln in lines:
+            st.write("- " + ln)
+    else:
+        st.info("아직 입력/선택이 없습니다.")
+
+# ---------- QR helper ----------
+def _build_hospital_summary():
+    key_id = st.session_state.get("key", "(미설정)")
+    labs = st.session_state.get("labs_dict", {}) or {}
+    temp = st.session_state.get(wkey("cur_temp")) or "—"
+    hr = st.session_state.get(wkey("cur_hr")) or "—"
+    group = st.session_state.get("onco_group", "") or "—"
+    disease = st.session_state.get("onco_disease", "") or "—"
+    meds = st.session_state.get("chemo_keys", []) or []
+    sym_keys = [
+        "sym_hematuria",
+        "sym_melena",
+        "sym_hematochezia",
+        "sym_chest",
+        "sym_dyspnea",
+        "sym_confusion",
+        "sym_oliguria",
+        "sym_pvomit",
+        "sym_petechiae",
+        "sym_thunderclap",
+        "sym_visual_change",
+    ]
+    sym_kor = ["혈뇨", "흑색변", "혈변", "흉통", "호흡곤란", "의식저하", "소변량 급감", "지속 구토", "점상출혈", "번개두통", "시야 이상"]
+    sym_line = ", ".join([nm for nm, kk in zip(sym_kor, sym_keys) if st.session_state.get(wkey(kk), False)]) or "해당 없음"
+    pick = ["WBC", "Hb", "PLT", "ANC", "CRP", "Na", "K", "Ca", "Cr", "BUN", "AST", "ALT", "T.B", "Alb", "Glu"]
+    lab_parts = []
+    for k in pick:
+        v = labs.get(k)
+        if v not in (None, ""):
+            lab_parts.append(f"{k}:{v}")
+    labs_line = ", ".join(lab_parts) if lab_parts else "—"
+    meds_line = ", ".join(meds) if meds else "—"
+    return f"[PIN]{key_id} | T:{temp}℃ HR:{hr} | Dx:{group}/{disease} | Sx:{sym_line} | Labs:{labs_line} | Chemo:{meds_line}"
+
+def _qr_image_bytes(text: str) -> bytes:
+    try:
+        import qrcode
+        img = qrcode.make(text)
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        return buf.getvalue()
+    except Exception:
+        return b""
+
+# REPORT with side panel (tabs)
+with t_report:
+    st.subheader("보고서 (.md/.txt/.pdf) — 모든 항목 포함")
+
+    key_id = st.session_state.get("key", "(미설정)")
+    labs = st.session_state.get("labs_dict", {}) or {}
+    group = st.session_state.get("onco_group", "")
+    disease = st.session_state.get("onco_disease", "")
+    meds = st.session_state.get("chemo_keys", [])
+    diets = lab_diet_guides(labs, heme_flag=(group == "혈액암"))
+    temp = st.session_state.get(wkey("cur_temp"))
+    hr = st.session_state.get(wkey("cur_hr"))
+    age_years = _safe_float(st.session_state.get(wkey("age_years")), 0.0)
+    is_peds = bool(st.session_state.get(wkey("is_peds"), False))
+
+    sym_map = {
+        "혈뇨": st.session_state.get(wkey("sym_hematuria"), False),
+        "흑색변": st.session_state.get(wkey("sym_melena"), False),
+        "혈변": st.session_state.get(wkey("sym_hematochezia"), False),
+        "흉통": st.session_state.get(wkey("sym_chest"), False),
+        "호흡곤란": st.session_state.get(wkey("sym_dyspnea"), False),
+        "의식저하": st.session_state.get(wkey("sym_confusion"), False),
+        "소변량 급감": st.session_state.get(wkey("sym_oliguria"), False),
+        "지속 구토": st.session_state.get(wkey("sym_pvomit"), False),
+        "점상출혈": st.session_state.get(wkey("sym_petechiae"), False),
+        "번개치는 듯한 두통": st.session_state.get(wkey("sym_thunderclap"), False),
+        "시야 이상/복시/암점": st.session_state.get(wkey("sym_visual_change"), False),
+    }
+    level, reasons, contrib = emergency_level(
+        labs or {},
+        temp,
+        hr,
+        {
+            "hematuria": sym_map["혈뇨"],
+            "melena": sym_map["흑색변"],
+            "hematochezia": sym_map["혈변"],
+            "chest_pain": sym_map["흉통"],
+            "dyspnea": sym_map["호흡곤란"],
+            "confusion": sym_map["의식저하"],
+            "oliguria": sym_map["소변량 급감"],
+            "persistent_vomit": sym_map["지속 구토"],
+            "petechiae": sym_map["점상출혈"],
+            "thunderclap": sym_map["번개치는 듯한 두통"],
+            "visual_change": sym_map["시야 이상/복시/암점"],
+        },
+    )
+
+    col_report, col_side = st.columns([2, 1])
+
+    # ---------- 오른쪽: 기록/그래프/내보내기 ----------
+    with col_side:
+        st.markdown("### 📊 기록/그래프 패널")
+
+        st.session_state.setdefault("lab_history", [])
+        hist = st.session_state["lab_history"]
+
+        tab_log, tab_plot, tab_export = st.tabs(["📝 기록", "📈 그래프", "⬇️ 내보내기"])
+
+        with tab_log:
+            cols_btn = st.columns([1, 1, 1])
+            with cols_btn[0]:
+                if st.button("➕ 현재 값을 기록에 추가", key=wkey("add_history_tab")):
+                    snap = {
+                        "ts": now_kst().strftime("%Y-%m-%d %H:%M:%S"),
+                        "temp": temp or "",
+                        "hr": hr or "",
+                        "labs": {k: ("" if labs.get(k) in (None, "") else labs.get(k)) for k in labs.keys()},
+                        "mode": "peds" if bool(st.session_state.get(wkey("is_peds"), False)) else "adult",
+                        "ref": lab_ref(bool(st.session_state.get(wkey("is_peds"), False))),
+                    }
+                    weird = []
+                    for k, v in (snap["labs"] or {}).items():
+                        try:
+                            fv = float(v)
+                            if k == "Na" and not (110 <= fv <= 170):
+                                weird.append(f"Na {fv}")
+                            if k == "K" and not (1.0 <= fv <= 8.0):
+                                weird.append(f"K {fv}")
+                            if k == "Hb" and not (3.0 <= fv <= 25.0):
+                                weird.append(f"Hb {fv}")
+                            if k == "PLT" and fv > 0 and fv < 1:
+                                weird.append(f"PLT {fv} (단위 확인)")
+                        except Exception:
+                            pass
+                    hist.append(snap)
+                    st.success("현재 값이 기록에 추가되었습니다.")
+                    if weird:
+                        st.warning("비정상적으로 보이는 값 감지: " + ", ".join(weird) + " — 단위/오타를 확인하세요.")
+            with cols_btn[1]:
+                if st.button("🗑️ 기록 비우기", key=wkey("clear_history")) and hist:
+                    st.session_state["lab_history"] = []
+                    hist = st.session_state["lab_history"]
+                    st.warning("기록을 모두 비웠습니다.")
+            with cols_btn[2]:
+                st.caption(f"총 {len(hist)}건")
+
+            if not hist:
+                st.info("기록이 없습니다.")
+            else:
+                try:
+                    import pandas as pd
+                    rows = []
+                    for h in hist[-10:]:
+                        row = {
+                            "시각": h.get("ts", ""),
+                            "T(℃)": h.get("temp", ""),
+                            "HR": h.get("hr", ""),
+                            "WBC": (h.get("labs", {}) or {}).get("WBC", ""),
+                            "Hb": (h.get("labs", {}) or {}).get("Hb", ""),
+                            "PLT": (h.get("labs", {}) or {}).get("PLT", ""),
+                            "ANC": (h.get("labs", {}) or {}).get("ANC", ""),
+                            "CRP": (h.get("labs", {}) or {}).get("CRP", ""),
+                        }
+                        rows.append(row)
+                    df = pd.DataFrame(rows)
+                    st.dataframe(df, use_container_width=True, height=280)
+                except Exception:
+                    st.write(hist[-5:])
+
+        with tab_plot:
+            default_metrics = ["WBC", "Hb", "PLT", "ANC", "CRP", "Na", "Cr", "BUN", "AST", "ALT", "Glu"]
+            all_metrics = sorted({*default_metrics, *list(labs.keys())})
+            pick = st.multiselect("그래프 항목 선택", options=all_metrics, default=default_metrics[:4], key=wkey("chart_metrics_tab"))
+
+            if not hist:
+                st.info("기록이 없습니다. 먼저 '기록' 탭에서 추가하세요.")
+            elif not pick:
+                st.info("표시할 항목을 선택하세요.")
+            else:
+                x = [h.get("ts", "") for h in hist]
+                if _HAS_MPL:
+                    for m in pick:
+                        y, band = [], None
+                        for h in hist:
+                            v = (h.get("labs", {}) or {}).get(m, "")
+                            try:
+                                v = float(str(v).replace(",", "."))
+                            except Exception:
+                                v = None
+                            y.append(v)
+                        for h in reversed(hist):
+                            ref = (h.get("ref") or {})
+                            if m in ref:
+                                band = ref[m]
+                                break
+                        if all(v is None for v in y):
+                            continue
+                        fig = plt.figure()
+                        plt.plot(x, [vv if vv is not None else float("nan") for vv in y], marker="o")
+                        plt.title(m)
+                        plt.xlabel("기록 시각")
+                        plt.ylabel(m)
+                        plt.xticks(rotation=45, ha="right")
+                        if band and isinstance(band, (tuple, list)) and len(band) == 2:
+                            lo, hi = band
+                            try:
+                                plt.axhspan(lo, hi, alpha=0.15)
+                            except Exception:
+                                pass
+                        plt.tight_layout()
+                        st.pyplot(fig)
+                else:
+                    try:
+                        import pandas as pd
+                        df_rows = []
+                        for i, h in enumerate(hist):
+                            row = {"ts": x[i]}
+                            for m in pick:
+                                v = (h.get("labs", {}) or {}).get(m, None)
+                                try:
+                                    v = float(str(v).replace(",", "."))
+                                except Exception:
+                                    v = None
+                                row[m] = v
+                            df_rows.append(row)
+                        if df_rows:
+                            df = pd.DataFrame(df_rows).set_index("ts")
+                            for m in pick:
+                                st.line_chart(df[[m]])
+                        else:
+                            st.info("표시할 데이터가 없습니다.")
+                    except Exception:
+                        st.warning("matplotlib/pandas 미설치 → 간단 표로 폴백합니다.")
+                        for m in pick:
+                            st.write(m, [(x[i], (hist[i].get("labs", {}) or {}).get(m, None)) for i in range(len(hist))])
+
+        with tab_export:
+            if not hist:
+                st.info("기록이 없습니다.")
+            else:
+                since = st.text_input("시작 시각(YYYY-MM-DD)", value="")
+                until = st.text_input("종료 시각(YYYY-MM-DD)", value="")
+
+                def _in_range(ts):
+                    if not ts:
+                        return False
+                    d = ts[:10]
+                    if since and d < since:
+                        return False
+                    if until and d > until:
+                        return False
+                    return True
+
+                sel = [h for h in hist if _in_range(h.get("ts", ""))] if (since or until) else hist
+
+                output = io.StringIO()
+                writer = csv.writer(output)
+                all_keys = set()
+                for h in sel:
+                    all_keys |= set((h.get("labs", {}) or {}).keys())
+                all_keys = sorted(all_keys)
+                headers = ["ts", "temp", "hr"] + all_keys
+                writer.writerow(headers)
+                for h in sel:
+                    row = [h.get("ts", ""), h.get("temp", ""), h.get("hr", "")]
+                    for m in all_keys:
+                        row.append((h.get("labs", {}) or {}).get(m, ""))
+                    writer.writerow(row)
+                st.download_button("CSV 다운로드", data=output.getvalue().encode("utf-8"), file_name="bloodmap_history.csv", mime="text/csv")
+                st.caption("팁: 기간 필터를 지정해 필요한 구간만 내보낼 수 있습니다.")
+
+    # ---------- 왼쪽: 보고서 본문 ----------
+    with col_report:
+        use_dflt = st.checkbox("기본(모두 포함)", True, key=wkey("rep_all"))
+        colp1, colp2 = st.columns(2)
+        with colp1:
+            sec_profile = st.checkbox("프로필/활력/모드", True if use_dflt else False, key=wkey("sec_profile"))
+            sec_symptom = st.checkbox("증상 체크(홈) — (보고서에서 제외됨)", False, key=wkey("sec_symptom"))
+            sec_symptom = False
+            sec_emerg = st.checkbox("응급도 평가(기여도/가중치 포함) — (보고서에서 제외됨)", False, key=wkey("sec_emerg"))
+            sec_emerg = False
+            sec_dx = st.checkbox("진단명(암 선택)", True if use_dflt else False, key=wkey("sec_dx"))
+        with colp2:
+            sec_meds = st.checkbox("항암제 요약/부작용/병용경고", True if use_dflt else False, key=wkey("sec_meds"))
+            sec_labs = st.checkbox("피수치 전항목", True if use_dflt else False, key=wkey("sec_labs"))
+            sec_diet = st.checkbox("식이가이드", True if use_dflt else False, key=wkey("sec_diet"))
+            sec_special = st.checkbox("특수검사 해석(각주)", True if use_dflt else False, key=wkey("sec_special"))
+
+        st.markdown("### 🏥 병원 전달용 요약 + QR")
+        qr_text = _build_hospital_summary()
+        st.code(qr_text, language="text")
+        qr_png = _qr_image_bytes(qr_text)
+        if qr_png:
+            st.image(qr_png, caption="이 QR을 스캔하면 위 요약 텍스트가 표시됩니다.", use_column_width=False)
+            st.download_button("QR 이미지(.png) 다운로드", data=qr_png, file_name="bloodmap_hospital_qr.png", mime="image/png")
+        else:
+            st.info("QR 라이브러리를 찾지 못했습니다. 위 텍스트를 그대로 공유하세요. (선택: requirements에 `qrcode` 추가)")
+
+        lines = []
+        lines.append("# Bloodmap Report (Full)")
+        lines.append(f"_생성 시각(KST): {now_kst().strftime('%Y-%m-%d %H:%M:%S')}_")
+        lines.append("")
+        lines.append("> In memory of Eunseo, a little star now shining in the sky.")
+        lines.append("> This app is made with the hope that she is no longer in pain,")
+        lines.append("> and resting peacefully in a world free from all hardships.")
+        lines.append("")
+        lines.append("---")
+        lines.append("")
+
+        if sec_profile:
+            lines.append("## 프로필/활력/모드")
+            lines.append(f"- 키(별명#PIN): {key_id}")
+            lines.append(f"- 나이(년): {age_years}")
+            lines.append(f"- 모드: {'소아' if is_peds else '성인'}")
+            lines.append(f"- 체온(℃): {temp if temp not in (None, '') else '—'}")
+            lines.append(f"- 심박수(bpm): {hr if hr not in (None, '') else '—'}")
+            lines.append("")
+        # (제외됨) 증상 체크(홈) 섹션은 보고서에서 제거되었습니다.
+        # (제외됨) 응급도 평가(기여도/가중치 포함) 섹션은 보고서에서 제거되었습니다.
+
+        if sec_dx:
+            lines.append("## 진단명(암)")
+            lines.append(f"- 그룹: {group or '(미선택)'}")
+            lines.append(f"- 질환: {disease or '(미선택)'}")
+            lines.append("")
+
+        if sec_meds:
+            lines.append("## 항암제 요약")
+            if meds:
+                for m in meds:
+                    try:
+                        lines.append(f"- {display_label(m, DRUG_DB)}")
+                    except Exception:
+                        lines.append(f"- {m}")
+            else:
+                lines.append("- (없음)")
+            lines.append("")
+
+            warns, notes = check_chemo_interactions(meds)
+            if warns:
+                lines.append("### ⚠️ 병용 주의/경고")
+                for w in warns:
+                    lines.append(f"- {w}")
+                lines.append("")
+            if notes:
+                lines.append("### ℹ️ 참고(데이터베이스 기재)")
+                for n in notes:
+                    lines.append(n)
+                lines.append("")
+
+            if meds:
+                ae_map = _aggregate_all_aes(meds, DRUG_DB)
+                if ae_map:
+                    lines.append("## 항암제 부작용(전체)")
+                    for k, arr in ae_map.items():
+                        try:
+                            nm = display_label(k, DRUG_DB)
+                        except Exception:
+                            nm = k
+                        lines.append(f"- {nm}")
+                        for ln in arr:
+                            lines.append(f"  - {ln}")
+                    lines.append("")
+
+        if sec_labs:
+            lines.append("## 피수치 (모든 항목)")
+            all_labs = [
+                ("WBC", "백혈구"),
+                ("Ca", "칼슘"),
+                ("Glu", "혈당"),
+                ("CRP", "CRP"),
+                ("Hb", "혈색소"),
+                ("P", "인(Phosphorus)"),
+                ("T.P", "총단백"),
+                ("Cr", "크레아티닌"),
+                ("PLT", "혈소판"),
+                ("Na", "나트륨"),
+                ("AST", "AST"),
+                ("T.B", "총빌리루빈"),
+                ("ANC", "절대호중구"),
+                ("Alb", "알부민"),
+                ("ALT", "ALT"),
+                ("BUN", "BUN"),
+            ]
+            for abbr, kor in all_labs:
+                v = labs.get(abbr) if isinstance(labs, dict) else None
+                lines.append(f"- {abbr} ({kor}): {v if v not in (None, '') else '—'}")
+            lines.append(f"- ANC 분류: {anc_band(labs.get('ANC') if isinstance(labs, dict) else None)}")
+            lines.append("")
+
+        if sec_diet:
+            dlist = diets or []
+            if dlist:
+                lines.append("## 식이가이드(자동)")
+                for d in dlist:
+                    lines.append(f"- {d}")
+                lines.append("")
+
+        if sec_special:
+            spec_lines = st.session_state.get("special_interpretations", [])
+            if spec_lines:
+                lines.append("## 특수검사 해석(각주 포함)")
+                for ln in spec_lines:
+                    lines.append(f"- {ln}")
+                lines.append("")
+
+        lines.append("---")
+        lines.append("### 🏥 병원 전달용 텍스트 (QR 동일 내용)")
+        lines.append(_build_hospital_summary())
+        lines.append("")
+
+        md = "\n".join(lines)
+        st.code(md, language="markdown")
+        st.download_button("💾 보고서 .md 다운로드", data=md.encode("utf-8"), file_name="bloodmap_report.md", mime="text/markdown")
+        txt_data = md.replace("**", "")
+        st.download_button("📝 보고서 .txt 다운로드", data=txt_data.encode("utf-8"), file_name="bloodmap_report.txt", mime="text/plain")
+        try:
+            pdf_bytes = export_md_to_pdf(md)
+            st.download_button("📄 보고서 .pdf 다운로드", data=pdf_bytes, file_name="bloodmap_report.pdf", mime="application/pdf")
+        except Exception:
+            st.caption("PDF 변환 모듈을 불러오지 못했습니다. .md 또는 .txt를 사용해주세요.")
+
+
+# ---------------- Graph/Log Panel (separate tab) ----------------
+def render_graph_panel():
+
+    import os, io, datetime as _dt
+    import pandas as pd
+    import streamlit as st
+    try:
+        import matplotlib.pyplot as plt
+    except Exception:
+        plt = None
+
+    st.markdown("### 📊 기록/그래프(파일 + 세션기록)")
+
+    base_dir = "/mnt/data/bloodmap_graph"
+    try:
+        os.makedirs(base_dir, exist_ok=True)
+    except Exception:
+        pass
+
+    # 파일 로딩
+    csv_files = []
+    try:
+        csv_files = [os.path.join(base_dir, f) for f in os.listdir(base_dir) if f.lower().endswith(".csv")]
+    except Exception:
+        csv_files = []
+
+    file_map = {os.path.basename(p): p for p in csv_files}
+    mode = st.radio("데이터 소스", ["세션 기록", "CSV 파일"], horizontal=True, key=wkey("g2_mode"))
+    df = None
+
+    hist = st.session_state.get("lab_history", [])
+
+    if mode == "CSV 파일" and file_map:
+        sel_name = st.selectbox("기록 파일 선택", sorted(file_map.keys()), key=wkey("g2_csv_select"))
+        path = file_map[sel_name]
+        try:
+            df = pd.read_csv(path)
+        except Exception as e:
+            st.error(f"CSV를 읽을 수 없습니다: {e}")
+            df = None
+    elif mode == "CSV 파일" and not file_map:
+        st.info("CSV 파일이 없습니다. 세션 기록을 사용하거나 /mnt/data/bloodmap_graph 폴더에 CSV를 넣어주세요.")
+
+    # 세션 기록 → DataFrame
+    if mode == "세션 기록":
+        if not hist:
+            st.info("세션 기록이 없습니다. 보고서 옆 패널의 '기록' 탭에서 '현재 값을 기록에 추가'를 눌러보세요.")
+        else:
+            rows = []
+            for h in hist:
+                row = {"ts": h.get("ts", "")}
+                labs = (h.get("labs") or {})
+                for k, v in labs.items():
+                    row[k] = v
+                rows.append(row)
+            if rows:
+                df = pd.DataFrame(rows)
+                try:
+                    df["ts"] = pd.to_datetime(df["ts"])
+                except Exception:
+                    pass
+
+    if df is None:
+        return
+
+    # 시간축 정렬/정규화
+    time_col = None
+    for cand in ["ts", "date", "Date", "timestamp", "Timestamp", "time", "Time", "sample_time"]:
+        if cand in df.columns:
+            time_col = cand
+            break
+    if time_col is None:
+        df["_ts"] = range(len(df))
+        time_col = "_ts"
+    else:
+        try:
+            df["_ts"] = pd.to_datetime(df[time_col])
+            time_col = "_ts"
+        except Exception:
+            pass
+
+    # 항목 선택
+    candidates = ["WBC", "Hb", "PLT", "CRP", "ANC", "Na", "Cr", "BUN", "AST", "ALT", "Glu"]
+    cols_avail = [c for c in candidates if c in df.columns]
+    if not cols_avail:
+        cols_avail = [c for c in df.columns if c not in ["_ts", "ts", "date", "Date", "timestamp", "Timestamp", "time", "Time", "sample_time"]]
+
+    picks = st.multiselect("그래프 항목 선택", options=cols_avail, default=cols_avail[:4], key=wkey("g2_cols"))
+
+    # 기간 필터
+    period = st.radio("기간", ("전체", "최근 7일", "최근 14일", "최근 30일"), horizontal=True, key=wkey("g2_period"))
+    if period != "전체" and "datetime64" in str(df[time_col].dtype):
+        days = {"최근 7일": 7, "최근 14일": 14, "최근 30일": 30}[period]
+        cutoff = _dt.datetime.now() - _dt.timedelta(days=days)
+        try:
+            mask = df[time_col] >= cutoff
+            df = df[mask]
+        except Exception:
+            pass
+
+    if not picks:
+        st.info("표시할 항목을 선택하세요.")
+        return
+
+    # 플롯
+    if plt is None:
+        st.warning("matplotlib이 없어 간단 표로 대체합니다.")
+        st.dataframe(df[[time_col] + picks].tail(50))
+    else:
+        for m_ in picks:
+            try:
+                y = pd.to_numeric(df[m_], errors="coerce")
+            except Exception:
+                y = df[m_]
+            fig, ax = plt.subplots()
+            ax.plot(df[time_col], y, marker="o")
+            ax.set_title(m_)
+            ax.set_xlabel("시점")
+            ax.set_ylabel(m_)
+            fig.autofmt_xdate(rotation=45)
+            st.pyplot(fig)
+
+with t_graph:
+    render_graph_panel()
+
+# ===== [INLINE FEEDBACK – drop-in, no external file] =====
+import os, tempfile
+from datetime import datetime
+import pandas as pd
+import streamlit as st
+try:
+    from zoneinfo import ZoneInfo
+    _KST = ZoneInfo("Asia/Seoul")
+except Exception:
+    _KST = None
+
+def _kst_now():
+    return datetime.now(_KST) if _KST else datetime.utcnow()
+
+def _feedback_dir():
+    for p in [
+        os.environ.get("BLOODMAP_DATA_DIR"),
+        os.path.join(os.path.expanduser("~"), ".bloodmap", "metrics"),
+        os.path.join(tempfile.gettempdir(), "bloodmap_metrics"),
+    ]:
+        if not p: 
+            continue
+        try:
+            os.makedirs(p, exist_ok=True)
+            probe = os.path.join(p, ".probe")
+            with open(probe, "w", encoding="utf-8") as f:
+                f.write("ok")
+            os.remove(probe)
+            return p
+        except Exception:
+            continue
+    p = os.path.join(tempfile.gettempdir(), "bloodmap_metrics")
+    os.makedirs(p, exist_ok=True)
+    return p
+
+_FB_DIR = _feedback_dir()
+_FEEDBACK_CSV = os.path.join(_FB_DIR, "feedback.csv")
+
+def _atomic_save_csv(df: pd.DataFrame, path: str) -> None:
+    tmp = path + ".tmp"
+    df.to_csv(tmp, index=False)
+    os.replace(tmp, path)
+
+def _ensure_feedback_file() -> None:
+    if not os.path.exists(_FEEDBACK_CSV):
+        cols = ["ts_kst","name_or_nick","contact","category","rating","message","page"]
+        _atomic_save_csv(pd.DataFrame(columns=cols), _FEEDBACK_CSV)
+
+def set_current_tab_hint(name: str) -> None:
+    st.session_state["_bm_current_tab"] = name
+
+def render_feedback_box(default_category: str = "일반 의견", page_hint: str = "") -> None:
+    _ensure_feedback_file()
+    categories = ["버그 제보","개선 요청","기능 아이디어","데이터 오류 신고","일반 의견"]
+    try:
+        default_index = categories.index(default_category)
+    except ValueError:
+        default_index = categories.index("일반 의견")
+    with st.form("feedback_form_sidebar", clear_on_submit=True):
+        name = st.text_input("이름/별명 (선택)", key="fb_name")
+        contact = st.text_input("연락처(이메일/카톡ID, 선택)", key="fb_contact")
+        category = st.selectbox("분류", categories, index=default_index, key="fb_cat")
+        rating = st.slider("전반적 만족도", 1, 5, 4, key="fb_rating")
+        msg = st.text_area("메시지", placeholder="자유롭게 적어주세요.", key="fb_msg")
+        if st.form_submit_button("보내기", use_container_width=True):
+            row = {
+                "ts_kst": _kst_now().strftime("%Y-%m-%d %H:%M:%S"),
+                "name_or_nick": (name or "").strip(),
+                "contact": (contact or "").strip(),
+                "category": category,
+                "rating": int(rating),
+                "message": (msg or "").strip(),
+                "page": (page_hint or st.session_state.get("_bm_current_tab","")).strip(),
+            }
+            try:
+                df = pd.read_csv(_FEEDBACK_CSV)
+            except Exception:
+                df = pd.DataFrame(columns=list(row.keys()))
+            df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
+            _atomic_save_csv(df, _FEEDBACK_CSV)
+            st.success("고맙습니다! 피드백이 저장되었습니다. (KST 기준)")
+
+def render_feedback_admin() -> None:
+    pwd = st.text_input("관리자 비밀번호", type="password", key="fb_admin_pwd")
+    admin_pw = st.secrets.get("ADMIN_PASS", "9047")
+    if admin_pw and pwd == admin_pw:
+        if os.path.exists(_FEEDBACK_CSV):
+            try:
+                df = pd.read_csv(_FEEDBACK_CSV)
+            except Exception:
+                df = pd.DataFrame(columns=["ts_kst","name_or_nick","contact","category","rating","message","page"])
+            st.dataframe(df, use_container_width=True)
+            st.download_button("CSV 다운로드", data=df.to_csv(index=False), file_name="feedback.csv", mime="text/csv", use_container_width=True)
+        else:
+            st.info("아직 피드백이 없습니다.")
+    else:
+        st.caption("올바른 비밀번호를 입력하면 목록이 표시됩니다." if admin_pw else "ADMIN_PASS가 설정되지 않았습니다.")
+
+def attach_feedback_sidebar(page_hint: str = "Sidebar") -> None:
+    with st.sidebar:
+        st.markdown("### 💬 의견 보내기")
+        set_current_tab_hint(page_hint or "Sidebar")
+        render_feedback_box(default_category="일반 의견", page_hint=page_hint or "Sidebar")
+        st.markdown("---")
+        render_feedback_admin()
+
+# ← 이 줄은 파일 ‘맨 아래’에 있어야 합니다.
+attach_feedback_sidebar(page_hint="Home")
+
+def _ss_setdefault(k, v):
+    try:
+        st.session_state.setdefault(k, v)
+    except Exception:
+        if k not in st.session_state:
+            st.session_state[k] = v
+# === mobile stability init ===
+_ss_setdefault('open_feedback_expander', False)
+_ss_setdefault('visited_today_counted', False)
+_ss_setdefault(wkey('home_fb_counts_cache'), {'1':0,'2':0,'3':0,'4':0,'5':0})
+_ss_setdefault(wkey('home_fb_log_cache'), [])
+# === end mobile stability init ===
+
+
+# ===== [/INLINE FEEDBACK] =====
+# ---- Tab auto-select (route sync hack) ----
+def _select_tab_by_label(label: str):
+    try:
+        import streamlit as st
+        st.markdown("""
+        <script>
+        (function(){
+          const trySelect = () => {
+            const tabs = window.parent.document.querySelectorAll('button[role="tab"]');
+            for (const t of tabs) {
+              if ((t.innerText || '').trim().startsWith(label)) { t.click(); return true; }
+            }
+            return false;
+          };
+          if (!trySelect()) { setTimeout(trySelect, 80); setTimeout(trySelect, 200); }
+        })();
+        </script>
+        """, unsafe_allow_html=True)
+    except Exception:
+        pass
+
+_label_by_route = {
+    "home": "🏠 홈",
+    "peds": "👶 소아 증상",
+    "dx": "🧬 암 선택",
+    "chemo": "💊 항암제(진단 기반)",
+    "labs": "🧪 피수치 입력",
+    "special": "🔬 특수검사",
+    "report": "📄 보고서",
+    "graph": "📊 기록/그래프",
+}
+_cur_route = st.session_state.get("_route")
+if _cur_route and _cur_route in _label_by_route and _cur_route != "home":
+    _select_tab_by_label(_label_by_route[_cur_route])
+# ---- End Tab auto-select ----
+
+
+
+
+# === [PATCH 2025-10-25] DEV GUARD + STUB INJECTOR ===
+def _is_dev() -> bool:
+    """Developer mode gate.
+    Enabled if any of:
+      - env BLOODMAP_DEV == "1"
+      - URL query param dev in {"1","true","yes"}
+      - session_state['dev_beta'] True (shown only when dev qp/env is present)
+    """
+    import os
+    try:
+        import streamlit as st
+    except Exception:
+        return False
+    if os.environ.get("BLOODMAP_DEV", "") == "1":
+        return True
+    try:
+        q = st.query_params.get("dev")
+    except Exception:
+        try:
+            q = (st.experimental_get_query_params().get("dev") or [""])[0]
+        except Exception:
+            q = ""
+    if isinstance(q, list):
+        q = q[0] if q else ""
+    if str(q).lower() in ("1","true","yes","y"):
+        return True
+    return bool(st.session_state.get("dev_beta", False))
+
+def _dev_inject_stubs():
+    """When not in dev, inject empty placeholder modules so dev imports do nothing."""
+    if _is_dev():
+        return
+    import sys, types
+    names = [
+        "features", "features_dev",
+        "features.dev", "features_dev.diag_panel",
+        "features.dev.diag_panel",
+        "features.app_legacy_stubs",
+        "features.app_shell",
+        "features.app_deprecator",
+        "features.app_router",
+    ]
+    for nm in names:
+        if nm not in sys.modules:
+            sys.modules[nm] = types.ModuleType(nm)
+
+try:
+    _dev_inject_stubs()
+except Exception:
+    pass
+
+def _maybe_render_dev_panels(st):
+    if not _is_dev():
+        return
+    # Diagnostics/dev-only panels (safe; errors suppressed)
+    try:
+        from features_dev.diag_panel import render_diag_panel as _diag
+        _diag(st)
+    except Exception:
+        pass
+    try:
+        from features.dev.diag_panel import render_diag_panel as _diag
+        _diag(st)
+    except Exception:
+        pass
+    try:
+        from features.app_legacy_stubs import initialize as _lgstub
+        _lgstub(st)
+    except Exception:
+        pass
+    try:
+        from features.app_shell import render_sidebar as _shell
+        _shell(st)
+    except Exception:
+        pass
+    try:
+        from features.app_deprecator import apply_lean_mode as _lean
+        _lean(st)
+    except Exception:
+        pass
+    try:
+        if st.session_state.get("_lean_mode", True):
+            from features.app_router import render_modular_sections as _mod
+            _mod(st, st.session_state.get("chemo_keys", []), globals().get("DRUG_DB", {}))
+    except Exception:
+        pass
+
+# Developer toggle block (append-only; not inside existing 'with' blocks)
+try:
+    import streamlit as st
+    if _is_dev():
+        with st.sidebar:
+            with st.expander("🔧 Developer", expanded=False):
+                st.toggle("개발자 모드(베타 패널)", value=bool(st.session_state.get("dev_beta", True)), key="dev_beta")
+                st.caption("※ URL에 ?dev=1 또는 환경변수 BLOODMAP_DEV=1일 때만 보입니다.")
+except Exception:
+    pass
+# === [/PATCH] ===
+
+
+
+# === [PATCH 2025-10-25] BETA ON/OFF MODE ===
+def _beta_enabled() -> bool:
+    try:
+        import streamlit as st
+        return bool(st.session_state.get("_beta_enabled", False))
+    except Exception:
+        return False
+
+def _set_beta(val: bool) -> None:
+    try:
+        import streamlit as st
+        st.session_state["_beta_enabled"] = bool(val)
+    except Exception:
+        pass
+
+# Monkeypatch expander: if beta OFF and title contains beta markers, SKIP body.
+try:
+    import streamlit as _st_beta
+except Exception:
+    _st_beta = None
+
+if _st_beta is not None and not getattr(_st_beta, "_beta_gate_installed", False):
+    try:
+        _orig_expander = getattr(_st_beta, "expander", None)
+
+        class _SkipCtx:
+            def __enter__(self):
+                raise RuntimeError("_beta_blocked")
+            def __exit__(self, exc_type, exc, tb):
+                return True  # suppress
+
+        def _expander_beta_guard(label, *args, **kwargs):
+            try:
+                text = str(label or "")
+            except Exception:
+                text = ""
+            if (not _beta_enabled()) and any(tok in text for tok in ("(β", "β)", "베타", "beta", "Beta")):
+                return _SkipCtx()
+            return _orig_expander(label, *args, **kwargs)
+
+        if callable(_orig_expander):
+            _st_beta.expander = _expander_beta_guard
+            _st_beta._beta_gate_installed = True
+    except Exception:
+        pass
+
+# Sidebar toggle (always visible)
+try:
+    import streamlit as st
+    with st.sidebar:
+        st.toggle("베타 패널 표시", value=bool(st.session_state.get("_beta_enabled", False)), key="_beta_enabled")
+        st.caption("이 스위치를 끄면 제목에 'β/베타/beta'가 포함된 패널은 숨겨집니다.")
+except Exception:
+    pass
+# === [/PATCH] ===
+
+
+
+# === [PATCH 2025-10-25] BETA PASSWORD GUARD ===
+def _beta_pass_file() -> str:
+    return "/mnt/data/.beta_password"
+
+def _beta_hash(s: str) -> str:
+    try:
+        import hashlib
+        return hashlib.sha256((s or "").encode("utf-8")).hexdigest()
+    except Exception:
+        return ""
+
+def _beta_password_is_set() -> bool:
+    try:
+        import os
+        if os.environ.get("BETA_PASSWORD"):
+            return True
+        return bool(os.path.exists(_beta_pass_file()))
+    except Exception:
+        return False
+
+def _beta_password_ok() -> bool:
+    try:
+        import os, streamlit as st
+        if not bool(st.session_state.get("_beta_enabled", False)):
+            return False
+        # Once validated for session, reuse
+        if bool(st.session_state.get("_beta_pwd_ok", False)):
+            return True
+        # Check env password first
+        env_pw = os.environ.get("BETA_PASSWORD")
+        if env_pw:
+            want = _beta_hash(env_pw)
+        else:
+            # read from file
+            try:
+                with open(_beta_pass_file(), "r", encoding="utf-8") as f:
+                    want = f.read().strip()
+            except Exception:
+                want = ""
+        typed = st.session_state.get("_beta_pwd_input") or ""
+        if want and _beta_hash(typed) == want:
+            st.session_state["_beta_pwd_ok"] = True
+            return True
+        return False
+    except Exception:
+        return False
+
+def _beta_password_sidebar():
+    # Renders password UI when beta toggle is ON. Allows first-time setup if not configured.
+    try:
+        import os, streamlit as st
+        with st.sidebar:
+            if not bool(st.session_state.get("_beta_enabled", False)):
+                return
+            st.markdown("**🔒 베타 패널 잠금**")
+            if _beta_password_is_set():
+                st.text_input("비밀번호 입력", type="password", key="_beta_pwd_input")
+                if _beta_password_ok():
+                    st.caption("✅ 인증됨 — 베타 패널이 표시됩니다.")
+                else:
+                    st.caption("❗ 비밀번호가 맞아야 베타 패널이 열립니다.")
+            else:
+                st.caption("처음 사용 — 비밀번호를 설정해주세요.")
+                st.text_input("새 비밀번호", type="password", key="_beta_pwd_new1")
+                st.text_input("새 비밀번호 확인", type="password", key="_beta_pwd_new2")
+                if st.button("비밀번호 설정", use_container_width=True):
+                    p1 = st.session_state.get("_beta_pwd_new1") or ""
+                    p2 = st.session_state.get("_beta_pwd_new2") or ""
+                    if p1 and (p1 == p2):
+                        try:
+                            with open(_beta_pass_file(), "w", encoding="utf-8") as f:
+                                f.write(_beta_hash(p1))
+                            st.success("설정 완료! 이제 비밀번호로 열 수 있습니다.")
+                        except Exception as e:
+                            st.error("저장 실패: 파일 쓰기 권한을 확인해주세요.")
+                    else:
+                        st.error("두 비밀번호가 일치하지 않습니다.")
+    except Exception:
+        pass
+
+# Strengthen expander guard to require BOTH toggle and password
+try:
+    import streamlit as _st_beta2
+except Exception:
+    _st_beta2 = None
+
+if _st_beta2 is not None and getattr(_st_beta2, "_beta_gate_installed", False):
+    try:
+        _orig_expander2 = getattr(_st_beta2, "expander", None)
+
+        class _SkipCtx2:
+            def __enter__(self):
+                raise RuntimeError("_beta_blocked")
+            def __exit__(self, exc_type, exc, tb):
+                return True
+
+        def _expander_beta_guard2(label, *args, **kwargs):
+            try:
+                text = str(label or "")
+            except Exception:
+                text = ""
+            markers = ("(β", "β)", "베타", "beta", "Beta")
+            needs_beta = any(tok in text for tok in markers)
+            # if it's a beta-marked expander, require both toggle and password
+            if needs_beta and not (_st_beta2.session_state.get("_beta_enabled") and _beta_password_ok()):
+                return _SkipCtx2()
+            return _orig_expander2(label, *args, **kwargs)
+
+        if callable(_orig_expander2):
+            _st_beta2.expander = _expander_beta_guard2
+            _st_beta2._beta_gate_installed = True
+    except Exception:
+        pass
+
+# Render password UI (append-only)
+try:
+    _beta_password_sidebar()
+except Exception:
+    pass
+# === [/PATCH] ===
+
+
+
+# === [PATCH 2025-10-25] BETA DENYLIST EXTENSION ===
+# Labels to always treat as beta content when beta is OFF
+_BETA_LABEL_DENYLIST = {
+    "ER 원페이지 PDF (소아)",
+    "내보내기(소아 요약)",
+}
+
+try:
+    import streamlit as _st_beta3
+except Exception:
+    _st_beta3 = None
+
+if _st_beta3 is not None and hasattr(_st_beta3, "expander"):
+    try:
+        _orig_expander3 = _st_beta3.expander
+
+        class _SkipCtx3:
+            def __enter__(self):
+                raise RuntimeError("_beta_blocked")
+            def __exit__(self, exc_type, exc, tb):
+                return True
+
+        def _expander_beta_guard3(label, *args, **kwargs):
+            try:
+                text = str(label or "")
+            except Exception:
+                text = ""
+            markers = ("(β", "β)", "베타", "beta", "Beta")
+            is_marked = any(tok in text for tok in markers)
+            in_deny = text in _BETA_LABEL_DENYLIST
+            # Require both toggle and password if marked or denylisted
+            try:
+                import streamlit as st
+                need_protect = is_marked or in_deny
+                if need_protect:
+                    enabled = bool(st.session_state.get("_beta_enabled", False))
+                    # _beta_password_ok may not exist; guard call
+                    ok = False
+                    try:
+                        ok = globals().get("_beta_password_ok", lambda: False)()
+                    except Exception:
+                        ok = False
+                    if not (enabled and ok):
+                        return _SkipCtx3()
+            except Exception:
+                pass
+            return _orig_expander3(label, *args, **kwargs)
+
+        # Install only once
+        if not getattr(_st_beta3, "_beta_gate_denylist_installed", False):
+            _st_beta3.expander = _expander_beta_guard3
+            _st_beta3._beta_gate_denylist_installed = True
+    except Exception:
+        pass
+# === [/PATCH] ===
+
+
+# === BM_ROUTE_WATCHDOG (EOF) ===
+try:
+    import streamlit as _st_guard
+    def __bm_guard_dx():
+        ss = _st_guard.session_state
+        # dx 컨텍스트 추정: 진단 관련 키가 살아있음
+        _dx_ctx = any(k in ss and ss.get(k) not in (None, "", []) for k in (
+            "group","disease","진단","암종","dx_group","dx_disease","selected_group","selected_disease"
+        ))
+        if _dx_ctx:
+            # 최근 라우트가 dx면 홈 강제 덮어쓰기를 즉시 되돌림
+            if ss.get("_route_last") == "dx" and ss.get("_route") == "home":
+                ss["_route"] = "dx"
+            # 최소한 last는 dx로 유지
+            ss["_route_last"] = "dx"
+    __bm_guard_dx()
+except Exception:
+    pass
+# === /BM_ROUTE_WATCHDOG ===
