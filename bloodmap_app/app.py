@@ -40,7 +40,24 @@ except Exception:
         except Exception:
             def _ae(drug_key: str, rec: dict | None = None):
                 import streamlit as st
-                st.markdown(f"- **{drug_key}**: 부작용 정보 준비 중")
+
+# safety: resolve_key polyfill & safe wrapper
+def resolve_key(x):
+    try:
+        return x.get('key') if isinstance(x, dict) and 'key' in x else str(x)
+    except Exception:
+        return str(x)
+
+def _safe_rk(x):
+    try:
+        return resolve_key(x)
+    except Exception:
+        try:
+            return x.get('key') if isinstance(x, dict) and 'key' in x else str(x)
+        except Exception:
+            return str(x)
+
+_BM_BOOT_MSG = "선택된 항암제의 부작용 정보를 불러오는 중입니다."
 
 # 소아 페이지 모듈 폴백
 try:
@@ -156,6 +173,13 @@ try:
 except Exception:
     pass
 # ---- End initial route bootstrap ----
+# ---- Early home-drop guard call (ensures we don't jump to 'home' unexpectedly) ----
+try:
+    _block_spurious_home()
+except Exception:
+    pass
+# ---- /Early home-drop guard call ----
+
 
 
 
@@ -275,7 +299,7 @@ html { scroll-behavior: smooth; }
 
 
 # --- HTML-only pediatric navigator (no rerun) ---
-def render_peds_nav_md():
+def render_peds_nav_html():
     from streamlit.components.v1 import html as _html
     _html("""
     <style>
@@ -1703,16 +1727,6 @@ def _aggregate_all_aes(meds, db):
 # CHEMO
 with t_chemo:
     st.subheader("항암제(진단 기반)")
-    # === ROUTE-STICKY (inside chemo tab) ===
-    try:
-        ss = st.session_state
-        if ss.get("_route") != "dx":
-            ss["_route"] = "dx"
-        if not ss.get("_route_last") or ss.get("_route_last") == "home":
-            ss["_route_last"] = "dx"
-    except Exception:
-        pass
-    # === /ROUTE-STICKY ===
     group = st.session_state.get("onco_group")
     disease = st.session_state.get("onco_disease")
     recs = st.session_state.get("recs_by_dx", {}) or {}
@@ -1869,7 +1883,7 @@ with t_chemo:
                 pass
 
             for k, arr in ae_map.items():
-                if resolve_key(k) in ("Cytarabine", "Ara-C"):
+                if _safe_rk(k) in ("Cytarabine", "Ara-C"):
                     continue
                 st.write(f"- **{label_map.get(k, str(k))}**")
                 if isinstance(arr, (list, tuple)):
@@ -3442,3 +3456,24 @@ if _st_beta3 is not None and hasattr(_st_beta3, "expander"):
     except Exception:
         pass
 # === [/PATCH] ===
+
+
+# === BM_ROUTE_WATCHDOG (EOF) ===
+try:
+    import streamlit as _st_guard
+    def __bm_guard_dx():
+        ss = _st_guard.session_state
+        # dx 컨텍스트 추정: 진단 관련 키가 살아있음
+        _dx_ctx = any(k in ss and ss.get(k) not in (None, "", []) for k in (
+            "group","disease","진단","암종","dx_group","dx_disease","selected_group","selected_disease"
+        ))
+        if _dx_ctx:
+            # 최근 라우트가 dx면 홈 강제 덮어쓰기를 즉시 되돌림
+            if ss.get("_route_last") == "dx" and ss.get("_route") == "home":
+                ss["_route"] = "dx"
+            # 최소한 last는 dx로 유지
+            ss["_route_last"] = "dx"
+    __bm_guard_dx()
+except Exception:
+    pass
+# === /BM_ROUTE_WATCHDOG ===
