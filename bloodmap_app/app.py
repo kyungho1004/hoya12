@@ -321,6 +321,12 @@ def render_peds_nav_html():
 
 
 # --- Markdown-based pediatric navigator (no rerun, no iframe) ---
+# [PATCH] Externalize PEDS quick section (safe call)
+try:
+    if pages_peds and hasattr(pages_peds, 'render_peds_tab_phase1'):
+        pages_peds.render_peds_tab_phase1(st)
+except Exception:
+    pass
 def render_peds_nav_md():
     import streamlit as st
     st.markdown("""
@@ -1866,7 +1872,7 @@ with t_chemo:
 
         # === [/PATCH] ===
 
-        if ae_map:
+        if ae_map and not _used_shared_renderer:
             # --- Ara-C 제형 선택(IV/SC/HDAC) ---
             try:
                 from ae_resolve import resolve_key, get_ae, get_checks
@@ -2760,6 +2766,15 @@ with t_report:
 
             if meds:
                 ae_map = _aggregate_all_aes(meds, DRUG_DB)
+                # [PATCH] Shared AE renderer pre-hook
+                try:
+                    import ui_results as _ui
+                    if hasattr(_ui, 'render_adverse_effects'):
+                        _ui.render_adverse_effects(st)
+                        _used_shared_renderer = True
+                except Exception:
+                    pass
+                
                 if ae_map:
                     lines.append("## 항암제 부작용(전체)")
                     for k, arr in ae_map.items():
