@@ -2902,7 +2902,7 @@ except Exception:
 
     if not picks:
         st.info("표시할 항목을 선택하세요.")
-        return
+        st.stop()
 
     # 플롯
     if plt is None:
