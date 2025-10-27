@@ -1898,6 +1898,17 @@ _block_spurious_home()
 
 # PEDS
 with t_peds:
+    # [PATCH] 케어로그 패널: PEDS 탭 내부 + 중복 방지
+    try:
+        ss = st.session_state
+        if not ss.get("_cl_rendered"):
+            st.markdown("### 📝 케어 로그")
+            if care_log_ui:
+                care_log_ui.render(st, wkey=wkey if 'wkey' in globals() else (lambda x: x),
+                                   profile=globals().get('profile'))
+            ss["_cl_rendered"] = True
+    except Exception:
+        pass
     st.subheader("소아 증상 기반 점수 + 보호자 설명 + 해열제 계산")
     render_peds_nav_md()
     c1, c2, c3, c4, c5 = st.columns(5)
