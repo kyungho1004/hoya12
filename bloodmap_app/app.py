@@ -1,27 +1,3 @@
-
-# [PATCH] safe import for router
-try:
-    import router
-except Exception:
-    router = None
-
-# [PATCH] safe import for care_log_ui
-try:
-    import care_log_ui
-except Exception:
-    care_log_ui = None
-
-# [PATCH] safe import for graph_io
-try:
-    import graph_io
-except Exception:
-    graph_io = None
-
-# [PATCH] safe import for alerts
-try:
-    import alerts
-except Exception:
-    alerts = None
 # === PATCH-LOCK: classic hard lock + safety fallbacks ===
 from datetime import timedelta, timezone as _tz
 import os, sys, types
@@ -65,12 +41,22 @@ except Exception:
             def _ae(drug_key: str, rec: dict | None = None):
                 import streamlit as st
 
-# minimal polyfill to avoid NameError (kept lean)
+# safety: resolve_key polyfill & safe wrapper
 def resolve_key(x):
     try:
         return x.get('key') if isinstance(x, dict) and 'key' in x else str(x)
     except Exception:
         return str(x)
+
+def _safe_rk(x):
+    try:
+        return resolve_key(x)
+    except Exception:
+        try:
+            return x.get('key') if isinstance(x, dict) and 'key' in x else str(x)
+        except Exception:
+            return str(x)
+
 _BM_BOOT_MSG = "선택된 항암제의 부작용 정보를 불러오는 중입니다."
 
 # 소아 페이지 모듈 폴백
@@ -100,6 +86,7 @@ except Exception:
 # === /PATCH-CSS ===
 
 
+# ---- HomeBlocker v1 ----
 def _block_spurious_home():
     ss = st.session_state
     cur = ss.get("_route") or "home"
@@ -122,8 +109,10 @@ def _block_spurious_home():
     except Exception:
         pass
 
+# ---- End HomeBlocker v1 ----
 
 
+# ---- Hard redirect guard v2 (pre-render; URL-only hydrate, safer) ----
 try:
     import streamlit as st  # ultra-early
     def __hr_qp(name: str) -> str:
@@ -155,8 +144,10 @@ try:
                 st.rerun()
 except Exception:
     pass
+# ---- End hard redirect guard v2 ----
 
 
+# ---- Initial route bootstrap (anti first-click→home) ----
 try:
     import streamlit as st
     ss = st.session_state
@@ -181,10 +172,13 @@ try:
             st.rerun()
 except Exception:
     pass
+# ---- End initial route bootstrap ----
+# ---- Early home-drop guard call (ensures we don't jump to 'home' unexpectedly) ----
 try:
     _block_spurious_home()
 except Exception:
     pass
+# ---- /Early home-drop guard call ----
 
 
 
@@ -234,6 +228,7 @@ if "wkey" not in globals():
             return str(x)
 
 # ===== End import guard =====
+# ---- Onco import shim (robust) ----
 import sys
 from pathlib import Path
 try:
@@ -277,6 +272,7 @@ except Exception:
         build_onco_map = getattr(_onco, "build_onco_map", lambda: {})
         auto_recs_by_dx = getattr(_onco, "auto_recs_by_dx",
                                   lambda *a, **k: {"chemo": [], "targeted": [], "abx": []})
+# ---- End Onco import shim ----
 import datetime as _dt
 from zoneinfo import ZoneInfo as _ZoneInfo
 KST = _ZoneInfo("Asia/Seoul")
@@ -299,8 +295,10 @@ html { scroll-behavior: smooth; }
 </style>
 """, unsafe_allow_html=True)
 
+# --- in-place smooth scroll (no rerun) ---
 
 
+# --- HTML-only pediatric navigator (no rerun) ---
 def render_peds_nav_html():
     from streamlit.components.v1 import html as _html
     _html("""
@@ -318,9 +316,11 @@ def render_peds_nav_html():
         <button onclick="document.getElementById('peds_respiratory')?.scrollIntoView({behavior:'smooth',block:'start'})">🫁 가래·쌕쌕</button>
     </div>
     """, height=70)
+# --- /HTML-only pediatric navigator ---
 
 
 
+# --- Markdown-based pediatric navigator (no rerun, no iframe) ---
 def render_peds_nav_md():
     import streamlit as st
     st.markdown("""
@@ -333,6 +333,7 @@ def render_peds_nav_md():
       <a href="#peds_respiratory">🫁 가래·쌕쌕</a>
     </div>
     """, unsafe_allow_html=True)
+# --- /Markdown-based pediatric navigator ---
 
 def _scroll_now(target: str):
     from streamlit.components.v1 import html as _html
@@ -346,7 +347,9 @@ def _scroll_now(target: str):
     }})();
     </script>
     """, height=0)
+# --- /in-place smooth scroll ---
 
+# --- Session defaults to prevent NameError on first load ---
 if 'peds_notes' not in st.session_state:
     st.session_state['peds_notes'] = ''
 if 'peds_actions' not in st.session_state:
@@ -355,6 +358,7 @@ if 'peds_actions' not in st.session_state:
 
 APP_VERSION = "항상 여러분들의 힘이 되도록 노력하겠습니다. 여러분들의 피드백이 업데이트에 많은 도움이 됩니다"
 
+# ---------- Safe Import Helper ----------
 def _load_local_module(mod_name: str, rel_paths):
     here = Path(__file__).resolve().parent
     for rel in rel_paths:
@@ -371,6 +375,7 @@ def _load_local_module(mod_name: str, rel_paths):
     except Exception:
         return None, None
 
+# ---------- Optional modules with graceful fallback ----------
 _branding, BRANDING_PATH = _load_local_module("branding", ["branding.py", "modules/branding.py"])
 if _branding and hasattr(_branding, "render_deploy_banner"):
     render_deploy_banner = _branding.render_deploy_banner
@@ -445,6 +450,7 @@ else:
         st.warning("special_tests.py를 찾지 못해, 특수검사 UI는 더미로 표시됩니다.")
         return []
 
+# --- plotting backend (matplotlib → st.line_chart → 표 폴백) ---
 try:
     import matplotlib.pyplot as plt
     _HAS_MPL = True
@@ -452,25 +458,9 @@ except Exception:
     plt = None
     _HAS_MPL = False
 
+# ---------- Page & Banner ----------
 st.set_page_config(page_title=f"Bloodmap {APP_VERSION}", layout="wide")
 st.title(f"Bloodmap {APP_VERSION}")
-
-
-
-
-# [PATCH] 케어로그 UI 래퍼(추가 패널)
-try:
-    if care_log_ui:
-        care_log_ui.render(st, wkey=wkey if 'wkey' in globals() else (lambda x: x), profile=globals().get('profile'))
-except Exception:
-    pass
-# [PATCH] 🚨 위험배너(전역)
-try:
-    if alerts:
-        alerts.render_risk_banner(st)
-except Exception:
-    pass
-
 st.markdown(
     """> In memory of Eunseo, a little star now shining in the sky.
 > This app is made with the hope that she is no longer in pain,
@@ -480,6 +470,7 @@ st.markdown("---")
 render_deploy_banner("https://bloodmap.streamlit.app/", "제작: Hoya/GPT · 자문: Hoya/GPT")
 st.caption(f"모듈 경로 — special_tests: {SPECIAL_PATH or '(not found)'} | onco_map: {ONCO_PATH or '(not found)'} | drug_db: {DRUGDB_PATH or '(not found)'}")
 
+# ---------- Helpers ----------
 def wkey(name: str) -> str:
     who = st.session_state.get("key", "guest#PIN")
     return f"{who}:{name}"
@@ -509,6 +500,7 @@ def _safe_float(v, default=0.0):
     except Exception:
         return default
 
+# ---------- Emergency scoring (Weights + Presets) ----------
 DEFAULT_WEIGHTS = {
     "w_anc_lt500": 1.0, "w_anc_500_999": 1.0,
     "w_temp_38_0_38_4": 1.0, "w_temp_ge_38_5": 1.0,
@@ -612,9 +604,11 @@ def emergency_level(labs: dict, temp_c, hr, symptoms: dict):
     level = "🚨 응급" if risk >= 5 else ("🟧 주의" if risk >= 2 else "🟢 안심")
     return level, reasons, contrib
 
+# ---------- Preload ----------
 ensure_onco_drug_db(DRUG_DB)
 ONCO = build_onco_map() or {}
 
+# ---------- Sidebar ----------
 with st.sidebar:
     st.header("프로필")
     raw_key = st.text_input("별명#PIN (또는 별명만)", value=st.session_state.get("key", "guest#PIN"), key="user_key_raw")
@@ -671,6 +665,7 @@ with st.sidebar:
     st.session_state[wkey("is_peds")] = is_peds
     st.caption(("현재 모드: **소아**" if is_peds else "현재 모드: **성인**") + (" (자동)" if not manual_override else " (수동)"))
 
+# ---------- Caregiver notes ----------
 def render_caregiver_notes_peds(
     *,
     stool,
@@ -887,6 +882,7 @@ def build_peds_notes(
         lines.append("(특이 소견 없음)")
     return "\\n".join(lines)
 
+# ---------- Tabs ----------
 tab_labels = ["🏠 홈", "👶 소아 증상", "🧬 암 선택", "💊 항암제(진단 기반)", "🧪 피수치 입력", "🔬 특수검사", "📄 보고서", "📊 기록/그래프"]
 t_home, t_peds, t_dx, t_chemo, t_labs, t_special, t_report, t_graph = st.tabs(tab_labels)
 
@@ -1510,6 +1506,7 @@ with t_labs:
 # DX
 with t_dx:
 
+    # ---- DX label fallbacks (avoid NameError) ----
     try:
         DX_KO  # type: ignore
     except NameError:
@@ -1525,6 +1522,7 @@ with t_dx:
             from onco_map import _norm as _dx_norm  # if module exposes it
         except Exception:
             _dx_norm = lambda s: s
+    # ---- End fallbacks ----
     st.subheader("암 선택")
     if not ONCO:
         st.warning("onco_map 이 로드되지 않아 기본 목록이 비어있습니다. onco_map.py를 같은 폴더나 modules/ 에 두세요.")
@@ -1574,14 +1572,6 @@ with t_dx:
                        or st.session_state.get("onco_disease_sel_candidate"))
     disp = None
     try:
-        
-        # [PATCH] DX 라우팅 가드 (추가)
-        try:
-            if router:
-                router.lock_route("dx")
-                router.sync_query("dx")
-        except Exception:
-            pass
         disp = dx_display(group, disease)
     except Exception as _e:
         try:
@@ -1610,6 +1600,7 @@ with t_dx:
             st.write(f"- {cat}: " + ", ".join(arr))
     st.session_state["recs_by_dx"] = recs
 
+# ---------- Chemo helpers ----------
 def _to_set_or_empty(x):
     s = set()
     if not x:
@@ -1814,6 +1805,7 @@ with t_chemo:
 
         ae_map = _aggregate_all_aes(picked_keys, DRUG_DB)
         st.markdown("### 항암제 부작용(전체)")
+        # === [PATCH 2025-10-22 KST] Use shared renderer if available ===
         try:
             from ui_results_final import render_adverse_effects as _render_aes_shared
         except Exception:
@@ -1829,24 +1821,31 @@ with t_chemo:
                 _used_shared_renderer = False
         else:
             _used_shared_renderer = False
+        # === [PATCH] Diagnostics panel (Phase 28 ALT) ===
         try:
             from features_dev.diag_panel import render_diag_panel as _diag
             _diag(st)
         except Exception:
             pass
+        # === [/PATCH] ===
 
+        # === [PATCH] Diagnostics panel (Phase 28) ===
         try:
             from features.dev.diag_panel import render_diag_panel as _diag
             _diag(st)
         except Exception:
             pass
+        # === [/PATCH] ===
 
+        # === [PATCH] Lean legacy stubs attach (Phase 25) ===
         try:
             from features.app_legacy_stubs import initialize as _lgstub
             _lgstub(st)
         except Exception:
             pass
+        # === [/PATCH] ===
 
+        # === [PATCH] App shell & lean-mode (Phase 24) ===
         try:
             from features.app_shell import render_sidebar as _shell
             _shell(st)
@@ -1863,9 +1862,12 @@ with t_chemo:
                 _mod(st, picked_keys, DRUG_DB)
         except Exception:
             pass
+        # === [/PATCH] ===
 
+        # === [/PATCH] ===
 
         if ae_map:
+            # --- Ara-C 제형 선택(IV/SC/HDAC) ---
             try:
                 from ae_resolve import resolve_key, get_ae, get_checks
                 from drug_db import display_label
@@ -1881,7 +1883,7 @@ with t_chemo:
                 pass
 
             for k, arr in ae_map.items():
-                if resolve_key(k) in ("Cytarabine", "Ara-C"):
+                if _safe_rk(k) in ("Cytarabine", "Ara-C"):
                     continue
                 st.write(f"- **{label_map.get(k, str(k))}**")
                 if isinstance(arr, (list, tuple)):
@@ -1898,17 +1900,6 @@ _block_spurious_home()
 
 # PEDS
 with t_peds:
-    # [PATCH] 케어로그 패널: PEDS 탭 내부 + 중복 방지
-    try:
-        ss = st.session_state
-        if not ss.get("_cl_rendered"):
-            st.markdown("### 📝 케어 로그")
-            if care_log_ui:
-                care_log_ui.render(st, wkey=wkey if 'wkey' in globals() else (lambda x: x),
-                                   profile=globals().get('profile'))
-            ss["_cl_rendered"] = True
-    except Exception:
-        pass
     st.subheader("소아 증상 기반 점수 + 보호자 설명 + 해열제 계산")
     render_peds_nav_md()
     c1, c2, c3, c4, c5 = st.columns(5)
@@ -2203,6 +2194,7 @@ st.markdown("---")
 st.markdown("## 👶 소아 퀵 섹션 (GI/호흡기)")
 st.caption("필요한 것만 펼쳐서 확인하세요. 아래 각 섹션은 보고서/해열제 계산과 연동됩니다.")
 
+# --- Anchors ---
 st.markdown('<div id="peds_constipation"></div>', unsafe_allow_html=True)
 st.markdown('<div id="peds_diarrhea"></div>', unsafe_allow_html=True)
 st.markdown('<div id="peds_vomit"></div>', unsafe_allow_html=True)
@@ -2210,6 +2202,7 @@ st.markdown('<div id="peds_antipyretic"></div>', unsafe_allow_html=True)
 st.markdown('<div id="peds_ors"></div>', unsafe_allow_html=True)
 st.markdown('<div id="peds_respiratory"></div>', unsafe_allow_html=True)
 
+# --- 변비 ---
 with st.expander("🧻 변비 체크", expanded=False):
     try:
         render_section_constipation()
@@ -2218,6 +2211,7 @@ with st.expander("🧻 변비 체크", expanded=False):
         st.write("- 수분/수유 자주, 식이섬유(과일·채소·전곡), 식후 5~10분 배변 루틴")
         st.write("- 3일 이상/배변 시 통증/혈변/복부팽만/구토 동반 시 진료")
 
+# --- 설사 ---
 with st.expander("💦 설사 체크", expanded=False):
     try:
         render_section_diarrhea()
@@ -2226,6 +2220,7 @@ with st.expander("💦 설사 체크", expanded=False):
         st.write("- ORS를 5~10분마다 소량씩, 기름진 음식·우유 일시 제한")
         st.write("- 혈변/검은변, 고열, 소변 감소·축 늘어짐 → 진료")
 
+# --- 구토 ---
 with st.expander("🤢 구토 체크", expanded=False):
     try:
         render_section_vomit()
@@ -2233,6 +2228,7 @@ with st.expander("🤢 구토 체크", expanded=False):
         st.info("상세 구토 체크 모듈을 불러오지 못했습니다. 아래 요약 가이드를 참고하세요.")
         st.write("- 10~15분마다 소량 수분, 초록/커피색/혈토 → 즉시 진료")
 
+# --- 해열제 ---
 with st.expander("🌡️ 해열제 가이드/계산", expanded=False):
     try:
         ap_ml_1, ap_ml_max = acetaminophen_ml(st.session_state.get(wkey("wt_peds"), 0.0))
@@ -2242,6 +2238,7 @@ with st.expander("🌡️ 해열제 가이드/계산", expanded=False):
     st.write(f"- 아세트아미노펜(160mg/5mL): **{ap_ml_1:.1f} mL** (최대 {ap_ml_max:.1f} mL) — 최소 간격 **4h**")
     st.write(f"- 이부프로펜(100mg/5mL): **{ib_ml_1:.1f} mL** (최대 {ib_ml_max:.1f} mL) — 최소 간격 **6h**")
     
+# --- P1-2: Antipyretic schedule chain (.ics + care hint) ---
 import datetime as _dt
 from zoneinfo import ZoneInfo as _ZoneInfo
 import tempfile as _tmp
@@ -2331,8 +2328,10 @@ ap24 = st.session_state.get(wkey("apap_ml_24h"), 0.0)
 ib24 = st.session_state.get(wkey("ibu_ml_24h"), 0.0)
 if ap24 > 0 or ib24 > 0:
     st.caption(f"24시간 누적(세션 기준): APAP {ap24:.1f} mL / IBU {ib24:.1f} mL")
+# --- /P1-2 ---
 st.caption("※ 금기/주의 질환은 반드시 의료진 지시를 따르세요. 중복 복용 주의.")
 
+# --- ORS/탈수 ---
 with st.expander("🥤 ORS/탈수 가이드", expanded=False):
     with st.expander("🏠 ORS 집에서 만드는 법(WHO 권장 비율)", expanded=False):
         st.markdown("**재료 (1 L 기준)**")
@@ -2352,6 +2351,7 @@ with st.expander("🥤 ORS/탈수 가이드", expanded=False):
     st.write("- 2시간 이상 소변 없음/입마름/눈물 감소/축 늘어짐 → 진료")
     st.write("- 가능하면 스포츠음료 대신 **ORS** 용액 사용")
 
+# --- 가래/쌕쌕 ---
 with st.expander("🫁 가래/쌕쌕(천명) 가이드", expanded=False):
     st.write("- 생리식염수 분무/흡인, 수면 시 머리 살짝 높이기")
     st.write("- 쌕쌕/호흡곤란/청색증 → 즉시 응급평가")
@@ -2414,6 +2414,7 @@ with t_special:
     else:
         st.info("아직 입력/선택이 없습니다.")
 
+# ---------- QR helper ----------
 def _build_hospital_summary():
     key_id = st.session_state.get("key", "(미설정)")
     labs = st.session_state.get("labs_dict", {}) or {}
@@ -2506,6 +2507,7 @@ with t_report:
 
     col_report, col_side = st.columns([2, 1])
 
+    # ---------- 오른쪽: 기록/그래프/내보내기 ----------
     with col_side:
         st.markdown("### 📊 기록/그래프 패널")
 
@@ -2677,6 +2679,7 @@ with t_report:
                 st.download_button("CSV 다운로드", data=output.getvalue().encode("utf-8"), file_name="bloodmap_history.csv", mime="text/csv")
                 st.caption("팁: 기간 필터를 지정해 필요한 구간만 내보낼 수 있습니다.")
 
+    # ---------- 왼쪽: 보고서 본문 ----------
     with col_report:
         use_dflt = st.checkbox("기본(모두 포함)", True, key=wkey("rep_all"))
         colp1, colp2 = st.columns(2)
@@ -2828,6 +2831,7 @@ with t_report:
             st.caption("PDF 변환 모듈을 불러오지 못했습니다. .md 또는 .txt를 사용해주세요.")
 
 
+# ---------------- Graph/Log Panel (separate tab) ----------------
 def render_graph_panel():
 
     import os, io, datetime as _dt
@@ -2841,17 +2845,6 @@ def render_graph_panel():
     st.markdown("### 📊 기록/그래프(파일 + 세션기록)")
 
     base_dir = "/mnt/data/bloodmap_graph"
-
-# [PATCH] graph_io hook (non-destructive): if uid/fig/df available, perform extra save
-try:
-    _uid = st.session_state.get("uid") or st.session_state.get("pin_user") or st.session_state.get("profile_name")
-    _fig = locals().get("fig") or st.session_state.get("last_fig")
-    _df  = locals().get("df") or st.session_state.get("last_df")
-    if graph_io and _uid:
-        graph_io.save(_uid, _fig, _df)
-except Exception:
-    pass
-
     try:
         os.makedirs(base_dir, exist_ok=True)
     except Exception:
@@ -2901,8 +2894,7 @@ except Exception:
                     pass
 
     if df is None:
-        st.stop()
-
+        return
 
     # 시간축 정렬/정규화
     time_col = None
@@ -2941,7 +2933,7 @@ except Exception:
 
     if not picks:
         st.info("표시할 항목을 선택하세요.")
-        st.stop()
+        return
 
     # 플롯
     if plt is None:
@@ -3088,6 +3080,7 @@ _ss_setdefault(wkey('home_fb_log_cache'), [])
 
 
 # ===== [/INLINE FEEDBACK] =====
+# ---- Tab auto-select (route sync hack) ----
 def _select_tab_by_label(label: str):
     try:
         import streamlit as st
@@ -3121,10 +3114,12 @@ _label_by_route = {
 _cur_route = st.session_state.get("_route")
 if _cur_route and _cur_route in _label_by_route and _cur_route != "home":
     _select_tab_by_label(_label_by_route[_cur_route])
+# ---- End Tab auto-select ----
 
 
 
 
+# === [PATCH 2025-10-25] DEV GUARD + STUB INJECTOR ===
 def _is_dev() -> bool:
     """Developer mode gate.
     Enabled if any of:
@@ -3221,9 +3216,11 @@ try:
                 st.caption("※ URL에 ?dev=1 또는 환경변수 BLOODMAP_DEV=1일 때만 보입니다.")
 except Exception:
     pass
+# === [/PATCH] ===
 
 
 
+# === [PATCH 2025-10-25] BETA ON/OFF MODE ===
 def _beta_enabled() -> bool:
     try:
         import streamlit as st
@@ -3277,9 +3274,11 @@ try:
         st.caption("이 스위치를 끄면 제목에 'β/베타/beta'가 포함된 패널은 숨겨집니다.")
 except Exception:
     pass
+# === [/PATCH] ===
 
 
 
+# === [PATCH 2025-10-25] BETA PASSWORD GUARD ===
 def _beta_pass_file() -> str:
     return "/mnt/data/.beta_password"
 
@@ -3398,9 +3397,11 @@ try:
     _beta_password_sidebar()
 except Exception:
     pass
+# === [/PATCH] ===
 
 
 
+# === [PATCH 2025-10-25] BETA DENYLIST EXTENSION ===
 # Labels to always treat as beta content when beta is OFF
 _BETA_LABEL_DENYLIST = {
     "ER 원페이지 PDF (소아)",
@@ -3454,6 +3455,7 @@ if _st_beta3 is not None and hasattr(_st_beta3, "expander"):
             _st_beta3._beta_gate_denylist_installed = True
     except Exception:
         pass
+# === [/PATCH] ===
 
 
 # === BM_ROUTE_WATCHDOG (EOF) ===
