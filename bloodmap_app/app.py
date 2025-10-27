@@ -1,5 +1,4 @@
 # === PATCH-LOCK: classic hard lock + safety fallbacks ===
-import streamlit as st
 from datetime import timedelta, timezone as _tz
 import os, sys, types
 
@@ -42,52 +41,6 @@ except Exception:
             def _ae(drug_key: str, rec: dict | None = None):
                 import streamlit as st
 
-def _route_get():
-    r = None
-    try:
-        r = st.query_params.get("r")
-        if isinstance(r, list):
-            r = r[0] if r else None
-    except Exception:
-        try:
-            r = st.experimental_get_query_params().get("r", [None])[0]
-        except Exception:
-            r = None
-    return r or st.session_state.get("_route") or "home"
-
-def _route_set(route: str):
-    st.session_state["_route"] = route
-    try:
-        st.query_params["r"] = route
-    except Exception:
-        pass
-
-# 사용자가 의도하지 않은 홈 튐 방지:
-# - _nav_lock 이 True면 어떤 네비게이션도 무시
-# - _allow_home_nav 이 False면 home 이동 무시
-def goto(route: str):
-    if st.session_state.get("_nav_lock", False):
-        return
-    if route == "home" and not st.session_state.get("_allow_home_nav", False):
-        # block unintended bounce to home
-        return
-    _route_set(route)
-    try:
-        st.rerun()
-    except Exception:
-        pass
-
-def route_safe_set(route: str):
-    if st.session_state.get("_nav_lock", False):
-        return
-    _route_set(route)
-
-if "_route" not in st.session_state:
-    st.session_state["_route"] = _route_get()
-if "_nav_lock" not in st.session_state:
-    st.session_state["_nav_lock"] = False
-if "_allow_home_nav" not in st.session_state:
-    st.session_state["_allow_home_nav"] = False
 # minimal polyfill to avoid NameError (kept lean)
 def resolve_key(x):
     try:
@@ -3450,3 +3403,12 @@ try:
 except Exception:
     pass
 # === /BM_ROUTE_WATCHDOG ===
+
+
+# --- route tail tracker ---
+try:
+    st.session_state["_route_last"] = st.session_state.get("_route")
+except Exception:
+    pass
+# --- /route tail tracker ---
+
