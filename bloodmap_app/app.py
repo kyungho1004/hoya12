@@ -1,3 +1,15 @@
+
+# [PATCH] safe import for graph_io
+try:
+    import graph_io
+except Exception:
+    graph_io = None
+
+# [PATCH] safe import for alerts
+try:
+    import alerts
+except Exception:
+    alerts = None
 # === PATCH-LOCK: classic hard lock + safety fallbacks ===
 from datetime import timedelta, timezone as _tz
 import os, sys, types
@@ -430,6 +442,15 @@ except Exception:
 
 st.set_page_config(page_title=f"Bloodmap {APP_VERSION}", layout="wide")
 st.title(f"Bloodmap {APP_VERSION}")
+
+
+# [PATCH] 🚨 위험배너(전역)
+try:
+    if alerts:
+        alerts.render_risk_banner(st)
+except Exception:
+    pass
+
 st.markdown(
     """> In memory of Eunseo, a little star now shining in the sky.
 > This app is made with the hope that she is no longer in pain,
@@ -2781,6 +2802,17 @@ def render_graph_panel():
     st.markdown("### 📊 기록/그래프(파일 + 세션기록)")
 
     base_dir = "/mnt/data/bloodmap_graph"
+
+# [PATCH] graph_io hook (non-destructive): if uid/fig/df available, perform extra save
+try:
+    _uid = st.session_state.get("uid") or st.session_state.get("pin_user") or st.session_state.get("profile_name")
+    _fig = locals().get("fig") or st.session_state.get("last_fig")
+    _df  = locals().get("df") or st.session_state.get("last_df")
+    if graph_io and _uid:
+        graph_io.save(_uid, _fig, _df)
+except Exception:
+    pass
+
     try:
         os.makedirs(base_dir, exist_ok=True)
     except Exception:
@@ -2830,7 +2862,8 @@ def render_graph_panel():
                     pass
 
     if df is None:
-        return
+        st.stop()
+
 
     # 시간축 정렬/정규화
     time_col = None
