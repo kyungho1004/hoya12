@@ -1648,98 +1648,6 @@ def check_chemo_interactions(keys):
             notes.append(f"- {k} [경고]: {m['warning']}")
     return warns, notes
 
-
-# === Ara-C formulation selector (IV / SC / HDAC) ===
-def _find_arac_keys(db: dict):
-    def norm(s: str) -> str:
-        return re.sub(r"[^a-z0-9]+", "", str(s).lower())
-    keys = list(db.keys()) if isinstance(db, dict) else []
-    # Map by heuristic tokens
-    found = {"iv": None, "sc": None, "hdac": None, "generic": None}
-    for k in keys:
-        nk = norm(k)
-        if any(t in nk for t in ["cytarabine", "arac", "ara-c", "aracytidine"]):
-            if found["generic"] is None:
-                found["generic"] = k
-            if "hdac" in nk or "highdose" in nk or "hiDAC".lower() in nk:
-                found["hdac"] = k
-            if "iv" in nk or "intravenous" in nk:
-                found["iv"] = k
-            if "sc" in nk or "subcut" in nk or "subcutaneous" in nk:
-                found["sc"] = k
-    # Fallbacks: try to synthesize common variants if exact not present
-    base = found["generic"] or "Cytarabine"
-    for form, suffix in [("iv", " IV"), ("sc", " SC"), ("hdac", " HDAC")]:
-        if found[form] is None:
-            candidate = f"{base}{suffix}"
-            if isinstance(db, dict) and candidate in db:
-                found[form] = candidate
-    return found
-
-def render_arac_wrapper(title: str = "Ara-C 제형 선택", default: str = "Cytarabine"):
-    import streamlit as st
-    # DRUG_DB may be missing; guard
-    db = globals().get("DRUG_DB", {}) if isinstance(globals().get("DRUG_DB"), dict) else {}
-    found = _find_arac_keys(db)
-    # Build options only for available keys
-    opts = []
-    mapping = {}
-    if found.get("iv"):
-        opts.append("정맥(IV)")
-        mapping["정맥(IV)"] = found["iv"]
-    if found.get("sc"):
-        opts.append("피하(SC)")
-        mapping["피하(SC)"] = found["sc"]
-    if found.get("hdac"):
-        opts.append("고용량(HDAC)")
-        mapping["고용량(HDAC)"] = found["hdac"]
-    # Fallback to generic if none resolved
-    if not opts:
-        generic = found.get("generic") or default
-        opts = ["일반"]
-        mapping["일반"] = generic
-    # Persist selection per user
-    key_sel = wkey("arac_formulation")
-    prev_label = st.session_state.get(key_sel)
-    if prev_label not in opts:
-        # choose sensible default order preference
-        init = "정맥(IV)" if "정맥(IV)" in opts else (opts[0] if opts else None)
-        if init:
-            st.session_state[key_sel] = init
-    st.radio(title, opts, key=key_sel, horizontal=True)
-    label = st.session_state.get(key_sel, opts[0])
-    picked_key = mapping.get(label, mapping[opts[0]])
-    st.session_state["arac_picked_key"] = picked_key
-    return picked_key
-# === /Ara-C formulation selector ===
-
-
-def _infer_chemo_keys_from_onco(group, disease, ONCO):
-    try:
-        node = (ONCO or {}).get(group, {}).get(disease, {})
-    except Exception:
-        node = {}
-    keys = []
-    def pull(obj):
-        if obj is None: return
-        if isinstance(obj, (list, tuple, set)):
-            for v in obj: pull(v)
-        elif isinstance(obj, dict):
-            for k in ("chemo","drugs","regimen","agents","list","items"):
-                if k in obj: pull(obj.get(k))
-            for v in obj.values(): pull(v)
-        else:
-            s = str(obj).strip()
-            if s and len(s) <= 64:
-                keys.append(s)
-    pull(node)
-    uniq, seen = [], set()
-    for k in keys:
-        if isinstance(k, str) and k not in seen:
-            seen.add(k); uniq.append(k)
-    filt = [k for k in uniq if any(t in k.lower() for t in ("mab","ib","ine","ab","ara","cytarab","mtx","mercap","regorafenib","imatinib","sunitinib","ripretinib","bevacizumab","bleomycin","bendamustine","alectinib","5-fu","fluorouracil","ara-c")) or len(k.split())<=3]
-    return filt[:12]
-
 def _aggregate_all_aes(meds, db):
     result = {}
     if not isinstance(meds, (list, tuple)) or not meds:
@@ -1795,45 +1703,6 @@ def _aggregate_all_aes(meds, db):
 # CHEMO
 with t_chemo:
     st.subheader("항암제(진단 기반)")
-    # === 🖥️ 모니터 (디버그/상태 표시 · 항상 표시) ===
-    with st.expander("🖥️ 모니터", expanded=True):
-        try:
-            qp = {}
-            try:
-                qp = dict(st.query_params)
-            except Exception:
-                qp = st.experimental_get_query_params()
-            st.write({
-                "route": st.session_state.get("_route"),
-                "route_last": st.session_state.get("_route_last"),
-                "group": st.session_state.get("onco_group"),
-                "disease": st.session_state.get("onco_disease"),
-                "picked_chemo": st.session_state.get("chemo_keys"),
-                "arac_selected": st.session_state.get("arac_picked_key"),
-                "query_params": qp,
-            })
-        try:
-            if not st.session_state.get("picked_keys"):
-                grp = st.session_state.get("onco_group")
-                dis = st.session_state.get("onco_disease")
-                pk = _infer_chemo_keys_from_onco(grp, dis, ONCO)
-                if pk:
-                    st.session_state["picked_keys"] = pk
-                    st.info(f"ONCO 맵에서 약물 자동 추론: {pk}")
-        except Exception as _e:
-            st.caption(f"(자동추론 예외: {_e})")
-        try:
-            _pk = st.session_state.get("picked_keys") or []
-            if _pk:
-                preview = _aggregate_all_aes(_pk, DRUG_DB)
-                st.write({"ae_map_keys": list(preview.keys())[:12]})
-        except Exception as _e:
-            st.caption(f"(AE 미리보기 예외: {_e})")
-
-        except Exception as _e:
-            st.caption(f"(모니터 예외: {_e})")
-    # === /모니터 ===
-
     # === ROUTE-STICKY (inside chemo tab) ===
     try:
         ss = st.session_state
@@ -1984,22 +1853,6 @@ with t_chemo:
         # === [/PATCH] ===
 
         if ae_map:
-
-            # Ara-C 제형/모니터링 (ae_map 기반 감지)
-            try:
-                present = set(map(str, ae_map.keys()))
-            except Exception:
-                present = set()
-            if any(t in present for t in ("Cytarabine","Ara-C","시타라빈")):
-                try:
-                    sel_key = render_arac_wrapper("Ara-C 제형 선택", default="Cytarabine")
-                    if "_fallback_get_ae_text" in globals():
-                        st.caption(_fallback_get_ae_text(sel_key))
-                    if "_fallback_monitoring_checks" in globals():
-                        for _ln in _fallback_monitoring_checks(sel_key):
-                            st.checkbox(_ln, key=wkey(f"mon_{sel_key}_{_ln}"))
-                except Exception as _e:
-                    st.caption(f"(Ara-C 제형/모니터 예외: {_e})")
             # --- Ara-C 제형 선택(IV/SC/HDAC) ---
             try:
                 from ae_resolve import resolve_key, get_ae, get_checks
