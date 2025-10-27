@@ -47,7 +47,7 @@ def resolve_key(x):
         return x.get('key') if isinstance(x, dict) and 'key' in x else str(x)
     except Exception:
         return str(x)
-st.markdown("- 선택된 항암제의 **부작용 정보**를 불러오는 중입니다.")
+_BM_BOOT_MSG = "선택된 항암제의 부작용 정보를 불러오는 중입니다."
 
 # 소아 페이지 모듈 폴백
 try:
