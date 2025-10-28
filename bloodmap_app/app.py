@@ -1900,14 +1900,8 @@ _block_spurious_home()
 
 # PEDS
 with t_peds:
-
-    # [PATCH] 이식 후 관리 섹션 렌더 (중복/오류 안전)
-    try:
-        if post_tx:
-            post_tx.render(st, wkey=wkey if 'wkey' in globals() else (lambda x: x),
-                           profile=globals().get('profile'))
-    except Exception:
-        pass
+    # [PATCH] 이식 후 관리 탭 콘텐츠 (보장)
+    _render_post_tx_section()
     st.subheader("소아 증상 기반 점수 + 보호자 설명 + 해열제 계산")
     render_peds_nav_md()
     c1, c2, c3, c4, c5 = st.columns(5)
@@ -2969,20 +2963,6 @@ import os, tempfile
 from datetime import datetime
 import pandas as pd
 import streamlit as st
-# [PATCH] post_tx (이식 후 관리) 안전 임포트
-try:
-    import post_tx
-except Exception:
-    post_tx = None
-
-# [PATCH] QA 스모크 체크 자동화 (비파괴)
-try:
-    import qa_precheck as _qa
-    _ = _qa.run()  # /mnt/data/PRECHECK_REPORT.txt 생성
-except Exception:
-    # QA 실패해도 앱은 계속 실행
-    pass
-
 try:
     from zoneinfo import ZoneInfo
     _KST = ZoneInfo("Asia/Seoul")
