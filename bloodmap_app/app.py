@@ -2961,6 +2961,14 @@ import os, tempfile
 from datetime import datetime
 import pandas as pd
 import streamlit as st
+# [PATCH] QA 스모크 체크 자동화 (비파괴)
+try:
+    import qa_precheck as _qa
+    _ = _qa.run()  # /mnt/data/PRECHECK_REPORT.txt 생성
+except Exception:
+    # QA 실패해도 앱은 계속 실행
+    pass
+
 try:
     from zoneinfo import ZoneInfo
     _KST = ZoneInfo("Asia/Seoul")
