@@ -17,6 +17,7 @@ DEFAULT_FILES = [
     "/mnt/data/branding.py",
     "/mnt/data/drug_db.py",
     "/mnt/data/pages_peds.py",
+    "/mnt/data/post_tx.py",
 ]
 
 def _exists(p: str) -> bool:

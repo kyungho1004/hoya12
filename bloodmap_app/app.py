@@ -1900,6 +1900,14 @@ _block_spurious_home()
 
 # PEDS
 with t_peds:
+
+    # [PATCH] 이식 후 관리 섹션 렌더 (중복/오류 안전)
+    try:
+        if post_tx:
+            post_tx.render(st, wkey=wkey if 'wkey' in globals() else (lambda x: x),
+                           profile=globals().get('profile'))
+    except Exception:
+        pass
     st.subheader("소아 증상 기반 점수 + 보호자 설명 + 해열제 계산")
     render_peds_nav_md()
     c1, c2, c3, c4, c5 = st.columns(5)
@@ -2961,6 +2969,12 @@ import os, tempfile
 from datetime import datetime
 import pandas as pd
 import streamlit as st
+# [PATCH] post_tx (이식 후 관리) 안전 임포트
+try:
+    import post_tx
+except Exception:
+    post_tx = None
+
 # [PATCH] QA 스모크 체크 자동화 (비파괴)
 try:
     import qa_precheck as _qa
