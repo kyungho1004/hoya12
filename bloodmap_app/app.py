@@ -1,3 +1,48 @@
+# === BM_ROUTE_HARDLOCK (TOP) ===
+try:
+    import streamlit as _st_bm
+    def __bm_dx_ctx():
+        ss = _st_bm.session_state
+        return any(k in ss and ss.get(k) not in (None, "", []) for k in (
+            "group","disease","진단","암종","dx_group","dx_disease","selected_group","selected_disease"
+        ))
+    def __bm_enforce_dx():
+        ss = _st_bm.session_state
+        ss["_route_last"] = "dx"
+        ss["_route"] = "dx"
+    if __bm_dx_ctx():
+        __bm_enforce_dx()
+    if not getattr(_st_bm, "_bm_patched_multiselect", False):
+        _bm_orig_ms = _st_bm.multiselect
+        def _bm_ms(label, options, default=None, *a, **k):
+            try:
+                k_key = k.get("key", None)
+            except Exception:
+                k_key = None
+            try:
+                ss = _st_bm.session_state
+                manual = bool(ss.get("_bm_chemo_manual", False))
+                pool_default = ss.get("_bm_chemo_pool_default", default)
+            except Exception:
+                manual = False
+                pool_default = default
+            if isinstance(k_key, str) and "drug_pick" in k_key:
+                default = [] if manual else (pool_default if pool_default is not None else default)
+            return _bm_orig_ms(label, options, default=default, *a, **k)
+        _st_bm.multiselect = _bm_ms
+        _st_bm._bm_patched_multiselect = True
+    __prev_bsh = globals().get("_block_spurious_home")
+    def _block_spurious_home():
+        if __bm_dx_ctx():
+            __bm_enforce_dx()
+        if callable(__prev_bsh):
+            try:
+                return __prev_bsh()
+            except Exception:
+                pass
+except Exception:
+    pass
+# === /BM_ROUTE_HARDLOCK ===
 # === PATCH-LOCK: classic hard lock + safety fallbacks ===
 from datetime import timedelta, timezone as _tz
 import os, sys, types
@@ -1727,6 +1772,24 @@ def _aggregate_all_aes(meds, db):
 # CHEMO
 with t_chemo:
     st.subheader("항암제(진단 기반)")
+    # === ROUTE-STICKY (inside chemo tab) ===
+    try:
+        ss = st.session_state
+        if ss.get("_route") != "dx":
+            ss["_route"] = "dx"
+        if not ss.get("_route_last") or ss.get("_route_last") == "home":
+            ss["_route_last"] = "dx"
+    except Exception:
+        pass
+    # === /ROUTE-STICKY ===
+
+    # === CHEMO-PICK MODE TOGGLE ===
+    try:
+        manual_pick_mode = st.toggle("직접 선택 모드", value=False, key=wkey("chemo_manual_pick"))
+        st.session_state["_bm_chemo_manual"] = bool(manual_pick_mode)
+    except Exception:
+        pass
+    # === /CHEMO-PICK MODE TOGGLE ===
     group = st.session_state.get("onco_group")
     disease = st.session_state.get("onco_disease")
     recs = st.session_state.get("recs_by_dx", {}) or {}
@@ -1900,8 +1963,6 @@ _block_spurious_home()
 
 # PEDS
 with t_peds:
-    # [PATCH] 이식 후 관리 탭 콘텐츠 (보장)
-    _render_post_tx_section()
     st.subheader("소아 증상 기반 점수 + 보호자 설명 + 해열제 계산")
     render_peds_nav_md()
     c1, c2, c3, c4, c5 = st.columns(5)
@@ -2963,6 +3024,14 @@ import os, tempfile
 from datetime import datetime
 import pandas as pd
 import streamlit as st
+# [PATCH] QA 스모크 체크 자동화 (비파괴)
+try:
+    import qa_precheck as _qa
+    _ = _qa.run()  # /mnt/data/PRECHECK_REPORT.txt 생성
+except Exception:
+    # QA 실패해도 앱은 계속 실행
+    pass
+
 try:
     from zoneinfo import ZoneInfo
     _KST = ZoneInfo("Asia/Seoul")
