@@ -839,6 +839,18 @@ def build_peds_notes(
 tab_labels = ["🏠 홈", "👶 소아 증상", "🧬 암 선택", "💊 항암제(진단 기반)", "🧪 피수치 입력", "🔬 특수검사", "📄 보고서", "📊 기록/그래프"]
 t_home, t_peds, t_dx, t_chemo, t_labs, t_special, t_report, t_graph = st.tabs(tab_labels)
 
+
+with t_special:
+    # [ONEPATCH] 특수검사 결과 세션 저장 + 렌더
+    import streamlit as st
+    st.subheader("🔬 특수검사")
+    try:
+        _sp_lines = special_tests_ui()
+        if isinstance(_sp_lines, (list, tuple)):
+            st.session_state["special_interpretations"] = list(_sp_lines)
+    except Exception as e:
+        st.error(f"특수검사 UI 표시 중 오류 발생: {e}")
+
 # HOME
 with t_home:
     st.subheader("응급도 요약")
@@ -2876,7 +2888,7 @@ with t_report:
 
         if sec_special:
             spec_lines = st.session_state.get("special_interpretations", [])
-            # [PATCH] Fallback if special_interpretations is empty — try analysis_ctx.lines_blocks
+            # [ONEPATCH] 폴백: 세션이 비면 analysis_ctx.lines_blocks에서 "특수검사" 블록 회수
             if not spec_lines:
                 try:
                     _ac = st.session_state.get("analysis_ctx", {}) or {}
@@ -2888,7 +2900,6 @@ with t_report:
                                 break
                         except Exception:
                             pass
-                    # cache back for report/pdf export consistency
                     if spec_lines:
                         st.session_state["special_interpretations"] = spec_lines
                 except Exception:
