@@ -55,6 +55,9 @@ def _fav_list():
 
 def special_tests_ui() -> List[str]:
     lines: List[str] = []
+    # Render only within special tab
+    if st.session_state.get('_ctx_tab') not in ('special','t_special'):
+        return []
     # RENDER LOCK: avoid duplicate draw in same run
     try:
         __SP_RENDER_LOCK__

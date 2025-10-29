@@ -193,48 +193,6 @@ import importlib.util
 import streamlit as st
 
 
-
-# ===== Route guards (lean, no widget wrapping) =====
-ALLOWED_ROUTES = {"home","dx","chemo","labs","special","peds","report"}
-
-def _bm_defaults():
-    ss = st.session_state
-    ss.setdefault("_route", "dx")
-    ss.setdefault("_route_last", "dx")
-    ss.setdefault("_home_intent", False)
-    ss.setdefault("_ctx_tab", None)
-
-def _bm_hardlock():
-    ss = st.session_state
-    cur = ss.get("_route", "dx")
-    if cur not in ALLOWED_ROUTES:
-        ss["_route"] = "dx"
-    cur = ss.get("_route", "dx")
-    last = ss.get("_route_last", "dx")
-    if cur == "home" and not ss.get("_home_intent", False):
-        ss["_route"] = last if last and last != "home" else "dx"
-        st.rerun()
-
-def _pin_route(name: str):
-    ss = st.session_state
-    ss["_home_intent"] = False
-    ss["_route"] = name
-    if name != "home":
-        ss["_route_last"] = name
-    try:
-        qp = st.query_params
-        if qp.get("route") != name:
-            st.query_params.update(route=name)
-    except Exception:
-        try:
-            if (st.experimental_get_query_params().get("route") or [""])[0] != name:
-                st.experimental_set_query_params(route=name)
-        except Exception:
-            pass
-
-_bm_defaults()
-_bm_hardlock()  # early
-# ================================================
 # ===== [BLOODMAP ULTRA PATCH] early guards =====
 ALLOWED_ROUTES = {"home","dx","chemo","labs","special","peds","report"}
 
@@ -2488,23 +2446,10 @@ def _annotate_special_notes(lines):
     return out
 # (migrated) 기존 소아 GI 섹션 호출은 t_peds 퀵 섹션으로 이동되었습니다.
 with t_special:
-    # --- SPECIAL singleton guard & context pin ---
+    # ---- SPECIAL: context pin (no direct UI call) ----
     st.session_state['_ctx_tab'] = 'special'
     _pin_route('special')
-    try:
-        __SP_CALLED__
-    except NameError:
-        __SP_CALLED__ = False
-    if not __SP_CALLED__:
-        try:
-            from special_tests import special_tests_ui as _sp_ui
-            _sp_lines = _sp_ui()
-            if isinstance(_sp_lines, (list, tuple)):
-                st.session_state['special_interpretations'] = list(_sp_lines)
-        except Exception as e:
-            st.error(f'특수검사 UI 표시 중 오류: {e}')
-        __SP_CALLED__ = True
-    # ---------------------------------------------
+    # -----------------------------------------------
     # --- SPECIAL TAB CONTEXT + ROOT CONTAINER (ultra) ---
     root = st.container(key='tab_special_root')
     with root:
