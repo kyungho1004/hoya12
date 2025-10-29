@@ -2891,6 +2891,20 @@ with t_graph:
 # ===== [INLINE FEEDBACK – drop-in, no external file] =====
 import os, tempfile
 from datetime import datetime
+
+# === CANONICAL DRUG KEY RESOLVER (patch) ===
+try:
+    from onco_map import _canon as resolve_key  # ex) "Ara-C" -> "Cytarabine"
+except Exception:
+    def resolve_key(s):
+        s0 = (s or "").strip()
+        s1 = s0.upper().replace(" ", "").replace("−","-")
+        if s1 in ("ARA-C","ARAC","CYTARABINE(ARA-C)"):
+            return "Cytarabine"
+        return s0 or s
+# === /CANONICAL DRUG KEY RESOLVER ===
+
+
 import pandas as pd
 import streamlit as st
 try:
