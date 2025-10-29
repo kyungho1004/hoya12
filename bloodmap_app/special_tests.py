@@ -50,9 +50,6 @@ def _fav_list():
     return st.session_state["fav_tests"]
 
 def special_tests_ui() -> List[str]:
-    # Render only within 특수검사 탭
-    if st.session_state.get('_ctx_tab') not in ('special','t_special'):
-        return []
     lines: List[str] = []
     with st.expander("🧪 특수검사 (선택 입력)", expanded=True):
         st.caption("정성검사는 +/++/+++ , 정량검사는 숫자만 입력. ★로 즐겨찾기 고정.")
