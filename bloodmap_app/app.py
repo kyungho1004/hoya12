@@ -192,8 +192,6 @@ from pathlib import Path
 import importlib.util
 import streamlit as st
 
-
-# [ROUTE-HARDLOCK] helpers
 def _route_defaults():
     import streamlit as st
     ss = st.session_state
@@ -206,32 +204,11 @@ def _route_defaults():
 def _route_hardlock():
     import streamlit as st
     ss = st.session_state
-    # Never allow implicit 'home' — only explicit intent can go home
-    cur = ss.get("_route", "dx")
-    last = ss.get("_route_last", "dx")
-    intent = ss.get("_home_intent", False)
-    if cur == "home" and not intent:
-        # restore last or dx
-        tgt = last if last and last != "home" else "dx"
-        ss["_route"] = tgt
-        try:
-            if st.query_params.get("route") != tgt:
-                st.query_params.update(route=tgt)
-        except Exception:
-            st.experimental_set_query_params(route=tgt)
-        # ensure stability
+    if ss.get("_route") == "home" and not ss.get("_home_intent", False):
+        ss["_route"] = ss.get("_route_last", "dx") or "dx"
         st.rerun()
-
-def _remember_last_route():
-    import streamlit as st
-    ss = st.session_state
-    cur = ss.get("_route")
-    if cur and cur != "home":
-        ss["_route_last"] = cur
-
 _route_defaults()
 _route_hardlock()
-
 st.markdown("""
 <style>
 /* smooth-scroll */
@@ -877,7 +854,6 @@ def build_peds_notes(
 
 # ---------- Tabs ----------
 tab_labels = ["🏠 홈", "👶 소아 증상", "🧬 암 선택", "💊 항암제(진단 기반)", "🧪 피수치 입력", "🔬 특수검사", "📄 보고서", "📊 기록/그래프"]
-_route_hardlock()  # pre-tabs
 t_home, t_peds, t_dx, t_chemo, t_labs, t_special, t_report, t_graph = st.tabs(tab_labels)
 
 # HOME
@@ -1593,9 +1569,6 @@ with t_dx:
                 continue
             st.write(f"- {cat}: " + ", ".join(arr))
     st.session_state["recs_by_dx"] = recs
-    # [ROUTE-HARDLOCK] set current route marker
-    st.session_state["_route"] = "dx"
-    _remember_last_route()
 
 # ---------- Chemo helpers ----------
 def _to_set_or_empty(x):
@@ -3688,9 +3661,3 @@ def _load_local_module2(mod_name: str, candidates):
             if m:
                 return m, used
     return None, None
-
-
-# [ROUTE-HARDLOCK] tail guards
-_remember_last_route()
-_route_hardlock()  # final
-
