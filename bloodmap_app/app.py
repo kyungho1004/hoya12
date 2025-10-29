@@ -2904,6 +2904,77 @@ with t_graph:
 import os, tempfile
 from datetime import datetime
 
+
+# === SPECIAL TESTS IMPORT BRIDGE ===
+try:
+    import sys, importlib.util
+    from pathlib import Path as _P
+    _BM_BASES = [
+        _P(__file__).parent,
+        _P(__file__).parent / "modules",
+        _P("/mnt/data"),
+        _P("/mount/src/hoya12/bloodmap_app"),
+    ]
+    for _b in _BM_BASES:
+        try:
+            if str(_b) not in sys.path:
+                sys.path.insert(0, str(_b))
+        except Exception:
+            pass
+
+    def _bm_import_by_paths(mod_name, rels):
+        # rels can include absolute or relative candidates
+        def _load_fp(fp):
+            spec = importlib.util.spec_from_file_location(mod_name, str(fp))
+            if not spec or not spec.loader:
+                return None
+            m = importlib.util.module_from_spec(spec)
+            sys.modules[mod_name] = m
+            spec.loader.exec_module(m)
+            return m
+        # try explicit file paths
+        for rel in rels:
+            try:
+                p = _P(rel) if str(rel).startswith("/") else None
+                if p is None:
+                    for base in _BM_BASES:
+                        cand = base / rel
+                        if cand.exists():
+                            m = _load_fp(cand)
+                            if m: 
+                                return m, str(cand)
+                else:
+                    if p.exists():
+                        m = _load_fp(p)
+                        if m: 
+                            return m, str(p)
+            except Exception:
+                continue
+        # fallback to plain import
+        try:
+            m = __import__(mod_name)
+            return m, getattr(m, "__file__", None)
+        except Exception:
+            return None, None
+
+    # Resolve special_tests & UI symbol if missing
+    if "special_tests_ui" not in globals():
+        _sp, SPECIAL_PATH = _bm_import_by_paths("special_tests", [
+            "special_tests.py",
+            "modules/special_tests.py",
+            "/mnt/data/special_tests.py"
+        ])
+        if _sp is not None:
+            special_tests_ui = getattr(_sp, "special_tests_ui", None)
+        else:
+            SPECIAL_PATH = None
+            special_tests_ui = None
+except Exception:
+    SPECIAL_PATH = None
+    special_tests_ui = None
+# === /SPECIAL TESTS IMPORT BRIDGE ===
+
+
 # === CANONICAL DRUG KEY RESOLVER (patch) ===
 try:
     from onco_map import _canon as resolve_key  # ex) "Ara-C" -> "Cytarabine"
