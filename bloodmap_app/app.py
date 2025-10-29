@@ -192,20 +192,77 @@ from pathlib import Path
 import importlib.util
 import streamlit as st
 
-def _route_defaults():
-    ss = st.session_state
-    ss.setdefault('_route', 'dx')
-    ss.setdefault('_route_last', 'dx')
-    ss.setdefault('_home_intent', False)
+
+# ======= [WIDGET FIREWALL + ROUTE LOCK] =======
+import importlib, sys
+for _m in ("special_tests", "peds_guide", "pages_peds"):
+    try:
+        if _m in sys.modules:
+            importlib.reload(sys.modules[_m])
+    except Exception:
+        pass
+
+# Defaults
+ss = st.session_state
+ss.setdefault("_route", "dx")
+ss.setdefault("_route_last", "dx")
+ss.setdefault("_home_intent", False)
+ss.setdefault("_ctx_tab", None)
+
+def _remember_last_route():
+    cur = ss.get("_route")
+    if cur and cur != "home":
+        ss["_route_last"] = cur
 
 def _route_hardlock():
-    ss = st.session_state
-    if ss.get('_route') == 'home' and not ss.get('_home_intent', False):
-        ss['_route'] = ss.get('_route_last','dx') or 'dx'
+    cur = ss.get("_route", "dx")
+    last = ss.get("_route_last", "dx")
+    if cur == "home" and not ss.get("_home_intent", False):
+        tgt = last if last and last != "home" else "dx"
+        ss["_route"] = tgt
+        try:
+            if st.query_params.get("route") != tgt:
+                st.query_params.update(route=tgt)
+        except Exception:
+            st.experimental_set_query_params(route=tgt)
         st.rerun()
 
-_route_defaults()
-_route_hardlock()
+_route_hardlock()  # very early
+
+# ---- Widget firewall: auto-prefix keys by context to avoid cross-tab bleed ----
+if not ss.get("_widget_firewall_active", False):
+    def _ctx_prefix(key):
+        if not isinstance(key, str) or not key:
+            return key
+        # already namespaced?
+        if key.startswith(("peds_", "sp_", "dx_", "chemo_", "labs_", "special_", "report_", "home_")):
+            return key
+        ctx = ss.get("_ctx_tab") or ss.get("_route") or "global"
+        return f"{ctx}_{key}"
+
+    def _wrap_widget(fn):
+        def _inner(*args, **kwargs):
+            if "key" in kwargs and kwargs["key"]:
+                kwargs["key"] = _ctx_prefix(kwargs["key"])
+            return fn(*args, **kwargs)
+        return _inner
+
+    _to_wrap = [
+        "checkbox","radio","selectbox","multiselect","text_input","number_input",
+        "slider","textarea","toggle","date_input","time_input","file_uploader",
+        "button","color_picker","data_editor","text_area","expander","form","columns"
+    ]
+    for _name in _to_wrap:
+        try:
+            orig = getattr(st, _name, None)
+            if orig and not getattr(orig, "_firewalled", False):
+                wrapped = _wrap_widget(orig)
+                wrapped._firewalled = True
+                setattr(st, _name, wrapped)
+        except Exception:
+            pass
+    ss["_widget_firewall_active"] = True
+# ======= [/WIDGET FIREWALL + ROUTE LOCK] =======
 st.markdown("""
 <style>
 /* smooth-scroll */
@@ -1474,6 +1531,8 @@ with t_labs:
 with t_dx:
 
     st.session_state['_ctx_tab'] = 'dx'
+    st.session_state['_route'] = 'dx'
+    _remember_last_route()
     # ---- DX label fallbacks (avoid NameError) ----
     try:
         DX_KO  # type: ignore
@@ -2382,6 +2441,13 @@ def _annotate_special_notes(lines):
     return out
 # (migrated) 기존 소아 GI 섹션 호출은 t_peds 퀵 섹션으로 이동되었습니다.
 with t_special:
+    # 🔬 특수검사 탭 렌더링 (패치 추가)
+    import streamlit as st
+    st.subheader("🔬 특수검사")
+    try:
+        special_tests_ui()
+    except Exception as e:
+        st.error(f"특수검사 UI 표시 중 오류 발생: {e}")
     st.subheader("특수검사 해석")
     if SPECIAL_PATH:
         st.caption(f"special_tests 로드: {SPECIAL_PATH}")
@@ -3659,3 +3725,4 @@ def _load_local_module2(mod_name: str, candidates):
             if m:
                 return m, used
     return None, None
+_route_hardlock()  # final
