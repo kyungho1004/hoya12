@@ -27,8 +27,14 @@ def _emit(lines: List[str], kind: Optional[str], msg: str):
     tag = _flag(kind)
     lines.append(f"{tag} {msg}" if tag else msg)
 
-def _tog_key(name: str) -> str: return f"sp_tog_{name}"
-def _fav_key(name: str) -> str: return f"sp_fav_{name}"
+def _tog_key(name: str, idx: int | None = None) -> str:
+    base = f"sp_tog_{name}"
+    return f"{base}_{idx}" if idx is not None else base
+
+def _fav_key(name: str, idx: int | None = None) -> str:
+    base = f"sp_fav_{name}"
+    return f"{base}_{idx}" if idx is not None else base
+
 
 SECTIONS = [
     ("소변검사 (Urinalysis)", "urine"),
@@ -60,12 +66,12 @@ def special_tests_ui() -> List[str]:
             for i, sec_id in enumerate(favs):
                 with chips[i]:
                     if st.button(f"★ {sec_id}", key=_fav_key(f"chip_{sec_id}")):
-                        st.session_state[_tog_key(sec_id)] = True
+                        st.session_state[_tog_key(sec_id, i)] = True
 
-        for title, sec_id in SECTIONS:
+        for i, (title, sec_id) in enumerate(SECTIONS):
             c1, c2 = st.columns([0.8, 0.2])
             with c1:
-                on = st.toggle(title, key=_tog_key(sec_id), value=bool(st.session_state.get(_tog_key(sec_id), True)))
+                on = st.toggle(title, key=_tog_key(sec_id, i), value=bool(st.session_state.get(_tog_key(sec_id, i), True)))
             with c2:
                 isfav = sec_id in favs
                 label = "★" if isfav else "☆"
