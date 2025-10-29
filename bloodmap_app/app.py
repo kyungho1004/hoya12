@@ -193,7 +193,7 @@ import importlib.util
 import streamlit as st
 
 
-# ===== [BLOODMAP PATCH] route lock + widget firewall =====
+# ===== [BLOODMAP FINAL PATCH] route lock + widget firewall + ctx markers =====
 import importlib, sys
 for _m in ("special_tests", "peds_guide", "pages_peds"):
     try:
@@ -226,15 +226,14 @@ def _route_hardlock():
             st.experimental_set_query_params(route=tgt)
         st.rerun()
 
-# very early guard
+# Pre-tabs hardlock
 _route_hardlock()
 
-# --- widget firewall: auto-prefix non-namespaced keys by current context ---
+# Widget firewall
 if not ss.get("_widget_firewall_active", False):
-    def _ctx_prefix(key):
+    def _ctx_prefix(key: str):
         if not isinstance(key, str) or not key:
             return key
-        # If already namespaced, leave as is
         if key.startswith(("peds_","sp_","dx_","chemo_","labs_","special_","report_","home_")):
             return key
         ctx = ss.get("_ctx_tab") or ss.get("_route") or "global"
@@ -247,22 +246,17 @@ if not ss.get("_widget_firewall_active", False):
             return fn(*args, **kwargs)
         return _inner
 
-    _to_wrap = [
-        "checkbox","radio","selectbox","multiselect","text_input","number_input",
-        "slider","textarea","toggle","date_input","time_input","file_uploader",
-        "button","data_editor","form","columns"
-    ]
-    for _name in _to_wrap:
+    for _name in ("checkbox","radio","selectbox","multiselect","text_input","number_input",
+                  "slider","textarea","toggle","date_input","time_input","file_uploader",
+                  "button","data_editor","form","columns"):
         try:
-            orig_fn = getattr(st, _name, None)
-            if orig_fn and not getattr(orig_fn, "_bm_wrapped", False):
-                wrapped = _wrap_widget(orig_fn)
-                wrapped._bm_wrapped = True
-                setattr(st, _name, wrapped)
+            f = getattr(st, _name, None)
+            if f and not getattr(f, "_bm_wrap", False):
+                wf = _wrap_widget(f); wf._bm_wrap = True; setattr(st, _name, wf)
         except Exception:
             pass
     ss["_widget_firewall_active"] = True
-# ===== [/BLOODMAP PATCH] =====
+# ===== [/BLOODMAP FINAL PATCH] =====
 st.markdown("""
 <style>
 /* smooth-scroll */
