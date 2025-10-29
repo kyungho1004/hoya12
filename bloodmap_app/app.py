@@ -193,7 +193,7 @@ import importlib.util
 import streamlit as st
 
 
-# [ROUTE-PATCH] helpers
+# [ROUTE-PATCH v2] helpers
 def _route_set(route: str):
     import streamlit as st
     last = st.session_state.get("_route", "home")
@@ -201,10 +201,23 @@ def _route_set(route: str):
         st.session_state["_route_last"] = last
     st.session_state["_route"] = route
 
-def _route_lock_dx():
+def _route_lock(route: str):
     import streamlit as st
-    if st.session_state.get("_route") != "dx":
-        _route_set("dx")
+    if st.session_state.get("_route") != route:
+        _route_set(route)
+
+def _route_lock_dx(): _route_lock("dx")
+def _route_lock_chemo(): _route_lock("chemo")
+def _route_lock_labs(): _route_lock("labs")
+
+
+# [ROUTE-PATCH v2] early anti-bounce (runs before any defaults)
+try:
+    import streamlit as st
+    if st.session_state.get("_route") == "home" and st.session_state.get("_route_last") in ("dx","chemo","labs"):
+        st.session_state["_route"] = st.session_state["_route_last"]
+except Exception:
+    pass
 
 
 st.markdown("""
@@ -853,10 +866,10 @@ def build_peds_notes(
 # ---------- Tabs ----------
 tab_labels = ["🏠 홈", "👶 소아 증상", "🧬 암 선택", "💊 항암제(진단 기반)", "🧪 피수치 입력", "🔬 특수검사", "📄 보고서", "📊 기록/그래프"]
 
-# [ROUTE-PATCH] Anti-bounce: prevent unintended jumps to home
+# [ROUTE-PATCH v2] anti-bounce before tabs build
 try:
     import streamlit as st
-    if st.session_state.get("_route") == "home" and st.session_state.get("_route_last") in ("dx", "chemo"):
+    if st.session_state.get("_route") == "home" and st.session_state.get("_route_last") in ("dx","chemo","labs"):
         st.session_state["_route"] = st.session_state["_route_last"]
 except Exception:
     pass
@@ -1576,7 +1589,7 @@ with t_dx:
                 continue
             st.write(f"- {cat}: " + ", ".join(arr))
     st.session_state["recs_by_dx"] = recs
-    # [ROUTE-PATCH] keep user on DX tab after any selection
+    # [ROUTE-PATCH v2] keep user on dx tab after any interaction
     _route_lock_dx()
 
 # ---------- Chemo helpers ----------
