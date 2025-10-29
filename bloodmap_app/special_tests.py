@@ -27,8 +27,8 @@ def _emit(lines: List[str], kind: Optional[str], msg: str):
     tag = _flag(kind)
     lines.append(f"{tag} {msg}" if tag else msg)
 
-def _tog_key(name: str) -> str: return f"tog_{name}"
-def _fav_key(name: str) -> str: return f"fav_{name}"
+def _tog_key(name: str) -> str: return f"sp_tog_{name}"
+def _fav_key(name: str) -> str: return f"sp_fav_{name}"
 
 SECTIONS = [
     ("소변검사 (Urinalysis)", "urine"),
@@ -50,6 +50,9 @@ def _fav_list():
     return st.session_state["fav_tests"]
 
 def special_tests_ui() -> List[str]:
+    # Render only within 특수검사 탭
+    if st.session_state.get('_ctx_tab') not in ('special','t_special'):
+        return []
     lines: List[str] = []
     with st.expander("🧪 특수검사 (선택 입력)", expanded=True):
         st.caption("정성검사는 +/++/+++ , 정량검사는 숫자만 입력. ★로 즐겨찾기 고정.")
