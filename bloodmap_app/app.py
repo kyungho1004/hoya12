@@ -348,7 +348,7 @@ else:
     def ibuprofen_ml(w):
         return (0.0, 0.0)
 
-_sp, SPECIAL_PATH = _load_local_module("special_tests", ["special_tests.py", "modules/special_tests.py"])
+_sp, SPECIAL_PATH = _load_local_module2("special_tests", ["special_tests.py", "modules/special_tests.py", "/mnt/data/special_tests.py"])
 if _sp and hasattr(_sp, "special_tests_ui"):
     special_tests_ui = _sp.special_tests_ui
 else:
@@ -3485,3 +3485,45 @@ if _st_beta3 is not None and hasattr(_st_beta3, "expander"):
     except Exception:
         pass
 # === [/PATCH] ===
+
+
+def _load_local_module2(mod_name: str, candidates):
+    """
+    Try multiple candidate paths. Return (module, used_path) or (None, None).
+    Does NOT break older _load_local_module usage elsewhere.
+    """
+    import importlib.util, sys
+    from pathlib import Path
+    def _try(fp: Path):
+        try:
+            spec = importlib.util.spec_from_file_location(mod_name, str(fp))
+            if not spec or not spec.loader:
+                return None, None
+            m = importlib.util.module_from_spec(spec)
+            sys.modules[mod_name] = m
+            spec.loader.exec_module(m)
+            return m, str(fp)
+        except Exception:
+            return None, None
+    base_candidates = []
+    for c in (candidates if isinstance(candidates, (list, tuple)) else [candidates]):
+        c = str(c)
+        fps = []
+        if c.startswith("/"):
+            fps = [Path(c)]
+        else:
+            fps = [
+                Path(__file__).parent / c,
+                Path(__file__).parent / "modules" / c,
+                Path("/mount/src/hoya12/bloodmap_app") / c,
+                Path("/mount/src/hoya12/bloodmap_app/modules") / c,
+                Path("/mnt/data") / c,
+            ]
+        for fp in fps:
+            base_candidates.append(fp)
+    for fp in base_candidates:
+        if fp.exists():
+            m, used = _try(fp)
+            if m:
+                return m, used
+    return None, None
