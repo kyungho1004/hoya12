@@ -196,6 +196,27 @@ import streamlit as st
 # ===== [BLOODMAP ULTRA PATCH] early guards =====
 ALLOWED_ROUTES = {"home","dx","chemo","labs","special","peds","report"}
 
+# ---- Route pin helper (prevents unintended jumps to 'home') ----
+def _pin_route(name: str):
+    import streamlit as st
+    ss = st.session_state
+    ss["_home_intent"] = False
+    if ss.get("_route") != name:
+        ss["_route"] = name
+    if not ss.get("_route_last") or ss.get("_route_last") == "home":
+        ss["_route_last"] = name
+    # keep URL query param in sync (no loop)
+    try:
+        if st.query_params.get("route") != name:
+            st.query_params.update(route=name)
+    except Exception:
+        try:
+            if (st.experimental_get_query_params().get("route") or [""])[0] != name:
+                st.experimental_set_query_params(route=name)
+        except Exception:
+            pass
+# ---- /Route pin helper ----
+
 def _bm_defaults():
     ss = st.session_state
     ss.setdefault("_route", "dx")
@@ -489,6 +510,17 @@ except Exception:
 # ---------- Page & Banner ----------
 st.set_page_config(page_title=f"Bloodmap {APP_VERSION}", layout="wide")
 st.title(f"Bloodmap {APP_VERSION}")
+
+# ---- Early home blocker (idempotent flag) ----
+try:
+    _EARLY_HOME_BLOCK_CALLED_
+except NameError:
+    _EARLY_HOME_BLOCK_CALLED_ = True
+    try:
+        _block_spurious_home()
+    except Exception:
+        pass
+# ---- /Early home blocker ----
 st.markdown(
     """> In memory of Eunseo, a little star now shining in the sky.
 > This app is made with the hope that she is no longer in pain,
@@ -916,7 +948,12 @@ t_home, t_peds, t_dx, t_chemo, t_labs, t_special, t_report, t_graph = st.tabs(ta
 
 # HOME
 with t_home:
-    st.subheader("응급도 요약")
+    
+    # ---- route/context pin for HOME ----
+    st.session_state['_ctx_tab'] = 'home'
+    _pin_route('home')
+    # ---- /route/context pin ----
+st.subheader("응급도 요약")
     labs = st.session_state.get("labs_dict", {})
     level_tmp, reasons_tmp, contrib_tmp = emergency_level(
         labs, st.session_state.get(wkey("cur_temp")), st.session_state.get(wkey("cur_hr")), {}
@@ -1455,7 +1492,12 @@ def lab_validate(abbr: str, val, is_peds: bool):
     return "정상범위"
 
 with t_labs:
-    st.subheader("피수치 입력 — 붙여넣기 지원 (견고)")
+    
+    # ---- route/context pin for LABS ----
+    st.session_state['_ctx_tab'] = 'labs'
+    _pin_route('labs')
+    # ---- /route/context pin ----
+st.subheader("피수치 입력 — 붙여넣기 지원 (견고)")
     st.caption("예: 'WBC: 4.5', 'Hb 12.3', 'PLT, 200', 'Na 140 mmol/L'…")
 
     auto_is_peds = bool(st.session_state.get(wkey("is_peds"), False))
@@ -1534,7 +1576,12 @@ with t_labs:
 # DX
 with t_dx:
 
+    
+    # ---- route/context pin for DX ----
     st.session_state['_ctx_tab'] = 'dx'
+    _pin_route('dx')
+    # ---- /route/context pin ----
+st.session_state['_ctx_tab'] = 'dx'
     st.session_state['_route'] = 'dx'
     _bm_remember()
     _bm_sync_query()
@@ -1758,7 +1805,12 @@ def _aggregate_all_aes(meds, db):
     return result
 # CHEMO
 with t_chemo:
-    st.subheader("항암제(진단 기반)")
+    
+    # ---- route/context pin for CHEMO ----
+    st.session_state['_ctx_tab'] = 'chemo'
+    _pin_route('chemo')
+    # ---- /route/context pin ----
+st.subheader("항암제(진단 기반)")
     group = st.session_state.get("onco_group")
     disease = st.session_state.get("onco_disease")
     recs = st.session_state.get("recs_by_dx", {}) or {}
@@ -1944,7 +1996,12 @@ _block_spurious_home()
 
 # PEDS
 with t_peds:
-    st.subheader("소아 증상 기반 점수 + 보호자 설명 + 해열제 계산")
+    
+    # ---- route/context pin for PEDS ----
+    st.session_state['_ctx_tab'] = 'peds'
+    _pin_route('peds')
+    # ---- /route/context pin ----
+st.subheader("소아 증상 기반 점수 + 보호자 설명 + 해열제 계산")
     render_peds_nav_md()
     c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
@@ -2446,7 +2503,12 @@ def _annotate_special_notes(lines):
     return out
 # (migrated) 기존 소아 GI 섹션 호출은 t_peds 퀵 섹션으로 이동되었습니다.
 with t_special:
-    # --- SPECIAL TAB CONTEXT + ROOT CONTAINER (ultra) ---
+    
+    # ---- route/context pin for SPECIAL ----
+    st.session_state['_ctx_tab'] = 'special'
+    _pin_route('special')
+    # ---- /route/context pin ----
+# --- SPECIAL TAB CONTEXT + ROOT CONTAINER (ultra) ---
     root = st.container(key='tab_special_root')
     with root:
         st.session_state['_ctx_tab'] = 'special'
@@ -2614,7 +2676,12 @@ def _qr_image_bytes(text: str) -> bytes:
 
 # REPORT with side panel (tabs)
 with t_report:
-    st.subheader("보고서 (.md/.txt/.pdf) — 모든 항목 포함")
+    
+    # ---- route/context pin for REPORT ----
+    st.session_state['_ctx_tab'] = 'report'
+    _pin_route('report')
+    # ---- /route/context pin ----
+st.subheader("보고서 (.md/.txt/.pdf) — 모든 항목 포함")
 
     key_id = st.session_state.get("key", "(미설정)")
     labs = st.session_state.get("labs_dict", {}) or {}
@@ -3108,7 +3175,12 @@ def render_graph_panel():
             st.pyplot(fig)
 
 with t_graph:
-    render_graph_panel()
+    
+    # ---- route/context pin for GRAPH ----
+    st.session_state['_ctx_tab'] = 'graph'
+    _pin_route('graph')
+    # ---- /route/context pin ----
+render_graph_panel()
 
 # ===== [INLINE FEEDBACK – drop-in, no external file] =====
 import os, tempfile
@@ -3739,3 +3811,15 @@ def _load_local_module2(mod_name: str, candidates):
     return None, None
 _bm_hardlock()  # final
 _bm_sync_query()
+
+
+# ---- Final home blocker (idempotent) ----
+try:
+    _FINAL_HOME_BLOCK_CALLED_
+except NameError:
+    _FINAL_HOME_BLOCK_CALLED_ = True
+    try:
+        _block_spurious_home()
+    except Exception:
+        pass
+# ---- /Final home blocker ----
