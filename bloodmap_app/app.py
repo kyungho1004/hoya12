@@ -1,3 +1,36 @@
+
+# === PATCH: Hardened Streamlit toggle namespacing (no KeyError; pre-seed state; idempotent) ===
+def _ensure_sp_ns():
+    import streamlit as st, uuid
+    ss = st.session_state
+    ss.setdefault("_sp_ns", "sp" + uuid.uuid4().hex[:8])
+    return ss["_sp_ns"]
+
+def _apply_toggle_monkey_patch():
+    try:
+        import streamlit as st
+        if getattr(st, "_sp_toggle_patched", False):
+            return
+        _orig_toggle = st.toggle
+        def _patched_toggle(label, *args, **kwargs):
+            k = kwargs.get("key", None)
+            if isinstance(k, str) and not k.startswith("__sp__/"):
+                ns = _ensure_sp_ns()
+                k = f"__sp__/{ns}/{k}"
+                kwargs["key"] = k
+            try:
+                _ = st.session_state[k]
+            except Exception:
+                st.session_state[k] = bool(kwargs.get("value", False))
+            return _orig_toggle(label, *args, **kwargs)
+        st.toggle = _patched_toggle
+        st._sp_toggle_patched = True
+    except Exception:
+        pass
+
+_apply_toggle_monkey_patch()
+# === /PATCH ===
+
 # === PATCH: Robust Streamlit toggle key namespacing (no KeyError, idempotent) ===
 def _ensure_sp_ns():
     import streamlit as st, uuid
