@@ -1,5 +1,4 @@
 
-_heal_home_once()
 
 # ---- HomeBlocker v1 ----
 def _block_spurious_home():
@@ -194,7 +193,7 @@ import importlib.util
 import streamlit as st
 
 
-# [ROUTE-PATCH v4] First-click healer: corrects accidental 'home' once, then reruns
+# [ROUTE-PATCH v4b] First-click healer: corrects accidental 'home' once, then reruns
 def _heal_home_once():
     import streamlit as st
     ss = st.session_state
@@ -212,6 +211,7 @@ def _heal_home_once():
             ss["_heal_home_once_done"] = True
             st.rerun()
 
+_heal_home_once()
 
 st.markdown("""
 <style>
