@@ -10,16 +10,6 @@ from __future__ import annotations
 from typing import List, Optional
 import streamlit as st
 
-# === PATCH: special-tests key helpers (namespaced + index-aware) ===
-def _tog_key(name: str, idx: int | None = None) -> str:
-    base = f"sp_tog_{name}"
-    return f"{base}_{idx}" if idx is not None else base
-
-def _fav_key(name: str, idx: int | None = None) -> str:
-    base = f"sp_fav_{name}"
-    return f"{base}_{idx}" if idx is not None else base
-# === /PATCH ===
-
 def _num(x):
     try:
         if x is None: return None
@@ -37,8 +27,12 @@ def _emit(lines: List[str], kind: Optional[str], msg: str):
     tag = _flag(kind)
     lines.append(f"{tag} {msg}" if tag else msg)
 
-def _tog_key(name: str) -> str: return f"sp_tog_{name}"
-def _fav_key(name: str) -> str: return f"sp_fav_{name}"
+def _tog_key(name: str, idx: int | None = None) -> str:
+    base = f"sp_tog_{name}"
+    return f"{base}_{idx}" if idx is not None else base
+def _fav_key(name: str, idx: int | None = None) -> str:
+    base = f"sp_fav_{name}"
+    return f"{base}_{idx}" if idx is not None else base
 
 SECTIONS = [
     ("소변검사 (Urinalysis)", "urine"),
@@ -60,11 +54,10 @@ def _fav_list():
     return st.session_state["fav_tests"]
 
 def special_tests_ui() -> List[str]:
+    lines: List[str] = []
     # Render only within special tab
-    import streamlit as st
     if st.session_state.get('_ctx_tab') not in ('special','t_special'):
         return []
-    lines: List[str] = []
     with st.expander("🧪 특수검사 (선택 입력)", expanded=True):
         st.caption("정성검사는 +/++/+++ , 정량검사는 숫자만 입력. ★로 즐겨찾기 고정.")
         favs = _fav_list()
@@ -73,7 +66,7 @@ def special_tests_ui() -> List[str]:
             chips = st.columns(len(favs))
             for i, sec_id in enumerate(favs):
                 with chips[i]:
-                    if st.button(f"★ {sec_id}", key=_fav_key(f"chip_{sec_id}")):
+                    if st.button(f"★ {sec_id}", key=_fav_key(f"chip_{sec_id}", i)):
                         st.session_state[_tog_key(sec_id, i)] = True
 
         for i, (title, sec_id) in enumerate(SECTIONS):
@@ -83,7 +76,7 @@ def special_tests_ui() -> List[str]:
             with c2:
                 isfav = sec_id in favs
                 label = "★" if isfav else "☆"
-                if st.button(label, key=_fav_key(f"btn_{sec_id}")):
+                if st.button(label, key=_fav_key(f"btn_{sec_id}", i)):
                     if isfav: favs.remove(sec_id)
                     else:
                         if sec_id not in favs: favs.append(sec_id)
