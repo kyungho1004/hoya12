@@ -2379,7 +2379,78 @@ def __bm_try_get_wkey():
         return lambda x: x
 _wkey = __bm_try_get_wkey()
 try:
-    lines = special_tests_ui()
+    # === SPECIAL TESTS SAFE+ADAPTIVE CALL ===
+    import inspect as _inspect
+    def __bm_try_get_wkey():
+        try:
+            return wkey
+        except Exception:
+            return lambda x: x
+    _wkey = __bm_try_get_wkey()
+
+    # --- Context bridge: push normalized aliases into session_state ---
+    ss = st.session_state
+    _group = ss.get("group") or ss.get("dx_group") or ss.get("암종") or ss.get("진단그룹") or ss.get("G")
+    _disease = ss.get("disease") or ss.get("dx_disease") or ss.get("진단") or ss.get("D")
+    _labs = ss.get("_labs_df") or ss.get("labs") or ss.get("LABS") or ss.get("input_labs")
+    # write back common aliases so special_tests.py (which may read different keys) can see consistent values
+    for k, v in {
+        "group": _group, "dx_group": _group, "암종": _group, "G": _group,
+        "disease": _disease, "dx_disease": _disease, "진단": _disease, "D": _disease,
+        "labs": _labs, "_labs_df": _labs, "LABS": _labs, "input_labs": _labs
+    }.items():
+        try:
+            if v is not None:
+                ss[k] = v
+        except Exception:
+            pass
+    # --- /Context bridge ---
+
+    try:
+        _ctx = {
+            "group": _group,
+            "disease": _disease,
+            "labs": _labs,
+            "ae_map": locals().get("ae_map", {}),
+            "label_map": locals().get("label_map", {}),
+        }
+        _fn = special_tests_ui
+        try:
+            _sig = _inspect.signature(_fn)
+        except Exception:
+            _sig = None
+        if _sig and "st" in _sig.parameters and "ctx" in _sig.parameters:
+            lines = _fn(st, _ctx)
+        elif _sig and "ctx" in _sig.parameters:
+            lines = _fn(ctx=_ctx)
+        elif _sig and "st" in _sig.parameters:
+            lines = _fn(st)
+        else:
+            lines = _fn()
+    except Exception as _e:
+        import importlib
+        st.error("특수검사 UI 실행 중 오류가 발생했습니다.")
+        try:
+            st.exception(_e)
+        except Exception:
+            st.write(str(_e))
+        if st.button("특수검사 모듈 리로드", key=_wkey("special_reload")):
+            try:
+                if "_sp" in globals() and _sp:
+                    importlib.reload(_sp)
+            except Exception:
+                pass
+            st.rerun()
+        lines = []
+
+    # 빈 결과 안내 (조건 미충족 시 사용자 힌트)
+    if not lines:
+        with st.expander("ℹ️ 특수검사가 비어있나요? (열어서 확인)", expanded=False):
+            st.markdown("- 진단(암종/질환) 선택되었는지 확인")
+            st.markdown("- 최근 입력한 **피수치**가 있는지 확인")
+            st.markdown("- 모듈 버전 불일치 시 위의 **리로드**로 갱신")
+            st.caption(f"컨텍스트: group={_group!r}, disease={_disease!r}, labs={'OK' if _labs is not None else 'None'}")
+    # === /SPECIAL TESTS SAFE+ADAPTIVE CALL ===
 except Exception as _e:
     import importlib
     st.error("특수검사 UI 실행 중 오류가 발생했습니다.")
