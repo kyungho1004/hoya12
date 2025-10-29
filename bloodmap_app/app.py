@@ -2876,12 +2876,28 @@ with t_report:
 
         if sec_special:
             spec_lines = st.session_state.get("special_interpretations", [])
+            # [PATCH] Fallback if special_interpretations is empty — try analysis_ctx.lines_blocks
+            if not spec_lines:
+                try:
+                    _ac = st.session_state.get("analysis_ctx", {}) or {}
+                    _blocks = _ac.get("lines_blocks", []) or []
+                    for _title, _arr in _blocks:
+                        try:
+                            if "특수검사" in str(_title) and _arr:
+                                spec_lines = list(_arr)
+                                break
+                        except Exception:
+                            pass
+                    # cache back for report/pdf export consistency
+                    if spec_lines:
+                        st.session_state["special_interpretations"] = spec_lines
+                except Exception:
+                    pass
             if spec_lines:
                 lines.append("## 특수검사 해석(각주 포함)")
                 for ln in spec_lines:
                     lines.append(f"- {ln}")
                 lines.append("")
-
         lines.append("---")
         lines.append("### 🏥 병원 전달용 텍스트 (QR 동일 내용)")
         lines.append(_build_hospital_summary())
