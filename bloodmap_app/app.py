@@ -1,67 +1,4 @@
 
-# === PATCH: Hardened Streamlit toggle namespacing (no KeyError; pre-seed state; idempotent) ===
-def _ensure_sp_ns():
-    import streamlit as st, uuid
-    ss = st.session_state
-    ss.setdefault("_sp_ns", "sp" + uuid.uuid4().hex[:8])
-    return ss["_sp_ns"]
-
-def _apply_toggle_monkey_patch():
-    try:
-        import streamlit as st
-        if getattr(st, "_sp_toggle_patched", False):
-            return
-        _orig_toggle = st.toggle
-        def _patched_toggle(label, *args, **kwargs):
-            k = kwargs.get("key", None)
-            if isinstance(k, str) and not k.startswith("__sp__/"):
-                ns = _ensure_sp_ns()
-                k = f"__sp__/{ns}/{k}"
-                kwargs["key"] = k
-            try:
-                _ = st.session_state[k]
-            except Exception:
-                st.session_state[k] = bool(kwargs.get("value", False))
-            return _orig_toggle(label, *args, **kwargs)
-        st.toggle = _patched_toggle
-        st._sp_toggle_patched = True
-    except Exception:
-        pass
-
-_apply_toggle_monkey_patch()
-# === /PATCH ===
-
-# === PATCH: Robust Streamlit toggle key namespacing (no KeyError, idempotent) ===
-def _ensure_sp_ns():
-    import streamlit as st, uuid
-    ss = st.session_state
-    # setdefault prevents KeyError and is safe across the whole app
-    ss.setdefault("_sp_ns", "sp" + uuid.uuid4().hex[:8])
-    return ss["_sp_ns"]
-
-def _apply_toggle_monkey_patch():
-    try:
-        import streamlit as st
-        if getattr(st, "_sp_toggle_patched", False):
-            return
-        _orig_toggle = st.toggle
-        def _patched_toggle(label, *args, **kwargs):
-            # Only adjust when user provided a string key that is not already namespaced
-            k = kwargs.get("key", None)
-            if isinstance(k, str) and not k.startswith("__sp__/"):
-                ns = _ensure_sp_ns()
-                kwargs["key"] = f"__sp__/{ns}/{k}"
-            return _orig_toggle(label, *args, **kwargs)
-        st.toggle = _patched_toggle
-        st._sp_toggle_patched = True
-    except Exception:
-        # Never break the app due to patching
-        pass
-# Call early so every section benefits
-_apply_toggle_monkey_patch()
-# === /PATCH ===
-
-
 
 # ---- HomeBlocker v1 ----
 def _block_spurious_home():
@@ -150,32 +87,6 @@ try:
 except Exception:
     pass
 # ---- End initial route bootstrap ----
-
-
-# ---- Route pin helper (idempotent) ----
-def _pin_route(route: str):
-    try:
-        import streamlit as st
-        ss = st.session_state
-        ss["_home_intent"] = False
-        ss["_route"] = route
-        if (not ss.get("_route_last")) or ss.get("_route_last") == "home":
-            ss["_route_last"] = route
-        # sync query param
-        try:
-            if st.query_params.get("route") != route:
-                st.query_params.update(route=route)
-        except Exception:
-            try:
-                if (st.experimental_get_query_params().get("route") or [""])[0] != route:
-                    st.experimental_set_query_params(route=route)
-            except Exception:
-                pass
-        return True
-    except Exception:
-        return False
-# ---- /Route pin helper ----
-
 
 
 
@@ -1469,7 +1380,6 @@ def lab_validate(abbr: str, val, is_peds: bool):
     return "정상범위"
 
 with t_labs:
-    _pin_route('labs')
     st.subheader("피수치 입력 — 붙여넣기 지원 (견고)")
     st.caption("예: 'WBC: 4.5', 'Hb 12.3', 'PLT, 200', 'Na 140 mmol/L'…")
 
@@ -1548,7 +1458,6 @@ with t_labs:
 
 # DX
 with t_dx:
-    _pin_route('dx')
 
     # ---- DX label fallbacks (avoid NameError) ----
     try:
@@ -1770,7 +1679,6 @@ def _aggregate_all_aes(meds, db):
     return result
 # CHEMO
 with t_chemo:
-    _pin_route('chemo')
     st.subheader("항암제(진단 기반)")
     group = st.session_state.get("onco_group")
     disease = st.session_state.get("onco_disease")
@@ -2459,63 +2367,6 @@ def _annotate_special_notes(lines):
     return out
 # (migrated) 기존 소아 GI 섹션 호출은 t_peds 퀵 섹션으로 이동되었습니다.
 with t_special:
-
-    # === INLINE PATCH: namespace Streamlit toggle keys to avoid collisions ===
-    try:
-        import streamlit as st, uuid
-        ss = st.session_state
-        if "_sp_ns" not in ss:
-            ss["_sp_ns"] = "sp" + uuid.uuid4().hex[:8]
-        if not getattr(st, "_sp_toggle_patched", False):
-            _orig_toggle = st.toggle
-            def _patched_toggle(label, *args, **kwargs):
-                k = kwargs.get("key", None)
-                if isinstance(k, str) and not k.startswith("__sp__/"):
-                    kwargs["key"] = f"__sp__/{ss['_sp_ns']}/{k}"
-                return _orig_toggle(label, *args, **kwargs)
-            st.toggle = _patched_toggle
-            st._sp_toggle_patched = True
-    except Exception:
-        pass
-    # === /INLINE PATCH ===
-    # === PATCH: FORCE special tests render (no home drop) ===
-    _pin_route('special')
-    import streamlit as st
-    ss = st.session_state
-    ss['_ctx_tab'] = 'special'
-    # robust loader: prefer /mnt/data over package
-    def _load_special_tests():
-        try:
-            import importlib.util, sys, os
-            for cand in ('/mnt/data/special_tests.py','/mnt/data/special_test.py'):
-                if os.path.exists(cand):
-                    spec = importlib.util.spec_from_file_location('special_tests_patched', cand)
-                    mod = importlib.util.module_from_spec(spec)
-                    spec.loader.exec_module(mod)  # type: ignore
-                    sys.modules['special_tests'] = mod
-                    return mod
-        except Exception:
-            pass
-        try:
-            import importlib
-            return importlib.import_module('special_tests')
-        except Exception:
-            try:
-                import importlib
-                return importlib.import_module('special_test')
-            except Exception:
-                return None
-    _sp = _load_special_tests()
-    _called = False
-    if _sp and hasattr(_sp, 'special_tests_ui'):
-        try:
-            _called = bool(_sp.special_tests_ui()) or True
-        except Exception as e:
-            st.warning('특수검사 로딩 오류: ' + str(e))
-            _called = False
-    if not _called:
-        st.info('특수검사 모듈이 없거나 UI가 비어있습니다. /mnt/data/special_tests.py를 확인하세요.')
-    _pin_route('special')
     # 🔬 특수검사 탭 렌더링 (패치 추가)
     import streamlit as st
     st.subheader("🔬 특수검사")
@@ -2677,7 +2528,6 @@ def _qr_image_bytes(text: str) -> bytes:
 
 # REPORT with side panel (tabs)
 with t_report:
-    _pin_route('report')
     st.subheader("보고서 (.md/.txt/.pdf) — 모든 항목 포함")
 
     key_id = st.session_state.get("key", "(미설정)")
@@ -3172,7 +3022,6 @@ def render_graph_panel():
             st.pyplot(fig)
 
 with t_graph:
-    _pin_route('graph')
     render_graph_panel()
 
 # ===== [INLINE FEEDBACK – drop-in, no external file] =====
@@ -3804,7 +3653,59 @@ def _load_local_module2(mod_name: str, candidates):
     return None, None
 
 
-# === PATCH APPEND: AE resolver safe shims (global fallbacks) ===
+# === PATCH APPEND: Ultra-hardened widget key namespacing (toggle+checkbox; no KeyError; idempotent; null-safe) ===
+def _bm_ns_seed():
+    import streamlit as st, uuid
+    ss = st.session_state
+    ss.setdefault("_sp_ns", "sp" + uuid.uuid4().hex[:8])
+    return ss["_sp_ns"]
+
+def _bm_prefix_key_if_needed(k):
+    if isinstance(k, str) and not k.startswith("__sp__/"):
+        return f"__sp__/{_bm_ns_seed()}/{k}"
+    return k
+
+def _bm_seed_state_if_possible(key, default=False):
+    try:
+        import streamlit as st
+        if isinstance(key, str) and key:
+            st.session_state.setdefault(key, bool(default))
+    except Exception:
+        pass
+
+def _bm_apply_widget_patches():
+    try:
+        import streamlit as st
+        if getattr(st, "_bm_widget_patched", False):
+            return
+        _orig_toggle = st.toggle
+        def _patched_toggle(label, *args, **kwargs):
+            k = kwargs.get("key", None)
+            ek = _bm_prefix_key_if_needed(k)
+            if ek is not None:
+                kwargs["key"] = ek
+                _bm_seed_state_if_possible(ek, kwargs.get("value", False))
+            return _orig_toggle(label, *args, **kwargs)
+        st.toggle = _patched_toggle
+
+        _orig_checkbox = st.checkbox
+        def _patched_checkbox(label, *args, **kwargs):
+            k = kwargs.get("key", None)
+            ek = _bm_prefix_key_if_needed(k)
+            if ek is not None:
+                kwargs["key"] = ek
+                _bm_seed_state_if_possible(ek, kwargs.get("value", False))
+            return _orig_checkbox(label, *args, **kwargs)
+        st.checkbox = _patched_checkbox
+
+        st._bm_widget_patched = True
+    except Exception:
+        pass
+
+_bm_apply_widget_patches()
+# === /PATCH APPEND ===
+
+# === PATCH APPEND: AE resolver safe shims (fallbacks) ===
 try:
     from ae_resolve import resolve_key, get_ae, get_checks, render_arac_wrapper  # type: ignore
 except Exception:
