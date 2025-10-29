@@ -113,6 +113,29 @@ def _pin_route(route: str):
         return False
 # ---- /Route pin helper ----
 
+# === PATCH: robust special_tests loader ===
+def _load_special_tests():
+    try:
+        import importlib
+        mod = importlib.import_module('special_tests')
+        return mod
+    except Exception:
+        try:
+            import importlib.util, sys, os
+            # try local /mnt/data first
+            for cand in ('/mnt/data/special_tests.py', '/mnt/data/special_test.py'):
+                if os.path.exists(cand):
+                    spec = importlib.util.spec_from_file_location('special_tests_patched', cand)
+                    mod = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(mod)  # type: ignore
+                    sys.modules['special_tests'] = mod
+                    return mod
+            # fallback: singular name in package path
+            mod = importlib.import_module('special_test')
+            return mod
+        except Exception:
+            return None
+
 
 
 
@@ -144,7 +167,7 @@ def _call_first(mod, names):
 branding = _safe_import("branding")
 pdf_export = _safe_import("pdf_export")
 lab_diet = _safe_import("lab_diet")
-special_tests = _safe_import("special_tests") or _safe_import("special_test")
+special_tests = _safe_import("special_tests")
 onco_map = _safe_import("onco_map")
 drug_db = _safe_import("drug_db")
 peds_dose = _safe_import("peds_dose")
@@ -420,7 +443,7 @@ except Exception:
         return None, None
     _bm__LML2_ready = True
 # === /LOCAL MODULE LOADER v2 (early) ===
-_sp, SPECIAL_PATH = _load_local_module2("special_tests", ["special_tests.py", "modules/special_tests.py", "/mnt/data/special_tests.py", "special_test.py", "modules/special_test.py", "/mnt/data/special_test.py"])
+_sp, SPECIAL_PATH = _load_local_module2("special_tests", ["special_tests.py", "modules/special_tests.py", "/mnt/data/special_tests.py"])
 if _sp and hasattr(_sp, "special_tests_ui"):
     special_tests_ui = _sp.special_tests_ui
 else:
@@ -1894,8 +1917,6 @@ _block_spurious_home()
 
 # PEDS
 with t_peds:
-    _pin_route('peds')
-
     st.subheader("소아 증상 기반 점수 + 보호자 설명 + 해열제 계산")
     render_peds_nav_md()
     c1, c2, c3, c4, c5 = st.columns(5)
@@ -2398,6 +2419,9 @@ def _annotate_special_notes(lines):
     return out
 # (migrated) 기존 소아 GI 섹션 호출은 t_peds 퀵 섹션으로 이동되었습니다.
 with t_special:
+    _pin_route('special')
+    import streamlit as st
+    st.session_state['_ctx_tab'] = 'special'
     _pin_route('special')
     # 🔬 특수검사 탭 렌더링 (패치 추가)
     import streamlit as st
