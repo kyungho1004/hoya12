@@ -2396,6 +2396,25 @@ def _annotate_special_notes(lines):
     return out
 # (migrated) 기존 소아 GI 섹션 호출은 t_peds 퀵 섹션으로 이동되었습니다.
 with t_special:
+
+    # === INLINE PATCH: namespace Streamlit toggle keys to avoid collisions ===
+    try:
+        import streamlit as st, uuid
+        ss = st.session_state
+        if "_sp_ns" not in ss:
+            ss["_sp_ns"] = "sp" + uuid.uuid4().hex[:8]
+        if not getattr(st, "_sp_toggle_patched", False):
+            _orig_toggle = st.toggle
+            def _patched_toggle(label, *args, **kwargs):
+                k = kwargs.get("key", None)
+                if isinstance(k, str) and not k.startswith("__sp__/"):
+                    kwargs["key"] = f"__sp__/{ss['_sp_ns']}/{k}"
+                return _orig_toggle(label, *args, **kwargs)
+            st.toggle = _patched_toggle
+            st._sp_toggle_patched = True
+    except Exception:
+        pass
+    # === /INLINE PATCH ===
     # === PATCH: FORCE special tests render (no home drop) ===
     _pin_route('special')
     import streamlit as st
