@@ -89,6 +89,32 @@ except Exception:
 # ---- End initial route bootstrap ----
 
 
+# ---- Route pin helper (idempotent) ----
+def _pin_route(route: str):
+    try:
+        import streamlit as st
+        ss = st.session_state
+        ss["_home_intent"] = False
+        ss["_route"] = route
+        if (not ss.get("_route_last")) or ss.get("_route_last") == "home":
+            ss["_route_last"] = route
+        # sync query param
+        try:
+            if st.query_params.get("route") != route:
+                st.query_params.update(route=route)
+        except Exception:
+            try:
+                if (st.experimental_get_query_params().get("route") or [""])[0] != route:
+                    st.experimental_set_query_params(route=route)
+            except Exception:
+                pass
+        return True
+    except Exception:
+        return False
+# ---- /Route pin helper ----
+
+
+
 
 # app.py
 
@@ -118,7 +144,7 @@ def _call_first(mod, names):
 branding = _safe_import("branding")
 pdf_export = _safe_import("pdf_export")
 lab_diet = _safe_import("lab_diet")
-special_tests = _safe_import("special_tests")
+special_tests = _safe_import("special_tests") or _safe_import("special_test")
 onco_map = _safe_import("onco_map")
 drug_db = _safe_import("drug_db")
 peds_dose = _safe_import("peds_dose")
@@ -192,81 +218,6 @@ from pathlib import Path
 import importlib.util
 import streamlit as st
 
-
-# ===== [BLOODMAP ULTRA PATCH] early guards =====
-ALLOWED_ROUTES = {"home","dx","chemo","labs","special","peds","report"}
-
-def _bm_defaults():
-    ss = st.session_state
-    ss.setdefault("_route", "dx")
-    ss.setdefault("_route_last", "dx")
-    ss.setdefault("_home_intent", False)
-    ss.setdefault("_ctx_tab", None)
-
-def _bm_remember():
-    ss = st.session_state
-    cur = ss.get("_route")
-    if cur and cur in ALLOWED_ROUTES and cur != "home":
-        ss["_route_last"] = cur
-
-def _bm_hardlock():
-    ss = st.session_state
-    cur = ss.get("_route", "dx")
-    if cur not in ALLOWED_ROUTES:
-        ss["_route"] = "dx"
-    cur = ss.get("_route", "dx")
-    last = ss.get("_route_last", "dx")
-    if cur == "home" and not ss.get("_home_intent", False):
-        ss["_route"] = last if last and last != "home" else "dx"
-        st.rerun()
-
-def _bm_sync_query():
-    try:
-        qp = st.query_params
-        r = st.session_state.get("_route","dx")
-        if qp.get("route") != r:
-            st.query_params.update(route=r)
-    except Exception:
-        try:
-            st.experimental_set_query_params(route=st.session_state.get("_route","dx"))
-        except Exception:
-            pass
-
-def _bm_attach_firewall():
-    ss = st.session_state
-    if ss.get("_widget_firewall_active", False):
-        return
-    def _ctx_prefix(key: str):
-        if not isinstance(key, str) or not key:
-            return key
-        # Respect namespaced keys
-        if key.startswith(("peds_","sp_","dx_","chemo_","labs_","special_","report_","home_")):
-            return key
-        ctx = ss.get("_ctx_tab") or ss.get("_route") or "global"
-        return f"{ctx}_{key}"
-    def _wrap(fn):
-        def _inner(*a, **kw):
-            if "key" in kw and kw["key"]:
-                kw["key"] = _ctx_prefix(kw["key"])
-            return fn(*a, **kw)
-        return _inner
-    for _n in ("checkbox","radio","selectbox","multiselect","text_input","number_input",
-               "slider","textarea","toggle","date_input","time_input","file_uploader",
-               "button","data_editor","form","columns"):
-        try:
-            f = getattr(st, _n, None)
-            if f and not getattr(f, "_bm_wrapped", False):
-                wf = _wrap(f); wf._bm_wrapped = True; setattr(st, _n, wf)
-        except Exception:
-            pass
-    ss["_widget_firewall_active"] = True
-
-# Boot sequence
-_bm_defaults()
-_bm_hardlock()
-_bm_sync_query()
-_bm_attach_firewall()
-# ===== [/BLOODMAP ULTRA PATCH] =====
 st.markdown("""
 <style>
 /* smooth-scroll */
@@ -469,7 +420,7 @@ except Exception:
         return None, None
     _bm__LML2_ready = True
 # === /LOCAL MODULE LOADER v2 (early) ===
-_sp, SPECIAL_PATH = _load_local_module2("special_tests", ["special_tests.py", "modules/special_tests.py", "/mnt/data/special_tests.py"])
+_sp, SPECIAL_PATH = _load_local_module2("special_tests", ["special_tests.py", "modules/special_tests.py", "/mnt/data/special_tests.py", "special_test.py", "modules/special_test.py", "/mnt/data/special_test.py"])
 if _sp and hasattr(_sp, "special_tests_ui"):
     special_tests_ui = _sp.special_tests_ui
 else:
@@ -1455,6 +1406,7 @@ def lab_validate(abbr: str, val, is_peds: bool):
     return "정상범위"
 
 with t_labs:
+    _pin_route('labs')
     st.subheader("피수치 입력 — 붙여넣기 지원 (견고)")
     st.caption("예: 'WBC: 4.5', 'Hb 12.3', 'PLT, 200', 'Na 140 mmol/L'…")
 
@@ -1533,11 +1485,8 @@ with t_labs:
 
 # DX
 with t_dx:
+    _pin_route('dx')
 
-    st.session_state['_ctx_tab'] = 'dx'
-    st.session_state['_route'] = 'dx'
-    _bm_remember()
-    _bm_sync_query()
     # ---- DX label fallbacks (avoid NameError) ----
     try:
         DX_KO  # type: ignore
@@ -1758,6 +1707,7 @@ def _aggregate_all_aes(meds, db):
     return result
 # CHEMO
 with t_chemo:
+    _pin_route('chemo')
     st.subheader("항암제(진단 기반)")
     group = st.session_state.get("onco_group")
     disease = st.session_state.get("onco_disease")
@@ -1944,6 +1894,8 @@ _block_spurious_home()
 
 # PEDS
 with t_peds:
+    _pin_route('peds')
+
     st.subheader("소아 증상 기반 점수 + 보호자 설명 + 해열제 계산")
     render_peds_nav_md()
     c1, c2, c3, c4, c5 = st.columns(5)
@@ -2446,24 +2398,14 @@ def _annotate_special_notes(lines):
     return out
 # (migrated) 기존 소아 GI 섹션 호출은 t_peds 퀵 섹션으로 이동되었습니다.
 with t_special:
-    # ---- SPECIAL: context pin (no direct UI call) ----
-    st.session_state['_ctx_tab'] = 'special'
     _pin_route('special')
-    # -----------------------------------------------
-    # --- SPECIAL TAB CONTEXT + ROOT CONTAINER (ultra) ---
-    root = st.container(key='tab_special_root')
-    with root:
-        st.session_state['_ctx_tab'] = 'special'
-        st.session_state['_route'] = 'special'
-        _bm_remember()
-        try:
-            from special_tests import special_tests_ui as _sp_ui
-            _sp_lines = _sp_ui()
-            if isinstance(_sp_lines, (list, tuple)):
-                st.session_state['special_interpretations'] = list(_sp_lines)
-        except Exception as e:
-            st.error(f'특수검사 UI 표시 중 오류: {e}')
-    # -----------------------------------------------------
+    # 🔬 특수검사 탭 렌더링 (패치 추가)
+    import streamlit as st
+    st.subheader("🔬 특수검사")
+    try:
+        special_tests_ui()
+    except Exception as e:
+        st.error(f"특수검사 UI 표시 중 오류 발생: {e}")
     st.subheader("특수검사 해석")
     if SPECIAL_PATH:
         st.caption(f"special_tests 로드: {SPECIAL_PATH}")
@@ -2618,6 +2560,7 @@ def _qr_image_bytes(text: str) -> bytes:
 
 # REPORT with side panel (tabs)
 with t_report:
+    _pin_route('report')
     st.subheader("보고서 (.md/.txt/.pdf) — 모든 항목 포함")
 
     key_id = st.session_state.get("key", "(미설정)")
@@ -3112,6 +3055,7 @@ def render_graph_panel():
             st.pyplot(fig)
 
 with t_graph:
+    _pin_route('graph')
     render_graph_panel()
 
 # ===== [INLINE FEEDBACK – drop-in, no external file] =====
@@ -3741,6 +3685,3 @@ def _load_local_module2(mod_name: str, candidates):
             if m:
                 return m, used
     return None, None
-_bm_hardlock()  # final
-_bm_sync_query()
-_bm_hardlock()  # final
