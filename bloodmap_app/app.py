@@ -194,7 +194,7 @@ import streamlit as st
 
 
 
-# ===== Route guards (patch-only) =====
+# ===== Route guards (lean, no widget wrapping) =====
 ALLOWED_ROUTES = {"home","dx","chemo","labs","special","peds","report"}
 
 def _bm_defaults():
@@ -203,12 +203,6 @@ def _bm_defaults():
     ss.setdefault("_route_last", "dx")
     ss.setdefault("_home_intent", False)
     ss.setdefault("_ctx_tab", None)
-
-def _bm_remember():
-    ss = st.session_state
-    cur = ss.get("_route")
-    if cur and cur in ALLOWED_ROUTES and cur != "home":
-        ss["_route_last"] = cur
 
 def _bm_hardlock():
     ss = st.session_state
@@ -240,7 +234,7 @@ def _pin_route(name: str):
 
 _bm_defaults()
 _bm_hardlock()  # early
-# =====================================
+# ================================================
 # ===== [BLOODMAP ULTRA PATCH] early guards =====
 ALLOWED_ROUTES = {"home","dx","chemo","labs","special","peds","report"}
 
@@ -2494,17 +2488,23 @@ def _annotate_special_notes(lines):
     return out
 # (migrated) 기존 소아 GI 섹션 호출은 t_peds 퀵 섹션으로 이동되었습니다.
 with t_special:
-    # ---- SPECIAL: context pin & safe call ----
+    # --- SPECIAL singleton guard & context pin ---
     st.session_state['_ctx_tab'] = 'special'
     _pin_route('special')
     try:
-        from special_tests import special_tests_ui as _sp_ui
-        _sp_lines = _sp_ui()
-        if isinstance(_sp_lines, (list, tuple)):
-            st.session_state['special_interpretations'] = list(_sp_lines)
-    except Exception as e:
-        st.error(f'특수검사 UI 표시 중 오류: {e}')
-    # ------------------------------------------
+        __SP_CALLED__
+    except NameError:
+        __SP_CALLED__ = False
+    if not __SP_CALLED__:
+        try:
+            from special_tests import special_tests_ui as _sp_ui
+            _sp_lines = _sp_ui()
+            if isinstance(_sp_lines, (list, tuple)):
+                st.session_state['special_interpretations'] = list(_sp_lines)
+        except Exception as e:
+            st.error(f'특수검사 UI 표시 중 오류: {e}')
+        __SP_CALLED__ = True
+    # ---------------------------------------------
     # --- SPECIAL TAB CONTEXT + ROOT CONTAINER (ultra) ---
     root = st.container(key='tab_special_root')
     with root:

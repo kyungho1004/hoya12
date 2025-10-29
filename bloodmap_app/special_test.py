@@ -27,8 +27,12 @@ def _emit(lines: List[str], kind: Optional[str], msg: str):
     tag = _flag(kind)
     lines.append(f"{tag} {msg}" if tag else msg)
 
-def _tog_key(name: str) -> str: return f"tog_{name}"
-def _fav_key(name: str) -> str: return f"fav_{name}"
+def _tog_key(name: str, idx: int | None = None) -> str:
+    base = f"sp_tog_{name}"
+    return f"{base}_{idx}" if idx is not None else base
+def _fav_key(name: str, idx: int | None = None) -> str:
+    base = f"sp_fav_{name}"
+    return f"{base}_{idx}" if idx is not None else base
 
 SECTIONS = [
     ("소변검사 (Urinalysis)", "urine"),
@@ -51,6 +55,14 @@ def _fav_list():
 
 def special_tests_ui() -> List[str]:
     lines: List[str] = []
+    # RENDER LOCK: avoid duplicate draw in same run
+    try:
+        __SP_RENDER_LOCK__
+    except NameError:
+        __SP_RENDER_LOCK__ = False
+    if __SP_RENDER_LOCK__:
+        return []
+    __SP_RENDER_LOCK__ = True
     with st.expander("🧪 특수검사 (선택 입력)", expanded=True):
         st.caption("정성검사는 +/++/+++ , 정량검사는 숫자만 입력. ★로 즐겨찾기 고정.")
         favs = _fav_list()
@@ -59,17 +71,17 @@ def special_tests_ui() -> List[str]:
             chips = st.columns(len(favs))
             for i, sec_id in enumerate(favs):
                 with chips[i]:
-                    if st.button(f"★ {sec_id}", key=_fav_key(f"chip_{sec_id}")):
-                        st.session_state[_tog_key(sec_id)] = True
+                    if st.button(f"★ {sec_id}", key=_fav_key(f"chip_{sec_id}", i)):
+                        st.session_state[_tog_key(sec_id, i)] = True
 
-        for title, sec_id in SECTIONS:
+        for i, (title, sec_id) in enumerate(SECTIONS):
             c1, c2 = st.columns([0.8, 0.2])
             with c1:
-                on = st.toggle(title, key=_tog_key(sec_id), value=bool(st.session_state.get(_tog_key(sec_id), True)))
+                on = st.toggle(title, key=_tog_key(sec_id, i), value=bool(st.session_state.get(_tog_key(sec_id, i), True)))
             with c2:
                 isfav = sec_id in favs
                 label = "★" if isfav else "☆"
-                if st.button(label, key=_fav_key(f"btn_{sec_id}")):
+                if st.button(label, key=_fav_key(f"btn_{sec_id}", i)):
                     if isfav: favs.remove(sec_id)
                     else:
                         if sec_id not in favs: favs.append(sec_id)
