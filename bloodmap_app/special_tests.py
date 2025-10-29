@@ -56,8 +56,16 @@ def _fav_list():
 def special_tests_ui() -> List[str]:
     lines: List[str] = []
     # Render only within special tab
-    if st.session_state.get('_ctx_tab') not in ('special','t_special'):
+    tab = st.session_state.get('_ctx_tab') or st.session_state.get('_route')
+    # Render gate: only block when tab is explicitly set and not special
+    if tab and tab not in ('special','t_special'):
         return []
+    # RENDER LOCK: avoid duplicate draw in same run
+    ss = st.session_state
+    ss.setdefault('SP_RENDER_LOCK', False)
+    if ss['SP_RENDER_LOCK']:
+        return []
+    ss['SP_RENDER_LOCK'] = True
     with st.expander("🧪 특수검사 (선택 입력)", expanded=True):
         st.caption("정성검사는 +/++/+++ , 정량검사는 숫자만 입력. ★로 즐겨찾기 고정.")
         favs = _fav_list()
