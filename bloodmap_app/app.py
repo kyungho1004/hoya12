@@ -1,4 +1,5 @@
 
+_heal_home_once()
 
 # ---- HomeBlocker v1 ----
 def _block_spurious_home():
@@ -60,7 +61,6 @@ except Exception:
     pass
 # ---- End hard redirect guard v2 ----
 
-_block_spurious_home()  # early
 
 # ---- Initial route bootstrap (anti first-click→home) ----
 try:
@@ -192,6 +192,26 @@ import os, sys, re, io, csv
 from pathlib import Path
 import importlib.util
 import streamlit as st
+
+
+# [ROUTE-PATCH v4] First-click healer: corrects accidental 'home' once, then reruns
+def _heal_home_once():
+    import streamlit as st
+    ss = st.session_state
+    cur = ss.get("_route")
+    last = ss.get("_route_last")
+    intent_home = ss.get("_home_intent", False)
+    if (not intent_home) and (last in ("dx", "chemo", "labs")) and (cur in (None, "", "home")):
+        if not ss.get("_heal_home_once_done", False):
+            ss["_route"] = last
+            try:
+                if st.query_params.get("route") != last:
+                    st.query_params.update(route=last)
+            except Exception:
+                st.experimental_set_query_params(route=last)
+            ss["_heal_home_once_done"] = True
+            st.rerun()
+
 
 st.markdown("""
 <style>
@@ -838,7 +858,7 @@ def build_peds_notes(
 
 # ---------- Tabs ----------
 tab_labels = ["🏠 홈", "👶 소아 증상", "🧬 암 선택", "💊 항암제(진단 기반)", "🧪 피수치 입력", "🔬 특수검사", "📄 보고서", "📊 기록/그래프"]
-_block_spurious_home()  # pre-tabs
+_heal_home_once()  # pre-tabs
 t_home, t_peds, t_dx, t_chemo, t_labs, t_special, t_report, t_graph = st.tabs(tab_labels)
 
 # HOME
@@ -3646,5 +3666,3 @@ def _load_local_module2(mod_name: str, candidates):
             if m:
                 return m, used
     return None, None
-
-_block_spurious_home()  # final
