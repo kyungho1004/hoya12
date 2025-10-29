@@ -1,5 +1,5 @@
 
-
+import ui_patch  # keep this as the very first import
 # ---- HomeBlocker v1 ----
 def _block_spurious_home():
     ss = st.session_state
