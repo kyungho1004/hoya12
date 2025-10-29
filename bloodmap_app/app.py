@@ -1790,6 +1790,18 @@ with t_chemo:
                 pass
 
             for k, arr in ae_map.items():
+                # --- ensure resolve_key is available (local guard) ---
+                if "resolve_key" not in globals():
+                    try:
+                        from onco_map import _canon as resolve_key
+                    except Exception:
+                        def resolve_key(s):
+                            s0 = (s or "").strip()
+                            s1 = s0.upper().replace(" ", "").replace("−", "-")
+                            if s1 in ("ARA-C","ARAC","CYTARABINE(ARA-C)"):
+                                return "Cytarabine"
+                            return s0 or s
+                # --- /guard ---
                 if resolve_key(k) in ("Cytarabine", "Ara-C"):
                     continue
                 st.write(f"- **{label_map.get(k, str(k))}**")
