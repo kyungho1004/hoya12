@@ -113,29 +113,6 @@ def _pin_route(route: str):
         return False
 # ---- /Route pin helper ----
 
-# === PATCH: robust special_tests loader ===
-def _load_special_tests():
-    try:
-        import importlib
-        mod = importlib.import_module('special_tests')
-        return mod
-    except Exception:
-        try:
-            import importlib.util, sys, os
-            # try local /mnt/data first
-            for cand in ('/mnt/data/special_tests.py', '/mnt/data/special_test.py'):
-                if os.path.exists(cand):
-                    spec = importlib.util.spec_from_file_location('special_tests_patched', cand)
-                    mod = importlib.util.module_from_spec(spec)
-                    spec.loader.exec_module(mod)  # type: ignore
-                    sys.modules['special_tests'] = mod
-                    return mod
-            # fallback: singular name in package path
-            mod = importlib.import_module('special_test')
-            return mod
-        except Exception:
-            return None
-
 
 
 
@@ -2419,9 +2396,43 @@ def _annotate_special_notes(lines):
     return out
 # (migrated) 기존 소아 GI 섹션 호출은 t_peds 퀵 섹션으로 이동되었습니다.
 with t_special:
+    # === PATCH: FORCE special tests render (no home drop) ===
     _pin_route('special')
     import streamlit as st
-    st.session_state['_ctx_tab'] = 'special'
+    ss = st.session_state
+    ss['_ctx_tab'] = 'special'
+    # robust loader: prefer /mnt/data over package
+    def _load_special_tests():
+        try:
+            import importlib.util, sys, os
+            for cand in ('/mnt/data/special_tests.py','/mnt/data/special_test.py'):
+                if os.path.exists(cand):
+                    spec = importlib.util.spec_from_file_location('special_tests_patched', cand)
+                    mod = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(mod)  # type: ignore
+                    sys.modules['special_tests'] = mod
+                    return mod
+        except Exception:
+            pass
+        try:
+            import importlib
+            return importlib.import_module('special_tests')
+        except Exception:
+            try:
+                import importlib
+                return importlib.import_module('special_test')
+            except Exception:
+                return None
+    _sp = _load_special_tests()
+    _called = False
+    if _sp and hasattr(_sp, 'special_tests_ui'):
+        try:
+            _called = bool(_sp.special_tests_ui()) or True
+        except Exception as e:
+            st.warning('특수검사 로딩 오류: ' + str(e))
+            _called = False
+    if not _called:
+        st.info('특수검사 모듈이 없거나 UI가 비어있습니다. /mnt/data/special_tests.py를 확인하세요.')
     _pin_route('special')
     # 🔬 특수검사 탭 렌더링 (패치 추가)
     import streamlit as st
