@@ -348,6 +348,52 @@ else:
     def ibuprofen_ml(w):
         return (0.0, 0.0)
 
+# === LOCAL MODULE LOADER v2 (early) ===
+try:
+    _bm__LML2_ready  # guard
+except Exception:
+    def _load_local_module2(mod_name: str, candidates):
+        """
+        Try multiple candidate paths. Return (module, used_path) or (None, None).
+        Searches common bases; safe for both single path and list of paths.
+        """
+        import importlib.util, sys
+        from pathlib import Path
+        def _try(fp: Path):
+            try:
+                spec = importlib.util.spec_from_file_location(mod_name, str(fp))
+                if not spec or not spec.loader:
+                    return None, None
+                m = importlib.util.module_from_spec(spec)
+                sys.modules[mod_name] = m
+                spec.loader.exec_module(m)
+                return m, str(fp)
+            except Exception:
+                return None, None
+        base_candidates = []
+        seq = candidates if isinstance(candidates, (list, tuple)) else [candidates]
+        for c in seq:
+            c = str(c)
+            if c.startswith("/"):
+                fps = [Path(c)]
+            else:
+                fps = [
+                    Path(__file__).parent / c,
+                    Path(__file__).parent / "modules" / c,
+                    Path("/mount/src/hoya12/bloodmap_app") / c,
+                    Path("/mount/src/hoya12/bloodmap_app/modules") / c,
+                    Path("/mnt/data") / c,
+                ]
+            for fp in fps:
+                base_candidates.append(fp)
+        for fp in base_candidates:
+            if fp.exists():
+                m, used = _try(fp)
+                if m:
+                    return m, used
+        return None, None
+    _bm__LML2_ready = True
+# === /LOCAL MODULE LOADER v2 (early) ===
 _sp, SPECIAL_PATH = _load_local_module2("special_tests", ["special_tests.py", "modules/special_tests.py", "/mnt/data/special_tests.py"])
 if _sp and hasattr(_sp, "special_tests_ui"):
     special_tests_ui = _sp.special_tests_ui
