@@ -192,6 +192,21 @@ from pathlib import Path
 import importlib.util
 import streamlit as st
 
+
+# [ROUTE-PATCH] helpers
+def _route_set(route: str):
+    import streamlit as st
+    last = st.session_state.get("_route", "home")
+    if last != route:
+        st.session_state["_route_last"] = last
+    st.session_state["_route"] = route
+
+def _route_lock_dx():
+    import streamlit as st
+    if st.session_state.get("_route") != "dx":
+        _route_set("dx")
+
+
 st.markdown("""
 <style>
 /* smooth-scroll */
@@ -837,19 +852,16 @@ def build_peds_notes(
 
 # ---------- Tabs ----------
 tab_labels = ["🏠 홈", "👶 소아 증상", "🧬 암 선택", "💊 항암제(진단 기반)", "🧪 피수치 입력", "🔬 특수검사", "📄 보고서", "📊 기록/그래프"]
-t_home, t_peds, t_dx, t_chemo, t_labs, t_special, t_report, t_graph = st.tabs(tab_labels)
 
-
-with t_special:
-    # [ONEPATCH] 특수검사 결과 세션 저장 + 렌더
+# [ROUTE-PATCH] Anti-bounce: prevent unintended jumps to home
+try:
     import streamlit as st
-    st.subheader("🔬 특수검사")
-    try:
-        _sp_lines = special_tests_ui()
-        if isinstance(_sp_lines, (list, tuple)):
-            st.session_state["special_interpretations"] = list(_sp_lines)
-    except Exception as e:
-        st.error(f"특수검사 UI 표시 중 오류 발생: {e}")
+    if st.session_state.get("_route") == "home" and st.session_state.get("_route_last") in ("dx", "chemo"):
+        st.session_state["_route"] = st.session_state["_route_last"]
+except Exception:
+    pass
+
+t_home, t_peds, t_dx, t_chemo, t_labs, t_special, t_report, t_graph = st.tabs(tab_labels)
 
 # HOME
 with t_home:
@@ -1564,6 +1576,8 @@ with t_dx:
                 continue
             st.write(f"- {cat}: " + ", ".join(arr))
     st.session_state["recs_by_dx"] = recs
+    # [ROUTE-PATCH] keep user on DX tab after any selection
+    _route_lock_dx()
 
 # ---------- Chemo helpers ----------
 def _to_set_or_empty(x):
@@ -2379,13 +2393,6 @@ def _annotate_special_notes(lines):
     return out
 # (migrated) 기존 소아 GI 섹션 호출은 t_peds 퀵 섹션으로 이동되었습니다.
 with t_special:
-    # 🔬 특수검사 탭 렌더링 (패치 추가)
-    import streamlit as st
-    st.subheader("🔬 특수검사")
-    try:
-        special_tests_ui()
-    except Exception as e:
-        st.error(f"특수검사 UI 표시 중 오류 발생: {e}")
     st.subheader("특수검사 해석")
     if SPECIAL_PATH:
         st.caption(f"special_tests 로드: {SPECIAL_PATH}")
@@ -2888,27 +2895,12 @@ with t_report:
 
         if sec_special:
             spec_lines = st.session_state.get("special_interpretations", [])
-            # [ONEPATCH] 폴백: 세션이 비면 analysis_ctx.lines_blocks에서 "특수검사" 블록 회수
-            if not spec_lines:
-                try:
-                    _ac = st.session_state.get("analysis_ctx", {}) or {}
-                    _blocks = _ac.get("lines_blocks", []) or []
-                    for _title, _arr in _blocks:
-                        try:
-                            if "특수검사" in str(_title) and _arr:
-                                spec_lines = list(_arr)
-                                break
-                        except Exception:
-                            pass
-                    if spec_lines:
-                        st.session_state["special_interpretations"] = spec_lines
-                except Exception:
-                    pass
             if spec_lines:
                 lines.append("## 특수검사 해석(각주 포함)")
                 for ln in spec_lines:
                     lines.append(f"- {ln}")
                 lines.append("")
+
         lines.append("---")
         lines.append("### 🏥 병원 전달용 텍스트 (QR 동일 내용)")
         lines.append(_build_hospital_summary())
