@@ -1,134 +1,3 @@
-# === BM_ROUTE_HARDLOCK (TOP) ===
-try:
-    import streamlit as _st_bm
-    def __bm_dx_ctx():
-        ss = _st_bm.session_state
-        return any(k in ss and ss.get(k) not in (None, "", []) for k in (
-            "group","disease","진단","암종","dx_group","dx_disease","selected_group","selected_disease"
-        ))
-    def __bm_enforce_dx():
-        ss = _st_bm.session_state
-        ss["_route_last"] = "dx"
-        ss["_route"] = "dx"
-    if __bm_dx_ctx():
-        __bm_enforce_dx()
-    if not getattr(_st_bm, "_bm_patched_multiselect", False):
-        _bm_orig_ms = _st_bm.multiselect
-        def _bm_ms(label, options, default=None, *a, **k):
-            try:
-                k_key = k.get("key", None)
-            except Exception:
-                k_key = None
-            try:
-                ss = _st_bm.session_state
-                manual = bool(ss.get("_bm_chemo_manual", False))
-                pool_default = ss.get("_bm_chemo_pool_default", default)
-            except Exception:
-                manual = False
-                pool_default = default
-            if isinstance(k_key, str) and "drug_pick" in k_key:
-                default = [] if manual else (pool_default if pool_default is not None else default)
-            return _bm_orig_ms(label, options, default=default, *a, **k)
-        _st_bm.multiselect = _bm_ms
-        _st_bm._bm_patched_multiselect = True
-    __prev_bsh = globals().get("_block_spurious_home")
-    def _block_spurious_home():
-        if __bm_dx_ctx():
-            __bm_enforce_dx()
-        if callable(__prev_bsh):
-            try:
-                return __prev_bsh()
-            except Exception:
-                pass
-except Exception:
-    pass
-# === /BM_ROUTE_HARDLOCK ===
-# === PATCH-LOCK: classic hard lock + safety fallbacks ===
-from datetime import timedelta, timezone as _tz
-import os, sys, types
-
-# KST 보정
-try:
-    KST
-except NameError:
-    KST = _tz(timedelta(hours=9))
-
-# 클래식 고정(lean/router UI 무력화)
-os.environ["BLOODMAP_CLASSIC"] = "1"
-globals()["_CLASSIC_LOCK"] = True
-
-def _noop(*a, **k): return None
-for _mod in ("features.app_shell", "features.app_deprecator", "features.app_router"):
-    try:
-        m = __import__(_mod, fromlist=["*"])
-        for flag in ("SHOW_LEAN_TOGGLE","DEFAULT_LEAN","ENABLE_LEAN_UI","ROUTER_ENABLED"):
-            try: setattr(m, flag, False)
-            except Exception: pass
-        for fn in ("render_sidebar","render_lean_toggle","render_jumpbar","mount_router"):
-            try: setattr(m, fn, _noop)
-            except Exception: pass
-    except Exception:
-        mod = types.ModuleType(_mod)
-        for fn in ("render_sidebar","render_lean_toggle","render_jumpbar","mount_router"):
-            setattr(mod, fn, _noop)
-        sys.modules[_mod] = mod
-
-# AE 렌더 우선순위 + 폴백
-try:
-    from ui_results import render_adverse_effect as _ae
-except Exception:
-    try:
-        from ae_bridge import render_adverse_effect as _ae
-    except Exception:
-        try:
-            from ae_resolve import render_adverse_effect as _ae
-        except Exception:
-            def _ae(drug_key: str, rec: dict | None = None):
-                import streamlit as st
-
-# safety: resolve_key polyfill & safe wrapper
-def resolve_key(x):
-    try:
-        return x.get('key') if isinstance(x, dict) and 'key' in x else str(x)
-    except Exception:
-        return str(x)
-
-def _safe_rk(x):
-    try:
-        return resolve_key(x)
-    except Exception:
-        try:
-            return x.get('key') if isinstance(x, dict) and 'key' in x else str(x)
-        except Exception:
-            return str(x)
-
-_BM_BOOT_MSG = "선택된 항암제의 부작용 정보를 불러오는 중입니다."
-
-# 소아 페이지 모듈 폴백
-try:
-    import pages_peds as _peds
-    _HAS_PEDS = True
-except Exception:
-    _HAS_PEDS = False
-
-# 안전 DB 핸들러
-def _get_db():
-    db = globals().get("DRUG_DB")
-    return db if isinstance(db, dict) else {}
-
-# 라벨/AE 맵 폴리필(없으면 만들어줌)
-if "_label_kor" not in globals():
-    def _label_kor(k, label_map=None): return str(k)
-if "ae_map" not in globals():
-    ae_map = {}
-# === /PATCH-LOCK ===
-# === PATCH-CSS: hide stray lean toggle ===
-import streamlit as _stcss
-try:
-    _stcss.markdown("<style>section[data-testid='stSidebar'] [aria-label='경량 모드']{display:none!important}</style>", unsafe_allow_html=True)
-except Exception:
-    pass
-# === /PATCH-CSS ===
 
 
 # ---- HomeBlocker v1 ----
@@ -218,13 +87,6 @@ try:
 except Exception:
     pass
 # ---- End initial route bootstrap ----
-# ---- Early home-drop guard call (ensures we don't jump to 'home' unexpectedly) ----
-try:
-    _block_spurious_home()
-except Exception:
-    pass
-# ---- /Early home-drop guard call ----
-
 
 
 
@@ -344,7 +206,7 @@ html { scroll-behavior: smooth; }
 
 
 # --- HTML-only pediatric navigator (no rerun) ---
-def render_peds_nav_html():
+def render_peds_nav_md():
     from streamlit.components.v1 import html as _html
     _html("""
     <style>
@@ -1772,24 +1634,6 @@ def _aggregate_all_aes(meds, db):
 # CHEMO
 with t_chemo:
     st.subheader("항암제(진단 기반)")
-    # === ROUTE-STICKY (inside chemo tab) ===
-    try:
-        ss = st.session_state
-        if ss.get("_route") != "dx":
-            ss["_route"] = "dx"
-        if not ss.get("_route_last") or ss.get("_route_last") == "home":
-            ss["_route_last"] = "dx"
-    except Exception:
-        pass
-    # === /ROUTE-STICKY ===
-
-    # === CHEMO-PICK MODE TOGGLE ===
-    try:
-        manual_pick_mode = st.toggle("직접 선택 모드", value=False, key=wkey("chemo_manual_pick"))
-        st.session_state["_bm_chemo_manual"] = bool(manual_pick_mode)
-    except Exception:
-        pass
-    # === /CHEMO-PICK MODE TOGGLE ===
     group = st.session_state.get("onco_group")
     disease = st.session_state.get("onco_disease")
     recs = st.session_state.get("recs_by_dx", {}) or {}
@@ -1946,7 +1790,7 @@ with t_chemo:
                 pass
 
             for k, arr in ae_map.items():
-                if _safe_rk(k) in ("Cytarabine", "Ara-C"):
+                if resolve_key(k) in ("Cytarabine", "Ara-C"):
                     continue
                 st.write(f"- **{label_map.get(k, str(k))}**")
                 if isinstance(arr, (list, tuple)):
@@ -2468,7 +2312,32 @@ with t_special:
     st.subheader("특수검사 해석")
     if SPECIAL_PATH:
         st.caption(f"special_tests 로드: {SPECIAL_PATH}")
+
+# === SPECIAL TESTS SAFE CALL ===
+def __bm_try_get_wkey():
+    try:
+        return wkey
+    except Exception:
+        return lambda x: x
+_wkey = __bm_try_get_wkey()
+try:
     lines = special_tests_ui()
+except Exception as _e:
+    import importlib
+    st.error("특수검사 UI 실행 중 오류가 발생했습니다.")
+    try:
+        st.exception(_e)
+    except Exception:
+        st.write(str(_e))
+    if st.button("특수검사 모듈 리로드", key=_wkey("special_reload")):
+        try:
+            if "_sp" in globals() and _sp:
+                importlib.reload(_sp)
+        except Exception:
+            pass
+        st.rerun()
+    lines = []
+# === /SPECIAL TESTS SAFE CALL ===
     lines = _annotate_special_notes(lines or [])
     st.session_state["special_interpretations"] = lines
     if lines:
@@ -3024,14 +2893,6 @@ import os, tempfile
 from datetime import datetime
 import pandas as pd
 import streamlit as st
-# [PATCH] QA 스모크 체크 자동화 (비파괴)
-try:
-    import qa_precheck as _qa
-    _ = _qa.run()  # /mnt/data/PRECHECK_REPORT.txt 생성
-except Exception:
-    # QA 실패해도 앱은 계속 실행
-    pass
-
 try:
     from zoneinfo import ZoneInfo
     _KST = ZoneInfo("Asia/Seoul")
@@ -3527,24 +3388,3 @@ if _st_beta3 is not None and hasattr(_st_beta3, "expander"):
     except Exception:
         pass
 # === [/PATCH] ===
-
-
-# === BM_ROUTE_WATCHDOG (EOF) ===
-try:
-    import streamlit as _st_guard
-    def __bm_guard_dx():
-        ss = _st_guard.session_state
-        # dx 컨텍스트 추정: 진단 관련 키가 살아있음
-        _dx_ctx = any(k in ss and ss.get(k) not in (None, "", []) for k in (
-            "group","disease","진단","암종","dx_group","dx_disease","selected_group","selected_disease"
-        ))
-        if _dx_ctx:
-            # 최근 라우트가 dx면 홈 강제 덮어쓰기를 즉시 되돌림
-            if ss.get("_route_last") == "dx" and ss.get("_route") == "home":
-                ss["_route"] = "dx"
-            # 최소한 last는 dx로 유지
-            ss["_route_last"] = "dx"
-    __bm_guard_dx()
-except Exception:
-    pass
-# === /BM_ROUTE_WATCHDOG ===
