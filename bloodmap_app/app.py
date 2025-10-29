@@ -192,73 +192,18 @@ from pathlib import Path
 import importlib.util
 import streamlit as st
 
-
 def _route_defaults():
-    import streamlit as st
     ss = st.session_state
-    ss.setdefault("_route", "dx")
-    ss.setdefault("_route_last", "dx")
-    ss.setdefault("_home_intent", False)
-    ss.setdefault("_ctx_tab", None)
-
-def _remember_last_route():
-    import streamlit as st
-    ss = st.session_state
-    cur = ss.get("_route")
-    if cur and cur != "home":
-        ss["_route_last"] = cur
+    ss.setdefault('_route', 'dx')
+    ss.setdefault('_route_last', 'dx')
+    ss.setdefault('_home_intent', False)
 
 def _route_hardlock():
-    import streamlit as st
     ss = st.session_state
-    cur = ss.get("_route", "dx")
-    last = ss.get("_route_last", "dx")
-    if cur == "home" and not ss.get("_home_intent", False):
-        tgt = last if last and last != "home" else "dx"
-        ss["_route"] = tgt
-        try:
-            if st.query_params.get("route") != tgt:
-                st.query_params.update(route=tgt)
-        except Exception:
-            st.experimental_set_query_params(route=tgt)
+    if ss.get('_route') == 'home' and not ss.get('_home_intent', False):
+        ss['_route'] = ss.get('_route_last','dx') or 'dx'
         st.rerun()
 
-def _enter_tab(name: str, route_value: str = None):
-    import streamlit as st
-    ss = st.session_state
-    ss["_ctx_tab"] = name
-    if route_value:
-        ss["_route"] = route_value
-        _remember_last_route()
-
-# wrappers
-try:
-    _orig_special_tests_ui = globals().get("special_tests_ui", None)
-    if _orig_special_tests_ui and not globals().get("_wrapped_special_tests_ui", False):
-        def special_tests_ui(*args, **kwargs):
-            import streamlit as st
-            if st.session_state.get("_ctx_tab") != "special":
-                return []
-            return _orig_special_tests_ui(*args, **kwargs)
-        _wrapped_special_tests_ui = True
-except Exception:
-    pass
-
-for _peds_func_name in ("render_constipation_quickguide", "render_peds_quickguides", "render_peds_panel"):
-    try:
-        _orig = globals().get(_peds_func_name, None)
-        if _orig and not globals().get(f"_wrapped_{_peds_func_name}", False):
-            def _make_wrap(fn):
-                def _wrap(*a, **k):
-                    import streamlit as st
-                    if st.session_state.get("_ctx_tab") != "peds":
-                        return
-                    return fn(*a, **k)
-                return _wrap
-            globals()[_peds_func_name] = _make_wrap(_orig)
-            globals()[f"_wrapped_{_peds_func_name}"] = True
-    except Exception:
-        pass
 _route_defaults()
 _route_hardlock()
 st.markdown("""
@@ -906,7 +851,6 @@ def build_peds_notes(
 
 # ---------- Tabs ----------
 tab_labels = ["🏠 홈", "👶 소아 증상", "🧬 암 선택", "💊 항암제(진단 기반)", "🧪 피수치 입력", "🔬 특수검사", "📄 보고서", "📊 기록/그래프"]
-_route_hardlock()  # pre-tabs
 t_home, t_peds, t_dx, t_chemo, t_labs, t_special, t_report, t_graph = st.tabs(tab_labels)
 
 # HOME
@@ -1529,7 +1473,7 @@ with t_labs:
 # DX
 with t_dx:
 
-    _enter_tab("dx", "dx")
+    st.session_state['_ctx_tab'] = 'dx'
     # ---- DX label fallbacks (avoid NameError) ----
     try:
         DX_KO  # type: ignore
@@ -2638,6 +2582,7 @@ with t_report:
     )
 
     col_report, col_side = st.columns([2, 1])
+
     # ---------- 오른쪽: 기록/그래프/내보내기 ----------
     with col_side:
         st.markdown("### 📊 기록/그래프 패널")
@@ -3714,5 +3659,3 @@ def _load_local_module2(mod_name: str, candidates):
             if m:
                 return m, used
     return None, None
-_remember_last_route()
-_route_hardlock()  # final
