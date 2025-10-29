@@ -2367,6 +2367,13 @@ def _annotate_special_notes(lines):
     return out
 # (migrated) 기존 소아 GI 섹션 호출은 t_peds 퀵 섹션으로 이동되었습니다.
 with t_special:
+    # 🔬 특수검사 탭 렌더링 (패치 추가)
+    import streamlit as st
+    st.subheader("🔬 특수검사")
+    try:
+        special_tests_ui()
+    except Exception as e:
+        st.error(f"특수검사 UI 표시 중 오류 발생: {e}")
     st.subheader("특수검사 해석")
     if SPECIAL_PATH:
         st.caption(f"special_tests 로드: {SPECIAL_PATH}")
