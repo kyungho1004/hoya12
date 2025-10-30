@@ -1,4 +1,3 @@
-import ae_fallback_shim  # early-safe AE symbols
 
 
 # ---- HomeBlocker v1 ----

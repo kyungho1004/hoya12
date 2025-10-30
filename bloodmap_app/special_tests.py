@@ -1,10 +1,5 @@
 
 # -*- coding: utf-8 -*-
-# Merged special_tests.py (from /mnt/data/special_test.py) with collision-proof keys
-# Auto-generated
-
-
-# -*- coding: utf-8 -*-
 """
 특수검사 UI/해석 모듈 (카테고리 토글 + 즐겨찾기)
 - ✅ 소변검사/혈구지수/보체/지질/심부전/당/심장·근육/간담도/췌장/응고/염증/젖산
