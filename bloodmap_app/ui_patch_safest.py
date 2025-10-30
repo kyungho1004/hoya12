@@ -1,6 +1,6 @@
-# ui_patch_safest_v2.py — NO-SEED key prefixer + duplicate-key deduper (per-call ns guard)
+# ui_patch_safest_v3.py — NO-SEED key prefixer + duplicate-key deduper (buttons 포함, per-call ns)
 # Use as FIRST import in app.py:
-#   import ui_patch_safest_v2  # must be first
+#   import ui_patch_safest_v3  # must be first
 
 def _bm_get_ns_safe():
     import streamlit as st, uuid
@@ -21,7 +21,7 @@ def _bm_prefix(key):
     return key
 
 def _bm_dedupe(key):
-    # ensure uniqueness within a single run
+    # ensure uniqueness within a render run
     import streamlit as st
     try:
         used = st.session_state.setdefault("__bm_used_keys__", set())
@@ -29,7 +29,6 @@ def _bm_dedupe(key):
         used = set()
     k = key
     if k in used:
-        # append minimal numeric suffix until unique
         i = 2
         while f"{k}__dup{i}" in used:
             i += 1
@@ -45,39 +44,44 @@ def _bm_fix_key(kwargs):
     k = kwargs.get("key", None)
     if k is None:
         return kwargs
-    k = _bm_prefix(k)
-    k = _bm_dedupe(k)
-    kwargs["key"] = k
+    kwargs["key"] = _bm_dedupe(_bm_prefix(k))
     return kwargs
 
-def _bm_apply_widget_patches_safest_v2():
+def _bm_apply_widget_patches_safest_v3():
     try:
         import streamlit as st
-        # allow reapply to sit outermost
-        def _wrap(name):
-            orig = getattr(st, name)
-            def _wrapped(*args, **kwargs):
-                kwargs = dict(kwargs)
-                kwargs = _bm_fix_key(kwargs)
-                return orig(*args, **kwargs)
-            return orig, _wrapped
-
-        for t in [
+        # wrap targets including buttons
+        targets = [
+            # selectors / inputs
             "toggle", "checkbox", "radio", "selectbox", "multiselect",
-            "slider", "number_input", "text_input", "text_area",
-            "date_input", "time_input", "file_uploader",
-        ]:
+            "slider", "select_slider",
+            "number_input", "text_input", "text_area",
+            "date_input", "time_input",
+            "file_uploader",
+            # buttons family
+            "button", "form_submit_button", "download_button",
+        ]
+        for name in targets:
             try:
-                orig, wrapped = _wrap(t)
-                setattr(st, t, wrapped)
+                orig = getattr(st, name)
+            except Exception:
+                continue
+            def _make_wrapped(_orig):
+                def _wrapped(*args, **kwargs):
+                    kwargs = dict(kwargs)
+                    kwargs = _bm_fix_key(kwargs)
+                    return _orig(*args, **kwargs)
+                return _wrapped
+            try:
+                setattr(st, name, _make_wrapped(orig))
             except Exception:
                 pass
     except Exception:
         pass
 
-_bm_apply_widget_patches_safest_v2()
+_bm_apply_widget_patches_safest_v3()
 
-# Optional AE fallbacks (only if ae_resolve missing)
+# Optional AE fallbacks (if ae_resolve missing)
 try:
     from ae_resolve import resolve_key, get_ae, get_checks, render_arac_wrapper  # type: ignore
 except Exception:
