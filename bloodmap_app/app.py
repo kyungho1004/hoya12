@@ -1,5 +1,6 @@
 import ui_patch_safest  # must be first: safe key prefixer
-
+import ui_patch_safest  # must be first
+import route_patch_safest  # routing shims
 
 # ---- HomeBlocker v1 ----
 def _block_spurious_home():
