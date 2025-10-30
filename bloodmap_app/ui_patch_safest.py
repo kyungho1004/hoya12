@@ -5,14 +5,12 @@
 def _bm_get_ns_safe():
     import streamlit as st, uuid
     ss = st.session_state
-    # Do NOT assume it exists; create if missing, but ignore write failures
     ns = ss.get("_sp_ns", None)
     if not isinstance(ns, str) or not ns:
         try:
             ns = "sp" + uuid.uuid4().hex[:8]
             ss["_sp_ns"] = ns
         except Exception:
-            # Fallback: ephemeral ns (no state read/write needed)
             ns = "sp" + uuid.uuid4().hex[:8]
     return ns
 
@@ -37,13 +35,10 @@ def _bm_apply_widget_patches_safest():
                 return orig(*args, **kwargs)
             return orig, _wrapped
 
-        # Broad coverage: form inputs + selectors + uploader
         targets = [
             "toggle", "checkbox", "radio", "selectbox", "multiselect",
-            "slider", "number_input",
-            "text_input", "text_area",
-            "date_input", "time_input",
-            "file_uploader",
+            "slider", "number_input", "text_input", "text_area",
+            "date_input", "time_input", "file_uploader",
         ]
         for t in targets:
             try:
@@ -58,7 +53,7 @@ def _bm_apply_widget_patches_safest():
 
 _bm_apply_widget_patches_safest()
 
-# Optional: AE fallbacks (only if module missing)
+# Optional AE fallbacks (only if ae_resolve is missing)
 try:
     from ae_resolve import resolve_key, get_ae, get_checks, render_arac_wrapper  # type: ignore
 except Exception:
