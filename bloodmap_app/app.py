@@ -1,3 +1,121 @@
+
+# === PATCH-BLOCK: stability v2025-10-30 (non-destructive) ===
+try:
+    import streamlit as st
+    try:
+        st.set_page_config(page_title="Bloodmap", layout="wide")
+    except Exception:
+        pass
+    import uuid as _uuid
+    # session-stable UID (decoupled from nickname/PIN)
+    if "_uid" not in st.session_state:
+        base = st.session_state.get("key") or f"guest#{_uuid.uuid4().hex[:6]}"
+        safe = str(base).replace(":", "_").replace("/", "_")
+        st.session_state["_uid"] = safe
+    # stable wkey (keeps existing features; overrides any later redefinitions)
+    def __wkey_stable(name: str) -> str:
+        return f"{st.session_state.get('_uid','guest')}:{name}"
+    # bind as global 'wkey' (save legacy if existed)
+    _g = globals()
+    if "wkey" in _g:
+        _g["wkey_legacy_autosaved"] = _g["wkey"]
+    _g["wkey"] = __wkey_stable
+except Exception:
+    # Patch is best-effort; never break the app.
+    pass
+# === /PATCH-BLOCK ===
+
+
+# ---- HomeBlocker v1 ----
+def _block_spurious_home():
+    ss = st.session_state
+    cur = ss.get("_route") or "home"
+    last = ss.get("_route_last")
+    intent_home = ss.get("_home_intent", False)
+    # If we have a known last non-home route and no explicit intent to go home,
+    # prevent accidental drop to 'home' (e.g., first click anomalies).
+    if (cur == "home") and (last and last != "home") and (not intent_home):
+        ss["_route"] = last
+        try:
+            if st.query_params.get("route") != last:
+                st.query_params.update(route=last)
+        except Exception:
+            st.experimental_set_query_params(route=last)
+        # do not rerun here; early/anti guards will sync on next pass
+    # Remember last non-home route if current is valid
+    try:
+        if ss.get("_route") and ss["_route"] != "home":
+            ss["_route_last"] = ss["_route"]
+    except Exception:
+        pass
+
+# ---- End HomeBlocker v1 ----
+
+
+# ---- Hard redirect guard v2 (pre-render; URL-only hydrate, safer) ----
+try:
+    import streamlit as st  # ultra-early
+    def __hr_qp(name: str) -> str:
+        try:
+            v = st.query_params.get(name)
+            return v[0] if isinstance(v, list) else (v or "")
+        except Exception:
+            v = st.experimental_get_query_params().get(name, [""])
+            return v[0]
+
+    url_route = __hr_qp("route")
+    ss = st.session_state
+    cur = ss.get("_route")
+    last = ss.get("_route_last")
+
+    # Run once per session to hydrate from URL only.
+    if not ss.get("_hrg_v2_done", False):
+        ss["_hrg_v2_done"] = True
+        if url_route:
+            want = url_route
+            if cur != want:
+                ss["_route"] = want
+                ss["_route_last"] = want
+                try:
+                    if st.query_params.get("route") != want:
+                        st.query_params.update(route=want)
+                except Exception:
+                    st.experimental_set_query_params(route=want)
+                st.rerun()
+except Exception:
+    pass
+# ---- End hard redirect guard v2 ----
+
+
+# ---- Initial route bootstrap (anti first-click→home) ----
+try:
+    import streamlit as st
+    ss = st.session_state
+    if not ss.get("_route"):
+        try:
+            url_r = st.query_params.get("route")
+            url_r = url_r[0] if isinstance(url_r, list) else url_r
+        except Exception:
+            url_r = (st.experimental_get_query_params().get("route") or [""])[0]
+        if not url_r:
+            last = ss.get("_route_last")
+            if last and last != "home":
+                ss["_route"] = last
+            else:
+                ss["_route"] = "chemo"
+                ss["_route_last"] = "chemo"
+            try:
+                if st.query_params.get("route") != ss["_route"]:
+                    st.query_params.update(route=ss["_route"])
+            except Exception:
+                st.experimental_set_query_params(route=ss["_route"])
+            st.rerun()
+except Exception:
+    pass
+# ---- End initial route bootstrap ----
+
+
+
 # app.py
 
 # ===== Robust import guard (auto-injected) =====
@@ -43,6 +161,51 @@ if "wkey" not in globals():
             return str(x)
 
 # ===== End import guard =====
+# ---- Onco import shim (robust) ----
+import sys
+from pathlib import Path
+try:
+    # 1) Standard import if available
+    from onco_map import ensure_onco_map, ONCO_REGIMENS, build_onco_map, auto_recs_by_dx  # type: ignore
+except Exception:
+    # 2) Dynamic load from multiple candidate paths
+    def _load_local_module(mod_name: str, file_path: str):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(mod_name, file_path)
+        m = importlib.util.module_from_spec(spec)
+        sys.modules[mod_name] = m
+        spec.loader.exec_module(m)
+        return m
+
+    _onco = None
+    _candidates = [
+        Path(__file__).parent / "onco_map.py",
+        Path(__file__).parent / "modules" / "onco_map.py",
+        Path("/mount/src/hoya12/bloodmap_app/onco_map.py"),
+        Path("/mount/src/hoya12/bloodmap_app/modules/onco_map.py"),
+        Path("/mnt/data/onco_map.py"),
+    ]
+    for _p in _candidates:
+        try:
+            if _p.is_file():
+                _onco = _load_local_module("onco_map", str(_p))
+                break
+        except Exception:
+            pass
+
+    if _onco is None:
+        # 3) Safe fallbacks to keep app running
+        def ensure_onco_map(m): return m
+        ONCO_REGIMENS = {}
+        def build_onco_map(): return {}
+        def auto_recs_by_dx(*args, **kwargs): return {"chemo": [], "targeted": [], "abx": []}
+    else:
+        ensure_onco_map = getattr(_onco, "ensure_onco_map", lambda m: m)
+        ONCO_REGIMENS  = getattr(_onco, "ONCO_REGIMENS", {})
+        build_onco_map = getattr(_onco, "build_onco_map", lambda: {})
+        auto_recs_by_dx = getattr(_onco, "auto_recs_by_dx",
+                                  lambda *a, **k: {"chemo": [], "targeted": [], "abx": []})
+# ---- End Onco import shim ----
 import datetime as _dt
 from zoneinfo import ZoneInfo as _ZoneInfo
 KST = _ZoneInfo("Asia/Seoul")
@@ -69,7 +232,7 @@ html { scroll-behavior: smooth; }
 
 
 # --- HTML-only pediatric navigator (no rerun) ---
-def render_peds_nav_md():
+def render_peds_nav_html():
     from streamlit.components.v1 import html as _html
     _html("""
     <style>
@@ -211,7 +374,53 @@ else:
     def ibuprofen_ml(w):
         return (0.0, 0.0)
 
-_sp, SPECIAL_PATH = _load_local_module("special_tests", ["special_tests.py", "modules/special_tests.py"])
+# === LOCAL MODULE LOADER v2 (early) ===
+try:
+    _bm__LML2_ready  # guard
+except Exception:
+    def _load_local_module2(mod_name: str, candidates):
+        """
+        Try multiple candidate paths. Return (module, used_path) or (None, None).
+        Searches common bases; safe for both single path and list of paths.
+        """
+        import importlib.util, sys
+        from pathlib import Path
+        def _try(fp: Path):
+            try:
+                spec = importlib.util.spec_from_file_location(mod_name, str(fp))
+                if not spec or not spec.loader:
+                    return None, None
+                m = importlib.util.module_from_spec(spec)
+                sys.modules[mod_name] = m
+                spec.loader.exec_module(m)
+                return m, str(fp)
+            except Exception:
+                return None, None
+        base_candidates = []
+        seq = candidates if isinstance(candidates, (list, tuple)) else [candidates]
+        for c in seq:
+            c = str(c)
+            if c.startswith("/"):
+                fps = [Path(c)]
+            else:
+                fps = [
+                    Path(__file__).parent / c,
+                    Path(__file__).parent / "modules" / c,
+                    Path("/mount/src/hoya12/bloodmap_app") / c,
+                    Path("/mount/src/hoya12/bloodmap_app/modules") / c,
+                    Path("/mnt/data") / c,
+                ]
+            for fp in fps:
+                base_candidates.append(fp)
+        for fp in base_candidates:
+            if fp.exists():
+                m, used = _try(fp)
+                if m:
+                    return m, used
+        return None, None
+    _bm__LML2_ready = True
+# === /LOCAL MODULE LOADER v2 (early) ===
+_sp, SPECIAL_PATH = _load_local_module2("special_tests", ["special_tests.py", "modules/special_tests.py", "/mnt/data/special_tests.py"])
 if _sp and hasattr(_sp, "special_tests_ui"):
     special_tests_ui = _sp.special_tests_ui
 else:
@@ -241,7 +450,7 @@ render_deploy_banner("https://bloodmap.streamlit.app/", "제작: Hoya/GPT · 자
 st.caption(f"모듈 경로 — special_tests: {SPECIAL_PATH or '(not found)'} | onco_map: {ONCO_PATH or '(not found)'} | drug_db: {DRUGDB_PATH or '(not found)'}")
 
 # ---------- Helpers ----------
-def wkey(name: str) -> str:
+def wkey_legacy(name: str) -> str:
     who = st.session_state.get("key", "guest#PIN")
     return f"{who}:{name}"
 
@@ -1275,14 +1484,87 @@ with t_labs:
 
 # DX
 with t_dx:
+
+    # ---- DX label fallbacks (avoid NameError) ----
+    try:
+        DX_KO  # type: ignore
+    except NameError:
+        try:
+            from onco_map import DX_KO as _DXK  # if module available
+            DX_KO = _DXK
+        except Exception:
+            DX_KO = {}
+    try:
+        _dx_norm  # type: ignore
+    except NameError:
+        try:
+            from onco_map import _norm as _dx_norm  # if module exposes it
+        except Exception:
+            _dx_norm = lambda s: s
+    # ---- End fallbacks ----
     st.subheader("암 선택")
     if not ONCO:
         st.warning("onco_map 이 로드되지 않아 기본 목록이 비어있습니다. onco_map.py를 같은 폴더나 modules/ 에 두세요.")
     groups = sorted(ONCO.keys()) if ONCO else ["혈액암", "고형암"]
     group = st.selectbox("암 그룹", options=groups, index=0, key=wkey("onco_group_sel"))
     diseases = sorted(ONCO.get(group, {}).keys()) if ONCO else ["ALL", "AML", "Lymphoma", "Breast", "Colon", "Lung"]
-    disease = st.selectbox("의심/진단명", options=diseases, index=0, key=wkey("onco_disease_sel"))
-    disp = dx_display(group, disease)
+    disease = st.selectbox("의심/진단명", options=diseases, index=0, key=wkey("onco_disease_sel"), format_func=lambda x: (f"{x} (" + (DX_KO.get(_dx_norm(x)) or DX_KO.get(x) or x) + ")") if not any("\uac00" <= ch <= "\ud7a3" for ch in str(x)) else str(x))
+
+    # ========= [PATCH A / t_dx] DX 라우트 고정 & last 보존 (idempotent) =========
+    try:
+        import streamlit as st
+        ss = st.session_state
+        ss["_home_intent"] = False  # 이 상호작용은 '홈' 의도가 아님
+        _need_pin = (ss.get("_route") != "dx")
+        if _need_pin:
+            ss["_route"] = "dx"
+        if not ss.get("_route_last") or ss.get("_route_last") == "home":
+            ss["_route_last"] = "dx"
+        if _need_pin:
+            _qp_dx_synced = False
+            try:
+                if st.query_params.get("route") != "dx":
+                    st.query_params.update(route="dx")
+                _qp_dx_synced = True
+            except Exception:
+                try:
+                    if (st.experimental_get_query_params().get("route") or [""])[0] != "dx":
+                        st.experimental_set_query_params(route="dx")
+                    _qp_dx_synced = True
+                except Exception:
+                    pass
+            if _qp_dx_synced and not ss.get("_dx_pin_done", False):
+                ss["_dx_pin_done"] = True
+                st.rerun()
+    except Exception:
+        pass
+    # ========= [END PATCH A] =========
+
+    # ========= [PATCH B / t_dx] dx_display 안정화 (예외 방지) =========
+    try:
+        disease  # noqa: F821
+    except NameError:
+        try:
+            disease = st.session_state[wkey("onco_disease_sel")]
+        except Exception:
+            disease = (st.session_state.get("onco_disease_sel")
+                       or st.session_state.get("onco_disease_sel_candidate"))
+    disp = None
+    try:
+        disp = dx_display(group, disease)
+    except Exception as _e:
+        try:
+            ss = st.session_state
+            ss["_home_intent"] = False
+            if ss.get("_route") != "dx":
+                ss["_route"] = "dx"
+            if not ss.get("_route_last") or ss.get("_route_last") == "home":
+                ss["_route_last"] = "dx"
+        except Exception:
+            pass
+        st.warning("⚠️ 진단 정보 표시 중 문제가 발생했어요. 진단/그룹 선택을 다시 확인해 주세요.")
+    # ========= [END PATCH B] =========
+
     st.session_state["onco_group"] = group
     st.session_state["onco_disease"] = disease
     st.session_state["dx_disp"] = disp
@@ -1421,7 +1703,6 @@ def _aggregate_all_aes(meds, db):
         if uniq:
             result[k] = uniq
     return result
-
 # CHEMO
 with t_chemo:
     st.subheader("항암제(진단 기반)")
@@ -1471,10 +1752,15 @@ with t_chemo:
     pool_labels = [label_map.get(k, str(k)) for k in pool_keys]
     unique_pairs = sorted(set(zip(pool_labels, pool_keys)), key=lambda x: x[0].lower())
     pool_labels_sorted = [p[0] for p in unique_pairs]
-    picked_labels = st.multiselect("투여/계획 약물 선택", options=pool_labels_sorted, key=wkey("drug_pick"))
+    picked_labels = st.multiselect("투여/계획 약물 선택", options=pool_labels_sorted, default=pool_labels_sorted, key=wkey("drug_pick"))
     label_to_key = {lbl: key for lbl, key in unique_pairs}
     picked_keys = [label_to_key.get(lbl) for lbl in picked_labels if lbl in label_to_key]
     st.session_state["chemo_keys"] = picked_keys
+    # 자동 복구: 사용자가 전부 해제해도 빈 화면 방지
+    if not picked_keys:
+        st.caption("선택된 항암제가 없어 기본값으로 복구했어요.")
+        picked_keys = [label_to_key.get(lbl) for lbl in pool_labels_sorted]
+        st.session_state["chemo_keys"] = picked_keys
 
     if picked_keys:
         # 선택한 약물 DB 비어있으면 경고
@@ -1498,13 +1784,110 @@ with t_chemo:
 
         ae_map = _aggregate_all_aes(picked_keys, DRUG_DB)
         st.markdown("### 항암제 부작용(전체)")
+        # === [PATCH 2025-10-22 KST] Use shared renderer if available ===
+        try:
+            from ui_results_final import render_adverse_effects as _render_aes_shared
+        except Exception:
+            try:
+                from ui_results import render_adverse_effects as _render_aes_shared
+            except Exception:
+                _render_aes_shared = None
+        if _render_aes_shared is not None:
+            try:
+                _render_aes_shared(st, picked_keys, DRUG_DB)
+                _used_shared_renderer = True
+            except Exception:
+                _used_shared_renderer = False
+        else:
+            _used_shared_renderer = False
+        # === [PATCH] Diagnostics panel (Phase 28 ALT) ===
+        try:
+            from features_dev.diag_panel import render_diag_panel as _diag
+            _diag(st)
+        except Exception:
+            pass
+        # === [/PATCH] ===
+
+        # === [PATCH] Diagnostics panel (Phase 28) ===
+        try:
+            from features.dev.diag_panel import render_diag_panel as _diag
+            _diag(st)
+        except Exception:
+            pass
+        # === [/PATCH] ===
+
+        # === [PATCH] Lean legacy stubs attach (Phase 25) ===
+        try:
+            from features.app_legacy_stubs import initialize as _lgstub
+            _lgstub(st)
+        except Exception:
+            pass
+        # === [/PATCH] ===
+
+        # === [PATCH] App shell & lean-mode (Phase 24) ===
+        try:
+            from features.app_shell import render_sidebar as _shell
+            _shell(st)
+        except Exception:
+            pass
+        try:
+            from features.app_deprecator import apply_lean_mode as _lean
+            _lean(st)
+        except Exception:
+            pass
+        try:
+            if st.session_state.get("_lean_mode", True):
+                from features.app_router import render_modular_sections as _mod
+                _mod(st, picked_keys, DRUG_DB)
+        except Exception:
+            pass
+        # === [/PATCH] ===
+
+        # === [/PATCH] ===
+
         if ae_map:
+            # --- Ara-C 제형 선택(IV/SC/HDAC) ---
+            try:
+                from ae_resolve import resolve_key, get_ae, get_checks
+                from drug_db import display_label
+                if ("Cytarabine" in ae_map) or ("Ara-C" in ae_map):
+                    st.markdown("**Ara-C 제형 선택**")
+                    picked_key = render_arac_wrapper("Ara-C 제형 선택", default="Cytarabine")
+                    st.write(f"- **{display_label(picked_key)}**")
+                    st.caption(get_ae(picked_key))
+                    for _ln in get_checks(picked_key):
+                        st.checkbox(_ln, key=wkey(f"chk_{picked_key}_{_ln}"))
+                    st.divider()
+            except Exception:
+                pass
+
             for k, arr in ae_map.items():
+                # --- ensure resolve_key is available (local guard) ---
+                if "resolve_key" not in globals():
+                    try:
+                        from onco_map import _canon as resolve_key
+                    except Exception:
+                        def resolve_key(s):
+                            s0 = (s or "").strip()
+                            s1 = s0.upper().replace(" ", "").replace("−", "-")
+                            if s1 in ("ARA-C","ARAC","CYTARABINE(ARA-C)"):
+                                return "Cytarabine"
+                            return s0 or s
+                # --- /guard ---
+                if resolve_key(k) in ("Cytarabine", "Ara-C"):
+                    continue
                 st.write(f"- **{label_map.get(k, str(k))}**")
-                for ln in arr:
-                    st.write(f"  - {ln}")
+                if isinstance(arr, (list, tuple)):
+                    for ln in arr:
+                        st.write(f"  - {ln}")
+                elif isinstance(arr, str) and arr.strip():
+                    st.write(f"  - {arr}")
+                else:
+                    st.write("  - (부작용 정보 없음)")
         else:
             st.write("- (DB에 상세 부작용 없음)")
+
+_block_spurious_home()
 
 # PEDS
 with t_peds:
@@ -1845,7 +2228,99 @@ with st.expander("🌡️ 해열제 가이드/계산", expanded=False):
         ap_ml_1 = ap_ml_max = ib_ml_1 = ib_ml_max = 0.0
     st.write(f"- 아세트아미노펜(160mg/5mL): **{ap_ml_1:.1f} mL** (최대 {ap_ml_max:.1f} mL) — 최소 간격 **4h**")
     st.write(f"- 이부프로펜(100mg/5mL): **{ib_ml_1:.1f} mL** (최대 {ib_ml_max:.1f} mL) — 최소 간격 **6h**")
-    st.caption("※ 금기/주의 질환은 반드시 의료진 지시를 따르세요. 중복 복용 주의.")
+    
+# --- P1-2: Antipyretic schedule chain (.ics + care hint) ---
+import datetime as _dt
+from zoneinfo import ZoneInfo as _ZoneInfo
+import tempfile as _tmp
+
+def _preferred_writable_base():
+    # Try known writable locations in order
+    for p in ["/mnt/data/care_log", "/mount/data/care_log", "/tmp/care_log"]:
+        try:
+            (__import__("os").makedirs(p, exist_ok=True))
+            test_fp = os.path.join(p, ".touch")
+            with open(test_fp, "w", encoding="utf-8") as _f:
+                _f.write("ok")
+            try:
+                os.remove(test_fp)
+            except Exception:
+                pass
+            return p
+        except Exception:
+            continue
+    # Extreme fallback
+    return _tmp.gettempdir()
+
+def _make_ics(title:str, start: _dt.datetime, minutes:int=0, description:str="") -> str:
+    tzid = "Asia/Seoul"
+    dtstart = start.strftime("%Y%m%dT%H%M%S")
+    dtend = (start + _dt.timedelta(minutes=minutes)).strftime("%Y%m%dT%H%M%S") if minutes>0 else None
+    uid = f"{dtstart}-{title.replace(' ','_')}@bloodmap"
+    lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//BloodMap//Peds Antipyretic//KR",
+        "CALSCALE:GREGORIAN",
+        "METHOD:PUBLISH",
+        "BEGIN:VEVENT",
+        f"UID:{uid}",
+        f"DTSTAMP:{_dt.datetime.now(_ZoneInfo(tzid)).strftime('%Y%m%dT%H%M%S')}",
+        f"DTSTART;TZID={tzid}:{dtstart}",
+    ]
+    if dtend:
+        lines.append(f"DTEND;TZID={tzid}:{dtend}")
+    lines += [
+        f"SUMMARY:{title}",
+        f"DESCRIPTION:{description}".replace("\n","\\n"),
+        "END:VEVENT",
+        "END:VCALENDAR",
+        ""
+    ]
+    return "\n".join(lines)
+
+kst = _dt.datetime.now(_ZoneInfo("Asia/Seoul"))
+col1, col2 = st.columns(2)
+with col1:
+    ap_given = st.number_input("APAP 실제 투여량(mL)", min_value=0.0, step=0.5, value=float(f"{ap_ml_1:.1f}"), key=wkey("apap_given"))
+    if st.button("APAP 기록 + 다음 복용 .ics", key=wkey("apap_log_ics")):
+        next_time = kst + _dt.timedelta(hours=4)
+        ics_text = _make_ics("다음 해열제(APAP) 복용 가능", next_time, 0, "APAP 최소 간격 4시간 (KST).")
+        base = _preferred_writable_base()
+        fname = f"next_APAP_{kst.strftime('%Y%m%d_%H%M%S')}.ics"
+        ics_path = os.path.join(base, fname)
+        try:
+            with open(ics_path, "w", encoding="utf-8") as f:
+                f.write(ics_text)
+        except Exception as _e:
+            st.warning(f"쓰기 권한 문제로 임시 다운로드만 제공합니다. ({type(_e).__name__})")
+        st.success(f"다음 APAP 가능 시각: {next_time.strftime('%Y-%m-%d %H:%M')} (KST)")
+        st.download_button("📅 .ics 내보내기 (APAP)", data=ics_text, file_name=fname, mime="text/calendar", key=wkey("apap_ics_dl"))
+        st.session_state[wkey("apap_ml_24h")] = st.session_state.get(wkey("apap_ml_24h"), 0.0) + float(ap_given)
+with col2:
+    ib_given = st.number_input("IBU 실제 투여량(mL)", min_value=0.0, step=0.5, value=float(f"{ib_ml_1:.1f}"), key=wkey("ibu_given"))
+    if st.button("IBU 기록 + 다음 복용 .ics", key=wkey("ibu_log_ics")):
+        next_time = kst + _dt.timedelta(hours=6)
+        ics_text = _make_ics("다음 해열제(IBU) 복용 가능", next_time, 0, "IBU 최소 간격 6시간 (KST).")
+        base = _preferred_writable_base()
+        fname = f"next_IBU_{kst.strftime('%Y%m%d_%H%M%S')}.ics"
+        ics_path = os.path.join(base, fname)
+        try:
+            with open(ics_path, "w", encoding="utf-8") as f:
+                f.write(ics_text)
+        except Exception as _e:
+            st.warning(f"쓰기 권한 문제로 임시 다운로드만 제공합니다. ({type(_e).__name__})")
+        st.success(f"다음 IBU 가능 시각: {next_time.strftime('%Y-%m-%d %H:%M')} (KST)")
+        st.download_button("📅 .ics 내보내기 (IBU)", data=ics_text, file_name=fname, mime="text/calendar", key=wkey("ibu_ics_dl"))
+        st.session_state[wkey("ibu_ml_24h")] = st.session_state.get(wkey("ibu_ml_24h"), 0.0) + float(ib_given)
+
+# 24h 총량 소프트 배너(실제 하드 가드레일과 충돌 없이 알림만)
+ap24 = st.session_state.get(wkey("apap_ml_24h"), 0.0)
+ib24 = st.session_state.get(wkey("ibu_ml_24h"), 0.0)
+if ap24 > 0 or ib24 > 0:
+    st.caption(f"24시간 누적(세션 기준): APAP {ap24:.1f} mL / IBU {ib24:.1f} mL")
+# --- /P1-2 ---
+st.caption("※ 금기/주의 질환은 반드시 의료진 지시를 따르세요. 중복 복용 주의.")
 
 # --- ORS/탈수 ---
 with st.expander("🥤 ORS/탈수 가이드", expanded=False):
@@ -1918,10 +2393,113 @@ def _annotate_special_notes(lines):
     return out
 # (migrated) 기존 소아 GI 섹션 호출은 t_peds 퀵 섹션으로 이동되었습니다.
 with t_special:
+    # 🔬 특수검사 탭 렌더링 (패치 추가)
+    import streamlit as st
+    st.subheader("🔬 특수검사")
+    try:
+        special_tests_ui()
+    except Exception as e:
+        st.error(f"특수검사 UI 표시 중 오류 발생: {e}")
     st.subheader("특수검사 해석")
     if SPECIAL_PATH:
         st.caption(f"special_tests 로드: {SPECIAL_PATH}")
-    lines = special_tests_ui()
+
+# === SPECIAL TESTS SAFE CALL ===
+def __bm_try_get_wkey():
+    try:
+        return wkey
+    except Exception:
+        return lambda x: x
+_wkey = __bm_try_get_wkey()
+try:
+    # === SPECIAL TESTS SAFE+ADAPTIVE CALL ===
+    import inspect as _inspect
+    def __bm_try_get_wkey():
+        try:
+            return wkey
+        except Exception:
+            return lambda x: x
+    _wkey = __bm_try_get_wkey()
+
+    # --- Context bridge: push normalized aliases into session_state ---
+    ss = st.session_state
+    _group = ss.get("group") or ss.get("dx_group") or ss.get("암종") or ss.get("진단그룹") or ss.get("G")
+    _disease = ss.get("disease") or ss.get("dx_disease") or ss.get("진단") or ss.get("D")
+    _labs = ss.get("_labs_df") or ss.get("labs") or ss.get("LABS") or ss.get("input_labs")
+    # write back common aliases so special_tests.py (which may read different keys) can see consistent values
+    for k, v in {
+        "group": _group, "dx_group": _group, "암종": _group, "G": _group,
+        "disease": _disease, "dx_disease": _disease, "진단": _disease, "D": _disease,
+        "labs": _labs, "_labs_df": _labs, "LABS": _labs, "input_labs": _labs
+    }.items():
+        try:
+            if v is not None:
+                ss[k] = v
+        except Exception:
+            pass
+    # --- /Context bridge ---
+
+    try:
+        _ctx = {
+            "group": _group,
+            "disease": _disease,
+            "labs": _labs,
+            "ae_map": locals().get("ae_map", {}),
+            "label_map": locals().get("label_map", {}),
+        }
+        _fn = special_tests_ui
+        try:
+            _sig = _inspect.signature(_fn)
+        except Exception:
+            _sig = None
+        if _sig and "st" in _sig.parameters and "ctx" in _sig.parameters:
+            lines = _fn(st, _ctx)
+        elif _sig and "ctx" in _sig.parameters:
+            lines = _fn(ctx=_ctx)
+        elif _sig and "st" in _sig.parameters:
+            lines = _fn(st)
+        else:
+            lines = _fn()
+    except Exception as _e:
+        import importlib
+        st.error("특수검사 UI 실행 중 오류가 발생했습니다.")
+        try:
+            st.exception(_e)
+        except Exception:
+            st.write(str(_e))
+        if st.button("특수검사 모듈 리로드", key=_wkey("special_reload")):
+            try:
+                if "_sp" in globals() and _sp:
+                    importlib.reload(_sp)
+            except Exception:
+                pass
+            st.rerun()
+        lines = []
+
+    # 빈 결과 안내 (조건 미충족 시 사용자 힌트)
+    if not lines:
+        with st.expander("ℹ️ 특수검사가 비어있나요? (열어서 확인)", expanded=False):
+            st.markdown("- 진단(암종/질환) 선택되었는지 확인")
+            st.markdown("- 최근 입력한 **피수치**가 있는지 확인")
+            st.markdown("- 모듈 버전 불일치 시 위의 **리로드**로 갱신")
+            st.caption(f"컨텍스트: group={_group!r}, disease={_disease!r}, labs={'OK' if _labs is not None else 'None'}")
+    # === /SPECIAL TESTS SAFE+ADAPTIVE CALL ===
+except Exception as _e:
+    import importlib
+    st.error("특수검사 UI 실행 중 오류가 발생했습니다.")
+    try:
+        st.exception(_e)
+    except Exception:
+        st.write(str(_e))
+    if st.button("특수검사 모듈 리로드", key=_wkey("special_reload")):
+        try:
+            if "_sp" in globals() and _sp:
+                importlib.reload(_sp)
+        except Exception:
+            pass
+        st.rerun()
+    lines = []
+# === /SPECIAL TESTS SAFE CALL ===
     lines = _annotate_special_notes(lines or [])
     st.session_state["special_interpretations"] = lines
     if lines:
@@ -2362,7 +2940,7 @@ def render_graph_panel():
 
     base_dir = "/mnt/data/bloodmap_graph"
     try:
-        os.makedirs(base_dir, exist_ok=True)
+        (__import__("os").makedirs(base_dir, exist_ok=True))
     except Exception:
         pass
 
@@ -2475,6 +3053,91 @@ with t_graph:
 # ===== [INLINE FEEDBACK – drop-in, no external file] =====
 import os, tempfile
 from datetime import datetime
+
+
+# === SPECIAL TESTS IMPORT BRIDGE ===
+try:
+    import sys, importlib.util
+    from pathlib import Path as _P
+    _BM_BASES = [
+        _P(__file__).parent,
+        _P(__file__).parent / "modules",
+        _P("/mnt/data"),
+        _P("/mount/src/hoya12/bloodmap_app"),
+    ]
+    for _b in _BM_BASES:
+        try:
+            if str(_b) not in sys.path:
+                sys.path.insert(0, str(_b))
+        except Exception:
+            pass
+
+    def _bm_import_by_paths(mod_name, rels):
+        # rels can include absolute or relative candidates
+        def _load_fp(fp):
+            spec = importlib.util.spec_from_file_location(mod_name, str(fp))
+            if not spec or not spec.loader:
+                return None
+            m = importlib.util.module_from_spec(spec)
+            sys.modules[mod_name] = m
+            spec.loader.exec_module(m)
+            return m
+        # try explicit file paths
+        for rel in rels:
+            try:
+                p = _P(rel) if str(rel).startswith("/") else None
+                if p is None:
+                    for base in _BM_BASES:
+                        cand = base / rel
+                        if cand.exists():
+                            m = _load_fp(cand)
+                            if m: 
+                                return m, str(cand)
+                else:
+                    if p.exists():
+                        m = _load_fp(p)
+                        if m: 
+                            return m, str(p)
+            except Exception:
+                continue
+        # fallback to plain import
+        try:
+            m = __import__(mod_name)
+            return m, getattr(m, "__file__", None)
+        except Exception:
+            return None, None
+
+    # Resolve special_tests & UI symbol if missing
+    if "special_tests_ui" not in globals():
+        _sp, SPECIAL_PATH = _bm_import_by_paths("special_tests", [
+            "special_tests.py",
+            "modules/special_tests.py",
+            "/mnt/data/special_tests.py"
+        ])
+        if _sp is not None:
+            special_tests_ui = getattr(_sp, "special_tests_ui", None)
+        else:
+            SPECIAL_PATH = None
+            special_tests_ui = None
+except Exception:
+    SPECIAL_PATH = None
+    special_tests_ui = None
+# === /SPECIAL TESTS IMPORT BRIDGE ===
+
+
+# === CANONICAL DRUG KEY RESOLVER (patch) ===
+try:
+    from onco_map import _canon as resolve_key  # ex) "Ara-C" -> "Cytarabine"
+except Exception:
+    def resolve_key(s):
+        s0 = (s or "").strip()
+        s1 = s0.upper().replace(" ", "").replace("−","-")
+        if s1 in ("ARA-C","ARAC","CYTARABINE(ARA-C)"):
+            return "Cytarabine"
+        return s0 or s
+# === /CANONICAL DRUG KEY RESOLVER ===
+
+
 import pandas as pd
 import streamlit as st
 try:
@@ -2495,7 +3158,7 @@ def _feedback_dir():
         if not p: 
             continue
         try:
-            os.makedirs(p, exist_ok=True)
+            (__import__("os").makedirs(p, exist_ok=True))
             probe = os.path.join(p, ".probe")
             with open(probe, "w", encoding="utf-8") as f:
                 f.write("ok")
@@ -2504,7 +3167,7 @@ def _feedback_dir():
         except Exception:
             continue
     p = os.path.join(tempfile.gettempdir(), "bloodmap_metrics")
-    os.makedirs(p, exist_ok=True)
+    (__import__("os").makedirs(p, exist_ok=True))
     return p
 
 _FB_DIR = _feedback_dir()
@@ -2596,3 +3259,421 @@ _ss_setdefault(wkey('home_fb_log_cache'), [])
 
 
 # ===== [/INLINE FEEDBACK] =====
+# ---- Tab auto-select (route sync hack) ----
+def _select_tab_by_label(label: str):
+    try:
+        import streamlit as st
+        st.markdown("""
+        <script>
+        (function(){
+          const trySelect = () => {
+            const tabs = window.parent.document.querySelectorAll('button[role="tab"]');
+            for (const t of tabs) {
+              if ((t.innerText || '').trim().startsWith(label)) { t.click(); return true; }
+            }
+            return false;
+          };
+          if (!trySelect()) { setTimeout(trySelect, 80); setTimeout(trySelect, 200); }
+        })();
+        </script>
+        """, unsafe_allow_html=True)
+    except Exception:
+        pass
+
+_label_by_route = {
+    "home": "🏠 홈",
+    "peds": "👶 소아 증상",
+    "dx": "🧬 암 선택",
+    "chemo": "💊 항암제(진단 기반)",
+    "labs": "🧪 피수치 입력",
+    "special": "🔬 특수검사",
+    "report": "📄 보고서",
+    "graph": "📊 기록/그래프",
+}
+_cur_route = st.session_state.get("_route")
+if _cur_route and _cur_route in _label_by_route and _cur_route != "home":
+    _select_tab_by_label(_label_by_route[_cur_route])
+# ---- End Tab auto-select ----
+
+
+
+
+# === [PATCH 2025-10-25] DEV GUARD + STUB INJECTOR ===
+def _is_dev() -> bool:
+    """Developer mode gate.
+    Enabled if any of:
+      - env BLOODMAP_DEV == "1"
+      - URL query param dev in {"1","true","yes"}
+      - session_state['dev_beta'] True (shown only when dev qp/env is present)
+    """
+    import os
+    try:
+        import streamlit as st
+    except Exception:
+        return False
+    if os.environ.get("BLOODMAP_DEV", "") == "1":
+        return True
+    try:
+        q = st.query_params.get("dev")
+    except Exception:
+        try:
+            q = (st.experimental_get_query_params().get("dev") or [""])[0]
+        except Exception:
+            q = ""
+    if isinstance(q, list):
+        q = q[0] if q else ""
+    if str(q).lower() in ("1","true","yes","y"):
+        return True
+    return bool(st.session_state.get("dev_beta", False))
+
+def _dev_inject_stubs():
+    """When not in dev, inject empty placeholder modules so dev imports do nothing."""
+    if _is_dev():
+        return
+    import sys, types
+    names = [
+        "features", "features_dev",
+        "features.dev", "features_dev.diag_panel",
+        "features.dev.diag_panel",
+        "features.app_legacy_stubs",
+        "features.app_shell",
+        "features.app_deprecator",
+        "features.app_router",
+    ]
+    for nm in names:
+        if nm not in sys.modules:
+            sys.modules[nm] = types.ModuleType(nm)
+
+try:
+    _dev_inject_stubs()
+except Exception:
+    pass
+
+def _maybe_render_dev_panels(st):
+    if not _is_dev():
+        return
+    # Diagnostics/dev-only panels (safe; errors suppressed)
+    try:
+        from features_dev.diag_panel import render_diag_panel as _diag
+        _diag(st)
+    except Exception:
+        pass
+    try:
+        from features.dev.diag_panel import render_diag_panel as _diag
+        _diag(st)
+    except Exception:
+        pass
+    try:
+        from features.app_legacy_stubs import initialize as _lgstub
+        _lgstub(st)
+    except Exception:
+        pass
+    try:
+        from features.app_shell import render_sidebar as _shell
+        _shell(st)
+    except Exception:
+        pass
+    try:
+        from features.app_deprecator import apply_lean_mode as _lean
+        _lean(st)
+    except Exception:
+        pass
+    try:
+        if st.session_state.get("_lean_mode", True):
+            from features.app_router import render_modular_sections as _mod
+            _mod(st, st.session_state.get("chemo_keys", []), globals().get("DRUG_DB", {}))
+    except Exception:
+        pass
+
+# Developer toggle block (append-only; not inside existing 'with' blocks)
+try:
+    import streamlit as st
+    if _is_dev():
+        with st.sidebar:
+            with st.expander("🔧 Developer", expanded=False):
+                st.toggle("개발자 모드(베타 패널)", value=bool(st.session_state.get("dev_beta", True)), key="dev_beta")
+                st.caption("※ URL에 ?dev=1 또는 환경변수 BLOODMAP_DEV=1일 때만 보입니다.")
+except Exception:
+    pass
+# === [/PATCH] ===
+
+
+
+# === [PATCH 2025-10-25] BETA ON/OFF MODE ===
+def _beta_enabled() -> bool:
+    try:
+        import streamlit as st
+        return bool(st.session_state.get("_beta_enabled", False))
+    except Exception:
+        return False
+
+def _set_beta(val: bool) -> None:
+    try:
+        import streamlit as st
+        st.session_state["_beta_enabled"] = bool(val)
+    except Exception:
+        pass
+
+# Monkeypatch expander: if beta OFF and title contains beta markers, SKIP body.
+try:
+    import streamlit as _st_beta
+except Exception:
+    _st_beta = None
+
+if _st_beta is not None and not getattr(_st_beta, "_beta_gate_installed", False):
+    try:
+        _orig_expander = getattr(_st_beta, "expander", None)
+
+        class _SkipCtx:
+            def __enter__(self):
+                raise RuntimeError("_beta_blocked")
+            def __exit__(self, exc_type, exc, tb):
+                return True  # suppress
+
+        def _expander_beta_guard(label, *args, **kwargs):
+            try:
+                text = str(label or "")
+            except Exception:
+                text = ""
+            if (not _beta_enabled()) and any(tok in text for tok in ("(β", "β)", "베타", "beta", "Beta")):
+                return _SkipCtx()
+            return _orig_expander(label, *args, **kwargs)
+
+        if callable(_orig_expander):
+            _st_beta.expander = _expander_beta_guard
+            _st_beta._beta_gate_installed = True
+    except Exception:
+        pass
+
+# Sidebar toggle (always visible)
+try:
+    import streamlit as st
+    with st.sidebar:
+        st.toggle("베타 패널 표시", value=bool(st.session_state.get("_beta_enabled", False)), key="_beta_enabled")
+        st.caption("이 스위치를 끄면 제목에 'β/베타/beta'가 포함된 패널은 숨겨집니다.")
+except Exception:
+    pass
+# === [/PATCH] ===
+
+
+
+# === [PATCH 2025-10-25] BETA PASSWORD GUARD ===
+def _beta_pass_file() -> str:
+    return "/mnt/data/.beta_password"
+
+def _beta_hash(s: str) -> str:
+    try:
+        import hashlib
+        return hashlib.sha256((s or "").encode("utf-8")).hexdigest()
+    except Exception:
+        return ""
+
+def _beta_password_is_set() -> bool:
+    try:
+        import os
+        if os.environ.get("BETA_PASSWORD"):
+            return True
+        return bool(os.path.exists(_beta_pass_file()))
+    except Exception:
+        return False
+
+def _beta_password_ok() -> bool:
+    try:
+        import os, streamlit as st
+        if not bool(st.session_state.get("_beta_enabled", False)):
+            return False
+        # Once validated for session, reuse
+        if bool(st.session_state.get("_beta_pwd_ok", False)):
+            return True
+        # Check env password first
+        env_pw = os.environ.get("BETA_PASSWORD")
+        if env_pw:
+            want = _beta_hash(env_pw)
+        else:
+            # read from file
+            try:
+                with open(_beta_pass_file(), "r", encoding="utf-8") as f:
+                    want = f.read().strip()
+            except Exception:
+                want = ""
+        typed = st.session_state.get("_beta_pwd_input") or ""
+        if want and _beta_hash(typed) == want:
+            st.session_state["_beta_pwd_ok"] = True
+            return True
+        return False
+    except Exception:
+        return False
+
+def _beta_password_sidebar():
+    # Renders password UI when beta toggle is ON. Allows first-time setup if not configured.
+    try:
+        import os, streamlit as st
+        with st.sidebar:
+            if not bool(st.session_state.get("_beta_enabled", False)):
+                return
+            st.markdown("**🔒 베타 패널 잠금**")
+            if _beta_password_is_set():
+                st.text_input("비밀번호 입력", type="password", key="_beta_pwd_input")
+                if _beta_password_ok():
+                    st.caption("✅ 인증됨 — 베타 패널이 표시됩니다.")
+                else:
+                    st.caption("❗ 비밀번호가 맞아야 베타 패널이 열립니다.")
+            else:
+                st.caption("처음 사용 — 비밀번호를 설정해주세요.")
+                st.text_input("새 비밀번호", type="password", key="_beta_pwd_new1")
+                st.text_input("새 비밀번호 확인", type="password", key="_beta_pwd_new2")
+                if st.button("비밀번호 설정", use_container_width=True):
+                    p1 = st.session_state.get("_beta_pwd_new1") or ""
+                    p2 = st.session_state.get("_beta_pwd_new2") or ""
+                    if p1 and (p1 == p2):
+                        try:
+                            with open(_beta_pass_file(), "w", encoding="utf-8") as f:
+                                f.write(_beta_hash(p1))
+                            st.success("설정 완료! 이제 비밀번호로 열 수 있습니다.")
+                        except Exception as e:
+                            st.error("저장 실패: 파일 쓰기 권한을 확인해주세요.")
+                    else:
+                        st.error("두 비밀번호가 일치하지 않습니다.")
+    except Exception:
+        pass
+
+# Strengthen expander guard to require BOTH toggle and password
+try:
+    import streamlit as _st_beta2
+except Exception:
+    _st_beta2 = None
+
+if _st_beta2 is not None and getattr(_st_beta2, "_beta_gate_installed", False):
+    try:
+        _orig_expander2 = getattr(_st_beta2, "expander", None)
+
+        class _SkipCtx2:
+            def __enter__(self):
+                raise RuntimeError("_beta_blocked")
+            def __exit__(self, exc_type, exc, tb):
+                return True
+
+        def _expander_beta_guard2(label, *args, **kwargs):
+            try:
+                text = str(label or "")
+            except Exception:
+                text = ""
+            markers = ("(β", "β)", "베타", "beta", "Beta")
+            needs_beta = any(tok in text for tok in markers)
+            # if it's a beta-marked expander, require both toggle and password
+            if needs_beta and not (_st_beta2.session_state.get("_beta_enabled") and _beta_password_ok()):
+                return _SkipCtx2()
+            return _orig_expander2(label, *args, **kwargs)
+
+        if callable(_orig_expander2):
+            _st_beta2.expander = _expander_beta_guard2
+            _st_beta2._beta_gate_installed = True
+    except Exception:
+        pass
+
+# Render password UI (append-only)
+try:
+    _beta_password_sidebar()
+except Exception:
+    pass
+# === [/PATCH] ===
+
+
+
+# === [PATCH 2025-10-25] BETA DENYLIST EXTENSION ===
+# Labels to always treat as beta content when beta is OFF
+_BETA_LABEL_DENYLIST = {
+    "ER 원페이지 PDF (소아)",
+    "내보내기(소아 요약)",
+}
+
+try:
+    import streamlit as _st_beta3
+except Exception:
+    _st_beta3 = None
+
+if _st_beta3 is not None and hasattr(_st_beta3, "expander"):
+    try:
+        _orig_expander3 = _st_beta3.expander
+
+        class _SkipCtx3:
+            def __enter__(self):
+                raise RuntimeError("_beta_blocked")
+            def __exit__(self, exc_type, exc, tb):
+                return True
+
+        def _expander_beta_guard3(label, *args, **kwargs):
+            try:
+                text = str(label or "")
+            except Exception:
+                text = ""
+            markers = ("(β", "β)", "베타", "beta", "Beta")
+            is_marked = any(tok in text for tok in markers)
+            in_deny = text in _BETA_LABEL_DENYLIST
+            # Require both toggle and password if marked or denylisted
+            try:
+                import streamlit as st
+                need_protect = is_marked or in_deny
+                if need_protect:
+                    enabled = bool(st.session_state.get("_beta_enabled", False))
+                    # _beta_password_ok may not exist; guard call
+                    ok = False
+                    try:
+                        ok = globals().get("_beta_password_ok", lambda: False)()
+                    except Exception:
+                        ok = False
+                    if not (enabled and ok):
+                        return _SkipCtx3()
+            except Exception:
+                pass
+            return _orig_expander3(label, *args, **kwargs)
+
+        # Install only once
+        if not getattr(_st_beta3, "_beta_gate_denylist_installed", False):
+            _st_beta3.expander = _expander_beta_guard3
+            _st_beta3._beta_gate_denylist_installed = True
+    except Exception:
+        pass
+# === [/PATCH] ===
+
+
+def _load_local_module2(mod_name: str, candidates):
+    """
+    Try multiple candidate paths. Return (module, used_path) or (None, None).
+    Does NOT break older _load_local_module usage elsewhere.
+    """
+    import importlib.util, sys
+    from pathlib import Path
+    def _try(fp: Path):
+        try:
+            spec = importlib.util.spec_from_file_location(mod_name, str(fp))
+            if not spec or not spec.loader:
+                return None, None
+            m = importlib.util.module_from_spec(spec)
+            sys.modules[mod_name] = m
+            spec.loader.exec_module(m)
+            return m, str(fp)
+        except Exception:
+            return None, None
+    base_candidates = []
+    for c in (candidates if isinstance(candidates, (list, tuple)) else [candidates]):
+        c = str(c)
+        fps = []
+        if c.startswith("/"):
+            fps = [Path(c)]
+        else:
+            fps = [
+                Path(__file__).parent / c,
+                Path(__file__).parent / "modules" / c,
+                Path("/mount/src/hoya12/bloodmap_app") / c,
+                Path("/mount/src/hoya12/bloodmap_app/modules") / c,
+                Path("/mnt/data") / c,
+            ]
+        for fp in fps:
+            base_candidates.append(fp)
+    for fp in base_candidates:
+        if fp.exists():
+            m, used = _try(fp)
+            if m:
+                return m, used
+    return None, None
