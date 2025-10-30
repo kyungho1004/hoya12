@@ -56,16 +56,26 @@ def _fav_list():
 def special_tests_ui() -> List[str]:
     lines: List[str] = []
     # Render only within special tab
-    tab = st.session_state.get('_ctx_tab') or st.session_state.get('_route')
-    # Render gate: only block when tab is explicitly set and not special
-    if tab and tab not in ('special','t_special'):
+    if st.session_state.get('_ctx_tab') not in ('special','t_special'):
         return []
     # RENDER LOCK: avoid duplicate draw in same run
-    ss = st.session_state
-    ss.setdefault('SP_RENDER_LOCK', False)
-    if ss['SP_RENDER_LOCK']:
+    try:
+        __SP_RENDER_LOCK__
+    except NameError:
+        __SP_RENDER_LOCK__ = False
+    if __SP_RENDER_LOCK__:
         return []
-    ss['SP_RENDER_LOCK'] = True
+    __SP_RENDER_LOCK__ = True
+    # --- AUTO-KEY SELECTBOX HELPERS ---
+    def _sel_key(field: str, sec_id: str, idx: int) -> str:
+        return f'sp_sel_{sec_id}_{idx}_{field}'
+    def _sb(label, options, *args, **kw):
+        if 'key' not in kw or not kw['key']:
+            import re as _re
+            field = _re.sub(r'[^A-Za-z0-9]+','_', str(label)).strip('_').lower()
+            kw['key'] = _sel_key(field, sec_id, i)
+        return _sb(label, options, *args, **kw)
+    # --- /AUTO-KEY SELECTBOX HELPERS ---
     with st.expander("🧪 특수검사 (선택 입력)", expanded=True):
         st.caption("정성검사는 +/++/+++ , 정량검사는 숫자만 입력. ★로 즐겨찾기 고정.")
         favs = _fav_list()
@@ -95,11 +105,11 @@ def special_tests_ui() -> List[str]:
             if sec_id == "urine":
                 st.markdown("**요시험지/현미경 (Dipstick / Microscopy)**")
                 row1 = st.columns(6)
-                with row1[0]: alb = st.selectbox("Albumin (알부민뇨)", ["없음","+","++","+++"], index=0)
-                with row1[1]: hem = st.selectbox("Hematuria/Blood (혈뇨/잠혈)", ["없음","+","++","+++"], index=0)
-                with row1[2]: glu = st.selectbox("Glucose (요당)", ["없음","+","++","+++"], index=0)
-                with row1[3]: nit = st.selectbox("Nitrite (아질산염)", ["없음","+","++","+++"], index=0)
-                with row1[4]: leu = st.selectbox("Leukocyte esterase (백혈구 에스테라제)", ["없음","+","++","+++"], index=0)
+                with row1[0]: alb = _sb("Albumin (알부민뇨)", ["없음","+","++","+++"], index=0)
+                with row1[1]: hem = _sb("Hematuria/Blood (혈뇨/잠혈)", ["없음","+","++","+++"], index=0)
+                with row1[2]: glu = _sb("Glucose (요당)", ["없음","+","++","+++"], index=0)
+                with row1[3]: nit = _sb("Nitrite (아질산염)", ["없음","+","++","+++"], index=0)
+                with row1[4]: leu = _sb("Leukocyte esterase (백혈구 에스테라제)", ["없음","+","++","+++"], index=0)
                 with row1[5]: sg  = st.text_input("Specific gravity (요비중)", placeholder="예: 1.015")
 
                 row2 = st.columns(4)
