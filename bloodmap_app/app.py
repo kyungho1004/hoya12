@@ -1,4 +1,5 @@
 
+import ui_patch_safest  # must be first
 import ui_patch_ext  # MUST be the first import
 import ui_patch  # keep this as the very first import
 # ---- HomeBlocker v1 ----
