@@ -1,4 +1,4 @@
-import ui_patch_safest_v3  # must be first
+import ui_patch_safest  # must be first
 import route_patch_safest  # routing shims
 
 
