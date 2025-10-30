@@ -1,6 +1,6 @@
-# ui_patch_safest.py — Extended NO-SEED key prefixer with per-call ns guard
+# ui_patch_safest_v2.py — NO-SEED key prefixer + duplicate-key deduper (per-call ns guard)
 # Use as FIRST import in app.py:
-#   import ui_patch_safest  # must be first
+#   import ui_patch_safest_v2  # must be first
 
 def _bm_get_ns_safe():
     import streamlit as st, uuid
@@ -14,46 +14,70 @@ def _bm_get_ns_safe():
             ns = "sp" + uuid.uuid4().hex[:8]
     return ns
 
-def _bm_prefix_kwargs(kwargs):
-    k = kwargs.get("key", None)
-    if isinstance(k, str) and not k.startswith("__sp__/"):
+def _bm_prefix(key):
+    if isinstance(key, str) and not key.startswith("__sp__/"):
         ns = _bm_get_ns_safe()
-        kwargs["key"] = f"__sp__/{ns}/{k}"
+        return f"__sp__/{ns}/{key}"
+    return key
+
+def _bm_dedupe(key):
+    # ensure uniqueness within a single run
+    import streamlit as st
+    try:
+        used = st.session_state.setdefault("__bm_used_keys__", set())
+    except Exception:
+        used = set()
+    k = key
+    if k in used:
+        # append minimal numeric suffix until unique
+        i = 2
+        while f"{k}__dup{i}" in used:
+            i += 1
+        k = f"{k}__dup{i}"
+    used.add(k)
+    try:
+        st.session_state["__bm_used_keys__"] = used
+    except Exception:
+        pass
+    return k
+
+def _bm_fix_key(kwargs):
+    k = kwargs.get("key", None)
+    if k is None:
+        return kwargs
+    k = _bm_prefix(k)
+    k = _bm_dedupe(k)
+    kwargs["key"] = k
     return kwargs
 
-def _bm_apply_widget_patches_safest():
+def _bm_apply_widget_patches_safest_v2():
     try:
         import streamlit as st
-        if getattr(st, "_bm_patch_safest", False):
-            return
-
+        # allow reapply to sit outermost
         def _wrap(name):
             orig = getattr(st, name)
             def _wrapped(*args, **kwargs):
                 kwargs = dict(kwargs)
-                kwargs = _bm_prefix_kwargs(kwargs)
+                kwargs = _bm_fix_key(kwargs)
                 return orig(*args, **kwargs)
             return orig, _wrapped
 
-        targets = [
+        for t in [
             "toggle", "checkbox", "radio", "selectbox", "multiselect",
             "slider", "number_input", "text_input", "text_area",
             "date_input", "time_input", "file_uploader",
-        ]
-        for t in targets:
+        ]:
             try:
                 orig, wrapped = _wrap(t)
                 setattr(st, t, wrapped)
             except Exception:
                 pass
-
-        st._bm_patch_safest = True
     except Exception:
         pass
 
-_bm_apply_widget_patches_safest()
+_bm_apply_widget_patches_safest_v2()
 
-# Optional AE fallbacks (only if ae_resolve is missing)
+# Optional AE fallbacks (only if ae_resolve missing)
 try:
     from ae_resolve import resolve_key, get_ae, get_checks, render_arac_wrapper  # type: ignore
 except Exception:
