@@ -1,24 +1,4 @@
 
-# [AUTO-PATCH] Stability guards (do not remove; non-destructive)
-try:
-    import streamlit as _st_patch  # alias to avoid shadowing
-except Exception:
-    _st_patch = None
-try:
-    # Safe first-call of set_page_config at top to reduce rerun hiccups
-    if _st_patch is not None:
-        try:
-            _APPV = APP_VERSION  # may exist later
-        except Exception:
-            _APPV = "App"
-        try:
-            _st_patch.set_page_config(page_title=f"Bloodmap {_APPV}", layout="wide")
-        except Exception:
-            pass
-except Exception:
-    pass
-
-
 
 # ---- HomeBlocker v1 ----
 def _block_spurious_home():
@@ -33,6 +13,8 @@ def _block_spurious_home():
         try:
             if st.query_params.get("route") != last:
                 st.query_params.update(route=last)
+        except Exception:
+            pass
         except Exception:
             st.experimental_set_query_params(route=last)
         # do not rerun here; early/anti guards will sync on next pass
@@ -84,6 +66,8 @@ except Exception:
 # ---- Initial route bootstrap (anti first-click→home) ----
 try:
     import streamlit as st
+
+
     ss = st.session_state
     if not ss.get("_route"):
         try:
@@ -107,6 +91,16 @@ try:
 except Exception:
     pass
 # ---- End initial route bootstrap ----
+# [PATCH] stable session UID for widget keys (do not remove)
+try:
+    import uuid as _uuid
+    if "_uid" not in st.session_state:
+        _base = st.session_state.get("key") or f"guest#{_uuid.uuid4().hex[:6]}"
+        _safe = _base.replace(":", "_").replace("/", "_")
+        st.session_state["_uid"] = _safe
+except Exception:
+    pass
+
 
 
 
@@ -444,7 +438,7 @@ render_deploy_banner("https://bloodmap.streamlit.app/", "제작: Hoya/GPT · 자
 st.caption(f"모듈 경로 — special_tests: {SPECIAL_PATH or '(not found)'} | onco_map: {ONCO_PATH or '(not found)'} | drug_db: {DRUGDB_PATH or '(not found)'}")
 
 # ---------- Helpers ----------
-def wkey_legacy(name: str) -> str:
+def wkey(name: str) -> str:
     who = st.session_state.get("key", "guest#PIN")
     return f"{who}:{name}"
 
