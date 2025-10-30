@@ -1,36 +1,28 @@
 
-# app.recovery.safe.py — BloodMap SAFE-BOOT (패치 방식, 핵심만 살려서 부팅)
-# - 세션 하이드레이션 + 라우트 가드(순한맛)
-# - 외부 UI 패치 비활성 (임포트 시도 후 실패해도 진행)
-# - 특수검사/소아/보고서 모듈은 선택적 호출(있으면 사용, 없으면 스킵)
-# - 피수치 입력 기본 UI 제공(값 보존)
-# - /mnt/data 경로/핵심 가드 방향성 유지 (삭제 아님)
-
+# app.recovery.safe.v2.py — BloodMap SAFE-BOOT (권한 에러 내성 패치)
 from __future__ import annotations
 import streamlit as st
-import json, os
+import json, os, io, tempfile
 from datetime import datetime, timedelta, timezone
 
 KST = timezone(timedelta(hours=9))
 
-# ===== SAFE defaults & guards =====
+# ===== helpers =====
 def _bm_defaults():
     ss = st.session_state
     ss.setdefault("_route", ss.get("_route_last", "dx"))
     ss.setdefault("_route_last", ss.get("_route", "dx"))
     ss.setdefault("_home_intent", True)
     ss.setdefault("_ctx_tab", None)
-    # critical dicts
     for k in ("labs_dict","peds_inputs","chemo_inputs","special_interpretations","care_log"):
         ss.setdefault(k, {})
-    # user/profile
     ss.setdefault("profile", {"maker": "Hoya/GPT", "tz":"KST"})
+
 def _pin_route(name: str):
     ss = st.session_state
     ss["_route"] = name
     if name != "home":
         ss["_route_last"] = name
-    # best-effort URL sync
     try:
         qp = st.query_params
         if qp.get("route") != name: st.query_params.update(route=name)
@@ -40,6 +32,27 @@ def _pin_route(name: str):
                 st.experimental_set_query_params(route=name)
         except Exception:
             pass
+
+def _first_writable_dir(candidates: list[str]) -> tuple[str | None, str]:
+    """Return first writable dir; create if needed. Also verify by writing a small probe file."""
+    note = ""
+    for d in candidates:
+        try:
+            os.makedirs(d, exist_ok=True)
+            probe_path = os.path.join(d, ".write_probe")
+            with open(probe_path, "w", encoding="utf-8") as f:
+                f.write("ok")
+            os.remove(probe_path)
+            if d.startswith("/mnt/data"):
+                note = "(/mnt/data 유지)"
+            else:
+                note = f"(권한 문제로 대체 경로 사용: {d})"
+            return d, note
+        except PermissionError:
+            continue
+        except OSError:
+            continue
+    return None, "(모든 후보 경로 쓰기 불가)"
 
 _bm_defaults()
 
@@ -52,7 +65,6 @@ except Exception as e:
 else:
     _special_err = None
 
-# Pediatric page (optional)
 _peds_render = None
 try:
     from pages_peds import render_peds_page as _peds_render
@@ -61,7 +73,6 @@ except Exception as e:
 else:
     _peds_err = None
 
-# Branding (optional banner)
 _brand = None
 try:
     import branding as _branding
@@ -70,31 +81,29 @@ except Exception:
     _brand = None
 
 # ===== UI =====
-st.set_page_config(page_title="BloodMap · SAFE-BOOT", layout="wide")
+st.set_page_config(page_title="BloodMap · SAFE-BOOT v2", layout="wide")
 if _brand:
     try: _brand()
     except Exception: pass
 
-st.title("🩸 BloodMap · SAFE-BOOT (복구용)")
-st.caption("한국시간 기준: " + datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S"))
+st.title("🩸 BloodMap · SAFE-BOOT v2 (복구용)")
+st.caption("한국시간: " + datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S"))
 
 tabs = st.tabs(["🏠 홈","🧬 암","💊 항암제","📊 피수치","🔬 특수검사","👶 소아","🧾 보고서"])
+
 # 홈
 with tabs[0]:
-    st.write("앱 복구용 안전 모드입니다. 기능은 유지하면서 충돌을 최소화했어요.")
+    st.write("앱 복구용 안전 모드입니다. 입력/저장/특수검사 동작 확인에 집중합니다.")
     if st.button("피수치로 이동", key="go_labs"):
         _pin_route("labs")
         st.rerun()
 
-# 암 (placeholder – 기존 구조 유지, 상세는 추후 원본 모듈 재연결)
 with tabs[1]:
-    st.info("암 탭(임시). 원래 모듈 연결 전까지 복구 모드로 유지됩니다.")
+    st.info("암 탭(임시).")
 
-# 항암제 (placeholder)
 with tabs[2]:
-    st.info("항암제 탭(임시). 원래 모듈 연결 전까지 복구 모드로 유지됩니다.")
+    st.info("항암제 탭(임시).")
 
-# 피수치
 with tabs[3]:
     st.header("📊 피수치 입력(복구 모드)")
     st.caption("입력값은 세션에 보존됩니다.")
@@ -116,17 +125,30 @@ with tabs[3]:
     st.session_state["labs_dict"] = labs
     if st.button("저장(세션)", key="save_labs"):
         st.success("세션에 저장되었습니다.")
-    # 외부 저장 경로 유지 (graph 외부 저장의 기본 구조를 살짝 유지)
-    save_dir = "/mnt/data/bloodmap_graph"
-    os.makedirs(save_dir, exist_ok=True)
+
+    # 외부 저장 (권한 내성)
+    candidates = [
+        "/mnt/data/bloodmap_graph",
+        "/mnt/data",
+        os.path.join(tempfile.gettempdir(), "bloodmap_graph"),
+        os.getcwd(),
+    ]
+    save_dir, note = _first_writable_dir(candidates)
+    st.caption(f"외부 저장 경로 후보 테스트: {note}")
     uid = "default_user"
     if st.button("CSV 외부 저장", key="save_csv"):
-        import pandas as pd
-        df = pd.DataFrame([labs])
-        df.to_csv(os.path.join(save_dir, f"{uid}.labs.csv"), index=False, encoding="utf-8")
-        st.success(f"외부 저장 완료: {save_dir}/{uid}.labs.csv")
+        if save_dir is None:
+            st.error("쓰기 가능한 외부 저장 경로가 없습니다. (권한 문제)")
+        else:
+            import pandas as pd
+            df = pd.DataFrame([labs])
+            out_path = os.path.join(save_dir, f"{uid}.labs.csv")
+            try:
+                df.to_csv(out_path, index=False, encoding="utf-8")
+                st.success(f"외부 저장 완료: {out_path}")
+            except Exception as e:
+                st.error(f"외부 저장 실패: {e}")
 
-# 특수검사
 with tabs[4]:
     st.session_state["_ctx_tab"] = "special"
     st.header("🔬 특수검사")
@@ -144,7 +166,6 @@ with tabs[4]:
         if _special_err:
             st.exception(_special_err)
 
-# 소아
 with tabs[5]:
     st.header("👶 소아")
     if _peds_render:
@@ -155,7 +176,6 @@ with tabs[5]:
     else:
         st.info("소아 모듈 연결 전(복구 모드). pages_peds.py 확인 필요.")
 
-# 보고서 (간단 요약)
 with tabs[6]:
     st.header("🧾 간단 보고서(복구 모드)")
     st.write("**입력된 피수치(세션):**")
@@ -166,6 +186,5 @@ with tabs[6]:
         st.json(summ)
     st.caption("정식 보고서는 원본 모듈 복귀 후 정상화됩니다.")
 
-# footer
 st.divider()
-st.caption("제작 · 자문: Hoya/GPT — SAFE-BOOT (KST)")
+st.caption("제작 · 자문: Hoya/GPT — SAFE-BOOT v2 (KST)")
