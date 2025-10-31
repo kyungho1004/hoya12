@@ -1,5 +1,4 @@
-
-# app_report_special_patch.py — Report Bridge for Special Tests (patch-only, debug-enabled)
+# app_report_special_patch.py — bridge for special tests (coalesce + render + debug)
 import streamlit as st
 from typing import List, Dict, Any
 
@@ -18,12 +17,11 @@ def _coalesce_special_lines() -> List[str]:
             out.extend([str(x) for x in v if x is not None])
         elif isinstance(v, str) and v.strip():
             out.append(v.strip())
-    # dedupe with order preserved
+    # dedupe order-preserving
     seen = set(); deduped = []
     for s in out:
         if s not in seen:
-            seen.add(s)
-            deduped.append(s)
+            seen.add(s); deduped.append(s)
     return deduped
 
 def bridge_special_to_report() -> List[str]:
