@@ -1,4 +1,3 @@
-
 # app_special_import_shim.py — robust loader for special_tests (patch-only)
 import sys, importlib.util, pathlib
 
@@ -20,7 +19,7 @@ def _load_from_path(p: pathlib.Path):
     return mod
 
 def ensure_special_tests_ui():
-    # 1) try normal import
+    # 1) normal import
     try:
         import special_tests as st_mod  # type: ignore
         if hasattr(st_mod, "special_tests_ui"):
@@ -35,7 +34,7 @@ def ensure_special_tests_ui():
                 return getattr(mod, "special_tests_ui")
         except Exception:
             continue
-    # 3) last resort dummy
+    # 3) fallback dummy
     def _dummy_ui():
         try:
             import streamlit as st
