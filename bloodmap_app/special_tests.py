@@ -3,7 +3,7 @@ import streamlit as st
 import re
 from typing import List, Optional
 
-SPECIAL_TESTS_VERSION = "safe-2025-10-31"
+SPECIAL_TESTS_VERSION = "safe-2025-10-31b"
 
 def _stable_uid() -> str:
     uid = st.session_state.get("_uid") or st.session_state.get("key") or "guest"
@@ -16,15 +16,18 @@ def _sec_ns(sec_id: Optional[str]) -> str:
     sid = _slug(sec_id or "root")
     return f"{_stable_uid()}.special.safe.{sid}"
 
-# per-rerun used-keys registry
+# per-rerun used-keys registry (robust init)
 _tick = st.session_state.get("_sp_tick_safe", 0) + 1
 st.session_state["_sp_tick_safe"] = _tick
+# ALWAYS ensure the set exists before use
+st.session_state.setdefault("_sp_used_keys_safe", set())
+# Also manage rollover each rerun to avoid unbounded growth
 if st.session_state.get("_sp_used_tick_safe") != _tick:
     st.session_state["_sp_used_tick_safe"] = _tick
     st.session_state["_sp_used_keys_safe"] = set()
 
 def _mint_key(base: str) -> str:
-    used = st.session_state["_sp_used_keys_safe"]
+    used = st.session_state.setdefault("_sp_used_keys_safe", set())
     if base not in used:
         used.add(base); return base
     i = 2
