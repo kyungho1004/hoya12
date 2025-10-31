@@ -93,6 +93,7 @@ except Exception:
 # app.py
 
 # ===== Robust import guard (auto-injected) =====
+from app_report_special_patch import bridge_special_to_report, render_special_report_section
 import importlib, types
 from peds_guide import render_section_constipation, render_section_diarrhea, render_section_vomit
 
@@ -206,7 +207,7 @@ html { scroll-behavior: smooth; }
 
 
 # --- HTML-only pediatric navigator (no rerun) ---
-def render_peds_nav_html():
+def render_peds_nav_md():
     from streamlit.components.v1 import html as _html
     _html("""
     <style>
@@ -424,7 +425,7 @@ render_deploy_banner("https://bloodmap.streamlit.app/", "제작: Hoya/GPT · 자
 st.caption(f"모듈 경로 — special_tests: {SPECIAL_PATH or '(not found)'} | onco_map: {ONCO_PATH or '(not found)'} | drug_db: {DRUGDB_PATH or '(not found)'}")
 
 # ---------- Helpers ----------
-def wkey_legacy(name: str) -> str:
+def wkey(name: str) -> str:
     who = st.session_state.get("key", "guest#PIN")
     return f"{who}:{name}"
 
@@ -2434,7 +2435,13 @@ try:
             lines = _fn(st)
         else:
             lines = _fn()
-    except Exception as _e:
+    
+            # [PATCH] normalize special tests lines for report
+            try:
+                bridge_special_to_report()
+            except Exception:
+                pass
+except Exception as _e:
         import importlib
         st.error("특수검사 UI 실행 중 오류가 발생했습니다.")
         try:
