@@ -1,5 +1,4 @@
-from app_special_import_shim import ensure_special_tests_ui
-special_tests_ui = ensure_special_tests_ui()  # ← special_tests.py를 못 찾아도 동작 보장
+
 # [PATCH-HEAD] special tests report bridge (safe import)
 try:
     from app_report_special_patch import bridge_special_to_report, render_special_report_section
