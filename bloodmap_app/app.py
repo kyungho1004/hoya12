@@ -1,5 +1,11 @@
 
-# [PATCH-HEAD] special tests report bridge (safe import)
+# [PATCH-HEAD] special tests import shim + report bridge (safe)
+try:
+    from app_special_import_shim import ensure_special_tests_ui
+    special_tests_ui = ensure_special_tests_ui()
+except Exception:
+    pass
+
 try:
     from app_report_special_patch import bridge_special_to_report, render_special_report_section
 except Exception:
@@ -3661,17 +3667,14 @@ def _load_local_module2(mod_name: str, candidates):
     return None, None
 
 
-# [PATCH-TAIL] normalize & render special tests section (safe)
-# This runs at the very end so it won't interfere with existing try/except blocks.
+# [PATCH-TAIL] normalize & render special tests report (safe, non-intrusive)
 try:
-    import streamlit as st  # ensure st is in scope
-    # Normalize: gather from various possible keys into special_interpretations
+    import streamlit as st  # ensure scope
     if bridge_special_to_report:
         try:
             bridge_special_to_report()
         except Exception:
             pass
-    # Render once if there is anything to show
     if render_special_report_section and st.session_state.get("special_interpretations"):
         try:
             render_special_report_section(title="## 특수검사 해석(각주 포함)")

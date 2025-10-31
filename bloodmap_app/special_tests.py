@@ -1,14 +1,11 @@
 
 # special_tests.py — fixed (safe keys, no recursive monkeypatch), v5
-# Patch-only philosophy: self-contained, can replace a broken special_tests.py safely.
-
 import streamlit as st
 import re
 from typing import List, Optional
 
 SPECIAL_TESTS_VERSION = "fixed-v5"
 
-# ------------------ Key stability helpers ------------------
 def _stable_uid() -> str:
     uid = st.session_state.get("_uid")
     if uid:
@@ -23,7 +20,6 @@ def _sec_ns(sec_id: Optional[str]) -> str:
     sid = _slug(sec_id or "root")
     return f"{_stable_uid()}.special.v5.{sid}"
 
-# per-rerun used-keys registry
 st.session_state["_sp_run_tick"] = st.session_state.get("_sp_run_tick", 0) + 1
 if st.session_state.get("_sp_used_tick") != st.session_state["_sp_run_tick"]:
     st.session_state["_sp_used_tick"] = st.session_state["_sp_run_tick"]
@@ -51,13 +47,10 @@ def _sel_key(sec_id: str, label: str) -> str:
 def _w_key(sec_id: str, label: str) -> str:
     return _mint_key(f"{_sec_ns(sec_id)}.w.{_slug(label)}")
 
-# --------------- Non-recursive monkeypatch (safe) ---------------
-# Capture originals once
 _ORIG = {}
 def _capture_originals_once():
     global _ORIG
-    if _ORIG:
-        return
+    if _ORIG: return
     _ORIG["toggle"] = st.toggle
     _ORIG["selectbox"] = st.selectbox
     _ORIG["text_input"] = st.text_input
@@ -69,21 +62,17 @@ def _patch_widgets():
     sec = lambda: st.session_state.get("_special_current_section", "root")
 
     def _wrap_toggle(label, key=None, **kwargs):
-        if key is None:
-            key = _tog_key(sec())
+        if key is None: key = _tog_key(sec())
         return _ORIG["toggle"](label, key=key, **kwargs)
 
     def _wrap_selectbox(label, options, index=0, key=None, **kwargs):
-        if key is None:
-            key = _sel_key(sec(), label)
+        if key is None: key = _sel_key(sec(), label)
         return _ORIG["selectbox"](label, options, index=index, key=key, **kwargs)
 
     def _wrap_text_input(label, value="", max_chars=None, key=None, **kwargs):
-        if key is None:
-            key = _w_key(sec(), label)
+        if key is None: key = _w_key(sec(), label)
         return _ORIG["text_input"](label, value=value, max_chars=max_chars, key=key, **kwargs)
 
-    # apply monkeypatch
     st.toggle = _wrap_toggle
     st.selectbox = _wrap_selectbox
     st.text_input = _wrap_text_input
@@ -91,14 +80,12 @@ def _patch_widgets():
         orig_cb = _ORIG.get("checkbox")
         if orig_cb:
             def _wrap_checkbox(label, value=False, key=None, **kwargs):
-                if key is None:
-                    key = _sel_key(sec(), label)
+                if key is None: key = _sel_key(sec(), label)
                 return orig_cb(label, value=value, key=key, **kwargs)
             st.checkbox = _wrap_checkbox
     except Exception:
         pass
 
-# Section context
 class special_section:
     def __init__(self, sec_id: str): self.sec_id = sec_id; self._prev=None
     def __enter__(self):
@@ -111,15 +98,14 @@ class special_section:
         else:
             st.session_state["_special_current_section"] = self._prev
 
-# ------------------ Minimal but working UI ------------------
 def special_tests_ui() -> List[str]:
     _patch_widgets()
     lines: List[str] = []
     st.caption(f"특수검사 모듈 ({SPECIAL_TESTS_VERSION}) — 안정화")
 
-    # 1) urine
+    # urine
     with special_section("urine"):
-        on = st.toggle("소변 검사 보기")  # key 자동
+        on = st.toggle("소변 검사 보기")
         if on:
             c1, c2 = st.columns(2)
             with c1:
@@ -128,10 +114,7 @@ def special_tests_ui() -> List[str]:
             with c2:
                 rbc = st.text_input("RBC/HPF")
                 wbc = st.text_input("WBC/HPF")
-            # 요약은 항상
-            summary = f"소변 요약: Albumin={alb}, UPCR={upcr or '-'}, RBC/HPF={rbc or '-'}, WBC/HPF={wbc or '-'}"
-            lines.append(summary)
-            # 조건 해석
+            lines.append(f"소변 요약: Albumin={alb}, UPCR={upcr or '-'}, RBC/HPF={rbc or '-'}, WBC/HPF={wbc or '-'}")
             if alb and alb != "없음":
                 lines.append(f"알부민뇨 {alb} → 단백뇨 가능성, 추적 권장")
             if upcr:
@@ -142,7 +125,7 @@ def special_tests_ui() -> List[str]:
                 except:
                     lines.append("UPCR 값이 숫자가 아닙니다.")
 
-    # 2) stool (샘플)
+    # stool
     with special_section("stool"):
         on2 = st.toggle("대변 검사 보기")
         if on2:
@@ -159,7 +142,6 @@ def special_tests_ui() -> List[str]:
             except:
                 lines.append("횟수 입력이 숫자가 아닙니다.")
 
-    # 보고서에서 읽도록 표준 키에 저장
     st.session_state["special_interpretations"] = lines
     return lines
 
