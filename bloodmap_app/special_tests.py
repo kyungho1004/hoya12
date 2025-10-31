@@ -6,6 +6,8 @@
 - ✅ 모든 입력 라벨을 영어+한글 병기(예: "UPCR (Protein/Cr, 단백/크레아티닌 비율)")
 - ✅ UPCR/ACR 10000 초과 시 '단일 라인' 경고(극고값 + 단위/입력 오류 가능성)
 """
+from special_tests_safe_patch import patch_streamlit_keys, special_section, run_special_tests_ui
+patch_streamlit_keys()  # ← 모든 위젯 자동 key 안정화
 from __future__ import annotations
 from typing import List, Optional
 import streamlit as st
