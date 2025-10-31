@@ -1,3 +1,10 @@
+# [PATCH-HEAD] special tests report bridge (safe import)
+try:
+    from app_report_special_patch import bridge_special_to_report, render_special_report_section
+except Exception:
+    bridge_special_to_report = None
+    render_special_report_section = None
+
 
 
 # ---- HomeBlocker v1 ----
@@ -93,7 +100,6 @@ except Exception:
 # app.py
 
 # ===== Robust import guard (auto-injected) =====
-from app_report_special_patch import bridge_special_to_report, render_special_report_section
 import importlib, types
 from peds_guide import render_section_constipation, render_section_diarrhea, render_section_vomit
 
@@ -2435,13 +2441,7 @@ try:
             lines = _fn(st)
         else:
             lines = _fn()
-    
-            # [PATCH] normalize special tests lines for report
-            try:
-                bridge_special_to_report()
-            except Exception:
-                pass
-except Exception as _e:
+    except Exception as _e:
         import importlib
         st.error("특수검사 UI 실행 중 오류가 발생했습니다.")
         try:
@@ -3658,3 +3658,23 @@ def _load_local_module2(mod_name: str, candidates):
             if m:
                 return m, used
     return None, None
+
+
+# [PATCH-TAIL] normalize & render special tests section (safe)
+# This runs at the very end so it won't interfere with existing try/except blocks.
+try:
+    import streamlit as st  # ensure st is in scope
+    # Normalize: gather from various possible keys into special_interpretations
+    if bridge_special_to_report:
+        try:
+            bridge_special_to_report()
+        except Exception:
+            pass
+    # Render once if there is anything to show
+    if render_special_report_section and st.session_state.get("special_interpretations"):
+        try:
+            render_special_report_section(title="## 특수검사 해석(각주 포함)")
+        except Exception:
+            pass
+except Exception:
+    pass
