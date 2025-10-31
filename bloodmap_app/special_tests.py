@@ -27,8 +27,20 @@ def _emit(lines: List[str], kind: Optional[str], msg: str):
     tag = _flag(kind)
     lines.append(f"{tag} {msg}" if tag else msg)
 
-def _tog_key(name: str) -> str: return f"tog_{name}"
-def _fav_key(name: str) -> str: return f"fav_{name}"
+# [PATCH] stable namespace per-call to avoid duplicate keys even if function is invoked twice
+def _ns():
+    ss = st.session_state
+    c = ss.get("_special_ns_counter", 0) + 1
+    ss["_special_ns_counter"] = c
+    uid = ss.get("_uid", "guest")
+    return f"{uid}.sp{c}"
+
+def _tog_key(name: str) -> str:
+    return f"{_ns()}.tog.{name}"
+
+def _fav_key(name: str) -> str:
+    return f"{_ns()}.fav.{name}"
+
 
 SECTIONS = [
     ("소변검사 (Urinalysis)", "urine"),
@@ -80,18 +92,18 @@ def special_tests_ui() -> List[str]:
             if sec_id == "urine":
                 st.markdown("**요시험지/현미경 (Dipstick / Microscopy)**")
                 row1 = st.columns(6)
-                with row1[0]: alb = st.selectbox("Albumin (알부민뇨)", ["없음","+","++","+++"], index=0, key=f"special.albumin" )
-                with row1[1]: hem = st.selectbox("Hematuria/Blood (혈뇨/잠혈)", ["없음","+","++","+++"], index=0, key=f"special.hematuria_blood" )
-                with row1[2]: glu = st.selectbox("Glucose (요당)", ["없음","+","++","+++"], index=0, key=f"special.glucose" )
-                with row1[3]: nit = st.selectbox("Nitrite (아질산염)", ["없음","+","++","+++"], index=0, key=f"special.nitrite" )
-                with row1[4]: leu = st.selectbox("Leukocyte esterase (백혈구 에스테라제)", ["없음","+","++","+++"], index=0, key=f"special.leukocyte_esterase" )
-                with row1[5]: sg  = st.text_input("Specific gravity (요비중)", placeholder="예: 1.015")
+                with row1[0]: alb = st.selectbox("Albumin (알부민뇨)", ["없음","+","++","+++"], index=0, key=f"{_ns()}.urine.Albumin (알부민뇨)")
+                with row1[1]: hem = st.selectbox("Hematuria/Blood (혈뇨/잠혈)", ["없음","+","++","+++"], index=0, key=f"{_ns()}.urine.Hematuria/Blood (혈뇨/잠혈)")
+                with row1[2]: glu = st.selectbox("Glucose (요당)", ["없음","+","++","+++"], index=0, key=f"{_ns()}.urine.Glucose (요당)")
+                with row1[3]: nit = st.selectbox("Nitrite (아질산염)", ["없음","+","++","+++"], index=0, key=f"{_ns()}.urine.Nitrite (아질산염)")
+                with row1[4]: leu = st.selectbox("Leukocyte esterase (백혈구 에스테라제)", ["없음","+","++","+++"], index=0, key=f"{_ns()}.urine.Leukocyte esterase (백혈구 에스테라제)")
+                with row1[5]: sg  = st.text_input("Specific gravity (요비중)", placeholder="예: 1.015", key=f"{_ns()}.urine.Specific gravity (요비중)")
 
                 row2 = st.columns(4)
-                with row2[0]: rbc  = _num(st.text_input("RBC (/HPF, 적혈구/고배율 시야당)", placeholder="예: 0~2 정상, 3↑ 비정상"))
-                with row2[1]: wbc  = _num(st.text_input("WBC (/HPF, 백혈구/고배율 시야당)", placeholder="예: 0~4 정상, 5↑ 비정상"))
-                with row2[2]: upcr = _num(st.text_input("UPCR (Protein/Cr, 단백/크레아티닌 비율, mg/gCr)", placeholder="예: 120"))
-                with row2[3]: acr  = _num(st.text_input("ACR (Albumin/Cr, 알부민/크레아티닌 비율, mg/gCr)", placeholder="예: 25"))
+                with row2[0]: rbc  = _num(st.text_input("RBC (/HPF, 적혈구/고배율 시야당)", placeholder="예: 0~2 정상, 3↑ 비정상", key=f"{_ns()}.urine.RBC (/HPF, 적혈구/고배율 시야당)"))
+                with row2[1]: wbc  = _num(st.text_input("WBC (/HPF, 백혈구/고배율 시야당)", placeholder="예: 0~4 정상, 5↑ 비정상", key=f"{_ns()}.urine.WBC (/HPF, 백혈구/고배율 시야당)"))
+                with row2[2]: upcr = _num(st.text_input("UPCR (Protein/Cr, 단백/크레아티닌 비율, mg/gCr)", placeholder="예: 120", key=f"{_ns()}.urine.UPCR (Protein/Cr, 단백/크레아티닌 비율, mg/gCr)"))
+                with row2[3]: acr  = _num(st.text_input("ACR (Albumin/Cr, 알부민/크레아티닌 비율, mg/gCr)", placeholder="예: 25", key=f"{_ns()}.urine.ACR (Albumin/Cr, 알부민/크레아티닌 비율, mg/gCr)"))
 
                 # 시험지/정성
                 if alb!="없음": _emit(lines, "warn" if alb in ["+","++"] else "risk", f"알부민뇨 {alb} → 단백뇨 평가 필요")
@@ -136,10 +148,10 @@ def special_tests_ui() -> List[str]:
             # --- 혈구지수/망상 / RBC Indices & Reticulocytes ---
             elif sec_id == "rbcidx":
                 g1, g2, g3, g4 = st.columns(4)
-                with g1: mcv = _num(st.text_input("MCV (Mean Corpuscular Volume, 평균적혈구용적, fL)",  placeholder="예: 75"))
-                with g2: mch = _num(st.text_input("MCH (Mean Corpuscular Hemoglobin, 평균적혈구혈색소량, pg)",  placeholder="예: 26"))
-                with g3: rdw = _num(st.text_input("RDW (Red Cell Distribution Width, 적혈구분포폭, %)",   placeholder="예: 13.5"))
-                with g4: ret = _num(st.text_input("Reticulocyte (망상적혈구, %)", placeholder="예: 1.0"))
+                with g1: mcv = _num(st.text_input("MCV (Mean Corpuscular Volume, 평균적혈구용적, fL)", placeholder="예: 75", key=f"{_ns()}.rbcidx.MCV (Mean Corpuscular Volume, 평균적혈구용적, fL)"))
+                with g2: mch = _num(st.text_input("MCH (Mean Corpuscular Hemoglobin, 평균적혈구혈색소량, pg)", placeholder="예: 26", key=f"{_ns()}.rbcidx.MCH (Mean Corpuscular Hemoglobin, 평균적혈구혈색소량, pg)"))
+                with g3: rdw = _num(st.text_input("RDW (Red Cell Distribution Width, 적혈구분포폭, %)", placeholder="예: 13.5", key=f"{_ns()}.rbcidx.RDW (Red Cell Distribution Width, 적혈구분포폭, %)"))
+                with g4: ret = _num(st.text_input("Reticulocyte (망상적혈구, %)", placeholder="예: 1.0", key=f"{_ns()}.rbcidx.Reticulocyte (망상적혈구, %)"))
                 # MCV
                 if mcv is not None:
                     if mcv < 80: _emit(lines, "warn", f"MCV {mcv} < 80 → 소구성 빈혈(철결핍/지중해빈혈 등) 감별")
@@ -165,9 +177,9 @@ def special_tests_ui() -> List[str]:
 
             elif sec_id == "complement":
                 d1,d2,d3 = st.columns(3)
-                with d1: c3   = _num(st.text_input("C3 (Complement 3, 보체 C3, mg/dL)", placeholder="예: 90"))
-                with d2: c4   = _num(st.text_input("C4 (Complement 4, 보체 C4, mg/dL)", placeholder="예: 20"))
-                with d3: ch50 = _num(st.text_input("CH50 (Total Complement Activity, 총보체활성, U/mL)", placeholder="예: 50"))
+                with d1: c3   = _num(st.text_input("C3 (Complement 3, 보체 C3, mg/dL)", placeholder="예: 90", key=f"{_ns()}.complement.C3 (Complement 3, 보체 C3, mg/dL)"))
+                with d2: c4   = _num(st.text_input("C4 (Complement 4, 보체 C4, mg/dL)", placeholder="예: 20", key=f"{_ns()}.complement.C4 (Complement 4, 보체 C4, mg/dL)"))
+                with d3: ch50 = _num(st.text_input("CH50 (Total Complement Activity, 총보체활성, U/mL)", placeholder="예: 50", key=f"{_ns()}.complement.CH50 (Total Complement Activity, 총보체활성, U/mL)"))
                 if c3 is not None and c3 < 85: _emit(lines, "warn", f"C3 낮음({c3}) → 면역복합체 질환/활성화 가능성")
                 if c4 is not None and c4 < 15: _emit(lines, "warn", f"C4 낮음({c4}) → 보체소모/면역 이상 가능성")
                 if ch50 is not None:
@@ -176,10 +188,10 @@ def special_tests_ui() -> List[str]:
 
             elif sec_id == "lipid":
                 l1,l2,l3,l4 = st.columns(4)
-                with l1: tc  = _num(st.text_input("Total Cholesterol (총콜레스테롤, mg/dL)", placeholder="예: 180"))
-                with l2: tg  = _num(st.text_input("Triglyceride (중성지방, mg/dL)", placeholder="예: 120"))
-                with l3: hdl = _num(st.text_input("HDL (고밀도지단백, mg/dL)", placeholder="예: 55"))
-                with l4: ldl = _num(st.text_input("LDL (저밀도지단백, mg/dL)", placeholder="예: 110"))
+                with l1: tc  = _num(st.text_input("Total Cholesterol (총콜레스테롤, mg/dL)", placeholder="예: 180", key=f"{_ns()}.lipid.Total Cholesterol (총콜레스테롤, mg/dL)"))
+                with l2: tg  = _num(st.text_input("Triglyceride (중성지방, mg/dL)", placeholder="예: 120", key=f"{_ns()}.lipid.Triglyceride (중성지방, mg/dL)"))
+                with l3: hdl = _num(st.text_input("HDL (고밀도지단백, mg/dL)", placeholder="예: 55", key=f"{_ns()}.lipid.HDL (고밀도지단백, mg/dL)"))
+                with l4: ldl = _num(st.text_input("LDL (저밀도지단백, mg/dL)", placeholder="예: 110", key=f"{_ns()}.lipid.LDL (저밀도지단백, mg/dL)"))
                 if tc is not None and tc >= 240: _emit(lines, "risk", f"총콜레스테롤 {tc} ≥ 240 → 고지혈증 가능")
                 elif tc is not None and tc >= 200: _emit(lines, "warn", f"총콜레스테롤 {tc} 200~239 → 경계역")
                 if tg is not None and tg >= 500: _emit(lines, "risk", f"중성지방 {tg} ≥ 500 → 췌장염 위험")
@@ -191,16 +203,16 @@ def special_tests_ui() -> List[str]:
 
             elif sec_id == "heartfail":
                 h5,h6 = st.columns(2)
-                with h5: bnp = _num(st.text_input("BNP (B-type Natriuretic Peptide, 뇌나트륨이뇨펩티드, pg/mL)", placeholder="예: 60"))
-                with h6: ntp = _num(st.text_input("NT-proBNP (N-terminal proBNP, pg/mL)", placeholder="예: 125"))
+                with h5: bnp = _num(st.text_input("BNP (B-type Natriuretic Peptide, 뇌나트륨이뇨펩티드, pg/mL)", placeholder="예: 60", key=f"{_ns()}.heartfail.BNP (B-type Natriuretic Peptide, 뇌나트륨이뇨펩티드, pg/mL)"))
+                with h6: ntp = _num(st.text_input("NT-proBNP (N-terminal proBNP, pg/mL)", placeholder="예: 125", key=f"{_ns()}.heartfail.NT-proBNP (N-terminal proBNP, pg/mL)"))
                 if bnp is not None and bnp >= 100: _emit(lines, "warn", f"BNP {bnp} ≥ 100 → 심부전 의심(연령/신장기능 고려)")
                 if ntp is not None and ntp >= 900: _emit(lines, "warn", f"NT-proBNP {ntp} 상승 → 연령/신장 기능 고려")
 
             elif sec_id == "glucose":
                 g1,g2,g3 = st.columns(3)
-                with g1: fpg  = _num(st.text_input("FPG (Fasting Plasma Glucose, 식전혈당, mg/dL)", placeholder="예: 95"))
-                with g2: ppg1 = _num(st.text_input("PPG 1h (Postprandial 1-hour Glucose, 식후1시간, mg/dL)", placeholder="예: 150"))
-                with g3: ppg2 = _num(st.text_input("PPG 2h (Postprandial 2-hour Glucose, 식후2시간, mg/dL)", placeholder="예: 120"))
+                with g1: fpg  = _num(st.text_input("FPG (Fasting Plasma Glucose, 식전혈당, mg/dL)", placeholder="예: 95", key=f"{_ns()}.glucose.FPG (Fasting Plasma Glucose, 식전혈당, mg/dL)"))
+                with g2: ppg1 = _num(st.text_input("PPG 1h (Postprandial 1-hour Glucose, 식후1시간, mg/dL)", placeholder="예: 150", key=f"{_ns()}.glucose.PPG 1h (Postprandial 1-hour Glucose, 식후1시간, mg/dL)"))
+                with g3: ppg2 = _num(st.text_input("PPG 2h (Postprandial 2-hour Glucose, 식후2시간, mg/dL)", placeholder="예: 120", key=f"{_ns()}.glucose.PPG 2h (Postprandial 2-hour Glucose, 식후2시간, mg/dL)"))
                 if fpg is not None:
                     if fpg >= 126: _emit(lines, "risk", f"FPG {fpg} ≥ 126 → 당뇨병 가능성")
                     elif fpg >= 100: _emit(lines, "warn", f"FPG {fpg} 100~125 → 공복혈당장애")
@@ -211,12 +223,12 @@ def special_tests_ui() -> List[str]:
 
             elif sec_id == "cardio":
                 h1,h2,h3,h4 = st.columns(4)
-                with h1: ck   = _num(st.text_input("CK (Creatine Kinase, 크레아틴키나아제, U/L)", placeholder="예: 160"))
-                with h2: ckmb = _num(st.text_input("CK-MB (MB fraction, MB분획, ng/mL)", placeholder="예: 2.5"))
-                with h3: troI = _num(st.text_input("Troponin I (트로포닌 I, ng/mL)", placeholder="예: 0.01"))
-                with h4: troT = _num(st.text_input("Troponin T (트로포닌 T, ng/mL)", placeholder="예: 0.005"))
-                ulnI = _num(st.text_input("ULN for Troponin I (정상상한, ng/mL)", placeholder="예: 0.04"))
-                ulnT = _num(st.text_input("ULN for Troponin T (정상상한, ng/mL)", placeholder="예: 0.014"))
+                with h1: ck   = _num(st.text_input("CK (Creatine Kinase, 크레아틴키나아제, U/L)", placeholder="예: 160", key=f"{_ns()}.cardio.CK (Creatine Kinase, 크레아틴키나아제, U/L)"))
+                with h2: ckmb = _num(st.text_input("CK-MB (MB fraction, MB분획, ng/mL)", placeholder="예: 2.5", key=f"{_ns()}.cardio.CK-MB (MB fraction, MB분획, ng/mL)"))
+                with h3: troI = _num(st.text_input("Troponin I (트로포닌 I, ng/mL)", placeholder="예: 0.01", key=f"{_ns()}.cardio.Troponin I (트로포닌 I, ng/mL)"))
+                with h4: troT = _num(st.text_input("Troponin T (트로포닌 T, ng/mL)", placeholder="예: 0.005", key=f"{_ns()}.cardio.Troponin T (트로포닌 T, ng/mL)"))
+                ulnI = _num(st.text_input("ULN for Troponin I (정상상한, ng/mL)", placeholder="예: 0.04", key=f"{_ns()}.cardio.ULN for Troponin I (정상상한, ng/mL)"))
+                ulnT = _num(st.text_input("ULN for Troponin T (정상상한, ng/mL)", placeholder="예: 0.014", key=f"{_ns()}.cardio.ULN for Troponin T (정상상한, ng/mL)"))
                 if ck is not None:
                     if ck >= 5000: _emit(lines, "risk", f"CK {ck} → 횡문근융해 의심(즉시 상담)")
                     elif ck >= 1000: _emit(lines, "warn", f"CK {ck} → 근손상/운동/약물 영향 가능")
@@ -226,24 +238,24 @@ def special_tests_ui() -> List[str]:
 
             elif sec_id == "hepatobiliary":
                 a1,a2 = st.columns(2)
-                with a1: ggt = _num(st.text_input("GGT (Gamma-GT, 감마지티피, U/L)", placeholder="예: 35"))
-                with a2: alp = _num(st.text_input("ALP (Alkaline Phosphatase, 알칼리인산분해효소, U/L)", placeholder="예: 110"))
+                with a1: ggt = _num(st.text_input("GGT (Gamma-GT, 감마지티피, U/L)", placeholder="예: 35", key=f"{_ns()}.hepatobiliary.GGT (Gamma-GT, 감마지티피, U/L)"))
+                with a2: alp = _num(st.text_input("ALP (Alkaline Phosphatase, 알칼리인산분해효소, U/L)", placeholder="예: 110", key=f"{_ns()}.hepatobiliary.ALP (Alkaline Phosphatase, 알칼리인산분해효소, U/L)"))
                 if ggt is not None and ggt >= 100: _emit(lines, "warn", f"GGT 상승({ggt}) → 담도/약물 영향 가능")
                 if alp is not None and alp >= 150: _emit(lines, "warn", f"ALP 상승({alp}) → 담도/골질환 감별")
 
             elif sec_id == "pancreas":
                 p1,p2 = st.columns(2)
-                with p1: amy = _num(st.text_input("Amylase (아밀라아제, U/L)", placeholder="예: 60"))
-                with p2: lip = _num(st.text_input("Lipase (리파아제, U/L)", placeholder="예: 40"))
+                with p1: amy = _num(st.text_input("Amylase (아밀라아제, U/L)", placeholder="예: 60", key=f"{_ns()}.pancreas.Amylase (아밀라아제, U/L)"))
+                with p2: lip = _num(st.text_input("Lipase (리파아제, U/L)", placeholder="예: 40", key=f"{_ns()}.pancreas.Lipase (리파아제, U/L)"))
                 if amy is not None and amy >= 300: _emit(lines, "warn", f"Amylase 상승({amy}) → 췌장/타장기 영향 가능")
                 if lip is not None and lip >= 180:  _emit(lines, "risk", f"Lipase 현저 상승({lip}) → 급성 췌장염 의심")
 
             elif sec_id == "coag":
                 c1,c2,c3,c4 = st.columns(4)
-                with c1: inr  = _num(st.text_input("PT-INR (프로트롬빈 시간-INR)", placeholder="예: 1.0"))
-                with c2: aptt = _num(st.text_input("aPTT (활성화 부분 트롬보플라스틴 시간, sec)", placeholder="예: 30"))
-                with c3: fib  = _num(st.text_input("Fibrinogen (피브리노겐, mg/dL)", placeholder="예: 300"))
-                with c4: dd   = _num(st.text_input("D-dimer (디-다이머, µg/mL)", placeholder="예: 0.3"))
+                with c1: inr  = _num(st.text_input("PT-INR (프로트롬빈 시간-INR)", placeholder="예: 1.0", key=f"{_ns()}.coag.PT-INR (프로트롬빈 시간-INR)"))
+                with c2: aptt = _num(st.text_input("aPTT (활성화 부분 트롬보플라스틴 시간, sec)", placeholder="예: 30", key=f"{_ns()}.coag.aPTT (활성화 부분 트롬보플라스틴 시간, sec)"))
+                with c3: fib  = _num(st.text_input("Fibrinogen (피브리노겐, mg/dL)", placeholder="예: 300", key=f"{_ns()}.coag.Fibrinogen (피브리노겐, mg/dL)"))
+                with c4: dd   = _num(st.text_input("D-dimer (디-다이머, µg/mL)", placeholder="예: 0.3", key=f"{_ns()}.coag.D-dimer (디-다이머, µg/mL)"))
                 if inr is not None and inr >= 1.5: _emit(lines, "warn", f"INR {inr} ≥ 1.5 → 응고 저하/간기능 저하 가능")
                 if aptt is not None and aptt >= 40: _emit(lines, "warn", f"aPTT {aptt} ≥ 40s → 내인성 경로 지연")
                 if fib is not None and fib < 150: _emit(lines, "risk", f"Fibrinogen {fib} < 150 → 소모/간기능 저하")
@@ -251,9 +263,9 @@ def special_tests_ui() -> List[str]:
 
             elif sec_id == "inflammation":
                 i1,i2,i3 = st.columns(3)
-                with i1: esr  = _num(st.text_input("ESR (적혈구침강속도, mm/h)", placeholder="예: 10"))
-                with i2: ferr = _num(st.text_input("Ferritin (페리틴, ng/mL)", placeholder="예: 100"))
-                with i3: pct  = _num(st.text_input("Procalcitonin (프로칼시토닌, ng/mL)", placeholder="예: 0.05"))
+                with i1: esr  = _num(st.text_input("ESR (적혈구침강속도, mm/h)", placeholder="예: 10", key=f"{_ns()}.inflammation.ESR (적혈구침강속도, mm/h)"))
+                with i2: ferr = _num(st.text_input("Ferritin (페리틴, ng/mL)", placeholder="예: 100", key=f"{_ns()}.inflammation.Ferritin (페리틴, ng/mL)"))
+                with i3: pct  = _num(st.text_input("Procalcitonin (프로칼시토닌, ng/mL)", placeholder="예: 0.05", key=f"{_ns()}.inflammation.Procalcitonin (프로칼시토닌, ng/mL)"))
                 if esr is not None and esr >= 40: _emit(lines, "warn", f"ESR {esr} ≥ 40 → 염증/만성질환 가능")
                 if ferr is not None and ferr >= 300: _emit(lines, "warn", f"Ferritin {ferr} ≥ 300 → 염증/철과부하 감별")
                 if pct is not None:
@@ -261,6 +273,6 @@ def special_tests_ui() -> List[str]:
                     elif pct >= 0.5: _emit(lines, "warn", f"PCT {pct} 0.5~2 → 세균감염 의심")
 
             elif sec_id == "lactate":
-                lc = _num(st.text_input("Lactate (젖산, mmol/L)", placeholder="예: 1.5"))
+                lc = _num(st.text_input("Lactate (젖산, mmol/L)", placeholder="예: 1.5", key=f"{_ns()}.lactate.Lactate (젖산, mmol/L)"))
                 if lc is not None and lc >= 2: _emit(lines, "warn", f"Lactate {lc} ≥ 2 → 조직저산소/패혈증 감시")
     return lines
