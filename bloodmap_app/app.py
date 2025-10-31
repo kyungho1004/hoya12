@@ -206,7 +206,7 @@ html { scroll-behavior: smooth; }
 
 
 # --- HTML-only pediatric navigator (no rerun) ---
-def render_peds_nav_html():
+def render_peds_nav_md():
     from streamlit.components.v1 import html as _html
     _html("""
     <style>
@@ -424,7 +424,7 @@ render_deploy_banner("https://bloodmap.streamlit.app/", "제작: Hoya/GPT · 자
 st.caption(f"모듈 경로 — special_tests: {SPECIAL_PATH or '(not found)'} | onco_map: {ONCO_PATH or '(not found)'} | drug_db: {DRUGDB_PATH or '(not found)'}")
 
 # ---------- Helpers ----------
-def wkey_legacy(name: str) -> str:
+def wkey(name: str) -> str:
     who = st.session_state.get("key", "guest#PIN")
     return f"{who}:{name}"
 
@@ -2448,8 +2448,7 @@ try:
             except Exception:
                 pass
             st.rerun()
-        lines = []
-
+    # [PATCH] lines reset removed to keep special results
     # 빈 결과 안내 (조건 미충족 시 사용자 힌트)
     if not lines:
         with st.expander("ℹ️ 특수검사가 비어있나요? (열어서 확인)", expanded=False):
