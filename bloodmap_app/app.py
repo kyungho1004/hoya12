@@ -1,9 +1,10 @@
-# app.py — hardened build: force-use built-in SAFE special_tests UI (no external monkeypatch risk)
+# app.py — Hardened Sandbox for Special Tests (Force-Load & Report Bridge)
 import streamlit as st
-# ==== FORCE-LOAD SAFE special_tests (hard lock) ====
-import importlib.util, sys, pathlib, types
-import streamlit as st
+import importlib, importlib.util, sys, pathlib
 
+st.set_page_config(page_title="BloodMap — Special Tests Sandbox", layout="wide")
+
+# ==== FORCE-LOAD SAFE special_tests (hard lock) ====
 def _force_load_safe_special_tests():
     app_dir = pathlib.Path(__file__).parent
     candidate = app_dir / "special_tests.py"   # 우리가 배치한 안전판 파일 위치
@@ -50,3 +51,23 @@ def special_tests_ui_safe():
 # 기존 코드가 special_tests_ui()를 호출하더라도 안전판으로 흡수되게 alias
 special_tests_ui = special_tests_ui_safe
 # ==== /FORCE-LOAD SAFE special_tests ====
+
+st.title("🧪 Special Tests Sandbox (보고서까지 즉시 확인)")
+
+tab1, tab2 = st.tabs(["① 특수검사 입력", "② 보고서 미리보기"])
+
+with tab1:
+    st.subheader("특수검사 입력")
+    st.info("아래 입력 후 탭을 이동하면 보고서에 바로 반영됩니다.")
+    lines = special_tests_ui()
+
+with tab2:
+    st.subheader("특수검사 해석(각주 포함)")
+    lines = st.session_state.get("special_interpretations", [])
+    if not lines:
+        st.info("아직 요약이 없습니다. 왼쪽 탭에서 토글을 열고 값을 입력하세요.")
+    else:
+        for s in lines:
+            st.write(f"- {s}")
+    with st.expander("🔎 디버그 보기"):
+        st.write({"special_interpretations": lines})
