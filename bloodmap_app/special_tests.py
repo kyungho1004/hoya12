@@ -3,7 +3,7 @@ import streamlit as st
 import re
 from typing import List, Optional
 
-SPECIAL_TESTS_VERSION = "safe-2025-10-31b"
+SPECIAL_TESTS_VERSION = "safe-2025-10-31c"
 
 def _stable_uid() -> str:
     uid = st.session_state.get("_uid") or st.session_state.get("key") or "guest"
@@ -19,9 +19,7 @@ def _sec_ns(sec_id: Optional[str]) -> str:
 # per-rerun used-keys registry (robust init)
 _tick = st.session_state.get("_sp_tick_safe", 0) + 1
 st.session_state["_sp_tick_safe"] = _tick
-# ALWAYS ensure the set exists before use
 st.session_state.setdefault("_sp_used_keys_safe", set())
-# Also manage rollover each rerun to avoid unbounded growth
 if st.session_state.get("_sp_used_tick_safe") != _tick:
     st.session_state["_sp_used_tick_safe"] = _tick
     st.session_state["_sp_used_keys_safe"] = set()
@@ -100,6 +98,10 @@ def special_tests_ui() -> List[str]:
                         lines.append("설사(≥4회/일) — 수분/ORS 권장, 탈수 체크")
             except:
                 lines.append("횟수 입력이 숫자가 아닙니다.")
+
+    # Ensure at least one line so report always shows section
+    if not lines:
+        lines.append("특수검사 항목을 펼치지 않아 요약이 없습니다. 필요 시 토글을 열어 값을 입력하세요.")
 
     st.session_state["special_interpretations"] = lines
     return lines
