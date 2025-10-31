@@ -1,23 +1,35 @@
-# app.py — Hardened Sandbox for Special Tests (Force-Load & Report Bridge)
+# app.py — Original-style Hardened App (patch-only, safe imports)
+# - Keeps classic single-file feel while delegating to modules if present
+# - Force-loads safe special_tests
+# - Always renders Special Tests report section
+# - Wraps optional modules with try/except so missing files won't crash
+
 import streamlit as st
-import importlib, importlib.util, sys, pathlib
+st.set_page_config(page_title="BloodMap Classic", layout="wide")
 
-st.set_page_config(page_title="BloodMap — Special Tests Sandbox", layout="wide")
+# ====== Deploy banner (optional) ======
+try:
+    import branding
+    if hasattr(branding, "render_deploy_banner"):
+        branding.render_deploy_banner()
+except Exception as _e:
+    st.caption(f"branding skipped: {_e}")
 
-# ==== FORCE-LOAD SAFE special_tests (hard lock) ====
+# ====== Force-load safe special_tests and alias ======
+import importlib.util, sys, pathlib
 def _force_load_safe_special_tests():
     app_dir = pathlib.Path(__file__).parent
-    candidate = app_dir / "special_tests.py"   # 우리가 배치한 안전판 파일 위치
+    candidate = app_dir / "special_tests.py"
     if not candidate.exists():
         st.warning("special_tests.py 안전판이 없습니다. (app_dir/special_tests.py)")
         return None
     spec = importlib.util.spec_from_file_location("special_tests", str(candidate))
     if not spec or not spec.loader:
-        st.error("special_tests 안전판 로딩 실패(spec).")
+        st.error("special_tests 안전판 로딩 실패(spec)")
         return None
-    mod = importlib.util.module_from_spec(spec)          # 새 모듈 객체 생성
-    sys.modules["special_tests"] = mod                   # 이름 고정 (다른 import들이 이걸 보게)
-    spec.loader.exec_module(mod)                         # 실제 로드
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["special_tests"] = mod
+    spec.loader.exec_module(mod)
     return mod
 
 try:
@@ -27,16 +39,13 @@ except Exception as _e:
     st.caption(f"special_tests force-load failed: {_e}")
     _stmod = None
 
-# 안전 호출 래퍼: 문제가 나도 빈 리스트/안내문으로 회복
 def special_tests_ui_safe():
     if not _stmod or not hasattr(_stmod, "special_tests_ui"):
-        st.warning("특수검사 안전판 모듈이 없어 더미 UI로 대체합니다.")
         st.session_state["special_interpretations"] = ["특수검사 모듈을 찾지 못했습니다."]
-        return ["특수검사 모듈을 찾지 못했습니다."]
+        return st.session_state["special_interpretations"]
     try:
         lines = _stmod.special_tests_ui()
-        # 방어적: 항상 리스트 보장
-        if isinstance(lines, list):
+        if isinstance(lines, list) and lines:
             st.session_state["special_interpretations"] = [str(x) for x in lines if x is not None]
         elif isinstance(lines, str) and lines.strip():
             st.session_state["special_interpretations"] = [lines.strip()]
@@ -44,30 +53,78 @@ def special_tests_ui_safe():
             st.session_state["special_interpretations"] = ["특수검사 항목을 펼치지 않아 요약이 없습니다. 필요 시 토글을 열어 값을 입력하세요."]
         return st.session_state["special_interpretations"]
     except Exception as e:
-        st.error(f"특수검사 UI 실행 오류(안전모드로 전환): {e}")
+        st.error(f"특수검사 UI 실행 오류(안전모드): {e}")
         st.session_state["special_interpretations"] = ["특수검사 UI 실행 중 오류가 발생하여 안전모드로 전환되었습니다."]
         return st.session_state["special_interpretations"]
 
-# 기존 코드가 special_tests_ui()를 호출하더라도 안전판으로 흡수되게 alias
 special_tests_ui = special_tests_ui_safe
-# ==== /FORCE-LOAD SAFE special_tests ====
 
-st.title("🧪 Special Tests Sandbox (보고서까지 즉시 확인)")
+# ====== Optional modules (safe import wrappers) ======
+def _load_module(name):
+    try:
+        return importlib.import_module(name)
+    except Exception as e:
+        st.caption(f"{name} 불러오기 생략: {e}")
+        return None
 
-tab1, tab2 = st.tabs(["① 특수검사 입력", "② 보고서 미리보기"])
+ui_results = _load_module("ui_results")
+care_log_ui = _load_module("care_log_ui")
+pdf_export = _load_module("pdf_export")
+graph_io = _load_module("graph_io")
+alerts = _load_module("alerts")
 
-with tab1:
-    st.subheader("특수검사 입력")
-    st.info("아래 입력 후 탭을 이동하면 보고서에 바로 반영됩니다.")
-    lines = special_tests_ui()
+# ====== UI Structure ======
+st.title("🩸 BloodMap — Classic")
 
-with tab2:
-    st.subheader("특수검사 해석(각주 포함)")
-    lines = st.session_state.get("special_interpretations", [])
-    if not lines:
-        st.info("아직 요약이 없습니다. 왼쪽 탭에서 토글을 열고 값을 입력하세요.")
+tabs = st.tabs(["홈", "피수치 해석", "특수검사", "보고서", "케어로그"])
+
+with tabs[0]:
+    st.subheader("홈")
+    st.write("이곳은 클래식 홈 화면입니다.")
+
+with tabs[1]:
+    st.subheader("피수치 해석")
+    if ui_results and hasattr(ui_results, "render_lab_results"):
+        try:
+            ui_results.render_lab_results()
+        except Exception as e:
+            st.error(f"피수치 해석 오류: {e}")
     else:
-        for s in lines:
-            st.write(f"- {s}")
-    with st.expander("🔎 디버그 보기"):
-        st.write({"special_interpretations": lines})
+        st.info("피수치 해석 모듈이 준비되지 않았습니다.")
+
+with tabs[2]:
+    st.subheader("특수검사")
+    st.info("입력 후 '보고서' 탭에서 결과를 확인하세요.")
+    special_tests_ui()
+
+with tabs[3]:
+    st.subheader("보고서")
+    # 특수검사 섹션
+    try:
+        from app_report_special_patch import render_special_report_section
+        render_special_report_section()
+    except Exception as e:
+        st.error(f"특수검사 보고서 섹션 오류: {e}")
+    # (선택) ER PDF 등 추가 섹션
+    if pdf_export and hasattr(pdf_export, "render_export_panel"):
+        try:
+            pdf_export.render_export_panel()
+        except Exception as e:
+            st.error(f"내보내기 오류: {e}")
+
+with tabs[4]:
+    st.subheader("케어로그")
+    if care_log_ui and hasattr(care_log_ui, "render"):
+        try:
+            care_log_ui.render()
+        except Exception as e:
+            st.error(f"케어로그 오류: {e}")
+    else:
+        st.info("케어로그 모듈이 준비되지 않았습니다.")
+
+# ====== Safety banners (optional) ======
+if alerts and hasattr(alerts, "render_recent_risk_banner"):
+    try:
+        alerts.render_recent_risk_banner()
+    except Exception as e:
+        st.caption(f"경고 배너 생략: {e}")
