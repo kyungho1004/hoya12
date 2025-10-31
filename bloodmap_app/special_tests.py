@@ -116,6 +116,7 @@ class special_section:
         return self._skip
 
 # === Minimal working UI ===
+
 def special_tests_ui() -> List[str]:
     lines: List[str] = []
     st.caption(f"특수검사 모듈 ({SPECIAL_TESTS_VERSION}) — 안정화 스텁")
@@ -133,7 +134,20 @@ def special_tests_ui() -> List[str]:
                     rbc = st.text_input("RBC/HPF", key=_w_key("urine","RBC/HPF"))
                     wbc = st.text_input("WBC/HPF", key=_w_key("urine","WBC/HPF"))
 
-                # 간단 해석
+                # 요약(항상 기록)
+                summary = []
+                if alb is not None:
+                    summary.append(f"Albumin={alb}")
+                if upcr:
+                    summary.append(f"UPCR={upcr}")
+                if rbc:
+                    summary.append(f"RBC/HPF={rbc}")
+                if wbc:
+                    summary.append(f"WBC/HPF={wbc}")
+                if summary:
+                    lines.append("소변 요약: " + ", ".join(summary))
+
+                # 간단 해석(조건부 경고/권고)
                 if alb and alb != "없음":
                     lines.append(f"알부민뇨 {alb} → 신장 단백뇨 가능성, 추적 권장")
                 if upcr:
@@ -151,6 +165,17 @@ def special_tests_ui() -> List[str]:
             if on:
                 color = st.selectbox("변 색상", ["노란","녹색","검은","피 섞임"], index=0, key=_sel_key("stool","변 색상"))
                 freq = st.text_input("하루 횟수", key=_w_key("stool","횟수"))
+
+                # 요약(항상 기록)
+                summary2 = []
+                if color:
+                    summary2.append(f"색상={color}")
+                if freq:
+                    summary2.append(f"횟수/일={freq}")
+                if summary2:
+                    lines.append("대변 요약: " + ", ".join(summary2))
+
+                # 해석
                 if color in ("검은","피 섞임"):
                     lines.append(f"경고: {color} 변 — 즉시 진료 권고")
                 try:
