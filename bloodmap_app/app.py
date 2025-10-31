@@ -1,18 +1,4 @@
 
-# [PATCH-HEAD] special tests import shim + report bridge (safe)
-try:
-    from app_special_import_shim import ensure_special_tests_ui
-    special_tests_ui = ensure_special_tests_ui()
-except Exception:
-    pass
-
-try:
-    from app_report_special_patch import bridge_special_to_report, render_special_report_section
-except Exception:
-    bridge_special_to_report = None
-    render_special_report_section = None
-
-
 
 # ---- HomeBlocker v1 ----
 def _block_spurious_home():
@@ -2776,7 +2762,14 @@ with t_report:
             sec_meds = st.checkbox("항암제 요약/부작용/병용경고", True if use_dflt else False, key=wkey("sec_meds"))
             sec_labs = st.checkbox("피수치 전항목", True if use_dflt else False, key=wkey("sec_labs"))
             sec_diet = st.checkbox("식이가이드", True if use_dflt else False, key=wkey("sec_diet"))
-            sec_special = st.checkbox("특수검사 해석(각주)", True if use_dflt else False, key=wkey("sec_special"))
+            sec_special = st.checkbox("특수검사 해석(각주)", True if use_dflt else False, key=wkey("sec_special")
+            # [PATCH] auto-show special section when lines exist
+            try:
+                if st.session_state.get("special_interpretations"):
+                    sec_special = True
+            except Exception:
+                pass
+)
 
         st.markdown("### 🏥 병원 전달용 요약 + QR")
         qr_text = _build_hospital_summary()
@@ -3665,20 +3658,3 @@ def _load_local_module2(mod_name: str, candidates):
             if m:
                 return m, used
     return None, None
-
-
-# [PATCH-TAIL] normalize & render special tests report (safe, non-intrusive)
-try:
-    import streamlit as st  # ensure scope
-    if bridge_special_to_report:
-        try:
-            bridge_special_to_report()
-        except Exception:
-            pass
-    if render_special_report_section and st.session_state.get("special_interpretations"):
-        try:
-            render_special_report_section(title="## 특수검사 해석(각주 포함)")
-        except Exception:
-            pass
-except Exception:
-    pass
