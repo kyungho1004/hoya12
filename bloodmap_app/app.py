@@ -1,30 +1,4 @@
 
-# === PATCH-BLOCK: stability v2025-10-30 (non-destructive) ===
-try:
-    import streamlit as st
-    try:
-        st.set_page_config(page_title="Bloodmap", layout="wide")
-    except Exception:
-        pass
-    import uuid as _uuid
-    # session-stable UID (decoupled from nickname/PIN)
-    if "_uid" not in st.session_state:
-        base = st.session_state.get("key") or f"guest#{_uuid.uuid4().hex[:6]}"
-        safe = str(base).replace(":", "_").replace("/", "_")
-        st.session_state["_uid"] = safe
-    # stable wkey (keeps existing features; overrides any later redefinitions)
-    def __wkey_stable(name: str) -> str:
-        return f"{st.session_state.get('_uid','guest')}:{name}"
-    # bind as global 'wkey' (save legacy if existed)
-    _g = globals()
-    if "wkey" in _g:
-        _g["wkey_legacy_autosaved"] = _g["wkey"]
-    _g["wkey"] = __wkey_stable
-except Exception:
-    # Patch is best-effort; never break the app.
-    pass
-# === /PATCH-BLOCK ===
-
 
 # ---- HomeBlocker v1 ----
 def _block_spurious_home():
@@ -2238,7 +2212,7 @@ def _preferred_writable_base():
     # Try known writable locations in order
     for p in ["/mnt/data/care_log", "/mount/data/care_log", "/tmp/care_log"]:
         try:
-            (__import__("os").makedirs(p, exist_ok=True))
+            os.makedirs(p, exist_ok=True)
             test_fp = os.path.join(p, ".touch")
             with open(test_fp, "w", encoding="utf-8") as _f:
                 _f.write("ok")
@@ -2940,7 +2914,7 @@ def render_graph_panel():
 
     base_dir = "/mnt/data/bloodmap_graph"
     try:
-        (__import__("os").makedirs(base_dir, exist_ok=True))
+        os.makedirs(base_dir, exist_ok=True)
     except Exception:
         pass
 
@@ -3158,7 +3132,7 @@ def _feedback_dir():
         if not p: 
             continue
         try:
-            (__import__("os").makedirs(p, exist_ok=True))
+            os.makedirs(p, exist_ok=True)
             probe = os.path.join(p, ".probe")
             with open(probe, "w", encoding="utf-8") as f:
                 f.write("ok")
@@ -3167,7 +3141,7 @@ def _feedback_dir():
         except Exception:
             continue
     p = os.path.join(tempfile.gettempdir(), "bloodmap_metrics")
-    (__import__("os").makedirs(p, exist_ok=True))
+    os.makedirs(p, exist_ok=True)
     return p
 
 _FB_DIR = _feedback_dir()

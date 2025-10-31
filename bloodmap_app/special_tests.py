@@ -10,23 +10,6 @@ from __future__ import annotations
 from typing import List, Optional
 import streamlit as st
 
-# === PATCH: unique keys for widgets (2025-10-30) ===
-import re as _re_patch
-try:
-    _orig_selectbox = st.selectbox
-    def _selectbox_patched(label, *args, **kwargs):
-        if "key" not in kwargs:
-            sec = st.session_state.get("_cur_special_section","special")
-            lab = _re_patch.sub(r"[^A-Za-z0-9]+","_", str(label))[:40]
-            uid = st.session_state.get("_uid","guest")
-            kwargs["key"] = f"{uid}.special.{sec}.{lab}"
-        return _orig_selectbox(label, *args, **kwargs)
-    st.selectbox = _selectbox_patched
-except Exception:
-    pass
-# === /PATCH ===
-
-
 def _num(x):
     try:
         if x is None: return None
@@ -80,7 +63,6 @@ def special_tests_ui() -> List[str]:
                         st.session_state[_tog_key(sec_id)] = True
 
         for title, sec_id in SECTIONS:
-            st.session_state['_cur_special_section']=sec_id
             c1, c2 = st.columns([0.8, 0.2])
             with c1:
                 on = st.toggle(title, key=_tog_key(sec_id), value=bool(st.session_state.get(_tog_key(sec_id), True)))
@@ -98,11 +80,11 @@ def special_tests_ui() -> List[str]:
             if sec_id == "urine":
                 st.markdown("**요시험지/현미경 (Dipstick / Microscopy)**")
                 row1 = st.columns(6)
-                with row1[0]: alb = st.selectbox("Albumin (알부민뇨)", ["없음","+","++","+++"], index=0)
-                with row1[1]: hem = st.selectbox("Hematuria/Blood (혈뇨/잠혈)", ["없음","+","++","+++"], index=0)
-                with row1[2]: glu = st.selectbox("Glucose (요당)", ["없음","+","++","+++"], index=0)
-                with row1[3]: nit = st.selectbox("Nitrite (아질산염)", ["없음","+","++","+++"], index=0)
-                with row1[4]: leu = st.selectbox("Leukocyte esterase (백혈구 에스테라제)", ["없음","+","++","+++"], index=0)
+                with row1[0]: alb = st.selectbox("Albumin (알부민뇨)", ["없음","+","++","+++"], index=0, key=f"special.albumin" )
+                with row1[1]: hem = st.selectbox("Hematuria/Blood (혈뇨/잠혈)", ["없음","+","++","+++"], index=0, key=f"special.hematuria_blood" )
+                with row1[2]: glu = st.selectbox("Glucose (요당)", ["없음","+","++","+++"], index=0, key=f"special.glucose" )
+                with row1[3]: nit = st.selectbox("Nitrite (아질산염)", ["없음","+","++","+++"], index=0, key=f"special.nitrite" )
+                with row1[4]: leu = st.selectbox("Leukocyte esterase (백혈구 에스테라제)", ["없음","+","++","+++"], index=0, key=f"special.leukocyte_esterase" )
                 with row1[5]: sg  = st.text_input("Specific gravity (요비중)", placeholder="예: 1.015")
 
                 row2 = st.columns(4)
