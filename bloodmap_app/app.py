@@ -1,15 +1,34 @@
-\
-# app.py — Classic Ordered App (Patch-only, Safe Guards)
+# app.py — Classic Ordered App (Compat-call, Patch-only, Safe Guards)
 import streamlit as st
 st.set_page_config(page_title="🩸 피수치 해석기 — 클래식", layout="wide")
 
-# ===== 배너 (선택) =====
+APP_URL = "https://bloodmap.streamlit.app/"
+MADE_BY = "Hoya/GPT"
+
+# ===== 유틸: 시그니처 자동 호환 호출 =====
+def call_compat(fn, **kwargs):
+    import inspect
+    try:
+        sig = inspect.signature(fn)
+        accepted = {k: v for k, v in kwargs.items() if k in sig.parameters}
+        return fn(**accepted)
+    except Exception as e:
+        # 인자 없는 함수일 수도 있으니 마지막으로 인자 없이도 시도
+        try:
+            return fn()
+        except Exception:
+            raise e
+
+# ===== 배너 (브랜딩) =====
 try:
     import branding
     if hasattr(branding, "render_deploy_banner"):
-        branding.render_deploy_banner()
+        try:
+            call_compat(branding.render_deploy_banner, app_url=APP_URL, made_by=MADE_BY, st=st)
+        except Exception as _e:
+            st.caption(f"branding skipped: {str(_e)}")
 except Exception as _e:
-    st.caption(f"branding skipped: {_e}")
+    st.caption(f"branding skipped: {str(_e)}")
 
 # ===== 특수검사 강제 로더 인젝터 =====
 try:
@@ -64,13 +83,15 @@ def _load(name):
     except Exception as e:
         st.caption(f"{name} 모듈 생략: {e}")
         return None
+
 def _call_first(mod, names, *args, **kwargs):
     if not mod: return False
     for n in names:
         fn = getattr(mod, n, None)
         if callable(fn):
             try:
-                fn(*args, **kwargs)
+                # 가능한 경우 st를 포함해 호출 시그니처 자동 호환
+                call_compat(fn, st=st)
                 return True
             except Exception as e:
                 st.error(f"{mod.__name__}.{n} 실행 오류: {e}")
@@ -86,7 +107,15 @@ with tabs[0]:
     st.subheader("홈")
     st.write("이곳은 클래식 홈 화면입니다.")
     _alerts = _load("alerts")
-    _call_first(_alerts, ["render_recent_risk_banner", "render_risk_banner"])
+    if _alerts:
+        # 최근 30분 경보 배너 우선
+        if not _call_first(_alerts, ["render_recent_risk_banner"]):
+            # 구형 시그니처 호환 (st 필요할 수 있음)
+            try:
+                if hasattr(_alerts, "render_risk_banner"):
+                    call_compat(_alerts.render_risk_banner, st=st)
+            except Exception as e:
+                st.caption(f"alerts.banner skipped: {e}")
 
 # ----- 소아 -----
 with tabs[1]:
