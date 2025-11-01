@@ -3651,3 +3651,39 @@ def _load_local_module2(mod_name: str, candidates):
             if m:
                 return m, used
     return None, None
+
+
+# ===== PATCH: Special Tests route-safe renderer (no deletion, add-only) =====
+try:
+    import streamlit as st  # ensure available
+except Exception:
+    pass  # already imported
+
+try:
+    import special_tests as _stx
+except Exception as _e_stx_imp:
+    _stx = None
+
+def _render_special_tests_page_patch():
+    import streamlit as st
+    if _stx is None:
+        st.warning("특수검사 모듈을 불러오지 못했습니다(special_tests).")
+        return
+    st.markdown("## 🧪 특수검사 해석")
+    try:
+        lines = _stx.special_tests_ui()
+        if isinstance(lines, list):
+            st.session_state["special_tests_lines"] = lines
+    except Exception as e:
+        st.error(f"특수검사 UI 로딩 오류: {e}")
+
+# 실행 컨텍스트에서만 해당 라우트일 때 렌더
+try:
+    import streamlit as st
+    _route_val = (st.session_state.get("_route") or "").lower()
+    if _route_val in ("special","special_tests","특수","특수검사"):
+        _render_special_tests_page_patch()
+except Exception:
+    # ignore on import-time
+    pass
+# ===== END PATCH =====
