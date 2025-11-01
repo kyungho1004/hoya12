@@ -1,13 +1,9 @@
-# ==== SPECIAL TESTS BRIDGE (drop-in, non-destructive) ====
-# Tries to import `special_tests_real` (your original), wraps it with:
-#  - automatic unique widget keys
-#  - single-run render guard + cached lines
-#  - report section fallback
+# ==== PATCH • Special Tests Fallback (self-contained & non-destructive) ====
 from __future__ import annotations
 import re
 
 try:
-    import streamlit as st  # type: ignore
+    import streamlit as st
 except Exception:  # pragma: no cover
     st = None  # type: ignore
 
@@ -36,8 +32,8 @@ def _uniq(base: str) -> str:
 def _norm(label: str) -> str:
     return re.sub(r"[^0-9a-zA-Z]+", "_", str(label)).strip("_").lower()
 
-# ---- Auto-key wrappers (idempotent) ----
 def _auto_wire_inputs():
+    # Wrap a few common widgets to auto‑inject unique keys
     if st is None: return
     if not hasattr(st, "_orig_selectbox"):
         st._orig_selectbox = st.selectbox
@@ -68,72 +64,73 @@ def _auto_wire_inputs():
             return st._orig_slider(label, *a, **kw)
         st.slider = _slider
 
-# ---- Try import user's original module ----
-try:
-    import special_tests_real as _real  # type: ignore
-except Exception:
-    _real = None
+def _try_import_special():
+    # Try normal and guarded imports, aliasing if needed
+    try:
+        import special_tests as _sp  # type: ignore
+        return _sp
+    except Exception:
+        try:
+            import special_tests_import_guard  # type: ignore
+            import special_tests as _sp  # retry
+            return _sp
+        except Exception:
+            return None
 
-# ---- Fallback UI ----
 def _fallback_ui() -> list[str]:
-    if st:
-        st.subheader("🔬 특수검사 (안전 모드)")
-        st.caption("모듈을 찾지 못해 간이 UI로 표시됩니다. 기능 점검 중…")
-        col1, col2 = st.columns(2)
-        with col1:
-            alb = st.selectbox("Albumin (알부민뇨)", ["없음","+","++","+++"], index=0)
-            glu = st.selectbox("Glucose (당뇨)", ["없음","+","++","+++"], index=0)
-        with col2:
-            ket = st.selectbox("Ketone (케톤뇨)", ["없음","+","++","+++"], index=0)
-            nit = st.selectbox("Nitrite (아질산염)", ["없음","+","++","+++"], index=0)
-        note = st.text_input("비고/메모")
-    else:
-        alb=glu=ket=nit="없음"; note=""
-
-    lines = [f"• 요검사: ALB={alb}, GLU={glu}, KET={ket}, NIT={nit}"]
+    # Minimal placeholder UI so the tab is never blank
+    st.subheader("🔬 특수검사 (안전 모드)")
+    st.caption("모듈을 찾지 못해 간이 UI로 표시됩니다. 기능 검사 중…")
+    col1, col2 = st.columns(2)
+    with col1:
+        alb = st.selectbox("Albumin (알부민뇨)", ["없음","+","++","+++"], index=0)
+        glu = st.selectbox("Glucose (당뇨)", ["없음","+","++","+++"], index=0)
+    with col2:
+        ket = st.selectbox("Ketone (케톤뇨)", ["없음","+","++","+++"], index=0)
+        nit = st.selectbox("Nitrite (아질산염)", ["없음","+","++","+++"], index=0)
+    note = st.text_input("비고/메모")
+    lines = [
+        f"• 요검사: ALB={alb}, GLU={glu}, KET={ket}, NIT={nit}",
+    ]
     if note:
         lines.append(f"• 메모: {note}")
-    if st:
-        st.success("특수검사(안전모드) 입력이 임시로 저장되었습니다.")
+    st.success("특수검사(안전모드) 입력이 임시로 저장되었습니다.")
     return lines
 
-# ---- Public API ----
-def special_tests_ui(*args, **kwargs):
+def force_render_special_tab():
+    if st is None:
+        return
     _auto_wire_inputs()
-    # single-run cache
-    if st and st.session_state.get("_sp3v1_special_rendered"):
-        return st.session_state.get("special_tests_lines", [])
 
-    # route/tab hints
-    if st:
+    # Already rendered by main app?
+    if st.session_state.get("_sp3v1_special_rendered"):
+        return
+
+    # Try real module first
+    _sp = _try_import_special()
+
+    # Always present a Special tab, isolated if the main tab wiring failed
+    t_special_fallback, = st.tabs(["특수검사"])
+    with t_special_fallback:
         st.session_state.setdefault("_route", "dx")
         st.session_state["_tab_active"] = "특수검사"
-
-    # delegate or fallback
-    if _real and hasattr(_real, "special_tests_ui"):
         try:
-            lines = _real.special_tests_ui(*args, **kwargs)
+            if _sp and hasattr(_sp, "special_tests_ui"):
+                lines = _sp.special_tests_ui()
+            else:
+                lines = _fallback_ui()
         except Exception as e:
-            if st: st.warning(f"특수검사(원본) 오류: {e}")
+            st.warning(f"특수검사 UI 로딩 오류: {e}")
             lines = _fallback_ui()
-    else:
-        lines = _fallback_ui()
 
-    if st and isinstance(lines, list):
-        st.session_state["special_tests_lines"] = lines
+        if isinstance(lines, list):
+            st.session_state["special_tests_lines"] = lines
         st.session_state["_sp3v1_special_rendered"] = True
-    return lines
 
-def special_section(*args, **kwargs) -> list[str]:
-    # Prefer user's report builder if available
-    if _real and hasattr(_real, "special_section"):
-        try:
-            return _real.special_section(*args, **kwargs) or []
-        except Exception:
-            pass
-    # Fallback to cached lines
-    if st:
-        lines = st.session_state.get("special_tests_lines") or []
-        return ["### 특수검사 요약"] + lines if lines else []
-    return []
-# ==== /BRIDGE END ====
+    # Try to stitch report at least once
+    try:
+        if _sp and hasattr(_sp, "special_section"):
+            _ = _sp.special_section()
+    except Exception:
+        pass
+# ==== /PATCH END ====
