@@ -265,62 +265,28 @@ def special_tests_ui() -> List[str]:
                 if lc is not None and lc >= 2: _emit(lines, "warn", f"Lactate {lc} ≥ 2 → 조직저산소/패혈증 감시")
     return lines
 
-def _collect_special_lines_from_state(max_items: int = 30) -> list[str]:
-    """
-    세션 상태에서 특수검사 관련 키를 스캔해 사람이 읽을 수 있는 요약 라인으로 만든다.
-    - 키 네임스페이스 힌트: 'sp', 'sp3', 'special'이 포함된 항목 우선
-    - 토글: True인 것만 채택
-    - 드롭다운/텍스트: 공란/기본값('없음','선택') 제외
-    최대 max_items까지만 반환해 보고서 과밀 방지.
-    """
-    import streamlit as st
-    prefer_prefixes = ("sp", "sp3", "special")
-    drop_values = {None, "", "없음", "선택", "기본값", "default"}
-    lines: list[str] = []
-    for k, v in st.session_state.items():
-        ks = str(k)
-        if ks.startswith("_"):
-            continue
-        if not any(p in ks for p in prefer_prefixes):
-            continue
-        if isinstance(v, bool):
-            if v:
-                label = ks.replace("__", " → ").replace("_", " ")
-                lines.append(f"✓ {label}")
-        elif isinstance(v, (str, int, float)):
-            sv = str(v).strip()
-            if sv not in drop_values:
-                label = ks.split("__")[-1].replace("_", " ")
-                lines.append(f"- {label}: {sv}")
-        elif isinstance(v, (list, tuple, set)):
-            if v:
-                label = ks.split("__")[-1].replace("_", " ")
-                sv = ", ".join(map(str, v))
-                lines.append(f"- {label}: {sv}")
-        if len(lines) >= max_items:
-            break
-    seen = set()
-    uniq = []
-    for s in lines:
-        if s in seen:
-            continue
-        seen.add(s); uniq.append(s)
-    return uniq
 
-def special_section() -> str:
-    """기존 API 호환: 라인이 비어도 수집기로 생성하여 섹션을 반환."""
+# ==== PATCH: strong key namespace for Special Tests (auto-inserted) ====
+try:
     import streamlit as st
-    lines = list(st.session_state.get("special_tests_lines") or [])
-    if not lines:
-        try:
-            lines = _collect_special_lines_from_state()
-            if lines:
-                st.session_state["special_tests_lines"] = lines
-            else:
-                special_tests_snapshot()
-        except Exception:
-            try:
-                special_tests_snapshot()
-            except Exception:
-                pass
-    return special_section_md(lines=lines, show_empty=True)
+except Exception:
+    st = None
+
+def _sp_ns() -> str:
+    """특수검사 전용 키 네임스페이스(사용자/탭/라우트 기준)."""
+    if st is None:
+        return "sp3v1|no-st"
+    who = str(st.session_state.get("key", "guest#PIN"))
+    uid = str(st.session_state.get("_uid", ""))
+    route = str(st.session_state.get("_route", "dx"))
+    tab = str(st.session_state.get("_tab_active", "특수검사"))
+    return f"sp3v1|{who}|{uid}|{route}|{tab}"
+
+def _k(*parts: str) -> str:
+    return "|".join([_sp_ns(), *map(str, parts)])
+
+# 기존 _tog_key를 강제로 오버라이드(패치 방식, 다른 함수는 건드리지 않음)
+def _tog_key(sec_id: str) -> str:
+    # 예: sp3v1|guest#PIN|<uid>|dx|특수검사|tog|urine
+    return _k("tog", sec_id)
+# ==== /PATCH ====

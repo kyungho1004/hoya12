@@ -2372,17 +2372,6 @@ with t_special:
     st.subheader("🔬 특수검사")
     try:
         special_tests_ui()
-
-        # synthesize lines if UI didn't return any
-        try:
-            if not st.session_state.get("special_tests_lines"):
-                from special_tests import _collect_special_lines_from_state as _sp_collect
-                _synth = _sp_collect()
-                if _synth:
-                    st.session_state["special_tests_lines"] = _synth
-        except Exception:
-            pass
-
     except Exception as e:
         st.error(f"특수검사 UI 표시 중 오류 발생: {e}")
     st.subheader("특수검사 해석")
