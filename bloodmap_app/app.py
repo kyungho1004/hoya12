@@ -2388,7 +2388,8 @@ with t_special:
         except Exception as _e:
             st.error(f"특수검사 모듈 폴백 로드 실패: {_e}")
     # 진입 진단 캡션
-    st.caption(f"i 특수검사 진입: route={st.session_state.get('_route')}, tab={st.session_state.get('_tab_active')}, src={SPECIAL_PATH or '/mnt/data/special_tests.py'}")
+    with st.expander("i 진단(필요시 펼치기)", expanded=False):
+        st.caption(f"route={st.session_state.get('_route')}, tab={st.session_state.get('_tab_active')}, src={SPECIAL_PATH or '/mnt/data/special_tests.py'}")
     try:
         out_lines = special_tests_ui()
         if isinstance(out_lines, list):
@@ -2398,7 +2399,7 @@ with t_special:
         st.code(traceback.format_exc())
     st.subheader("특수검사 해석")
     if SPECIAL_PATH:
-        st.caption(f"special_tests 로드: {SPECIAL_PATH}")
+        st.caption(f"모듈: {SPECIAL_PATH}")
 # === SPECIAL TESTS SAFE CALL ===
 def __bm_try_get_wkey():
     try:
