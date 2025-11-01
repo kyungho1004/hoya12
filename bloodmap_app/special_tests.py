@@ -265,28 +265,38 @@ def special_tests_ui() -> List[str]:
                 if lc is not None and lc >= 2: _emit(lines, "warn", f"Lactate {lc} ≥ 2 → 조직저산소/패혈증 감시")
     return lines
 
-
-# ==== PATCH: strong key namespace for Special Tests (auto-inserted) ====
+# ==== PATCH v6: session-backed unique keys for Special Tests ====
 try:
     import streamlit as st
 except Exception:
     st = None
 
 def _sp_ns() -> str:
-    """특수검사 전용 키 네임스페이스(사용자/탭/라우트 기준)."""
     if st is None:
         return "sp3v1|no-st"
     who = str(st.session_state.get("key", "guest#PIN"))
-    uid = str(st.session_state.get("_uid", ""))
+    uid = str(st.session_state.get("_uid") or who or "anon")
     route = str(st.session_state.get("_route", "dx"))
     tab = str(st.session_state.get("_tab_active", "특수검사"))
-    return f"sp3v1|{who}|{uid}|{route}|{tab}"
+    return f"sp3v1|{uid}|{route}|{tab}"
+
+def _key_counter(base: str) -> int:
+    if st is None:
+        return 0
+    counters = st.session_state.setdefault("_sp_key_counts", {})
+    n = int(counters.get(base, 0))
+    counters[base] = n + 1
+    st.session_state["_sp_key_counts"] = counters
+    return n
+
+def _unique_key(base: str) -> str:
+    n = _key_counter(base)
+    return base if n == 0 else f"{base}#{n}"
 
 def _k(*parts: str) -> str:
     return "|".join([_sp_ns(), *map(str, parts)])
 
-# 기존 _tog_key를 강제로 오버라이드(패치 방식, 다른 함수는 건드리지 않음)
+# Override toggle key builder to always be unique even if UI duplicates are created
 def _tog_key(sec_id: str) -> str:
-    # 예: sp3v1|guest#PIN|<uid>|dx|특수검사|tog|urine
-    return _k("tog", sec_id)
-# ==== /PATCH ====
+    return _unique_key(_k("tog", sec_id))
+# ==== /PATCH v6 ====
