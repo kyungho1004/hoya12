@@ -2366,41 +2366,18 @@ def _annotate_special_notes(lines):
     out.append(pitfalls)
     return out
 # (migrated) 기존 소아 GI 섹션 호출은 t_peds 퀵 섹션으로 이동되었습니다.
-
 with t_special:
-    # 🔬 특수검사 탭 렌더링 (강화 패치 v6)
-    import streamlit as st, traceback
+    # 🔬 특수검사 탭 렌더링 (패치 추가)
+    import streamlit as st
     st.subheader("🔬 특수검사")
-    # 컨텍스트 고정: rerun에도 비지 않도록 탭/라우트 힌트 주입
-    st.session_state["_tab_active"] = "특수검사"
-    st.session_state.setdefault("_route", "dx")
-    # 모듈 로더 폴백: 실패 시 /mnt/data 직접 임포트
     try:
-        _ = _ = special_tests_ui  # type: ignore
-    except Exception:
-        try:
-            import importlib.util as _ilu
-            spec = _ilu.spec_from_file_location("special_tests", "/mnt/data/special_tests.py")
-            if spec and spec.loader:
-                m = _ilu.module_from_spec(spec)
-                spec.loader.exec_module(m)
-                special_tests_ui = m._ = _ = special_tests_ui  # type: ignore
-        except Exception as _e:
-            st.error(f"특수검사 모듈 폴백 로드 실패: {_e}")
-    # 진입 진단 캡션
-    if st.session_state.get("_debug_special"):
-        with st.expander("i 진단(필요시 펼치기)", expanded=False):
-            st.caption(f"route={st.session_state.get('_route')}, tab={st.session_state.get('_tab_active')}, src={SPECIAL_PATH or '/mnt/data/special_tests.py'}")
-    try:
-        out_lines = special_tests_ui()
-        if isinstance(out_lines, list):
-            st.session_state["special_tests_lines"] = out_lines
+        special_tests_ui()
     except Exception as e:
         st.error(f"특수검사 UI 표시 중 오류 발생: {e}")
-        st.code(traceback.format_exc())
     st.subheader("특수검사 해석")
     if SPECIAL_PATH:
-        st.caption(f"모듈: {SPECIAL_PATH}")
+        st.caption(f"special_tests 로드: {SPECIAL_PATH}")
+
 # === SPECIAL TESTS SAFE CALL ===
 def __bm_try_get_wkey():
     try:
@@ -2552,34 +2529,22 @@ def _qr_image_bytes(text: str) -> bytes:
 # REPORT with side panel (tabs)
 with t_report:
     st.subheader("보고서 (.md/.txt/.pdf) — 모든 항목 포함")
-    # 🧪 특수검사 요약 (report-safe, module-driven)
+
     try:
-        import special_tests as _spmod
-    except Exception as _e:
-        _spmod = None
+        import special_tests as _sp
+    except Exception:
+        _sp = None
     _sp_md = ""
     try:
-        if _spmod and hasattr(_spmod, "special_section"):
-            _sp_md = _spmod.special_section()
-    except Exception as _e:
+        if _sp and hasattr(_sp, "special_section"):
+            _sp_md = _sp.special_section()
+    except Exception:
         _sp_md = ""
-    if _sp_md:
-        st.markdown(_sp_md)
-    else:
+    if not _sp_md:
         _sp_lines = st.session_state.get("special_tests_lines") or []
-        st.markdown("### 🧪 특수검사 요약")
-        if _sp_lines:
-            for _ln in _sp_lines:
-                st.markdown(f"- {_ln}")
-        else:
-            st.markdown("- (입력된 특수검사 요약이 없습니다)")
-
-    # 🧪 특수검사 요약 (캐시된 라인 표시)
-    _sp_lines = st.session_state.get("special_tests_lines") or []
-    if _sp_lines:
-        st.markdown("### 🧪 특수검사 요약")
-        for _ln in _sp_lines:
-            st.markdown(f"- {_ln}")
+        _sp_md = "### 🧪 특수검사 요약\n" + ("\n".join(f"- {ln}" for ln in _sp_lines) if _sp_lines else "- (입력된 특수검사 요약이 없습니다)")
+    st.markdown(_sp_md)
+    st.session_state["_report_section_special_tests_md"] = _sp_md
 
 
     key_id = st.session_state.get("key", "(미설정)")
