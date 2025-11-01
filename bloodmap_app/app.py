@@ -3725,3 +3725,50 @@ try:
 except Exception:
     pass
 # ===== END BLOODMAP PATCH =====
+
+
+# ===== BLOODMAP PATCH (add-only): Special Tests diagnostic + hard-fallback =====
+def _bm_diag_special_tests_v1():
+    import streamlit as st
+    try:
+        import special_tests
+    except Exception as e:
+        st.error(f"[특수검사] import 실패: {e}")
+        return False
+    r = (st.session_state.get("_route") or "")
+    st.caption(f"[diag] route='{r}', has_ui={hasattr(special_tests,'special_tests_ui')}")
+    st.caption(f"[diag] cached_lines={len(st.session_state.get('special_tests_lines') or [])}")
+    return True
+
+def _bm_force_render_special_tests_v1():
+    import streamlit as st
+    try:
+        import special_tests
+        st.markdown("## 🧪 특수검사 해석 (강제 로더)")
+        lines = special_tests.special_tests_ui()
+        if isinstance(lines, list):
+            st.session_state['special_tests_lines'] = lines
+        st.success("특수검사 UI 강제 로딩 완료")
+    except Exception as e:
+        st.error(f"특수검사 강제 로딩 실패: {e}")
+
+# 진입 라우트가 '특수/스페셜'이 아니더라도, 사용자가 원하면 강제로 띄울 수 있게 작은 버튼 제공
+try:
+    import streamlit as st
+    ok = _bm_diag_special_tests_v1()
+    # 특수검사 라우트이거나, 사용자가 강제 버튼을 누르면 로딩
+    _rv = (st.session_state.get("_route") or "").lower()
+    _is_report = any(k in _rv for k in ("report","reports","export","exports","report_md","export_md","report_pdf"))
+    _is_special = ("special" in _rv) or ("특수" in _rv) or (st.session_state.get("_tab_active") in ("특수검사","special","special_tests"))
+    if not _is_report:
+        if _is_special:
+            # 정상 경로
+            _bm_render_special_tests_v1()
+        else:
+            # 페이지 하단에 조용히 토글 버튼 제공
+            with st.expander("🔧 특수검사 로더(안 보이면 눌러서 강제 로딩)", expanded=False):
+                if st.button("특수검사 강제 로딩", key="btn_force_special_tests_load"):
+                    _bm_force_render_special_tests_v1()
+except Exception:
+    pass
+# ===== END BLOODMAP PATCH =====
