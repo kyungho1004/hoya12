@@ -2376,7 +2376,7 @@ with t_special:
     st.session_state.setdefault("_route", "dx")
     # 모듈 로더 폴백: 실패 시 /mnt/data 직접 임포트
     try:
-        special_tests_ui  # type: ignore
+        _ = special_tests_ui  # type: ignore
     except Exception:
         try:
             import importlib.util as _ilu
@@ -2384,7 +2384,7 @@ with t_special:
             if spec and spec.loader:
                 m = _ilu.module_from_spec(spec)
                 spec.loader.exec_module(m)
-                special_tests_ui = m.special_tests_ui  # type: ignore
+                special_tests_ui = m._ = special_tests_ui  # type: ignore
         except Exception as _e:
             st.error(f"특수검사 모듈 폴백 로드 실패: {_e}")
     # 진입 진단 캡션
@@ -2551,6 +2551,13 @@ def _qr_image_bytes(text: str) -> bytes:
 # REPORT with side panel (tabs)
 with t_report:
     st.subheader("보고서 (.md/.txt/.pdf) — 모든 항목 포함")
+    # 🧪 특수검사 요약 (캐시된 라인 표시)
+    _sp_lines = st.session_state.get("special_tests_lines") or []
+    if _sp_lines:
+        st.markdown("### 🧪 특수검사 요약")
+        for _ln in _sp_lines:
+            st.markdown(f"- {_ln}")
+
 
     key_id = st.session_state.get("key", "(미설정)")
     labs = st.session_state.get("labs_dict", {}) or {}
