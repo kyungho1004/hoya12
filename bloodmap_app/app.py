@@ -2366,18 +2366,39 @@ def _annotate_special_notes(lines):
     out.append(pitfalls)
     return out
 # (migrated) 기존 소아 GI 섹션 호출은 t_peds 퀵 섹션으로 이동되었습니다.
+
 with t_special:
-    # 🔬 특수검사 탭 렌더링 (패치 추가)
-    import streamlit as st
+    # 🔬 특수검사 탭 렌더링 (강화 패치 v6)
+    import streamlit as st, traceback
     st.subheader("🔬 특수검사")
+    # 컨텍스트 고정: rerun에도 비지 않도록 탭/라우트 힌트 주입
+    st.session_state["_tab_active"] = "특수검사"
+    st.session_state.setdefault("_route", "dx")
+    # 모듈 로더 폴백: 실패 시 /mnt/data 직접 임포트
     try:
-        special_tests_ui()
+        special_tests_ui  # type: ignore
+    except Exception:
+        try:
+            import importlib.util as _ilu
+            spec = _ilu.spec_from_file_location("special_tests", "/mnt/data/special_tests.py")
+            if spec and spec.loader:
+                m = _ilu.module_from_spec(spec)
+                spec.loader.exec_module(m)
+                special_tests_ui = m.special_tests_ui  # type: ignore
+        except Exception as _e:
+            st.error(f"특수검사 모듈 폴백 로드 실패: {_e}")
+    # 진입 진단 캡션
+    st.caption(f"i 특수검사 진입: route={st.session_state.get('_route')}, tab={st.session_state.get('_tab_active')}, src={SPECIAL_PATH or '/mnt/data/special_tests.py'}")
+    try:
+        out_lines = special_tests_ui()
+        if isinstance(out_lines, list):
+            st.session_state["special_tests_lines"] = out_lines
     except Exception as e:
         st.error(f"특수검사 UI 표시 중 오류 발생: {e}")
+        st.code(traceback.format_exc())
     st.subheader("특수검사 해석")
     if SPECIAL_PATH:
         st.caption(f"special_tests 로드: {SPECIAL_PATH}")
-
 # === SPECIAL TESTS SAFE CALL ===
 def __bm_try_get_wkey():
     try:
@@ -3651,33 +3672,3 @@ def _load_local_module2(mod_name: str, candidates):
             if m:
                 return m, used
     return None, None
-
-
-# ===== BLOODMAP PATCH v5 (add-only): attach Special Tests on dx/special routes =====
-def _bm_attach_special_tests_v5():
-    import streamlit as st
-    try:
-        import special_tests as _stx
-    except Exception as e:
-        st.error(f"[특수검사] 모듈 로드 실패: {e}")
-        return
-    route = (st.session_state.get("_route") or "").lower()
-    tab = (st.session_state.get("_tab_active") or "").lower()
-    is_report = any(k in route for k in ("report","reports","export","exports","report_md","export_md","report_pdf"))
-    if is_report: return
-    should = ("special" in tab) or ("특수" in tab) or (route in ("dx","special","special_tests")) or ("특수" in route)
-    if should:
-        st.markdown("## 🧪 특수검사 해석")
-        try:
-            lines = _stx.special_tests_ui()
-            if isinstance(lines, list):
-                st.session_state["special_tests_lines"] = lines
-        except Exception as e:
-            st.error(f"[특수검사] 렌더 오류: {e}")
-
-try:
-    import streamlit as st
-    _bm_attach_special_tests_v5()
-except Exception:
-    pass
-# ===== END BLOODMAP PATCH v5 =====
