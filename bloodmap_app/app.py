@@ -1,4 +1,5 @@
-# app.py — Classic Ordered App (패치 방식, 안전가드 포함)
+\
+# app.py — Classic Ordered App (Patch-only, Safe Guards)
 import streamlit as st
 st.set_page_config(page_title="🩸 피수치 해석기 — 클래식", layout="wide")
 
@@ -10,13 +11,12 @@ try:
 except Exception as _e:
     st.caption(f"branding skipped: {_e}")
 
-# ===== 특수검사 강제 로더 (모듈 있으면 우선 사용) =====
+# ===== 특수검사 강제 로더 인젝터 =====
 try:
     import app_special_lock_inject as _sp_lock
-    # alias가 이미 제공됨: special_tests_ui = _sp_lock.special_tests_ui
     special_tests_ui = _sp_lock.special_tests_ui
 except Exception as _e:
-    # 인젝터가 없을 때를 대비한 인라인 안전판
+    # 인젝터 없을 때 최소 안전판
     import importlib.util, sys, pathlib
     def _force_load_safe_special_tests():
         app_dir = pathlib.Path(__file__).parent
@@ -58,14 +58,12 @@ except Exception as _e:
 
 # ===== 공용 안전 임포트/호출 헬퍼 =====
 import importlib
-
 def _load(name):
     try:
         return importlib.import_module(name)
     except Exception as e:
         st.caption(f"{name} 모듈 생략: {e}")
         return None
-
 def _call_first(mod, names, *args, **kwargs):
     if not mod: return False
     for n in names:
@@ -76,7 +74,7 @@ def _call_first(mod, names, *args, **kwargs):
                 return True
             except Exception as e:
                 st.error(f"{mod.__name__}.{n} 실행 오류: {e}")
-                return True  # 시도는 했음
+                return True
     return False
 
 # ===== 탭 구성 (원래 순서) =====
@@ -87,7 +85,6 @@ with tabs[0]:
     st.title("🩸 BloodMap — Classic")
     st.subheader("홈")
     st.write("이곳은 클래식 홈 화면입니다.")
-    # 위험 배너(있으면)
     _alerts = _load("alerts")
     _call_first(_alerts, ["render_recent_risk_banner", "render_risk_banner"])
 
@@ -129,7 +126,6 @@ with tabs[5]:
         render_special_report_section()
     except Exception as e:
         st.error(f"특수검사 보고서 섹션 오류: {e}")
-    # (선택) ER PDF/CSV/QR 등
     _pdf = _load("pdf_export")
     _call_first(_pdf, ["render_export_panel", "render"])
 

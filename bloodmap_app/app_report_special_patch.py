@@ -1,5 +1,5 @@
-# app_report_special_patch.py — Report bridge for special tests
-# 사용: 보고서 탭/섹션에서 render_special_report_section() 한 줄 호출
+\
+# app_report_special_patch.py — Report bridge for Special Tests
 from __future__ import annotations
 import streamlit as st
 

@@ -1,16 +1,12 @@
-# app_special_lock_inject.py — Patch-only injector (no deletions)
-# 목적: 기존 app.py 구조/기능 그대로 유지하면서
-#       특수검사 강제 안전 로딩 + 보고서용 special_interpretations 보장.
-# 사용: app.py의 `import streamlit as st` 아래에
-#       `import app_special_lock_inject as _sp_lock` 한 줄만 추가하면 적용.
+\
+# app_special_lock_inject.py — Special Tests Force Loader (Patch-only)
 from __future__ import annotations
 import importlib.util, sys, pathlib
 import streamlit as st
 
-# ==== FORCE-LOAD SAFE special_tests (hard lock) ====
 def _force_load_safe_special_tests():
     app_dir = pathlib.Path(__file__).parent
-    candidate = app_dir / "special_tests.py"   # 우리가 배치한 안전판 파일
+    candidate = app_dir / "special_tests.py"
     if not candidate.exists():
         st.warning("special_tests.py 안전판이 없습니다. (app_dir/special_tests.py)")
         return None
@@ -18,9 +14,9 @@ def _force_load_safe_special_tests():
     if not spec or not spec.loader:
         st.error("special_tests 안전판 로딩 실패(spec).")
         return None
-    mod = importlib.util.module_from_spec(spec)          # 새 모듈 객체 생성
-    sys.modules["special_tests"] = mod                   # 전역 별칭 고정
-    spec.loader.exec_module(mod)                         # 실제 로드
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["special_tests"] = mod
+    spec.loader.exec_module(mod)
     return mod
 
 try:
@@ -30,14 +26,12 @@ except Exception as _e:
     st.caption(f"special_tests force-load failed: {_e}")
     _stmod = None
 
-# 안전 호출 래퍼: 문제가 나도 빈 리스트/안내문으로 회복
-def special_tests_ui_safe():
+def special_tests_ui():
     if not _stmod or not hasattr(_stmod, "special_tests_ui"):
         st.session_state["special_interpretations"] = ["특수검사 모듈을 찾지 못했습니다."]
         return st.session_state["special_interpretations"]
     try:
         lines = _stmod.special_tests_ui()
-        # 방어적: 항상 리스트 보장 + 최소 1줄 보장
         if isinstance(lines, list) and lines:
             st.session_state["special_interpretations"] = [str(x) for x in lines if x is not None]
         elif isinstance(lines, str) and lines.strip():
@@ -49,7 +43,3 @@ def special_tests_ui_safe():
         st.error(f"특수검사 UI 실행 오류(안전모드): {e}")
         st.session_state["special_interpretations"] = ["특수검사 UI 실행 중 오류가 발생하여 안전모드로 전환되었습니다."]
         return st.session_state["special_interpretations"]
-
-# 기존 코드가 special_tests_ui()를 호출하더라도 안전판으로 흡수되게 alias 제공
-special_tests_ui = special_tests_ui_safe
-# ==== /FORCE-LOAD SAFE special_tests ====

@@ -1,109 +1,28 @@
-# special_tests.py — safe edition (no recursive patch; stable keys; always stores lines)
+\
+# special_tests.py — SAFE (no re-patch, unique keys, minimal summary)
 import streamlit as st
-import re
-from typing import List, Optional
+from uuid import uuid4
 
-SPECIAL_TESTS_VERSION = "safe-2025-10-31c"
+def _uniq(base: str) -> str:
+    sid = st.session_state.get("_sp_uid", None)
+    if not sid:
+        sid = st.session_state["_sp_uid"] = uuid4().hex[:6]
+    return f"{base}.{sid}"
 
-def _stable_uid() -> str:
-    uid = st.session_state.get("_uid") or st.session_state.get("key") or "guest"
-    return re.sub(r'[^a-zA-Z0-9_.-]', '_', str(uid))
-
-def _slug(x: str) -> str:
-    return re.sub(r'[^a-zA-Z0-9_.-]+', '_', str(x)).strip('_') or "x"
-
-def _sec_ns(sec_id: Optional[str]) -> str:
-    sid = _slug(sec_id or "root")
-    return f"{_stable_uid()}.special.safe.{sid}"
-
-# per-rerun used-keys registry (robust init)
-_tick = st.session_state.get("_sp_tick_safe", 0) + 1
-st.session_state["_sp_tick_safe"] = _tick
-st.session_state.setdefault("_sp_used_keys_safe", set())
-if st.session_state.get("_sp_used_tick_safe") != _tick:
-    st.session_state["_sp_used_tick_safe"] = _tick
-    st.session_state["_sp_used_keys_safe"] = set()
-
-def _mint_key(base: str) -> str:
-    used = st.session_state.setdefault("_sp_used_keys_safe", set())
-    if base not in used:
-        used.add(base); return base
-    i = 2
-    while True:
-        k = f"{base}.dup{i}"
-        if k not in used:
-            used.add(k); return k
-        i += 1
-
-def _tog_key(sec_id: str) -> str:
-    return _mint_key(f"{_sec_ns(sec_id)}.tog")
-
-def _sel_key(sec_id: str, label: str) -> str:
-    return _mint_key(f"{_sec_ns(sec_id)}.sel.{_slug(label)}")
-
-def _w_key(sec_id: str, label: str) -> str:
-    return _mint_key(f"{_sec_ns(sec_id)}.w.{_slug(label)}")
-
-class special_section:
-    def __init__(self, sec_id: str): self.sec_id = sec_id; self._prev=None
-    def __enter__(self):
-        self._prev = st.session_state.get("_special_current_section")
-        st.session_state["_special_current_section"] = self.sec_id
-        return self
-    def __exit__(self, exc_type, exc, tb):
-        if self._prev is None:
-            st.session_state.pop("_special_current_section", None)
-        else:
-            st.session_state["_special_current_section"] = self._prev
-
-def special_tests_ui() -> List[str]:
-    lines: List[str] = []
-    st.caption(f"특수검사 모듈 ({SPECIAL_TESTS_VERSION}) — 안정화")
-
-    # urine
-    with special_section("urine"):
-        on = st.toggle("소변 검사 보기", key=_tog_key("urine"))
-        if on:
-            c1, c2 = st.columns(2)
-            with c1:
-                alb = st.selectbox("Albumin (알부민뇨)", ["없음","+","++","+++"], index=0, key=_sel_key("urine","Albumin"))
-                upcr = st.text_input("UPCR (단백/크레아티닌 비)", key=_w_key("urine","UPCR"))
-            with c2:
-                rbc = st.text_input("RBC/HPF", key=_w_key("urine","RBC"))
-                wbc = st.text_input("WBC/HPF", key=_w_key("urine","WBC"))
-            lines.append(f"소변 요약: Albumin={alb}, UPCR={upcr or '-'}, RBC/HPF={rbc or '-'}, WBC/HPF={wbc or '-'}")
-            if alb and alb != "없음":
-                lines.append(f"알부민뇨 {alb} → 단백뇨 가능성, 추적 권장")
-            if upcr:
-                try:
-                    v = float(str(upcr).replace(',', '').strip())
-                    if v >= 0.2:
-                        lines.append(f"UPCR {v} ↑ (≥0.2) — 단백뇨 의심, 신장내과 상담 고려")
-                except:
-                    lines.append("UPCR 값이 숫자가 아닙니다.")
-
-    # stool
-    with special_section("stool"):
-        on2 = st.toggle("대변 검사 보기", key=_tog_key("stool"))
-        if on2:
-            color = st.selectbox("변 색상", ["노란","녹색","검은","피 섞임"], index=0, key=_sel_key("stool","색상"))
-            freq  = st.text_input("하루 횟수", key=_w_key("stool","횟수"))
-            lines.append(f"대변 요약: 색상={color}, 횟수/일={freq or '-'}")
-            if color in ("검은","피 섞임"):
-                lines.append(f"경고: {color} 변 — 즉시 진료 권고")
-            try:
-                if freq:
-                    n = int(str(freq).strip())
-                    if n >= 4:
-                        lines.append("설사(≥4회/일) — 수분/ORS 권장, 탈수 체크")
-            except:
-                lines.append("횟수 입력이 숫자가 아닙니다.")
-
-    # Ensure at least one line so report always shows section
+def special_tests_ui():
+    st.info("특수검사 모듈 (safe) — 토글을 열어 값을 입력하세요.")
+    lines = []
+    with st.expander("🔴 소변 검사 보기", expanded=True):
+        alb = st.selectbox("Albumin (알부민뇨)", ["없음","+","++","+++"], key=_uniq("alb"))
+        rbc = st.text_input("RBC/HPF", key=_uniq("rbc"))
+        wbc = st.text_input("WBC/HPF", key=_uniq("wbc"))
+        if alb != "없음" or rbc or wbc:
+            lines.append(f"소변 요약: Alb {alb}, RBC/HPF {rbc or '-'}, WBC/HPF {wbc or '-'}")
+    with st.expander("🟡 대변 검사 보기", expanded=False):
+        occ = st.selectbox("잠혈(FOBT)", ["음성","양성"], key=_uniq("fobt"))
+        if occ == "양성":
+            lines.append("대변 요약: FOBT 양성")
     if not lines:
-        lines.append("특수검사 항목을 펼치지 않아 요약이 없습니다. 필요 시 토글을 열어 값을 입력하세요.")
-
+        lines = ["특수검사 항목을 펼치지 않아 요약이 없습니다. 필요 시 토글을 열어 값을 입력하세요."]
     st.session_state["special_interpretations"] = lines
     return lines
-
-__all__ = ["special_tests_ui", "special_section"]
