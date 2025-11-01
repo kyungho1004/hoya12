@@ -89,7 +89,72 @@ def _migrate_legacy_toggle(sec_id: str):
             except Exception:
                 pass
 
+
+# --- context helpers & export API (added, patch-only) ---
+def _is_report_context() -> bool:
+    route = st.session_state.get("_route", "").lower()
+    return route in ("report","reports","export","exports","report_md","export_md","report_pdf")
+
+def special_tests_snapshot() -> dict:
+    """현재 세션의 특수검사 입력값과 해석 라인을 스냅샷으로 반환 + 세션에 보관"""
+    who, uid = _who_uid()
+    snap = {"who": who, "uid": uid, "values": {}, "lines": []}
+    # 수집 대상 필드 구성
+    fields = {
+        "urine": ["alb","hem","glu","nit","leu","sg","rbc","wbc","upcr","acr"],
+        "rbcidx": ["mcv","mch","rdw","ret"],
+        "complement": ["c3","c4","ch50"],
+        "lipid": ["tc","tg","hdl","ldl"],
+        "heartfail": ["bnp","ntpro"],
+        "glucose": ["fpg","ppg"],
+        "cardio": ["ck","ckmb","tro"],
+        "hepatobiliary": ["ggt","alp"],
+        "pancreas": ["amy","lip"],
+        "coag": ["inr","aptt","fibrino","ddimer"],
+        "inflammation": ["esr","ferritin","pct"],
+        "lactate": ["lactate"],
+    }
+    for sec, names in fields.items():
+        for name in names:
+            snap["values"][f"{sec}.{name}"] = st.session_state.get(_key(sec, name))
+    # 해석 라인
+    lines = st.session_state.get("special_tests_lines") or []
+    snap["lines"] = list(lines)
+    st.session_state["special_tests_payload"] = snap
+    return snap
+
+def get_special_tests_lines() -> list:
+    """보고서 모듈이 호출할 수 있는 읽기 전용 라인 접근자"""
+    return list(st.session_state.get("special_tests_lines") or [])
+
+def special_section() -> str:
+    """보고서(.md) 섹션 텍스트 생성"""
+    lines = get_special_tests_lines()
+    if not lines:
+        # UI가 아직 호출 안되었으면 스냅샷만 반환(가능한 값 기준)
+        special_tests_snapshot()
+        lines = get_special_tests_lines()
+    if not lines:
+        return ""
+    md = ["### 🧪 특수검사 요약"]
+    for s in lines:
+        md.append(f"- {s}")
+    return "\n".join(md)
+
+def injector():
+    """
+    보고서/내보내기 모듈에서 선언적으로 사용하기 위한 인젝터.
+    반환: (title, lines)
+    """
+    lines = get_special_tests_lines()
+    if not lines:
+        special_tests_snapshot()
+        lines = get_special_tests_lines()
+    return ("🧪 특수검사", lines)
 def special_tests_ui() -> List[str]:
+    # 보고서/내보내기 컨텍스트에서는 UI 렌더링 생략하고 라인만 반환
+    if _is_report_context():
+        return get_special_tests_lines()
     # 렌더 인덱스 증가 → 이번 호출의 모든 위젯 키에 nonce 포함
     _bump_render_idx()
 
