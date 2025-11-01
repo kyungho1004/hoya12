@@ -12,6 +12,15 @@ from __future__ import annotations
 from typing import List, Optional
 import streamlit as st
 
+
+def _ns_prefix() -> str:
+    """모듈 단위 고정 네임스페이스(세션 내 안정). 기존 'sp_' 충돌 방지용."""
+    key = "_special_tests_ns"
+    if key not in st.session_state:
+        # 버전 구분자 포함(향후 또 충돌 시 sp3v1 등으로 승격 가능)
+        st.session_state[key] = "sp2v1"
+    return st.session_state[key]
+
 def _num(x):
     try:
         if x is None: return None
