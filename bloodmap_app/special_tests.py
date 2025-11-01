@@ -265,13 +265,14 @@ def special_tests_ui() -> List[str]:
                 if lc is not None and lc >= 2: _emit(lines, "warn", f"Lactate {lc} ≥ 2 → 조직저산소/패혈증 감시")
     return lines
 
-# ==== PATCH v6: session-backed unique keys for Special Tests ====
+# ==== PATCH v7: extend unique key builders for all common widgets ====
 try:
     import streamlit as st
 except Exception:
     st = None
 
 def _sp_ns() -> str:
+    # reuse or redefine safely; last definition wins.
     if st is None:
         return "sp3v1|no-st"
     who = str(st.session_state.get("key", "guest#PIN"))
@@ -296,7 +297,26 @@ def _unique_key(base: str) -> str:
 def _k(*parts: str) -> str:
     return "|".join([_sp_ns(), *map(str, parts)])
 
-# Override toggle key builder to always be unique even if UI duplicates are created
+# --- Per-widget builders (override-friendly) ---
 def _tog_key(sec_id: str) -> str:
     return _unique_key(_k("tog", sec_id))
-# ==== /PATCH v6 ====
+
+def _btn_key(elem_id: str) -> str:
+    return _unique_key(_k("btn", elem_id))
+
+def _fav_key(elem_id: str) -> str:
+    # alias to button key, but separate namespace for clarity
+    return _unique_key(_k("fav", elem_id))
+
+def _sel_key(elem_id: str) -> str:
+    return _unique_key(_k("sel", elem_id))
+
+def _num_key(elem_id: str) -> str:
+    return _unique_key(_k("num", elem_id))
+
+def _txt_key(elem_id: str) -> str:
+    return _unique_key(_k("txt", elem_id))
+
+def _sl_key(elem_id: str) -> str:
+    return _unique_key(_k("sld", elem_id))
+# ==== /PATCH v7 ====
