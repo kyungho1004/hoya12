@@ -394,6 +394,8 @@ except Exception:
         return None, None
     _bm__LML2_ready = True
 # === /LOCAL MODULE LOADER v2 (early) ===
+if st.session_state.get("_route","").lower().find("special") != -1 or "특수" in st.session_state.get("_route",""):
+    lines = special_tests.special_tests_ui()
 _sp, SPECIAL_PATH = _load_local_module2("special_tests", ["special_tests.py", "modules/special_tests.py", "/mnt/data/special_tests.py"])
 if _sp and hasattr(_sp, "special_tests_ui"):
     special_tests_ui = _sp.special_tests_ui
