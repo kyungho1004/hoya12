@@ -1,48 +1,26 @@
-== Syntax check ==
-[OK] app.py
-[OK] streamlit_app.py
-[OK] branding.py
-[OK] pdf_export.py
-[OK] peds_dose.py
-[OK] peds_profiles.py
-[OK] special_tests.py
-[OK] adult_rules.py
-[OK] onco_map.py
-[OK] ui_results.py
-[OK] drug_db.py
-[OK] core_utils.py
-[OK] lab_diet.py
+# PRECHECK REPORT (KST) — 2025-11-01 13:49:23
 
-== Entry order check (run->main->entry) ==
-[OK] sequence run->main->entry present
+## 1) Syntax (ast.parse)
 
-== Required UI sections in Fallback ==
-[OK] ① 암 선택
-[OK] ② 항암제 선택
-[OK] ③ 항생제 선택
-[OK] ④ 피수치 입력
-[OK] ANC 기반 식이가이드
-[OK] 해석하기
+- /mnt/data/app.py: OK
+- /mnt/data/core_utils.py: OK
+- /mnt/data/ui_results.py: OK
+- /mnt/data/peds_guide.py: OK
+- /mnt/data/peds_dose.py: OK
+- /mnt/data/pdf_export.py: OK
+- /mnt/data/guards_smoke.py: OK
+- /mnt/data/branding.py: OK
+- /mnt/data/drug_db.py: OK
+- /mnt/data/pages_peds.py: OK
 
-== No steppers (number_input) in Fallback ==
-[OK] No number_input usage
+## 2) Streamlit widget keys
 
-== Widget key lint (streamlit_app.py) ==
-[FAIL] Missing key= in st.text_input(...)
-[FAIL] Missing key= in st.selectbox(...)
-[FAIL] Missing key= in st.text_input(...)
-[FAIL] Missing key= in st.text_input(...)
-[FAIL] Missing key= in st.text_input(...)
-[FAIL] Missing key= in st.text_input(...)
-[FAIL] Missing key= in st.text_input(...)
-[FAIL] Missing key= in st.text_input(...)
-[FAIL] Missing key= in st.text_input(...)
-[FAIL] Missing key= in st.text_input(...)
-[FAIL] Missing key= in st.text_input(...)
-[FAIL] Missing key= in st.text_input(...)
-[FAIL] Missing key= in st.text_input(...)
-[FAIL] Missing key= in st.text_input(...)
-[FAIL] Missing key= in st.download_button(...)
+- total_keys: 17
+- duplicates: NONE
 
-== OVERALL ==
-FAIL
+## 3) Required features presence
+
+- eGFR: OK (found in: drug_db.py, pages_peds.py, ui_results.py)
+- graph_external_save: OK (found in: app.py, guards_smoke.py)
+- ER_PDF: OK (found in: app.py, guards_smoke.py, pdf_export.py)
+- carelog_guardrails: OK (found in: app.py, drug_db.py, guards_smoke.py, pages_peds.py, peds_dose.py, peds_guide.py)
