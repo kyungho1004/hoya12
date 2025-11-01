@@ -1,6 +1,3 @@
-import special_tests_import_guard  # ensure special_tests is importable
-import app_special_tab_failsafe
-import special_tests_import_guard  # ensure special_tests is importable
 
 
 # ---- HomeBlocker v1 ----
@@ -2370,30 +2367,6 @@ def _annotate_special_notes(lines):
     return out
 # (migrated) 기존 소아 GI 섹션 호출은 t_peds 퀵 섹션으로 이동되었습니다.
 with t_special:
-    st.session_state.setdefault('_route', 'dx')
-    st.session_state['_tab_active'] = '특수검사'
-    st.session_state.setdefault('_route_token', 'r0')
-
-    if not st.session_state.get('_sp3v1_special_rendered'):
-        try:
-            import special_tests as _sp
-            _sp_lines_tmp = _sp.special_tests_ui() if hasattr(_sp, 'special_tests_ui') else []
-        except Exception as e:
-            st.warning(f'특수검사 UI 로딩 오류: {e}')
-            _sp_lines_tmp = []
-        if isinstance(_sp_lines_tmp, list):
-            st.session_state['special_tests_lines'] = _sp_lines_tmp
-        st.session_state['_sp3v1_special_rendered'] = True
-    else:
-        _sp_lines_tmp = st.session_state.get('special_tests_lines', [])
-
-    # 보고서 섹션을 최소 1줄이라도 유지하도록 트리거
-    try:
-        import special_tests as _sp
-        if hasattr(_sp, 'special_section'):
-            _ = _sp.special_section()
-    except Exception:
-        pass
     # 🔬 특수검사 탭 렌더링 (패치 추가)
     import streamlit as st
     st.subheader("🔬 특수검사")
@@ -3678,3 +3651,123 @@ def _load_local_module2(mod_name: str, candidates):
             if m:
                 return m, used
     return None, None
+
+
+# >>> SPECIAL PATCH (single-file, no new files) — helpers (EOF-safe)
+import re as _sp_re_mod
+try:
+    import special_tests as _sp_mod  # 있으면 원본 모듈 사용
+except Exception:
+    _sp_mod = None
+
+def _sp_ns(_st):
+    who = str(_st.session_state.get("key", "guest#PIN"))
+    uid = str(_st.session_state.get("_uid") or who or "anon")
+    route = str(_st.session_state.get("_route", "dx"))
+    tab = str(_st.session_state.get("_tab_active", "특수검사"))
+    return f"sp3v1|{uid}|{route}|{tab}"
+
+def _sp_counts(_st):
+    return _st.session_state.setdefault("_sp_key_counts", {})
+
+def _sp_norm(label: str) -> str:
+    return _sp_re_mod.sub(r"[^0-9a-zA-Z]+", "_", str(label)).strip("_").lower()
+
+def _sp_uniq(_st, base: str) -> str:
+    c = _sp_counts(_st)
+    n = int(c.get(base, 0)); c[base] = n + 1
+    return base if n == 0 else f"{base}#{n}"
+
+def _sp_autokey_patch(_st):
+    # 위젯 자동 key 주입(중복키/ID 전역 차단) — 한 번만
+    if getattr(_st, "_sp_autokey_patched", False):
+        return
+    _st._sp_autokey_patched = True
+
+    _st._orig_selectbox = _st.selectbox
+    def _selectbox(label, options, *a, **kw):
+        if not kw.get("key"):
+            kw["key"] = _sp_uniq(_st, _sp_ns(_st) + "|sel|" + _sp_norm(label))
+        return _st._orig_selectbox(label, options, *a, **kw)
+    _st.selectbox = _selectbox
+
+    _st._orig_number_input = _st.number_input
+    def _number_input(label, *a, **kw):
+        if not kw.get("key"):
+            kw["key"] = _sp_uniq(_st, _sp_ns(_st) + "|num|" + _sp_norm(label))
+        return _st._orig_number_input(label, *a, **kw)
+    _st.number_input = _number_input
+
+    _st._orig_text_input = _st.text_input
+    def _text_input(label, *a, **kw):
+        if not kw.get("key"):
+            kw["key"] = _sp_uniq(_st, _sp_ns(_st) + "|txt|" + _sp_norm(label))
+        return _st._orig_text_input(label, *a, **kw)
+    _st.text_input = _text_input
+
+    _st._orig_slider = _st.slider
+    def _slider(label, *a, **kw):
+        if not kw.get("key"):
+            kw["key"] = _sp_uniq(_st, _sp_ns(_st) + "|sld|" + _sp_norm(label))
+        return _st._orig_slider(label, *a, **kw)
+    _st.slider = _slider
+
+    _st._orig_toggle = _st.toggle
+    def _toggle(label, *a, **kw):
+        if not kw.get("key"):
+            kw["key"] = _sp_uniq(_st, _sp_ns(_st) + "|tog|" + _sp_norm(label))
+        return _st._orig_toggle(label, *a, **kw)
+    _st.toggle = _toggle
+
+    _st._orig_button = _st.button
+    def _button(label, *a, **kw):
+        if not kw.get("key"):
+            kw["key"] = _sp_uniq(_st, _sp_ns(_st) + "|btn|" + _sp_norm(label))
+        return _st._orig_button(label, *a, **kw)
+    _st.button = _button
+
+def _sp_fallback_ui(_st):
+    _st.subheader("🔬 특수검사 (안전 모드)")
+    _st.caption("모듈을 찾지 못해 간이 UI로 표시됩니다. 기능 점검 중…")
+    col1, col2 = _st.columns(2)
+    with col1:
+        alb = _st.selectbox("Albumin (알부민뇨)", ["없음","+","++","+++"], index=0)
+        glu = _st.selectbox("Glucose (당뇨)", ["없음","+","++","+++"], index=0)
+    with col2:
+        ket = _st.selectbox("Ketone (케톤뇨)", ["없음","+","++","+++"], index=0)
+        nit = _st.selectbox("Nitrite (아질산염)", ["없음","+","++","+++"], index=0)
+    note = _st.text_input("비고/메모")
+    lines = [f"• 요검사: ALB={alb}, GLU={glu}, KET={ket}, NIT={nit}"]
+    if note: lines.append(f"• 메모: {note}")
+    _st.success("특수검사(안전모드) 입력이 임시로 저장되었습니다.")
+    return lines
+# <<< SPECIAL PATCH helpers (EOF-safe)
+
+# >>> SPECIAL PATCH — fallback tab at EOF (no new files)
+try:
+    import streamlit as _st
+    _sp_autokey_patch(_st)
+    if not _st.session_state.get("_sp3v1_special_rendered"):
+        _st.session_state.setdefault("_route", "dx")
+        _st.session_state["_tab_active"] = "특수검사"
+        _t_special, = _st.tabs(["특수검사"])
+        with _t_special:
+            try:
+                if '_sp_mod' in globals() and _sp_mod and hasattr(_sp_mod, 'special_tests_ui'):
+                    _lines = _sp_mod.special_tests_ui()
+                else:
+                    _lines = _sp_fallback_ui(_st)
+            except Exception as e:
+                _st.warning(f"특수검사 UI 로딩 오류: {e}")
+                _lines = _sp_fallback_ui(_st)
+            if isinstance(_lines, list):
+                _st.session_state['special_tests_lines'] = _lines
+            _st.session_state['_sp3v1_special_rendered'] = True
+        try:
+            if '_sp_mod' in globals() and _sp_mod and hasattr(_sp_mod, 'special_section'):
+                _ = _sp_mod.special_section()
+        except Exception:
+            pass
+except Exception:
+    pass
+# <<< SPECIAL PATCH EOF
