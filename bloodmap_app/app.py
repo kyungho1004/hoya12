@@ -1,3 +1,4 @@
+import special_tests_import_guard  # ensure special_tests is importable
 
 
 # ---- HomeBlocker v1 ----
