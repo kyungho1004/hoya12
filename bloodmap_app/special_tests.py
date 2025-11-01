@@ -93,14 +93,19 @@ def _migrate_legacy_toggle(sec_id: str):
 # --- context helpers & export API (added, patch-only) ---
 
 # --- strict UI context guards (patch) ---
-_ALLOWED_UI_ROUTES = {"special", "special_tests", "특수", "특수검사"}
+_ALLOWED_UI_ROUTES = {"special", "special_tests", "ae_special", "특수", "특수검사", "특수검사해석"}
 
 def _is_ui_context() -> bool:
     r = (st.session_state.get("_route") or "").lower()
-    # 일부 한글 라벨 대응
-    if r in _ALLOWED_UI_ROUTES: 
+    if not r:
+        # 라우트 정보가 비어있으면 안전하게 렌더 허용(빈화면 방지)
         return True
-    # report/export 계열은 UI가 아니라 export 모드
+    # 정확 매칭
+    if r in _ALLOWED_UI_ROUTES:
+        return True
+    # 부분 문자열 매칭 (특수/스페셜 포함된 커스텀 라우트 지원)
+    if ("special" in r) or ("특수" in r):
+        return True
     return False
 def _is_report_context() -> bool:
     route = st.session_state.get("_route", "").lower()
@@ -173,7 +178,7 @@ def special_tests_ui() -> List[str]:
     _bump_render_idx()
 
     lines: List[str] = []
-    with st.expander("🧪 특수검사 (선택 입력)", expanded=False):
+    with st.expander("🧪 특수검사 (선택 입력)", expanded=True):
         st.caption("정성검사는 +/++/+++ , 정량검사는 숫자만 입력. ★로 즐겨찾기 고정.")
         favs = _fav_list()
         if favs:
