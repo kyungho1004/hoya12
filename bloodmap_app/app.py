@@ -394,8 +394,6 @@ except Exception:
         return None, None
     _bm__LML2_ready = True
 # === /LOCAL MODULE LOADER v2 (early) ===
-if st.session_state.get("_route","").lower().find("special") != -1 or "특수" in st.session_state.get("_route",""):
-    lines = special_tests.special_tests_ui()
 _sp, SPECIAL_PATH = _load_local_module2("special_tests", ["special_tests.py", "modules/special_tests.py", "/mnt/data/special_tests.py"])
 if _sp and hasattr(_sp, "special_tests_ui"):
     special_tests_ui = _sp.special_tests_ui
@@ -3689,3 +3687,41 @@ except Exception:
     # ignore on import-time
     pass
 # ===== END PATCH =====
+
+
+# ===== BLOODMAP PATCH (add-only): Special Tests route-guarded renderer =====
+def _bm_render_special_tests_v1():
+    import streamlit as st
+    try:
+        import special_tests
+    except Exception as e:
+        st.warning(f"특수검사 모듈 불러오기 실패: {e}")
+        return
+
+    _route = (st.session_state.get("_route") or "").lower()
+    _is_report = any(k in _route for k in ("report","reports","export","exports","report_md","export_md","report_pdf"))
+    _should_render_special = (
+        any(k in _route for k in ("special","특수")) or
+        st.session_state.get("_tab_active") in ("특수검사","special","special_tests")
+    )
+
+    if _is_report:
+        return
+
+    if _should_render_special:
+        st.markdown("## 🧪 특수검사 해석")
+        try:
+            lines = special_tests.special_tests_ui()
+            if isinstance(lines, list):
+                st.session_state["special_tests_lines"] = lines
+        except Exception as e:
+            st.error(f"특수검사 UI 로딩 오류: {e}")
+
+try:
+    import streamlit as st
+    _route_val = (st.session_state.get("_route") or "").lower()
+    if ("special" in _route_val) or ("특수" in _route_val) or st.session_state.get("_tab_active") in ("특수검사","special","special_tests"):
+        _bm_render_special_tests_v1()
+except Exception:
+    pass
+# ===== END BLOODMAP PATCH =====
