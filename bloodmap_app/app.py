@@ -1,4 +1,5 @@
 import special_tests_import_guard  # ensure special_tests is importable
+import app_special_tab_failsafe
 
 
 # ---- HomeBlocker v1 ----
