@@ -1,4 +1,5 @@
 
+import special_tests_import_guard  # ensures `special_tests` can be imported
 
 # ---- HomeBlocker v1 ----
 def _block_spurious_home():
