@@ -264,3 +264,63 @@ def special_tests_ui() -> List[str]:
                 lc = _num(st.text_input("Lactate (젖산, mmol/L)", placeholder="예: 1.5"))
                 if lc is not None and lc >= 2: _emit(lines, "warn", f"Lactate {lc} ≥ 2 → 조직저산소/패혈증 감시")
     return lines
+
+def _collect_special_lines_from_state(max_items: int = 30) -> list[str]:
+    """
+    세션 상태에서 특수검사 관련 키를 스캔해 사람이 읽을 수 있는 요약 라인으로 만든다.
+    - 키 네임스페이스 힌트: 'sp', 'sp3', 'special'이 포함된 항목 우선
+    - 토글: True인 것만 채택
+    - 드롭다운/텍스트: 공란/기본값('없음','선택') 제외
+    최대 max_items까지만 반환해 보고서 과밀 방지.
+    """
+    import streamlit as st
+    prefer_prefixes = ("sp", "sp3", "special")
+    drop_values = {None, "", "없음", "선택", "기본값", "default"}
+    lines: list[str] = []
+    for k, v in st.session_state.items():
+        ks = str(k)
+        if ks.startswith("_"):
+            continue
+        if not any(p in ks for p in prefer_prefixes):
+            continue
+        if isinstance(v, bool):
+            if v:
+                label = ks.replace("__", " → ").replace("_", " ")
+                lines.append(f"✓ {label}")
+        elif isinstance(v, (str, int, float)):
+            sv = str(v).strip()
+            if sv not in drop_values:
+                label = ks.split("__")[-1].replace("_", " ")
+                lines.append(f"- {label}: {sv}")
+        elif isinstance(v, (list, tuple, set)):
+            if v:
+                label = ks.split("__")[-1].replace("_", " ")
+                sv = ", ".join(map(str, v))
+                lines.append(f"- {label}: {sv}")
+        if len(lines) >= max_items:
+            break
+    seen = set()
+    uniq = []
+    for s in lines:
+        if s in seen:
+            continue
+        seen.add(s); uniq.append(s)
+    return uniq
+
+def special_section() -> str:
+    """기존 API 호환: 라인이 비어도 수집기로 생성하여 섹션을 반환."""
+    import streamlit as st
+    lines = list(st.session_state.get("special_tests_lines") or [])
+    if not lines:
+        try:
+            lines = _collect_special_lines_from_state()
+            if lines:
+                st.session_state["special_tests_lines"] = lines
+            else:
+                special_tests_snapshot()
+        except Exception:
+            try:
+                special_tests_snapshot()
+            except Exception:
+                pass
+    return special_section_md(lines=lines, show_empty=True)

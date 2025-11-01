@@ -2372,6 +2372,17 @@ with t_special:
     st.subheader("🔬 특수검사")
     try:
         special_tests_ui()
+
+        # synthesize lines if UI didn't return any
+        try:
+            if not st.session_state.get("special_tests_lines"):
+                from special_tests import _collect_special_lines_from_state as _sp_collect
+                _synth = _sp_collect()
+                if _synth:
+                    st.session_state["special_tests_lines"] = _synth
+        except Exception:
+            pass
+
     except Exception as e:
         st.error(f"특수검사 UI 표시 중 오류 발생: {e}")
     st.subheader("특수검사 해석")
@@ -2529,23 +2540,6 @@ def _qr_image_bytes(text: str) -> bytes:
 # REPORT with side panel (tabs)
 with t_report:
     st.subheader("보고서 (.md/.txt/.pdf) — 모든 항목 포함")
-
-    try:
-        import special_tests as _sp
-    except Exception:
-        _sp = None
-    _sp_md = ""
-    try:
-        if _sp and hasattr(_sp, "special_section"):
-            _sp_md = _sp.special_section()
-    except Exception:
-        _sp_md = ""
-    if not _sp_md:
-        _sp_lines = st.session_state.get("special_tests_lines") or []
-        _sp_md = "### 🧪 특수검사 요약\n" + ("\n".join(f"- {ln}" for ln in _sp_lines) if _sp_lines else "- (입력된 특수검사 요약이 없습니다)")
-    st.markdown(_sp_md)
-    st.session_state["_report_section_special_tests_md"] = _sp_md
-
 
     key_id = st.session_state.get("key", "(미설정)")
     labs = st.session_state.get("labs_dict", {}) or {}
