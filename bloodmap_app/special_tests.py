@@ -91,6 +91,17 @@ def _migrate_legacy_toggle(sec_id: str):
 
 
 # --- context helpers & export API (added, patch-only) ---
+
+# --- strict UI context guards (patch) ---
+_ALLOWED_UI_ROUTES = {"special", "special_tests", "특수", "특수검사"}
+
+def _is_ui_context() -> bool:
+    r = (st.session_state.get("_route") or "").lower()
+    # 일부 한글 라벨 대응
+    if r in _ALLOWED_UI_ROUTES: 
+        return True
+    # report/export 계열은 UI가 아니라 export 모드
+    return False
 def _is_report_context() -> bool:
     route = st.session_state.get("_route", "").lower()
     return route in ("report","reports","export","exports","report_md","export_md","report_pdf")
@@ -152,14 +163,17 @@ def injector():
         lines = get_special_tests_lines()
     return ("🧪 특수검사", lines)
 def special_tests_ui() -> List[str]:
-    # 보고서/내보내기 컨텍스트에서는 UI 렌더링 생략하고 라인만 반환
+    # 보고서/내보내기 컨텍스트에서는 UI 렌더링 생략
     if _is_report_context():
         return get_special_tests_lines()
+    # 특수검사 UI는 지정된 라우트에서만 렌더 (다른 페이지에서는 전혀 생성 안 함)
+    if not _is_ui_context():
+        return list(st.session_state.get("special_tests_lines") or [])
     # 렌더 인덱스 증가 → 이번 호출의 모든 위젯 키에 nonce 포함
     _bump_render_idx()
 
     lines: List[str] = []
-    with st.expander("🧪 특수검사 (선택 입력)", expanded=True):
+    with st.expander("🧪 특수검사 (선택 입력)", expanded=False):
         st.caption("정성검사는 +/++/+++ , 정량검사는 숫자만 입력. ★로 즐겨찾기 고정.")
         favs = _fav_list()
         if favs:
