@@ -2376,7 +2376,7 @@ with t_special:
     st.session_state.setdefault("_route", "dx")
     # 모듈 로더 폴백: 실패 시 /mnt/data 직접 임포트
     try:
-        _ = special_tests_ui  # type: ignore
+        _ = _ = special_tests_ui  # type: ignore
     except Exception:
         try:
             import importlib.util as _ilu
@@ -2384,12 +2384,13 @@ with t_special:
             if spec and spec.loader:
                 m = _ilu.module_from_spec(spec)
                 spec.loader.exec_module(m)
-                special_tests_ui = m._ = special_tests_ui  # type: ignore
+                special_tests_ui = m._ = _ = special_tests_ui  # type: ignore
         except Exception as _e:
             st.error(f"특수검사 모듈 폴백 로드 실패: {_e}")
     # 진입 진단 캡션
-    with st.expander("i 진단(필요시 펼치기)", expanded=False):
-        st.caption(f"route={st.session_state.get('_route')}, tab={st.session_state.get('_tab_active')}, src={SPECIAL_PATH or '/mnt/data/special_tests.py'}")
+    if st.session_state.get("_debug_special"):
+        with st.expander("i 진단(필요시 펼치기)", expanded=False):
+            st.caption(f"route={st.session_state.get('_route')}, tab={st.session_state.get('_tab_active')}, src={SPECIAL_PATH or '/mnt/data/special_tests.py'}")
     try:
         out_lines = special_tests_ui()
         if isinstance(out_lines, list):
@@ -2551,6 +2552,28 @@ def _qr_image_bytes(text: str) -> bytes:
 # REPORT with side panel (tabs)
 with t_report:
     st.subheader("보고서 (.md/.txt/.pdf) — 모든 항목 포함")
+    # 🧪 특수검사 요약 (report-safe, module-driven)
+    try:
+        import special_tests as _spmod
+    except Exception as _e:
+        _spmod = None
+    _sp_md = ""
+    try:
+        if _spmod and hasattr(_spmod, "special_section"):
+            _sp_md = _spmod.special_section()
+    except Exception as _e:
+        _sp_md = ""
+    if _sp_md:
+        st.markdown(_sp_md)
+    else:
+        _sp_lines = st.session_state.get("special_tests_lines") or []
+        st.markdown("### 🧪 특수검사 요약")
+        if _sp_lines:
+            for _ln in _sp_lines:
+                st.markdown(f"- {_ln}")
+        else:
+            st.markdown("- (입력된 특수검사 요약이 없습니다)")
+
     # 🧪 특수검사 요약 (캐시된 라인 표시)
     _sp_lines = st.session_state.get("special_tests_lines") or []
     if _sp_lines:
