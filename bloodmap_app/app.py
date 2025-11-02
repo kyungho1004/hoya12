@@ -1,24 +1,3 @@
-# === BootstrapPatch: set_page_config first (KST) ===
-import os, sys, re, json, math, time
-try:
-    import streamlit as st
-except Exception as _e:
-    raise
-
-# Ensure page config comes before any st.* usage
-if "_page_configured" not in st.session_state:
-    try:
-        st.set_page_config(page_title="BloodMap", layout="wide", page_icon="🩸")
-    except Exception:
-        # Some Streamlit runtimes allow multiple calls; ignore if already configured
-        pass
-    st.session_state["_page_configured"] = True
-
-# KST helper
-from datetime import datetime, timedelta, timezone
-KST = timezone(timedelta(hours=9))
-# === End BootstrapPatch ===
-
 
 
 # ---- HomeBlocker v1 ----
@@ -249,7 +228,7 @@ def render_peds_nav_md():
 
 
 # --- Markdown-based pediatric navigator (no rerun, no iframe) ---
-def render_peds_nav_md_alt():
+def render_peds_nav_md():
     import streamlit as st
     st.markdown("""
     <div class="peds-nav-md">
@@ -415,7 +394,31 @@ except Exception:
         return None, None
     _bm__LML2_ready = True
 # === /LOCAL MODULE LOADER v2 (early) ===
-_sp, SPECIAL_PATH = _load_local_module2("special_tests", ["special_tests.py", "modules/special_tests.py", "/mnt/data/special_tests.py"])
+
+# Improved resolver for special_tests with robust path candidates + diagnostics
+_cand = []
+try:
+    _HERE = Path(__file__).parent
+except Exception:
+    _HERE = Path(os.getcwd())
+_cand.extend([
+    _HERE/"special_tests.py",
+    _HERE/"modules"/"special_tests.py",
+    Path("/mnt/data/special_tests.py"),
+    Path("./special_tests.py"),
+])
+# de-duplicate while preserving order
+_seen=set(); _cand=[p for p in _cand if not (str(p) in _seen or _seen.add(str(p)))]
+_sp, SPECIAL_PATH = _load_local_module2("special_tests", _cand)
+if not _sp:
+    # last resort: importlib by name if installed in site-packages
+    try:
+        import importlib
+        _sp = importlib.import_module("special_tests")
+        SPECIAL_PATH = Path(_sp.__file__).as_posix() if hasattr(_sp,"__file__") else "(module)"
+    except Exception as _e:
+        _sp = None
+        SPECIAL_PATH = None
 if _sp and hasattr(_sp, "special_tests_ui"):
     special_tests_ui = _sp.special_tests_ui
 else:
