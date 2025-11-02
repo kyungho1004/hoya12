@@ -1,3 +1,32 @@
+# --- BloodMap Safe Call Helpers (no recursion) ---
+def _BM_TI(*a, **kw):
+    try:
+        import streamlit as st
+        fn = getattr(st, "_bm_text_input_orig", getattr(st, "text_input"))
+        return fn(*a, **kw)
+    except Exception:
+        import streamlit as st
+        return _BM_TI(*a, **kw)
+
+def _BM_SB(*a, **kw):
+    try:
+        import streamlit as st
+        fn = getattr(st, "_bm_selectbox_orig", getattr(st, "selectbox"))
+        return fn(*a, **kw)
+    except Exception:
+        import streamlit as st
+        return st.selectbox(*a, **kw)
+
+def _BM_TA(*a, **kw):
+    try:
+        import streamlit as st
+        fn = getattr(st, "_bm_text_area_orig", getattr(st, "text_area"))
+        return fn(*a, **kw)
+    except Exception:
+        import streamlit as st
+        return st.text_area(*a, **kw)
+# --- /Safe Call Helpers ---
+
 try:
     import streamlit as st
     if hasattr(st, "_bm_text_input_orig"):
@@ -575,8 +604,8 @@ ONCO = build_onco_map() or {}
 # ---------- Sidebar ----------
 with st.sidebar:
     st.header("프로필")
-    raw_key = st.text_input("별명#PIN (또는 별명만)", value=st.session_state.get("key", "guest#PIN"), key="user_key_raw")
-    pin_field = st.text_input("PIN 숫자 (별명만 입력한 경우)", value=st.session_state.get("_pin_raw",""), key="_pin_raw", type="password", help="숫자 4~8자리")
+    raw_key = _BM_TI("별명#PIN (또는 별명만)", value=st.session_state.get("key", "guest#PIN"), key="user_key_raw")
+    pin_field = _BM_TI("PIN 숫자 (별명만 입력한 경우)", value=st.session_state.get("_pin_raw",""), key="_pin_raw", type="password", help="숫자 4~8자리")
     # PIN 추출
     if "#" in raw_key:
         nickname, pin = raw_key.split("#", 1)[0].strip(), raw_key.split("#", 1)[1].strip()
@@ -607,8 +636,8 @@ with st.sidebar:
     else:
         st.caption(f"PIN 인증됨 · 유효 시간 남음 ≈ {int(pin_timeout_min)}분")
     st.subheader("활력징후")
-    temp = st.text_input("현재 체온(℃)", value=st.session_state.get(wkey("cur_temp"), ""), key=wkey("cur_temp"), placeholder="36.8")
-    hr = st.text_input("심박수(bpm)", value=st.session_state.get(wkey("cur_hr"), ""), key=wkey("cur_hr"), placeholder="0")
+    temp = _BM_TI("현재 체온(℃)", value=st.session_state.get(wkey("cur_temp"), ""), key=wkey("cur_temp"), placeholder="36.8")
+    hr = _BM_TI("심박수(bpm)", value=st.session_state.get(wkey("cur_hr"), ""), key=wkey("cur_hr"), placeholder="0")
 
     st.subheader("연령/모드")
     age_years = st.number_input(
@@ -1457,7 +1486,7 @@ with t_labs:
     values = {}
     for i, (abbr, kor) in enumerate(order):
         with cols[i % 4]:
-            val = st.text_input(f"{abbr} — {kor}", value=str(st.session_state.get(wkey(abbr), "")), key=wkey(abbr))
+            val = _BM_TI(f"{abbr} — {kor}", value=str(st.session_state.get(wkey(abbr), "")), key=wkey(abbr))
             values[abbr] = _try_float(val)
             msg = lab_validate(abbr, values[abbr], use_peds)
             if msg:
@@ -2727,8 +2756,8 @@ with t_report:
             if not hist:
                 st.info("기록이 없습니다.")
             else:
-                since = st.text_input("시작 시각(YYYY-MM-DD)", value="")
-                until = st.text_input("종료 시각(YYYY-MM-DD)", value="")
+                since = _BM_TI("시작 시각(YYYY-MM-DD)", value="")
+                until = _BM_TI("종료 시각(YYYY-MM-DD)", value="")
 
                 def _in_range(ts):
                     if not ts:
@@ -3179,8 +3208,8 @@ def render_feedback_box(default_category: str = "일반 의견", page_hint: str 
     except ValueError:
         default_index = categories.index("일반 의견")
     with st.form("feedback_form_sidebar", clear_on_submit=True):
-        name = st.text_input("이름/별명 (선택)", key="fb_name")
-        contact = st.text_input("연락처(이메일/카톡ID, 선택)", key="fb_contact")
+        name = _BM_TI("이름/별명 (선택)", key="fb_name")
+        contact = _BM_TI("연락처(이메일/카톡ID, 선택)", key="fb_contact")
         category = st.selectbox("분류", categories, index=default_index, key="fb_cat")
         rating = st.slider("전반적 만족도", 1, 5, 4, key="fb_rating")
         msg = st.text_area("메시지", placeholder="자유롭게 적어주세요.", key="fb_msg")
@@ -3203,7 +3232,7 @@ def render_feedback_box(default_category: str = "일반 의견", page_hint: str 
             st.success("고맙습니다! 피드백이 저장되었습니다. (KST 기준)")
 
 def render_feedback_admin() -> None:
-    pwd = st.text_input("관리자 비밀번호", type="password", key="fb_admin_pwd")
+    pwd = _BM_TI("관리자 비밀번호", type="password", key="fb_admin_pwd")
     admin_pw = st.secrets.get("ADMIN_PASS", "9047")
     if admin_pw and pwd == admin_pw:
         if os.path.exists(_FEEDBACK_CSV):
@@ -3498,15 +3527,15 @@ def _beta_password_sidebar():
                 return
             st.markdown("**🔒 베타 패널 잠금**")
             if _beta_password_is_set():
-                st.text_input("비밀번호 입력", type="password", key="_beta_pwd_input")
+                _BM_TI("비밀번호 입력", type="password", key="_beta_pwd_input")
                 if _beta_password_ok():
                     st.caption("✅ 인증됨 — 베타 패널이 표시됩니다.")
                 else:
                     st.caption("❗ 비밀번호가 맞아야 베타 패널이 열립니다.")
             else:
                 st.caption("처음 사용 — 비밀번호를 설정해주세요.")
-                st.text_input("새 비밀번호", type="password", key="_beta_pwd_new1")
-                st.text_input("새 비밀번호 확인", type="password", key="_beta_pwd_new2")
+                _BM_TI("새 비밀번호", type="password", key="_beta_pwd_new1")
+                _BM_TI("새 비밀번호 확인", type="password", key="_beta_pwd_new2")
                 if st.button("비밀번호 설정", use_container_width=True):
                     p1 = st.session_state.get("_beta_pwd_new1") or ""
                     p2 = st.session_state.get("_beta_pwd_new2") or ""
