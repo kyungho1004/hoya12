@@ -1,3 +1,31 @@
+# --- Safe widget wrappers (BloodMap) ---
+try:
+    import streamlit as _st_alias
+except Exception:
+    _st_alias = None
+
+def _bm_text_input(label, *a, **kw):
+    stref = _st_alias
+    if stref is None:
+        import streamlit as stref
+    fn = getattr(stref, "_bm_text_input_orig", getattr(stref, "text_input"))
+    return fn(label, *a, **kw)
+
+def _bm_selectbox(label, *a, **kw):
+    stref = _st_alias
+    if stref is None:
+        import streamlit as stref
+    fn = getattr(stref, "_bm_selectbox_orig", getattr(stref, "selectbox"))
+    return fn(label, *a, **kw)
+
+def _bm_text_area(label, *a, **kw):
+    stref = _st_alias
+    if stref is None:
+        import streamlit as stref
+    fn = getattr(stref, "_bm_text_area_orig", getattr(stref, "text_area"))
+    return fn(label, *a, **kw)
+# --- /Safe widget wrappers ---
+
 
 # -*- coding: utf-8 -*-
 """

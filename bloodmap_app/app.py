@@ -1,3 +1,14 @@
+try:
+    import streamlit as st
+    if hasattr(st, "_bm_text_input_orig"):
+        st.text_input = st._bm_text_input_orig
+    if hasattr(st, "_bm_selectbox_orig"):
+        st.selectbox = st._bm_selectbox_orig
+    if hasattr(st, "_bm_text_area_orig"):
+        st.text_area = st._bm_text_area_orig
+except Exception:
+    pass
+
 
 
 # ---- HomeBlocker v1 ----
