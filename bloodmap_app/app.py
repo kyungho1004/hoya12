@@ -1,39 +1,46 @@
 
 # -*- coding: utf-8 -*-
 """
-app.py (hard-load special_tests)
-- 기존 기능 삭제 없이, 특수검사 섹션만 '강제 로드 + 전체 진단 출력'으로 교체
-- 우선순위: (1) 같은 폴더 special_tests.py → (2) /mnt/data/special_tests.py → (3) 패키지 import
-- 실패 시: 검색 경로/존재여부/cwd/__file__까지 화면에 전부 출력
+app.py — FINAL special_tests hard‑fix
+- 외부 special_tests.py 로드 실패해도 항상 '내장 특수검사 UI' 표시(더미 금지)
+- 실패 사유를 화면에 모두 표시(경로 존재 여부, ast.parse 결과, 스택트레이스)
+- 기존 기능은 손대지 않되, 특수검사 섹션만 안전 덮어쓰기(패치 방식 아이디어)
 """
 from __future__ import annotations
-import os, sys, importlib, importlib.util, traceback
+import os, sys, importlib, importlib.util, traceback, ast
 from pathlib import Path
-from datetime import timedelta, timezone, datetime
+from datetime import datetime, timedelta, timezone
 
 import streamlit as st
 
-# ---- Page config 먼저
 try:
-    st.set_page_config(page_title="BloodMap • hard-load", page_icon="🧪", layout="wide")
+    st.set_page_config(page_title="BloodMap • SpecialTests FINAL", page_icon="🧪", layout="wide")
 except Exception:
     pass
 
-# ---- 공통 KST/경로
 KST = timezone(timedelta(hours=9))
 BASE_DIR = Path(__file__).parent
 if "/mnt/data" not in sys.path:
     sys.path.append("/mnt/data")
 
-# ---- 상단
-st.title("🧪 특수검사 (강제 로더)")
-st.caption(f"한국시간: {datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S')}")
+def _builtin_special_tests_ui():
+    st.info("✅ (내장) 특수검사 UI가 표시됩니다. 외부 special_tests.py가 실패한 경우 자동 대체됩니다.")
+    with st.form("stx_special_builtin"):
+        c1, c2, c3 = st.columns(3)
+        with c1: crp = st.number_input("CRP", min_value=0.0, step=0.1, format="%.1f", key="stx_crp_b")
+        with c2: esr = st.number_input("ESR", min_value=0.0, step=1.0, format="%.0f", key="stx_esr_b")
+        with c3: pct = st.number_input("Procalcitonin (PCT)", min_value=0.0, step=0.01, format="%.2f", key="stx_pct_b")
+        ok = st.form_submit_button("해석하기", use_container_width=True)
+    if ok:
+        if crp >= 10 or pct >= 0.5:
+            st.warning("🚨 감염 가능성 ↑ — 열/증상 함께 확인하고 의료진과 상의하세요.")
+        else:
+            st.info("🟢 급성 염증 반응 수치는 높지 않습니다. (참고용)")
+    st.caption("※ 참고용 해석 — 최종 판단은 의료진의 진료에 따릅니다.")
 
 def _exists(p: Path):
-    try:
-        return p.exists()
-    except Exception:
-        return False
+    try: return p.exists()
+    except Exception: return False
 
 def _try_load_from_path(p: Path):
     spec = importlib.util.spec_from_file_location("special_tests", str(p))
@@ -53,46 +60,55 @@ def _find_ui(mod):
             return c, nm
     raise AttributeError("엔트리 함수(special_tests_ui/render/ui) 없음")
 
-def render_special_hard():
+def _ast_result(p: Path):
+    try:
+        src = p.read_text(encoding="utf-8")
+    except Exception as e:
+        return f"READ_FAIL: {e}"
+    try:
+        ast.parse(src)
+        return "OK (syntax)"
+    except SyntaxError as e:
+        return f"SyntaxError: {e}"
+
+def render_special_final():
+    st.title("🧪 특수검사 — 최종 하드 픽스")
+    st.caption(f"한국시간: {datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S')}")
     errors = []
     candidates = [BASE_DIR/"special_tests.py", Path("/mnt/data")/"special_tests.py"]
-    loaded_from = None
-    mod = None
-    # 1) 파일 경로 시도
+
+    # 1) 파일 경로 시도 (ast 검사 포함)
     for p in candidates:
         try:
             if _exists(p):
+                ast_info = _ast_result(p)
                 mod = _try_load_from_path(p)
-                loaded_from = str(p)
-                break
+                ui, attr = _find_ui(mod)
+                st.success(f"✅ 외부 special_tests 로드 성공 — {p} (entry: {attr}, ast={ast_info})")
+                ui()
+                with st.expander("🔧 로더 진단", expanded=False):
+                    st.code(f"CWD={os.getcwd()}\n__file__={__file__}\nBASE_DIR={BASE_DIR}\nLOADED_FROM={p}")
+                return
             else:
                 errors.append(f"MISS: {p}")
-        except Exception as e:
-            errors.append(f"FAIL_LOAD_PATH: {p}\n{traceback.format_exc()}")
-    # 2) 패키지
-    if mod is None:
-        try:
-            mod = _try_pkg()
-            loaded_from = "<pkg-import>"
-        except Exception as e:
-            errors.append(f"FAIL_PKG_IMPORT:\n{traceback.format_exc()}")
-    # 3) UI 호출
-    if mod is not None:
-        try:
-            ui, attr = _find_ui(mod)
-            st.success(f"✅ special_tests 로드 성공 — {loaded_from} (entry: {attr})")
-            lines = ui()
-            if lines:
-                with st.expander("📄 특수검사 · 디버그 로그", expanded=False):
-                    for ln in lines:
-                        st.write(ln)
-            with st.expander("🔧 로더 진단 정보", expanded=False):
-                st.code(f"CWD={os.getcwd()}\n__file__={__file__}\nBASE_DIR={BASE_DIR}\nLOADED_FROM={loaded_from}")
-            return
         except Exception:
-            errors.append(f"FAIL_UI_RUN:\n{traceback.format_exc()}")
-    # 4) 실패 보고서
-    st.warning("special_tests.py를 찾거나 실행하지 못했습니다. (하단 진단 정보 확인)")
+            errors.append(f"FAIL_LOAD_PATH: {p}\n{traceback.format_exc()}")
+
+    # 2) 패키지 임포트
+    try:
+        mod = _try_pkg()
+        ui, attr = _find_ui(mod)
+        st.success(f"✅ 패키지 special_tests 로드 성공 — <pkg-import> (entry: {attr})")
+        ui()
+        with st.expander("🔧 로더 진단", expanded=False):
+            st.code(f"CWD={os.getcwd()}\n__file__={__file__}\nBASE_DIR={BASE_DIR}\nLOADED_FROM=<pkg-import>")
+        return
+    except Exception:
+        errors.append(f"FAIL_PKG_IMPORT:\n{traceback.format_exc()}")
+
+    # 3) 모두 실패 — 내장 UI 표시 + 전체 진단
+    st.error("외부 special_tests.py를 불러오지 못했습니다. 아래 진단정보를 확인하세요. (내장 UI로 대체 표시)")
+    _builtin_special_tests_ui()
     with st.expander("🔎 전체 진단 출력", expanded=True):
         info = {
             "CWD": os.getcwd(),
@@ -106,5 +122,4 @@ def render_special_hard():
         for e in errors:
             st.code(e)
 
-# ---- 실제 호출
-render_special_hard()
+render_special_final()
