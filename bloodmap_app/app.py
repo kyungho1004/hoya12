@@ -1,12 +1,9 @@
 # --- BloodMap Safe Call Helpers (no recursion) ---
 def _BM_TI(*a, **kw):
-    try:
-        import streamlit as st
-        fn = getattr(st, "_bm_text_input_orig", getattr(st, "text_input"))
-        return fn(*a, **kw)
-    except Exception:
-        import streamlit as st
-        return _BM_TI(*a, **kw)
+    # SAFE: never call itself; fall back to Streamlit's current text_input
+    import streamlit as st
+    fn = getattr(st, "_bm_text_input_orig", None) or getattr(st, "text_input")
+    return fn(*a, **kw)
 
 def _BM_SB(*a, **kw):
     try:
