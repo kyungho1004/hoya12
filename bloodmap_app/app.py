@@ -3084,9 +3084,9 @@ try:
     # Resolve special_tests & UI symbol if missing
     if "special_tests_ui" not in globals():
         _sp, SPECIAL_PATH = _bm_import_by_paths("special_tests", [
+            "/mnt/data/special_tests.py",
             "special_tests.py",
-            "modules/special_tests.py",
-            "/mnt/data/special_tests.py"
+            "modules/special_tests.py"
         ])
         if _sp is not None:
             special_tests_ui = getattr(_sp, "special_tests_ui", None)
