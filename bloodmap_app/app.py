@@ -1406,7 +1406,7 @@ with t_labs:
         ("ANC", "절대호중구"),
         ("Alb", "알부민"),
         ("ALT", "ALT"),
-        ("BUN", "BUN"),
+        ("BUN", "혈중요소질소"),
     ]
     with st.expander("📋 검사값 붙여넣기(자동 인식)", expanded=False):
         pasted = st.text_area("예: WBC: 4.5\nHb 12.3\nPLT, 200\nNa 140 mmol/L", height=120, key=wkey("labs_paste"))
@@ -2155,57 +2155,53 @@ with t_peds:
     st.subheader("보호자 체크리스트")
 
 
-def render_peds_quick_legacy():
-    """Legacy in-app pediatric quick section (GI/호흡기).
-    유지: Phase-1 분리 전 UI. 기본적으로는 호출하지 않지만, 필요 시 복구용으로 보존.
-    """
-    st.markdown("---")
-    st.markdown("## 👶 소아 퀵 섹션 (GI/호흡기)")
-    st.caption("필요한 것만 펼쳐서 확인하세요. 아래 각 섹션은 보고서/해열제 계산과 연동됩니다.")
+st.markdown("---")
+st.markdown("## 👶 소아 퀵 섹션 (GI/호흡기)")
+st.caption("필요한 것만 펼쳐서 확인하세요. 아래 각 섹션은 보고서/해열제 계산과 연동됩니다.")
 
-    # --- Anchors ---
-    st.markdown('<div id="peds_constipation"></div>', unsafe_allow_html=True)
-    st.markdown('<div id="peds_diarrhea"></div>', unsafe_allow_html=True)
-    st.markdown('<div id="peds_vomit"></div>', unsafe_allow_html=True)
-    st.markdown('<div id="peds_antipyretic"></div>', unsafe_allow_html=True)
-    st.markdown('<div id="peds_ors"></div>', unsafe_allow_html=True)
-    st.markdown('<div id="peds_respiratory"></div>', unsafe_allow_html=True)
+# --- Anchors ---
+st.markdown('<div id="peds_constipation"></div>', unsafe_allow_html=True)
+st.markdown('<div id="peds_diarrhea"></div>', unsafe_allow_html=True)
+st.markdown('<div id="peds_vomit"></div>', unsafe_allow_html=True)
+st.markdown('<div id="peds_antipyretic"></div>', unsafe_allow_html=True)
+st.markdown('<div id="peds_ors"></div>', unsafe_allow_html=True)
+st.markdown('<div id="peds_respiratory"></div>', unsafe_allow_html=True)
 
-    # --- 변비 ---
-    with st.expander("🧻 변비 체크", expanded=False):
-        try:
-            render_section_constipation()
-        except Exception:
-            st.info("상세 변비 체크 모듈을 불러오지 못했습니다. 아래 요약 가이드를 참고하세요.")
-            st.write("- 수분/수유 자주, 식이섬유(과일·채소·전곡), 식후 5~10분 배변 루틴")
-            st.write("- 3일 이상/배변 시 통증/혈변/복부팽만/구토 동반 시 진료")
+# --- 변비 ---
+with st.expander("🧻 변비 체크", expanded=False):
+    try:
+        render_section_constipation()
+    except Exception:
+        st.info("상세 변비 체크 모듈을 불러오지 못했습니다. 아래 요약 가이드를 참고하세요.")
+        st.write("- 수분/수유 자주, 식이섬유(과일·채소·전곡), 식후 5~10분 배변 루틴")
+        st.write("- 3일 이상/배변 시 통증/혈변/복부팽만/구토 동반 시 진료")
 
-    # --- 설사 ---
-    with st.expander("💦 설사 체크", expanded=False):
-        try:
-            render_section_diarrhea()
-        except Exception:
-            st.info("상세 설사 체크 모듈을 불러오지 못했습니다. 아래 요약 가이드를 참고하세요.")
-            st.write("- ORS를 5~10분마다 소량씩, 기름진 음식·우유 일시 제한")
-            st.write("- 혈변/검은변, 고열, 소변 감소·축 늘어짐 → 진료")
+# --- 설사 ---
+with st.expander("💦 설사 체크", expanded=False):
+    try:
+        render_section_diarrhea()
+    except Exception:
+        st.info("상세 설사 체크 모듈을 불러오지 못했습니다. 아래 요약 가이드를 참고하세요.")
+        st.write("- ORS를 5~10분마다 소량씩, 기름진 음식·우유 일시 제한")
+        st.write("- 혈변/검은변, 고열, 소변 감소·축 늘어짐 → 진료")
 
-    # --- 구토 ---
-    with st.expander("🤢 구토 체크", expanded=False):
-        try:
-            render_section_vomit()
-        except Exception:
-            st.info("상세 구토 체크 모듈을 불러오지 못했습니다. 아래 요약 가이드를 참고하세요.")
-            st.write("- 10~15분마다 소량 수분, 초록/커피색/혈토 → 즉시 진료")
+# --- 구토 ---
+with st.expander("🤢 구토 체크", expanded=False):
+    try:
+        render_section_vomit()
+    except Exception:
+        st.info("상세 구토 체크 모듈을 불러오지 못했습니다. 아래 요약 가이드를 참고하세요.")
+        st.write("- 10~15분마다 소량 수분, 초록/커피색/혈토 → 즉시 진료")
 
-    # --- 해열제 ---
-    with st.expander("🌡️ 해열제 가이드/계산", expanded=False):
-        try:
-            ap_ml_1, ap_ml_max = acetaminophen_ml(st.session_state.get(wkey("wt_peds"), 0.0))
-            ib_ml_1, ib_ml_max = ibuprofen_ml(st.session_state.get(wkey("wt_peds"), 0.0))
-        except Exception:
-            ap_ml_1 = ap_ml_max = ib_ml_1 = ib_ml_max = 0.0
-        st.write(f"- 아세트아미노펜(160mg/5mL): **{ap_ml_1:.1f} mL** (최대 {ap_ml_max:.1f} mL) — 최소 간격 **4h**")
-        st.write(f"- 이부프로펜(100mg/5mL): **{ib_ml_1:.1f} mL** (최대 {ib_ml_max:.1f} mL) — 최소 간격 **6h**")
+# --- 해열제 ---
+with st.expander("🌡️ 해열제 가이드/계산", expanded=False):
+    try:
+        ap_ml_1, ap_ml_max = acetaminophen_ml(st.session_state.get(wkey("wt_peds"), 0.0))
+        ib_ml_1, ib_ml_max = ibuprofen_ml(st.session_state.get(wkey("wt_peds"), 0.0))
+    except Exception:
+        ap_ml_1 = ap_ml_max = ib_ml_1 = ib_ml_max = 0.0
+    st.write(f"- 아세트아미노펜(160mg/5mL): **{ap_ml_1:.1f} mL** (최대 {ap_ml_max:.1f} mL) — 최소 간격 **4h**")
+    st.write(f"- 이부프로펜(100mg/5mL): **{ib_ml_1:.1f} mL** (최대 {ib_ml_max:.1f} mL) — 최소 간격 **6h**")
     
 # --- P1-2: Antipyretic schedule chain (.ics + care hint) ---
 import datetime as _dt
@@ -2369,46 +2365,34 @@ def _annotate_special_notes(lines):
             out.append(ln)
     out.append(pitfalls)
     return out
-# (migrated) 기존 소아 GI 섹션 호출은 t_peds 퀵 섹션으로 이동되었습니다.
+
 with t_special:
-    # 🔬 특수검사 탭 렌더링 (패치 추가)
+    # 🔬 특수검사 탭 — 입력 + 해석
     import streamlit as st
     st.subheader("🔬 특수검사")
-    try:
-        special_tests_ui()
-    except Exception as e:
-        st.error(f"특수검사 UI 표시 중 오류 발생: {e}")
-    st.subheader("특수검사 해석")
     if SPECIAL_PATH:
         st.caption(f"special_tests 로드: {SPECIAL_PATH}")
 
-# === SPECIAL TESTS SAFE CALL ===
-def __bm_try_get_wkey():
-    try:
-        return wkey
-    except Exception:
-        return lambda x: x
-_wkey = __bm_try_get_wkey()
-try:
-    # === SPECIAL TESTS SAFE+ADAPTIVE CALL ===
+    # === SPECIAL TESTS SAFE+ADAPTIVE CALL (탭 내부 전용) ===
     import inspect as _inspect
+
     def __bm_try_get_wkey():
         try:
             return wkey
         except Exception:
             return lambda x: x
+
     _wkey = __bm_try_get_wkey()
 
-    # --- Context bridge: push normalized aliases into session_state ---
+    # --- Context bridge: 피수치/진단 정보를 special_tests 모듈로 동기화 ---
     ss = st.session_state
     _group = ss.get("group") or ss.get("dx_group") or ss.get("암종") or ss.get("진단그룹") or ss.get("G")
     _disease = ss.get("disease") or ss.get("dx_disease") or ss.get("진단") or ss.get("D")
     _labs = ss.get("_labs_df") or ss.get("labs") or ss.get("LABS") or ss.get("input_labs")
-    # write back common aliases so special_tests.py (which may read different keys) can see consistent values
     for k, v in {
         "group": _group, "dx_group": _group, "암종": _group, "G": _group,
         "disease": _disease, "dx_disease": _disease, "진단": _disease, "D": _disease,
-        "labs": _labs, "_labs_df": _labs, "LABS": _labs, "input_labs": _labs
+        "labs": _labs, "_labs_df": _labs, "LABS": _labs, "input_labs": _labs,
     }.items():
         try:
             if v is not None:
@@ -2430,6 +2414,7 @@ try:
             _sig = _inspect.signature(_fn)
         except Exception:
             _sig = None
+
         if _sig and "st" in _sig.parameters and "ctx" in _sig.parameters:
             lines = _fn(st, _ctx)
         elif _sig and "ctx" in _sig.parameters:
@@ -2461,23 +2446,9 @@ try:
             st.markdown("- 최근 입력한 **피수치**가 있는지 확인")
             st.markdown("- 모듈 버전 불일치 시 위의 **리로드**로 갱신")
             st.caption(f"컨텍스트: group={_group!r}, disease={_disease!r}, labs={'OK' if _labs is not None else 'None'}")
-    # === /SPECIAL TESTS SAFE+ADAPTIVE CALL ===
-except Exception as _e:
-    import importlib
-    st.error("특수검사 UI 실행 중 오류가 발생했습니다.")
-    try:
-        st.exception(_e)
-    except Exception:
-        st.write(str(_e))
-    if st.button("특수검사 모듈 리로드", key=_wkey("special_reload")):
-        try:
-            if "_sp" in globals() and _sp:
-                importlib.reload(_sp)
-        except Exception:
-            pass
-        st.rerun()
-    lines = []
-# === /SPECIAL TESTS SAFE CALL ===
+
+    # 해석 섹션
+    st.subheader("특수검사 해석")
     lines = _annotate_special_notes(lines or [])
     st.session_state["special_interpretations"] = lines
     if lines:
@@ -2485,7 +2456,6 @@ except Exception as _e:
             st.write("- " + ln)
     else:
         st.info("아직 입력/선택이 없습니다.")
-
 # ---------- QR helper ----------
 def _build_hospital_summary():
     key_id = st.session_state.get("key", "(미설정)")
@@ -2862,7 +2832,7 @@ with t_report:
                 ("ANC", "절대호중구"),
                 ("Alb", "알부민"),
                 ("ALT", "ALT"),
-                ("BUN", "BUN"),
+                ("BUN", "혈중요소질소"),
             ]
             for abbr, kor in all_labs:
                 v = labs.get(abbr) if isinstance(labs, dict) else None
