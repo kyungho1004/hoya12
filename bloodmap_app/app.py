@@ -1406,7 +1406,7 @@ with t_labs:
         ("ANC", "절대호중구"),
         ("Alb", "알부민"),
         ("ALT", "ALT"),
-        ("BUN", "BUN"),
+        ("BUN", "혈중요소질소"),
     ]
     with st.expander("📋 검사값 붙여넣기(자동 인식)", expanded=False):
         pasted = st.text_area("예: WBC: 4.5\nHb 12.3\nPLT, 200\nNa 140 mmol/L", height=120, key=wkey("labs_paste"))
@@ -2832,7 +2832,7 @@ with t_report:
                 ("ANC", "절대호중구"),
                 ("Alb", "알부민"),
                 ("ALT", "ALT"),
-                ("BUN", "BUN"),
+                ("BUN", "혈중요소질소"),
             ]
             for abbr, kor in all_labs:
                 v = labs.get(abbr) if isinstance(labs, dict) else None
