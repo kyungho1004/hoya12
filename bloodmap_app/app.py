@@ -394,7 +394,7 @@ except Exception:
         return None, None
     _bm__LML2_ready = True
 # === /LOCAL MODULE LOADER v2 (early) ===
-_sp, SPECIAL_PATH = _load_local_module2("special_tests", ["/mnt/data/special_tests.py", "special_tests.py", "modules/special_tests.py"])
+_sp, SPECIAL_PATH = _load_local_module2("special_tests", ["special_tests.py", "modules/special_tests.py", "/mnt/data/special_tests.py"])
 if _sp and hasattr(_sp, "special_tests_ui"):
     special_tests_ui = _sp.special_tests_ui
 else:
@@ -2371,7 +2371,9 @@ with t_special:
     import streamlit as st
     st.subheader("🔬 특수검사")
     try:
-        special_tests_ui()
+        # UI는 아래 SPECIAL TESTS SAFE CALL 블록에서 통합 처리됩니다.
+        # (중복 호출 시 위젯 key 충돌이 발생하므로 여기서는 직접 호출하지 않습니다.)
+        pass
     except Exception as e:
         st.error(f"특수검사 UI 표시 중 오류 발생: {e}")
     st.subheader("특수검사 해석")
@@ -3084,9 +3086,9 @@ try:
     # Resolve special_tests & UI symbol if missing
     if "special_tests_ui" not in globals():
         _sp, SPECIAL_PATH = _bm_import_by_paths("special_tests", [
-            "/mnt/data/special_tests.py",
             "special_tests.py",
-            "modules/special_tests.py"
+            "modules/special_tests.py",
+            "/mnt/data/special_tests.py"
         ])
         if _sp is not None:
             special_tests_ui = getattr(_sp, "special_tests_ui", None)
