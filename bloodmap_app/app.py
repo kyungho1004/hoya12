@@ -1,19 +1,4 @@
 
-# [PATCH] Ensure /mnt/data in sys.path
-import sys as _sys_patch
-
-# [PATCH] Use special_tests_finder (explicit)
-try:
-    from special_tests_finder import render_special_tests_safe as _render_special_tests_safe
-except Exception:
-    def _render_special_tests_safe():
-        import streamlit as st
-        st.error("special_tests_finder를 불러오지 못했습니다. /mnt/data 또는 app.py와 같은 폴더에 두세요.")
-
-if "/mnt/data" not in _sys_patch.path:
-    _sys_patch.path.append("/mnt/data")
-
-
 
 # ---- HomeBlocker v1 ----
 def _block_spurious_home():
@@ -133,71 +118,6 @@ def _call_first(mod, names):
 branding = _safe_import("branding")
 pdf_export = _safe_import("pdf_export")
 lab_diet = _safe_import("lab_diet")
-
-# === [PATCH] special_tests 안전 로더 (덮어쓰기 금지·패치만) =========================
-def _render_special_tests_safe():
-    try:
-        # Try bridge first
-        from special_tests_bridge import get_special_tests_ui, render_special_tests_or_dummy
-        _special_ui, _special_info = get_special_tests_ui()
-        return render_special_tests_or_dummy(_special_ui, _special_info)
-    except Exception:
-        pass
-
-    import importlib, importlib.util, traceback
-    from pathlib import Path as _PathPatch
-    try:
-        import streamlit as _st
-    except Exception:
-        return  # non-streamlit env
-
-    BASE_DIR = _PathPatch(__file__).parent
-    last_err = None
-    candidates = [
-        BASE_DIR/"special_tests.py",
-        _PathPatch("/mnt/data")/"special_tests.py",
-        _PathPatch.cwd()/"special_tests.py",
-    ]
-    for p in candidates:
-        try:
-            if p.exists():
-                spec = importlib.util.spec_from_file_location("special_tests", str(p))
-                if spec and spec.loader:
-                    mod = importlib.util.module_from_spec(spec)
-                    spec.loader.exec_module(mod)
-                    for nm in ("special_tests_ui","render","ui"):
-                        c = getattr(mod, nm, None)
-                        if callable(c):
-                            lines = c()
-                            if lines:
-                                with _st.expander("📄 특수검사 · 디버그 로그", expanded=False):
-                                    for ln in lines:
-                                        _st.write(ln)
-                            _st.caption(f"special_tests source: {p}")
-                            return
-        except Exception:
-            last_err = traceback.format_exc()
-    # 패키지 임포트
-    try:
-        mod = importlib.import_module("special_tests")
-        for nm in ("special_tests_ui","render","ui"):
-            c = getattr(mod, nm, None)
-            if callable(c):
-                lines = c()
-                if lines:
-                    with _st.expander("📄 특수검사 · 디버그 로그", expanded=False):
-                        for ln in lines:
-                            _st.write(ln)
-                _st.caption("special_tests source: <pkg-import>")
-                return
-    except Exception:
-        pass
-    _# \1  # patched out
-    if last_err:
-        with _st.expander("📄 특수검사 · 디버그 로그", expanded=True):
-            _st.code(last_err)
-# ===============================================================================
-
 special_tests = _safe_import("special_tests")
 onco_map = _safe_import("onco_map")
 drug_db = _safe_import("drug_db")
@@ -474,13 +394,13 @@ except Exception:
         return None, None
     _bm__LML2_ready = True
 # === /LOCAL MODULE LOADER v2 (early) ===
-_sp, SPECIAL_PATH = _load_local_module2("special_tests", ["special_tests.py", "modules/special_tests.py", "/mnt/data/special_tests.py"])
+_sp, SPECIAL_PATH = _load_local_module2("special_tests", ["/mnt/data/special_tests.py", "special_tests.py", "modules/special_tests.py"])
 if _sp and hasattr(_sp, "special_tests_ui"):
     special_tests_ui = _sp.special_tests_ui
 else:
     SPECIAL_PATH = None
     def special_tests_ui():
-        # \1  # patched out
+        st.warning("special_tests.py를 찾지 못해, 특수검사 UI는 더미로 표시됩니다.")
         return []
 
 # --- plotting backend (matplotlib → st.line_chart → 표 폴백) ---
