@@ -1406,7 +1406,7 @@ with t_labs:
         ("ANC", "절대호중구"),
         ("Alb", "알부민"),
         ("ALT", "ALT"),
-        ("BUN", "BUN"),
+        ("BUN", "혈중요소질소"),
     ]
     with st.expander("📋 검사값 붙여넣기(자동 인식)", expanded=False):
         pasted = st.text_area("예: WBC: 4.5\nHb 12.3\nPLT, 200\nNa 140 mmol/L", height=120, key=wkey("labs_paste"))
@@ -2365,43 +2365,34 @@ def _annotate_special_notes(lines):
             out.append(ln)
     out.append(pitfalls)
     return out
-# (migrated) 기존 소아 GI 섹션 호출은 t_peds 퀵 섹션으로 이동되었습니다.
+
 with t_special:
-    # 🔬 특수검사 탭 렌더링 (UI는 SAFE CALL 블록에서 처리)
+    # 🔬 특수검사 탭 — 입력 + 해석
     import streamlit as st
     st.subheader("🔬 특수검사")
     if SPECIAL_PATH:
         st.caption(f"special_tests 로드: {SPECIAL_PATH}")
-    st.subheader("특수검사 해석")
-    # 실제 UI 렌더링 및 해석 출력은 아래 SPECIAL TESTS SAFE CALL 블록에서 한 번만 실행됩니다.
 
-# === SPECIAL TESTS SAFE CALL ===
-def __bm_try_get_wkey():
-    try:
-        return wkey
-    except Exception:
-        return lambda x: x
-_wkey = __bm_try_get_wkey()
-try:
-    # === SPECIAL TESTS SAFE+ADAPTIVE CALL ===
+    # === SPECIAL TESTS SAFE+ADAPTIVE CALL (탭 내부 전용) ===
     import inspect as _inspect
+
     def __bm_try_get_wkey():
         try:
             return wkey
         except Exception:
             return lambda x: x
+
     _wkey = __bm_try_get_wkey()
 
-    # --- Context bridge: push normalized aliases into session_state ---
+    # --- Context bridge: 피수치/진단 정보를 special_tests 모듈로 동기화 ---
     ss = st.session_state
     _group = ss.get("group") or ss.get("dx_group") or ss.get("암종") or ss.get("진단그룹") or ss.get("G")
     _disease = ss.get("disease") or ss.get("dx_disease") or ss.get("진단") or ss.get("D")
     _labs = ss.get("_labs_df") or ss.get("labs") or ss.get("LABS") or ss.get("input_labs")
-    # write back common aliases so special_tests.py (which may read different keys) can see consistent values
     for k, v in {
         "group": _group, "dx_group": _group, "암종": _group, "G": _group,
         "disease": _disease, "dx_disease": _disease, "진단": _disease, "D": _disease,
-        "labs": _labs, "_labs_df": _labs, "LABS": _labs, "input_labs": _labs
+        "labs": _labs, "_labs_df": _labs, "LABS": _labs, "input_labs": _labs,
     }.items():
         try:
             if v is not None:
@@ -2423,6 +2414,7 @@ try:
             _sig = _inspect.signature(_fn)
         except Exception:
             _sig = None
+
         if _sig and "st" in _sig.parameters and "ctx" in _sig.parameters:
             lines = _fn(st, _ctx)
         elif _sig and "ctx" in _sig.parameters:
@@ -2454,23 +2446,9 @@ try:
             st.markdown("- 최근 입력한 **피수치**가 있는지 확인")
             st.markdown("- 모듈 버전 불일치 시 위의 **리로드**로 갱신")
             st.caption(f"컨텍스트: group={_group!r}, disease={_disease!r}, labs={'OK' if _labs is not None else 'None'}")
-    # === /SPECIAL TESTS SAFE+ADAPTIVE CALL ===
-except Exception as _e:
-    import importlib
-    st.error("특수검사 UI 실행 중 오류가 발생했습니다.")
-    try:
-        st.exception(_e)
-    except Exception:
-        st.write(str(_e))
-    if st.button("특수검사 모듈 리로드", key=_wkey("special_reload")):
-        try:
-            if "_sp" in globals() and _sp:
-                importlib.reload(_sp)
-        except Exception:
-            pass
-        st.rerun()
-    lines = []
-# === /SPECIAL TESTS SAFE CALL ===
+
+    # 해석 섹션
+    st.subheader("특수검사 해석")
     lines = _annotate_special_notes(lines or [])
     st.session_state["special_interpretations"] = lines
     if lines:
@@ -2478,7 +2456,6 @@ except Exception as _e:
             st.write("- " + ln)
     else:
         st.info("아직 입력/선택이 없습니다.")
-
 # ---------- QR helper ----------
 def _build_hospital_summary():
     key_id = st.session_state.get("key", "(미설정)")
@@ -2855,7 +2832,7 @@ with t_report:
                 ("ANC", "절대호중구"),
                 ("Alb", "알부민"),
                 ("ALT", "ALT"),
-                ("BUN", "BUN"),
+                ("BUN", "혈중요소질소"),
             ]
             for abbr, kor in all_labs:
                 v = labs.get(abbr) if isinstance(labs, dict) else None
