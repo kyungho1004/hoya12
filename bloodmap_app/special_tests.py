@@ -27,8 +27,8 @@ def _emit(lines: List[str], kind: Optional[str], msg: str):
     tag = _flag(kind)
     lines.append(f"{tag} {msg}" if tag else msg)
 
-def _tog_key(name: str) -> str: return f"tog_{name}"
-def _fav_key(name: str) -> str: return f"fav_{name}"
+def _tog_key(name: str) -> str: return f"stx_tog_{name}"
+def _fav_key(name: str) -> str: return f"stx_fav_{name}"
 
 SECTIONS = [
     ("소변검사 (Urinalysis)", "urine"),
