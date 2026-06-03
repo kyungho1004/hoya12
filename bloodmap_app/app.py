@@ -194,11 +194,16 @@ import streamlit as st
 
 st.markdown("""
 <style>
-/* smooth-scroll */
-html { scroll-behavior: smooth; }
-.peds-nav-md{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin:.25rem 0 .5rem;}
+/* smooth-scroll / pediatric nav anti-drag patch */
+html { scroll-behavior: smooth; overscroll-behavior-y: contain; }
+.peds-nav-md{
+  position: sticky; top: .25rem; z-index: 50;
+  display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin:.25rem 0 .75rem;
+  padding:.35rem 0;background:rgba(255,255,255,.96);backdrop-filter:blur(6px);
+}
 .peds-nav-md a{display:block;text-align:center;padding:.6rem .8rem;border-radius:12px;border:1px solid #ddd;text-decoration:none;color:inherit;background:#fff}
 .peds-nav-md a:active{transform:scale(.98)}
+div[id^="peds_"]{scroll-margin-top:5.5rem;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -1406,7 +1411,7 @@ with t_labs:
         ("ANC", "절대호중구"),
         ("Alb", "알부민"),
         ("ALT", "ALT"),
-        ("BUN", "혈중요소질소"),
+        ("BUN", "BUN"),
     ]
     with st.expander("📋 검사값 붙여넣기(자동 인식)", expanded=False):
         pasted = st.text_area("예: WBC: 4.5\nHb 12.3\nPLT, 200\nNa 140 mmol/L", height=120, key=wkey("labs_paste"))
@@ -1863,6 +1868,191 @@ with t_chemo:
 
 _block_spurious_home()
 
+
+# --- Pediatric quick sections renderer (anti-drag patch: render only inside t_peds) ---
+def render_peds_quick_sections() -> None:
+    st.markdown("---")
+    st.markdown("## 👶 소아 퀵 섹션 (GI/호흡기)")
+    st.caption("필요한 것만 펼쳐서 확인하세요. 아래 각 섹션은 보고서/해열제 계산과 연동됩니다.")
+
+    # --- Anchors are placed immediately before each section (avoid duplicate IDs) ---
+    # --- 변비 ---
+    st.markdown('<div id="peds_constipation"></div>', unsafe_allow_html=True)
+    with st.expander("🧻 변비 체크", expanded=False):
+        try:
+            render_section_constipation()
+        except Exception:
+            st.info("상세 변비 체크 모듈을 불러오지 못했습니다. 아래 요약 가이드를 참고하세요.")
+            st.write("- 수분/수유 자주, 식이섬유(과일·채소·전곡), 식후 5~10분 배변 루틴")
+            st.write("- 3일 이상/배변 시 통증/혈변/복부팽만/구토 동반 시 진료")
+
+    # --- 설사 ---
+    st.markdown('<div id="peds_diarrhea"></div>', unsafe_allow_html=True)
+    with st.expander("💦 설사 체크", expanded=False):
+        try:
+            render_section_diarrhea()
+        except Exception:
+            st.info("상세 설사 체크 모듈을 불러오지 못했습니다. 아래 요약 가이드를 참고하세요.")
+            st.write("- ORS를 5~10분마다 소량씩, 기름진 음식·우유 일시 제한")
+            st.write("- 혈변/검은변, 고열, 소변 감소·축 늘어짐 → 진료")
+
+    # --- 구토 ---
+    st.markdown('<div id="peds_vomit"></div>', unsafe_allow_html=True)
+    with st.expander("🤢 구토 체크", expanded=False):
+        try:
+            render_section_vomit()
+        except Exception:
+            st.info("상세 구토 체크 모듈을 불러오지 못했습니다. 아래 요약 가이드를 참고하세요.")
+            st.write("- 10~15분마다 소량 수분, 초록/커피색/혈토 → 즉시 진료")
+
+    # --- 해열제 ---
+    st.markdown('<div id="peds_antipyretic"></div>', unsafe_allow_html=True)
+    with st.expander("🌡️ 해열제 가이드/계산", expanded=False):
+        try:
+            ap_ml_1, ap_ml_max = acetaminophen_ml(st.session_state.get(wkey("wt_peds"), 0.0))
+            ib_ml_1, ib_ml_max = ibuprofen_ml(st.session_state.get(wkey("wt_peds"), 0.0))
+        except Exception:
+            ap_ml_1 = ap_ml_max = ib_ml_1 = ib_ml_max = 0.0
+        st.write(f"- 아세트아미노펜(160mg/5mL): **{ap_ml_1:.1f} mL** (최대 {ap_ml_max:.1f} mL) — 최소 간격 **4h**")
+        st.write(f"- 이부프로펜(100mg/5mL): **{ib_ml_1:.1f} mL** (최대 {ib_ml_max:.1f} mL) — 최소 간격 **6h**")
+    
+    # --- P1-2: Antipyretic schedule chain (.ics + care hint) ---
+    import datetime as _dt
+    from zoneinfo import ZoneInfo as _ZoneInfo
+    import tempfile as _tmp
+
+    def _preferred_writable_base():
+        # Try known writable locations in order
+        for p in ["/mnt/data/care_log", "/mount/data/care_log", "/tmp/care_log"]:
+            try:
+                os.makedirs(p, exist_ok=True)
+                test_fp = os.path.join(p, ".touch")
+                with open(test_fp, "w", encoding="utf-8") as _f:
+                    _f.write("ok")
+                try:
+                    os.remove(test_fp)
+                except Exception:
+                    pass
+                return p
+            except Exception:
+                continue
+        # Extreme fallback
+        return _tmp.gettempdir()
+
+    def _make_ics(title:str, start: _dt.datetime, minutes:int=0, description:str="") -> str:
+        tzid = "Asia/Seoul"
+        dtstart = start.strftime("%Y%m%dT%H%M%S")
+        dtend = (start + _dt.timedelta(minutes=minutes)).strftime("%Y%m%dT%H%M%S") if minutes>0 else None
+        uid = f"{dtstart}-{title.replace(' ','_')}@bloodmap"
+        lines = [
+            "BEGIN:VCALENDAR",
+            "VERSION:2.0",
+            "PRODID:-//BloodMap//Peds Antipyretic//KR",
+            "CALSCALE:GREGORIAN",
+            "METHOD:PUBLISH",
+            "BEGIN:VEVENT",
+            f"UID:{uid}",
+            f"DTSTAMP:{_dt.datetime.now(_ZoneInfo(tzid)).strftime('%Y%m%dT%H%M%S')}",
+            f"DTSTART;TZID={tzid}:{dtstart}",
+        ]
+        if dtend:
+            lines.append(f"DTEND;TZID={tzid}:{dtend}")
+        lines += [
+            f"SUMMARY:{title}",
+            f"DESCRIPTION:{description}".replace("\n","\\n"),
+            "END:VEVENT",
+            "END:VCALENDAR",
+            ""
+        ]
+        return "\n".join(lines)
+
+    kst = _dt.datetime.now(_ZoneInfo("Asia/Seoul"))
+    col1, col2 = st.columns(2)
+    with col1:
+        ap_given = st.number_input("APAP 실제 투여량(mL)", min_value=0.0, step=0.5, value=float(f"{ap_ml_1:.1f}"), key=wkey("apap_given"))
+        if st.button("APAP 기록 + 다음 복용 .ics", key=wkey("apap_log_ics")):
+            next_time = kst + _dt.timedelta(hours=4)
+            ics_text = _make_ics("다음 해열제(APAP) 복용 가능", next_time, 0, "APAP 최소 간격 4시간 (KST).")
+            base = _preferred_writable_base()
+            fname = f"next_APAP_{kst.strftime('%Y%m%d_%H%M%S')}.ics"
+            ics_path = os.path.join(base, fname)
+            try:
+                with open(ics_path, "w", encoding="utf-8") as f:
+                    f.write(ics_text)
+            except Exception as _e:
+                st.warning(f"쓰기 권한 문제로 임시 다운로드만 제공합니다. ({type(_e).__name__})")
+            st.success(f"다음 APAP 가능 시각: {next_time.strftime('%Y-%m-%d %H:%M')} (KST)")
+            st.download_button("📅 .ics 내보내기 (APAP)", data=ics_text, file_name=fname, mime="text/calendar", key=wkey("apap_ics_dl"))
+            st.session_state[wkey("apap_ml_24h")] = st.session_state.get(wkey("apap_ml_24h"), 0.0) + float(ap_given)
+    with col2:
+        ib_given = st.number_input("IBU 실제 투여량(mL)", min_value=0.0, step=0.5, value=float(f"{ib_ml_1:.1f}"), key=wkey("ibu_given"))
+        if st.button("IBU 기록 + 다음 복용 .ics", key=wkey("ibu_log_ics")):
+            next_time = kst + _dt.timedelta(hours=6)
+            ics_text = _make_ics("다음 해열제(IBU) 복용 가능", next_time, 0, "IBU 최소 간격 6시간 (KST).")
+            base = _preferred_writable_base()
+            fname = f"next_IBU_{kst.strftime('%Y%m%d_%H%M%S')}.ics"
+            ics_path = os.path.join(base, fname)
+            try:
+                with open(ics_path, "w", encoding="utf-8") as f:
+                    f.write(ics_text)
+            except Exception as _e:
+                st.warning(f"쓰기 권한 문제로 임시 다운로드만 제공합니다. ({type(_e).__name__})")
+            st.success(f"다음 IBU 가능 시각: {next_time.strftime('%Y-%m-%d %H:%M')} (KST)")
+            st.download_button("📅 .ics 내보내기 (IBU)", data=ics_text, file_name=fname, mime="text/calendar", key=wkey("ibu_ics_dl"))
+            st.session_state[wkey("ibu_ml_24h")] = st.session_state.get(wkey("ibu_ml_24h"), 0.0) + float(ib_given)
+
+    # 24h 총량 소프트 배너(실제 하드 가드레일과 충돌 없이 알림만)
+    ap24 = st.session_state.get(wkey("apap_ml_24h"), 0.0)
+    ib24 = st.session_state.get(wkey("ibu_ml_24h"), 0.0)
+    if ap24 > 0 or ib24 > 0:
+        st.caption(f"24시간 누적(세션 기준): APAP {ap24:.1f} mL / IBU {ib24:.1f} mL")
+    # --- /P1-2 ---
+    st.caption("※ 금기/주의 질환은 반드시 의료진 지시를 따르세요. 중복 복용 주의.")
+
+    # --- ORS/탈수 ---
+    st.markdown('<div id="peds_ors"></div>', unsafe_allow_html=True)
+    with st.expander("🥤 ORS/탈수 가이드", expanded=False):
+        with st.expander("🏠 ORS 집에서 만드는 법(WHO 권장 비율)", expanded=False):
+            st.markdown("**재료 (1 L 기준)**")
+            st.write("- 끓였다 식힌 물 **1 L**")
+            st.write("- 설탕 **작은술 6스푼(평평하게)** ≈ 27 g")
+            st.write("- 소금 **작은술 1/2 스푼(평평하게)** ≈ 2.5 g")
+            st.markdown("**만드는 법/복용**")
+            st.write("- 깨끗한 용기에 모두 넣고 완전히 녹을 때까지 저어주세요.")
+            st.write("- **5~10분마다 소량씩** 마시고, **토하면 10~15분 쉬었다 재개**하세요.")
+            st.write("- 맛은 '살짝 짠 단물(눈물맛)' 정도가 정상입니다. 너무 짜거나 달면 **물을 더** 넣어 희석하세요.")
+            st.markdown("**주의**")
+            st.write("- 과일주스·탄산·순수한 물만 대량 섭취는 피하세요(전해질 불균형 위험).")
+            st.write("- **6개월 미만 영아/만성질환/신생아**는 반드시 의료진과 상의 후 사용하세요.")
+            st.write("- 설탕 대신 꿀을 쓰지 마세요(영아 보툴리누스 위험).")
+
+        st.write("- 5~10분마다 소량씩 자주, 토하면 10~15분 휴식 후 재개")
+        st.write("- 2시간 이상 소변 없음/입마름/눈물 감소/축 늘어짐 → 진료")
+        st.write("- 가능하면 스포츠음료 대신 **ORS** 용액 사용")
+
+    # --- 가래/쌕쌕 ---
+    st.markdown('<div id="peds_respiratory"></div>', unsafe_allow_html=True)
+    with st.expander("🫁 가래/쌕쌕(천명) 가이드", expanded=False):
+        st.write("- 생리식염수 분무/흡인, 수면 시 머리 살짝 높이기")
+        st.write("- 쌕쌕/호흡곤란/청색증 → 즉시 응급평가")
+        show_ck = st.toggle("체크리스트 열기", value=False, key=wkey("peds_ck"))
+        if show_ck:
+            colL, colR = st.columns(2)
+            with colL:
+                st.markdown("**🟢 집에서 해볼 수 있는 것**")
+                st.write("- 충분한 수분 섭취(ORS/미온수)")
+                st.write("- 해열제 올바른 간격 준수")
+                st.write("- 생리식염수 비강 세척/흡인(콧물)")
+                st.write("- 가벼운 옷/시원한 환경")
+            with colR:
+                st.markdown("**🔴 즉시 진료가 필요한 신호**")
+                st.write("- 번개치는 두통, 시야 이상, 경련, 의식저하")
+                st.write("- 호흡곤란/청색증/입술부종")
+                st.write("- 소변량 급감·축 늘어짐(탈수)")
+                st.write("- 피 섞인 변/검은 변, 점상출혈 지속")
+
+# --- /Pediatric quick sections renderer ---
+
 # PEDS
 with t_peds:
     st.subheader("소아 증상 기반 점수 + 보호자 설명 + 해열제 계산")
@@ -2153,188 +2343,10 @@ with t_peds:
         st.info("시간 형식을 확인하세요.")
     st.markdown("---")
     st.subheader("보호자 체크리스트")
+    render_peds_quick_sections()
 
 
-st.markdown("---")
-st.markdown("## 👶 소아 퀵 섹션 (GI/호흡기)")
-st.caption("필요한 것만 펼쳐서 확인하세요. 아래 각 섹션은 보고서/해열제 계산과 연동됩니다.")
-
-# --- Anchors ---
-st.markdown('<div id="peds_constipation"></div>', unsafe_allow_html=True)
-st.markdown('<div id="peds_diarrhea"></div>', unsafe_allow_html=True)
-st.markdown('<div id="peds_vomit"></div>', unsafe_allow_html=True)
-st.markdown('<div id="peds_antipyretic"></div>', unsafe_allow_html=True)
-st.markdown('<div id="peds_ors"></div>', unsafe_allow_html=True)
-st.markdown('<div id="peds_respiratory"></div>', unsafe_allow_html=True)
-
-# --- 변비 ---
-with st.expander("🧻 변비 체크", expanded=False):
-    try:
-        render_section_constipation()
-    except Exception:
-        st.info("상세 변비 체크 모듈을 불러오지 못했습니다. 아래 요약 가이드를 참고하세요.")
-        st.write("- 수분/수유 자주, 식이섬유(과일·채소·전곡), 식후 5~10분 배변 루틴")
-        st.write("- 3일 이상/배변 시 통증/혈변/복부팽만/구토 동반 시 진료")
-
-# --- 설사 ---
-with st.expander("💦 설사 체크", expanded=False):
-    try:
-        render_section_diarrhea()
-    except Exception:
-        st.info("상세 설사 체크 모듈을 불러오지 못했습니다. 아래 요약 가이드를 참고하세요.")
-        st.write("- ORS를 5~10분마다 소량씩, 기름진 음식·우유 일시 제한")
-        st.write("- 혈변/검은변, 고열, 소변 감소·축 늘어짐 → 진료")
-
-# --- 구토 ---
-with st.expander("🤢 구토 체크", expanded=False):
-    try:
-        render_section_vomit()
-    except Exception:
-        st.info("상세 구토 체크 모듈을 불러오지 못했습니다. 아래 요약 가이드를 참고하세요.")
-        st.write("- 10~15분마다 소량 수분, 초록/커피색/혈토 → 즉시 진료")
-
-# --- 해열제 ---
-with st.expander("🌡️ 해열제 가이드/계산", expanded=False):
-    try:
-        ap_ml_1, ap_ml_max = acetaminophen_ml(st.session_state.get(wkey("wt_peds"), 0.0))
-        ib_ml_1, ib_ml_max = ibuprofen_ml(st.session_state.get(wkey("wt_peds"), 0.0))
-    except Exception:
-        ap_ml_1 = ap_ml_max = ib_ml_1 = ib_ml_max = 0.0
-    st.write(f"- 아세트아미노펜(160mg/5mL): **{ap_ml_1:.1f} mL** (최대 {ap_ml_max:.1f} mL) — 최소 간격 **4h**")
-    st.write(f"- 이부프로펜(100mg/5mL): **{ib_ml_1:.1f} mL** (최대 {ib_ml_max:.1f} mL) — 최소 간격 **6h**")
-    
-# --- P1-2: Antipyretic schedule chain (.ics + care hint) ---
-import datetime as _dt
-from zoneinfo import ZoneInfo as _ZoneInfo
-import tempfile as _tmp
-
-def _preferred_writable_base():
-    # Try known writable locations in order
-    for p in ["/mnt/data/care_log", "/mount/data/care_log", "/tmp/care_log"]:
-        try:
-            os.makedirs(p, exist_ok=True)
-            test_fp = os.path.join(p, ".touch")
-            with open(test_fp, "w", encoding="utf-8") as _f:
-                _f.write("ok")
-            try:
-                os.remove(test_fp)
-            except Exception:
-                pass
-            return p
-        except Exception:
-            continue
-    # Extreme fallback
-    return _tmp.gettempdir()
-
-def _make_ics(title:str, start: _dt.datetime, minutes:int=0, description:str="") -> str:
-    tzid = "Asia/Seoul"
-    dtstart = start.strftime("%Y%m%dT%H%M%S")
-    dtend = (start + _dt.timedelta(minutes=minutes)).strftime("%Y%m%dT%H%M%S") if minutes>0 else None
-    uid = f"{dtstart}-{title.replace(' ','_')}@bloodmap"
-    lines = [
-        "BEGIN:VCALENDAR",
-        "VERSION:2.0",
-        "PRODID:-//BloodMap//Peds Antipyretic//KR",
-        "CALSCALE:GREGORIAN",
-        "METHOD:PUBLISH",
-        "BEGIN:VEVENT",
-        f"UID:{uid}",
-        f"DTSTAMP:{_dt.datetime.now(_ZoneInfo(tzid)).strftime('%Y%m%dT%H%M%S')}",
-        f"DTSTART;TZID={tzid}:{dtstart}",
-    ]
-    if dtend:
-        lines.append(f"DTEND;TZID={tzid}:{dtend}")
-    lines += [
-        f"SUMMARY:{title}",
-        f"DESCRIPTION:{description}".replace("\n","\\n"),
-        "END:VEVENT",
-        "END:VCALENDAR",
-        ""
-    ]
-    return "\n".join(lines)
-
-kst = _dt.datetime.now(_ZoneInfo("Asia/Seoul"))
-col1, col2 = st.columns(2)
-with col1:
-    ap_given = st.number_input("APAP 실제 투여량(mL)", min_value=0.0, step=0.5, value=float(f"{ap_ml_1:.1f}"), key=wkey("apap_given"))
-    if st.button("APAP 기록 + 다음 복용 .ics", key=wkey("apap_log_ics")):
-        next_time = kst + _dt.timedelta(hours=4)
-        ics_text = _make_ics("다음 해열제(APAP) 복용 가능", next_time, 0, "APAP 최소 간격 4시간 (KST).")
-        base = _preferred_writable_base()
-        fname = f"next_APAP_{kst.strftime('%Y%m%d_%H%M%S')}.ics"
-        ics_path = os.path.join(base, fname)
-        try:
-            with open(ics_path, "w", encoding="utf-8") as f:
-                f.write(ics_text)
-        except Exception as _e:
-            st.warning(f"쓰기 권한 문제로 임시 다운로드만 제공합니다. ({type(_e).__name__})")
-        st.success(f"다음 APAP 가능 시각: {next_time.strftime('%Y-%m-%d %H:%M')} (KST)")
-        st.download_button("📅 .ics 내보내기 (APAP)", data=ics_text, file_name=fname, mime="text/calendar", key=wkey("apap_ics_dl"))
-        st.session_state[wkey("apap_ml_24h")] = st.session_state.get(wkey("apap_ml_24h"), 0.0) + float(ap_given)
-with col2:
-    ib_given = st.number_input("IBU 실제 투여량(mL)", min_value=0.0, step=0.5, value=float(f"{ib_ml_1:.1f}"), key=wkey("ibu_given"))
-    if st.button("IBU 기록 + 다음 복용 .ics", key=wkey("ibu_log_ics")):
-        next_time = kst + _dt.timedelta(hours=6)
-        ics_text = _make_ics("다음 해열제(IBU) 복용 가능", next_time, 0, "IBU 최소 간격 6시간 (KST).")
-        base = _preferred_writable_base()
-        fname = f"next_IBU_{kst.strftime('%Y%m%d_%H%M%S')}.ics"
-        ics_path = os.path.join(base, fname)
-        try:
-            with open(ics_path, "w", encoding="utf-8") as f:
-                f.write(ics_text)
-        except Exception as _e:
-            st.warning(f"쓰기 권한 문제로 임시 다운로드만 제공합니다. ({type(_e).__name__})")
-        st.success(f"다음 IBU 가능 시각: {next_time.strftime('%Y-%m-%d %H:%M')} (KST)")
-        st.download_button("📅 .ics 내보내기 (IBU)", data=ics_text, file_name=fname, mime="text/calendar", key=wkey("ibu_ics_dl"))
-        st.session_state[wkey("ibu_ml_24h")] = st.session_state.get(wkey("ibu_ml_24h"), 0.0) + float(ib_given)
-
-# 24h 총량 소프트 배너(실제 하드 가드레일과 충돌 없이 알림만)
-ap24 = st.session_state.get(wkey("apap_ml_24h"), 0.0)
-ib24 = st.session_state.get(wkey("ibu_ml_24h"), 0.0)
-if ap24 > 0 or ib24 > 0:
-    st.caption(f"24시간 누적(세션 기준): APAP {ap24:.1f} mL / IBU {ib24:.1f} mL")
-# --- /P1-2 ---
-st.caption("※ 금기/주의 질환은 반드시 의료진 지시를 따르세요. 중복 복용 주의.")
-
-# --- ORS/탈수 ---
-with st.expander("🥤 ORS/탈수 가이드", expanded=False):
-    with st.expander("🏠 ORS 집에서 만드는 법(WHO 권장 비율)", expanded=False):
-        st.markdown("**재료 (1 L 기준)**")
-        st.write("- 끓였다 식힌 물 **1 L**")
-        st.write("- 설탕 **작은술 6스푼(평평하게)** ≈ 27 g")
-        st.write("- 소금 **작은술 1/2 스푼(평평하게)** ≈ 2.5 g")
-        st.markdown("**만드는 법/복용**")
-        st.write("- 깨끗한 용기에 모두 넣고 완전히 녹을 때까지 저어주세요.")
-        st.write("- **5~10분마다 소량씩** 마시고, **토하면 10~15분 쉬었다 재개**하세요.")
-        st.write("- 맛은 '살짝 짠 단물(눈물맛)' 정도가 정상입니다. 너무 짜거나 달면 **물을 더** 넣어 희석하세요.")
-        st.markdown("**주의**")
-        st.write("- 과일주스·탄산·순수한 물만 대량 섭취는 피하세요(전해질 불균형 위험).")
-        st.write("- **6개월 미만 영아/만성질환/신생아**는 반드시 의료진과 상의 후 사용하세요.")
-        st.write("- 설탕 대신 꿀을 쓰지 마세요(영아 보툴리누스 위험).")
-
-    st.write("- 5~10분마다 소량씩 자주, 토하면 10~15분 휴식 후 재개")
-    st.write("- 2시간 이상 소변 없음/입마름/눈물 감소/축 늘어짐 → 진료")
-    st.write("- 가능하면 스포츠음료 대신 **ORS** 용액 사용")
-
-# --- 가래/쌕쌕 ---
-with st.expander("🫁 가래/쌕쌕(천명) 가이드", expanded=False):
-    st.write("- 생리식염수 분무/흡인, 수면 시 머리 살짝 높이기")
-    st.write("- 쌕쌕/호흡곤란/청색증 → 즉시 응급평가")
-    show_ck = st.toggle("체크리스트 열기", value=False, key=wkey("peds_ck"))
-    if show_ck:
-        colL, colR = st.columns(2)
-        with colL:
-            st.markdown("**🟢 집에서 해볼 수 있는 것**")
-            st.write("- 충분한 수분 섭취(ORS/미온수)")
-            st.write("- 해열제 올바른 간격 준수")
-            st.write("- 생리식염수 비강 세척/흡인(콧물)")
-            st.write("- 가벼운 옷/시원한 환경")
-        with colR:
-            st.markdown("**🔴 즉시 진료가 필요한 신호**")
-            st.write("- 번개치는 두통, 시야 이상, 경련, 의식저하")
-            st.write("- 호흡곤란/청색증/입술부종")
-            st.write("- 소변량 급감·축 늘어짐(탈수)")
-            st.write("- 피 섞인 변/검은 변, 점상출혈 지속")
+# (migrated) 소아 퀵 섹션은 render_peds_quick_sections()로 t_peds 내부에서만 렌더링됩니다.
 
 # SPECIAL (notes + pitfalls)
 def _annotate_special_notes(lines):
@@ -2365,34 +2377,46 @@ def _annotate_special_notes(lines):
             out.append(ln)
     out.append(pitfalls)
     return out
-
+# (migrated) 기존 소아 GI 섹션 호출은 t_peds 퀵 섹션으로 이동되었습니다.
 with t_special:
-    # 🔬 특수검사 탭 — 입력 + 해석
+    # 🔬 특수검사 탭 렌더링 (패치 추가)
     import streamlit as st
     st.subheader("🔬 특수검사")
+    try:
+        special_tests_ui()
+    except Exception as e:
+        st.error(f"특수검사 UI 표시 중 오류 발생: {e}")
+    st.subheader("특수검사 해석")
     if SPECIAL_PATH:
         st.caption(f"special_tests 로드: {SPECIAL_PATH}")
 
-    # === SPECIAL TESTS SAFE+ADAPTIVE CALL (탭 내부 전용) ===
+# === SPECIAL TESTS SAFE CALL ===
+def __bm_try_get_wkey():
+    try:
+        return wkey
+    except Exception:
+        return lambda x: x
+_wkey = __bm_try_get_wkey()
+try:
+    # === SPECIAL TESTS SAFE+ADAPTIVE CALL ===
     import inspect as _inspect
-
     def __bm_try_get_wkey():
         try:
             return wkey
         except Exception:
             return lambda x: x
-
     _wkey = __bm_try_get_wkey()
 
-    # --- Context bridge: 피수치/진단 정보를 special_tests 모듈로 동기화 ---
+    # --- Context bridge: push normalized aliases into session_state ---
     ss = st.session_state
     _group = ss.get("group") or ss.get("dx_group") or ss.get("암종") or ss.get("진단그룹") or ss.get("G")
     _disease = ss.get("disease") or ss.get("dx_disease") or ss.get("진단") or ss.get("D")
     _labs = ss.get("_labs_df") or ss.get("labs") or ss.get("LABS") or ss.get("input_labs")
+    # write back common aliases so special_tests.py (which may read different keys) can see consistent values
     for k, v in {
         "group": _group, "dx_group": _group, "암종": _group, "G": _group,
         "disease": _disease, "dx_disease": _disease, "진단": _disease, "D": _disease,
-        "labs": _labs, "_labs_df": _labs, "LABS": _labs, "input_labs": _labs,
+        "labs": _labs, "_labs_df": _labs, "LABS": _labs, "input_labs": _labs
     }.items():
         try:
             if v is not None:
@@ -2414,7 +2438,6 @@ with t_special:
             _sig = _inspect.signature(_fn)
         except Exception:
             _sig = None
-
         if _sig and "st" in _sig.parameters and "ctx" in _sig.parameters:
             lines = _fn(st, _ctx)
         elif _sig and "ctx" in _sig.parameters:
@@ -2446,9 +2469,23 @@ with t_special:
             st.markdown("- 최근 입력한 **피수치**가 있는지 확인")
             st.markdown("- 모듈 버전 불일치 시 위의 **리로드**로 갱신")
             st.caption(f"컨텍스트: group={_group!r}, disease={_disease!r}, labs={'OK' if _labs is not None else 'None'}")
-
-    # 해석 섹션
-    st.subheader("특수검사 해석")
+    # === /SPECIAL TESTS SAFE+ADAPTIVE CALL ===
+except Exception as _e:
+    import importlib
+    st.error("특수검사 UI 실행 중 오류가 발생했습니다.")
+    try:
+        st.exception(_e)
+    except Exception:
+        st.write(str(_e))
+    if st.button("특수검사 모듈 리로드", key=_wkey("special_reload")):
+        try:
+            if "_sp" in globals() and _sp:
+                importlib.reload(_sp)
+        except Exception:
+            pass
+        st.rerun()
+    lines = []
+# === /SPECIAL TESTS SAFE CALL ===
     lines = _annotate_special_notes(lines or [])
     st.session_state["special_interpretations"] = lines
     if lines:
@@ -2456,6 +2493,7 @@ with t_special:
             st.write("- " + ln)
     else:
         st.info("아직 입력/선택이 없습니다.")
+
 # ---------- QR helper ----------
 def _build_hospital_summary():
     key_id = st.session_state.get("key", "(미설정)")
@@ -2832,7 +2870,7 @@ with t_report:
                 ("ANC", "절대호중구"),
                 ("Alb", "알부민"),
                 ("ALT", "ALT"),
-                ("BUN", "혈중요소질소"),
+                ("BUN", "BUN"),
             ]
             for abbr, kor in all_labs:
                 v = labs.get(abbr) if isinstance(labs, dict) else None
