@@ -27,8 +27,19 @@ def _emit(lines: List[str], kind: Optional[str], msg: str):
     tag = _flag(kind)
     lines.append(f"{tag} {msg}" if tag else msg)
 
-def _tog_key(name: str) -> str: return f"stx_tog_{name}"
-def _fav_key(name: str) -> str: return f"stx_fav_{name}"
+# === [PATCH 2026-06-03 KST] Streamlit key namespace guard ===
+def _stx_ns() -> str:
+    """Keep special-test widget keys isolated from app.py and other tabs."""
+    try:
+        raw = str(st.session_state.get("key") or st.session_state.get("_uid") or "guest")
+        safe = "".join(ch for ch in raw if ch.isalnum() or ch in ("-", "_"))[:32] or "guest"
+        return f"stx_{safe}"
+    except Exception:
+        return "stx_guest"
+
+def _tog_key(name: str) -> str: return f"{_stx_ns()}_tog_{name}"
+def _fav_key(name: str) -> str: return f"{_stx_ns()}_fav_{name}"
+# === [/PATCH] ===
 
 SECTIONS = [
     ("소변검사 (Urinalysis)", "urine"),
