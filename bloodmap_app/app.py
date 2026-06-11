@@ -2370,10 +2370,12 @@ with t_special:
     # 🔬 특수검사 탭 렌더링 (패치 추가)
     import streamlit as st
     st.subheader("🔬 특수검사")
-    try:
-        special_tests_ui()
-    except Exception as e:
-        st.error(f"특수검사 UI 표시 중 오류 발생: {e}")
+    # [PATCH 2026-06-11 KST]
+    # special_tests_ui()는 아래 SAFE+ADAPTIVE CALL에서 1회만 호출한다.
+    # 같은 Streamlit run 안에서 여기와 아래에서 중복 호출되면
+    # key='tog_urine' 같은 동일 widget key가 2번 등록되어
+    # StreamlitDuplicateElementKey가 발생한다.
+    st.session_state["_bm_special_tab_ready"] = True
     st.subheader("특수검사 해석")
     if SPECIAL_PATH:
         st.caption(f"special_tests 로드: {SPECIAL_PATH}")

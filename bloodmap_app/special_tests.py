@@ -27,8 +27,27 @@ def _emit(lines: List[str], kind: Optional[str], msg: str):
     tag = _flag(kind)
     lines.append(f"{tag} {msg}" if tag else msg)
 
-def _tog_key(name: str) -> str: return f"tog_{name}"
-def _fav_key(name: str) -> str: return f"fav_{name}"
+# [PATCH 2026-06-11 KST]
+# Streamlit widget keys must be globally unique within a run.
+# Keep legacy keys migrated, but render with a module-scoped/user-scoped namespace.
+def _special_key_prefix() -> str:
+    try:
+        raw = st.session_state.get("key") or st.session_state.get("_uid") or "guest"
+        safe = "".join(ch if (ch.isalnum() or ch in ("-", "_")) else "_" for ch in str(raw))
+        return f"stx_{safe}"
+    except Exception:
+        return "stx_guest"
+
+def _tog_key(name: str) -> str: return f"{_special_key_prefix()}_tog_{name}"
+def _fav_key(name: str) -> str: return f"{_special_key_prefix()}_fav_{name}"
+
+def _migrate_bool_key(old_key: str, new_key: str, default: bool = True) -> bool:
+    try:
+        if new_key not in st.session_state and old_key in st.session_state:
+            st.session_state[new_key] = bool(st.session_state.get(old_key))
+        return bool(st.session_state.get(new_key, default))
+    except Exception:
+        return default
 
 SECTIONS = [
     ("소변검사 (Urinalysis)", "urine"),
@@ -65,7 +84,7 @@ def special_tests_ui() -> List[str]:
         for title, sec_id in SECTIONS:
             c1, c2 = st.columns([0.8, 0.2])
             with c1:
-                on = st.toggle(title, key=_tog_key(sec_id), value=bool(st.session_state.get(_tog_key(sec_id), True)))
+                on = st.toggle(title, key=_tog_key(sec_id), value=_migrate_bool_key(f"tog_{sec_id}", _tog_key(sec_id), True))
             with c2:
                 isfav = sec_id in favs
                 label = "★" if isfav else "☆"
