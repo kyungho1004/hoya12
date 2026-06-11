@@ -96,7 +96,14 @@ def special_tests_ui() -> List[str]:
         for title, sec_id in SECTIONS:
             c1, c2 = st.columns([0.8, 0.2])
             with c1:
-                on = st.toggle(title, key=_tog_key(sec_id), value=_migrate_bool_key(f"tog_{sec_id}", _tog_key(sec_id), True))
+                for i, (title, sec_id) in enumerate(SECTIONS):
+    c1, c2 = st.columns([0.8, 0.2])
+    with c1:
+        on = st.toggle(
+            title,
+            key=f"{_tog_key(sec_id)}_{i}",
+            value=_migrate_bool_key(f"tog_{sec_id}", _tog_key(sec_id), True),
+        )on = st.toggle(title, key=_tog_key(sec_id), value=_migrate_bool_key(f"tog_{sec_id}", _tog_key(sec_id), True))
             with c2:
                 isfav = sec_id in favs
                 label = "★" if isfav else "☆"
