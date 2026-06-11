@@ -192,10 +192,6 @@ from pathlib import Path
 import importlib.util
 import streamlit as st
 
-# [PATCH 2026-06-10 KST] Reset per-rerun special-tests render guard.
-# Prevents stale session flags while allowing exactly one Special Tests UI render per Streamlit run.
-st.session_state["_bm_special_tests_rendered_this_run"] = False
-
 st.markdown("""
 <style>
 /* smooth-scroll */
@@ -1317,6 +1313,8 @@ def _normalize_abbr(k: str) -> str:
         "ANC": "ANC",
         "CRP": "CRP",
         "NA": "Na",
+        "K": "K",
+        "POTASSIUM": "K",
         "CR": "Cr",
         "GLU": "Glu",
         "CA": "Ca",
@@ -1336,6 +1334,7 @@ LAB_REF_ADULT = {
     "ANC": (1500, 8000),
     "CRP": (0.0, 5.0),
     "Na": (135, 145),
+    "K": (3.5, 5.2),
     "Cr": (0.5, 1.2),
     "Glu": (70, 140),
     "Ca": (8.6, 10.2),
@@ -1354,6 +1353,7 @@ LAB_REF_PEDS = {
     "ANC": (1500, 8000),
     "CRP": (0.0, 5.0),
     "Na": (135, 145),
+    "K": (3.5, 5.2),
     "Cr": (0.2, 0.8),
     "Glu": (70, 140),
     "Ca": (8.8, 10.8),
@@ -1383,6 +1383,121 @@ def lab_validate(abbr: str, val, is_peds: bool):
         return f"⬆️ 기준치 초과({lo}~{hi})"
     return "정상범위"
 
+
+# === [PATCH 2026-06-11 KST] Lab interpretation restore (non-destructive) ===
+def build_lab_interpretations(labs: dict, is_peds: bool = False) -> list[str]:
+    """피수치 해석 표시/보고서 공용 빌더.
+    기존 입력·검증·응급도·그래프·케어로그 로직은 건드리지 않고, 해석 라인만 추가 생성한다.
+    """
+    labs = labs or {}
+    out: list[str] = []
+
+    def g(k):
+        try:
+            v = labs.get(k)
+            if v in (None, ""):
+                return None
+            return float(v)
+        except Exception:
+            return None
+
+    def add(level: str, msg: str):
+        icon = {"ok": "🟢", "watch": "🟡", "warn": "🟠", "risk": "🚨"}.get(level, "•")
+        out.append(f"{icon} {msg}")
+
+    WBC, ANC, Hb, PLT = g("WBC"), g("ANC"), g("Hb"), g("PLT")
+    CRP, Na, K, Ca, P = g("CRP"), g("Na"), g("K"), g("Ca"), g("P")
+    Cr, BUN, Alb, TP = g("Cr"), g("BUN"), g("Alb"), g("T.P")
+    AST, ALT, TB, Glu = g("AST"), g("ALT"), g("T.B"), g("Glu")
+
+    # CBC / infection / bleeding
+    if ANC is not None:
+        if ANC < 500:
+            add("risk", f"ANC {ANC:g}/µL: 중증 호중구감소 — 38.0℃ 이상이면 발열성 호중구감소증으로 즉시 병원 연락 권장")
+        elif ANC < 1000:
+            add("warn", f"ANC {ANC:g}/µL: 중등도 호중구감소 — 감염 증상/발열 모니터링 필요")
+        elif ANC < 1500:
+            add("watch", f"ANC {ANC:g}/µL: 경도 호중구감소 — 추적 관찰")
+        else:
+            add("ok", f"ANC {ANC:g}/µL: 호중구 범위 양호")
+    elif WBC is not None and WBC < (5.0 if is_peds else 4.0):
+        add("watch", f"WBC {WBC:g}: 낮음 — ANC 입력 시 감염 위험 해석이 더 정확합니다")
+
+    if Hb is not None:
+        if Hb < 7:
+            add("risk", f"Hb {Hb:g} g/dL: 중증 빈혈 범위 — 증상 있으면 수혈/응급평가 고려")
+        elif Hb < 10:
+            add("warn", f"Hb {Hb:g} g/dL: 빈혈 — 피로/호흡곤란/어지럼 및 추적 필요")
+        elif Hb < (11 if is_peds else 12):
+            add("watch", f"Hb {Hb:g} g/dL: 경도 저하")
+
+    if PLT is not None:
+        if PLT < 20:
+            add("risk", f"PLT {PLT:g}k/µL: 중증 혈소판감소 — 출혈/점상출혈/혈변 시 즉시 병원")
+        elif PLT < 50:
+            add("warn", f"PLT {PLT:g}k/µL: 출혈 주의 범위 — 침습시술/외상 주의")
+        elif PLT < 150:
+            add("watch", f"PLT {PLT:g}k/µL: 혈소판 감소 — 추적 필요")
+        elif PLT > (450 if is_peds else 400):
+            add("watch", f"PLT {PLT:g}k/µL: 증가 — 염증/철결핍/반응성 변화 감별")
+
+    if CRP is not None:
+        if CRP >= 10:
+            add("warn", f"CRP {CRP:g}: 의미 있는 염증 상승 — 발열/통증/호흡기·요로 증상 동반 여부 확인")
+        elif CRP >= 5:
+            add("watch", f"CRP {CRP:g}: 경도 상승 — 증상과 함께 추적")
+
+    # Electrolyte / renal / nutrition
+    if Na is not None and (Na < 125 or Na > 155):
+        add("risk", f"Na {Na:g}: 중증 나트륨 이상 — 신경증상/경련 위험, 즉시 평가 권장")
+    elif Na is not None and (Na < 135 or Na > 145):
+        add("watch", f"Na {Na:g}: 나트륨 이상 — 수분섭취/구토·설사/수액 여부 확인")
+
+    if K is not None and (K < 2.8 or K > 6.0):
+        add("risk", f"K {K:g}: 위험 범위 칼륨 이상 — 부정맥 위험, ECG/재검 권장")
+    elif K is not None and (K < 3.5 or K > 5.2):
+        add("warn", f"K {K:g}: 칼륨 이상 — 약물/신기능/용혈 여부 확인")
+
+    if Ca is not None and (Ca < 7.0 or Ca > 12.5):
+        add("risk", f"Ca {Ca:g}: 위험 범위 칼슘 이상 — 증상 확인 및 교정 필요")
+    elif Ca is not None and (Ca < (8.8 if is_peds else 8.6) or Ca > (10.8 if is_peds else 10.2)):
+        add("watch", f"Ca {Ca:g}: 칼슘 이상 — Alb 보정칼슘/증상 함께 확인")
+
+    if Cr is not None or BUN is not None:
+        renal_bits = []
+        if Cr is not None and Cr > (0.8 if is_peds else 1.2):
+            renal_bits.append(f"Cr {Cr:g} 상승")
+        if BUN is not None and BUN > (18 if is_peds else 20):
+            renal_bits.append(f"BUN {BUN:g} 상승")
+        if renal_bits:
+            add("warn", " / ".join(renal_bits) + " — 탈수·신독성 약물·신기능 저하 여부 확인, eGFR/소변량 같이 보기")
+        if Cr is not None:
+            stg = "소아는 키(cm) 미입력 시 Schwartz eGFR 계산 제한" if is_peds else "성별 미입력 상태라 CKD-EPI 정밀 eGFR 계산 제한"
+            add("watch", f"eGFR 참고: {stg}; Cr 단독보다 추세와 소변량이 중요")
+
+    if Alb is not None and Alb < (3.8 if is_peds else 3.5):
+        add("watch", f"Alb {Alb:g}: 알부민 저하 — 영양/염증/단백소실 가능성")
+    if TP is not None and TP < (6.0 if is_peds else 6.4):
+        add("watch", f"T.P {TP:g}: 총단백 저하 — 영양/희석/단백소실 확인")
+
+    # Liver / glucose
+    if (AST is not None and AST >= (50 if is_peds else 40)) or (ALT is not None and ALT >= (40 if is_peds else 41)):
+        add("watch", f"간효소 상승(AST {AST if AST is not None else '—'}, ALT {ALT if ALT is not None else '—'}) — 약물성/감염/지방간/담도 문제 추적")
+    if TB is not None and TB > 1.2:
+        add("warn", f"T.B {TB:g}: 빌리루빈 상승 — 황달/담도폐쇄/용혈 여부 확인")
+    if Glu is not None:
+        if Glu >= 200:
+            add("warn", f"Glu {Glu:g}: 고혈당 범위 — 식후 여부/스테로이드/감염 스트레스 확인")
+        elif Glu < 60:
+            add("risk", f"Glu {Glu:g}: 저혈당 가능 — 증상 있으면 즉시 교정")
+        elif Glu >= 140:
+            add("watch", f"Glu {Glu:g}: 혈당 상승 — 공복/식후 여부 확인")
+
+    if not out:
+        add("ok", "입력된 피수치에서 즉시 두드러지는 이상 해석은 없습니다. 단, 추세와 증상이 더 중요합니다.")
+    return out
+# === [/PATCH 2026-06-11 KST] ===
+
 with t_labs:
     st.subheader("피수치 입력 — 붙여넣기 지원 (견고)")
     st.caption("예: 'WBC: 4.5', 'Hb 12.3', 'PLT, 200', 'Na 140 mmol/L'…")
@@ -1405,6 +1520,7 @@ with t_labs:
         ("Cr", "크레아티닌"),
         ("PLT", "혈소판"),
         ("Na", "나트륨"),
+        ("K", "칼륨"),
         ("AST", "AST"),
         ("T.B", "총빌리루빈"),
         ("ANC", "절대호중구"),
@@ -1459,6 +1575,27 @@ with t_labs:
     labs_dict.update(values)
     st.session_state["labs_dict"] = labs_dict
     st.markdown(f"**참조범위 기준:** {'소아' if use_peds else '성인'} / **ANC 분류:** {anc_band(values.get('ANC'))}")
+
+
+    # === [PATCH 2026-06-11 KST] 피수치 해석 표시부 복구 ===
+    lab_lines = build_lab_interpretations(labs_dict, is_peds=use_peds)
+    st.session_state["lab_interpretations"] = lab_lines
+    with st.expander("🧾 피수치 해석", expanded=True):
+        for ln in lab_lines:
+            if ln.startswith("🚨"):
+                st.error(ln)
+            elif ln.startswith("🟠"):
+                st.warning(ln)
+            elif ln.startswith("🟡"):
+                st.info(ln)
+            else:
+                st.write(ln)
+        diets = lab_diet_guides(labs_dict, heme_flag=(st.session_state.get("onco_group", "") == "혈액암"))
+        if diets:
+            st.markdown("**🍽️ 식이/생활 힌트**")
+            for d in diets:
+                st.write("- " + d)
+    # === [/PATCH 2026-06-11 KST] ===
 
 # DX
 with t_dx:
@@ -2372,20 +2509,12 @@ def _annotate_special_notes(lines):
 # (migrated) 기존 소아 GI 섹션 호출은 t_peds 퀵 섹션으로 이동되었습니다.
 with t_special:
     # 🔬 특수검사 탭 렌더링 (패치 추가)
-    # [PATCH 2026-06-10 KST] Render exactly once per Streamlit run.
-    # The legacy SAFE CALL block below used to call special_tests_ui() again,
-    # which caused StreamlitDuplicateElementKey such as stx_guestPIN_tog_urine.
     import streamlit as st
     st.subheader("🔬 특수검사")
     try:
-        if not st.session_state.get("_bm_special_tests_rendered_this_run", False):
-            st.session_state["special_tests_lines"] = special_tests_ui() or []
-            st.session_state["_bm_special_tests_rendered_this_run"] = True
-        else:
-            st.caption("특수검사 UI는 이번 실행에서 이미 렌더링되어 중복 호출을 건너뜁니다.")
+        special_tests_ui()
     except Exception as e:
         st.error(f"특수검사 UI 표시 중 오류 발생: {e}")
-        st.session_state["special_tests_lines"] = []
     st.subheader("특수검사 해석")
     if SPECIAL_PATH:
         st.caption(f"special_tests 로드: {SPECIAL_PATH}")
@@ -2434,25 +2563,18 @@ try:
             "label_map": locals().get("label_map", {}),
         }
         _fn = special_tests_ui
-        # [PATCH 2026-06-10 KST] Do not render Special Tests twice in the same run.
-        # Reuse the lines captured by the visible tab render above.
-        if st.session_state.get("_bm_special_tests_rendered_this_run", False):
-            lines = st.session_state.get("special_tests_lines", []) or []
+        try:
+            _sig = _inspect.signature(_fn)
+        except Exception:
+            _sig = None
+        if _sig and "st" in _sig.parameters and "ctx" in _sig.parameters:
+            lines = _fn(st, _ctx)
+        elif _sig and "ctx" in _sig.parameters:
+            lines = _fn(ctx=_ctx)
+        elif _sig and "st" in _sig.parameters:
+            lines = _fn(st)
         else:
-            try:
-                _sig = _inspect.signature(_fn)
-            except Exception:
-                _sig = None
-            if _sig and "st" in _sig.parameters and "ctx" in _sig.parameters:
-                lines = _fn(st, _ctx)
-            elif _sig and "ctx" in _sig.parameters:
-                lines = _fn(ctx=_ctx)
-            elif _sig and "st" in _sig.parameters:
-                lines = _fn(st)
-            else:
-                lines = _fn()
-            st.session_state["special_tests_lines"] = lines or []
-            st.session_state["_bm_special_tests_rendered_this_run"] = True
+            lines = _fn()
     except Exception as _e:
         import importlib
         st.error("특수검사 UI 실행 중 오류가 발생했습니다.")
@@ -2872,6 +2994,7 @@ with t_report:
                 ("Cr", "크레아티닌"),
                 ("PLT", "혈소판"),
                 ("Na", "나트륨"),
+                ("K", "칼륨"),
                 ("AST", "AST"),
                 ("T.B", "총빌리루빈"),
                 ("ANC", "절대호중구"),
@@ -2883,6 +3006,12 @@ with t_report:
                 v = labs.get(abbr) if isinstance(labs, dict) else None
                 lines.append(f"- {abbr} ({kor}): {v if v not in (None, '') else '—'}")
             lines.append(f"- ANC 분류: {anc_band(labs.get('ANC') if isinstance(labs, dict) else None)}")
+            lab_interp = st.session_state.get("lab_interpretations") or build_lab_interpretations(labs, is_peds=is_peds)
+            if lab_interp:
+                lines.append("")
+                lines.append("### 피수치 해석")
+                for ln in lab_interp:
+                    lines.append(f"- {ln}")
             lines.append("")
 
         if sec_diet:
